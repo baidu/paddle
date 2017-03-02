@@ -1,6 +1,7 @@
 from setuptools import setup
 
 packages=['paddle',
+          'paddle.data',
           'paddle.proto',
           'paddle.trainer',
           'paddle.trainer_config_helpers',
