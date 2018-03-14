@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from layers.control_flow import BlockGuard
+from layers.control_flow import BlockGuard, Select
 from layer_helper import LayerHelper, unique_name
 from layers import fill_constant
 import core
@@ -23,6 +23,7 @@ __all__ = [
     'channel_send',
     'channel_recv',
     'channel_close',
+    'Select'
 ]
 
 
@@ -198,7 +199,7 @@ def channel_recv(channel, return_value):
 
           ch = fluid.make_channel(dtype='int32', capacity=10)
           with fluid.Go():
-            returned_value = fluid.channel_recv(ch, 'int32')
+            returned_value, return_status = fluid.channel_recv(ch, 'int32')
 
           # Code to send data through the channel.
     """

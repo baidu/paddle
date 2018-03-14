@@ -487,7 +487,7 @@ class Operator(object):
             'rnn_memory_helper_grad', 'conditional_block', 'while', 'send',
             'recv', 'listen_and_serv', 'parallel_do', 'save_combine',
             'load_combine', 'ncclInit', 'channel_create', 'channel_close',
-            'channel_send', 'channel_recv'
+            'channel_send', 'channel_recv', 'select'
         }
         if type not in no_kernel_op_set:
             self.desc.infer_var_type(self.block.desc)
