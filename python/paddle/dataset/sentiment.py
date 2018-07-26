@@ -43,11 +43,11 @@ def download_data_if_not_yet():
             nltk.data.path.append(paddle.dataset.common.DATA_HOME)
         movie_reviews.categories()
     except LookupError:
-        print "Downloading movie_reviews data set, please wait....."
+        print("Downloading movie_reviews data set, please wait.....")
         nltk.download(
             'movie_reviews', download_dir=paddle.dataset.common.DATA_HOME)
-        print "Download data set success....."
-        print "Path is " + nltk.data.find('corpora/movie_reviews').path
+        print("Download data set success.....")
+        print(("Path is " + nltk.data.find('corpora/movie_reviews').path))
 
 
 def get_word_dict():
@@ -64,7 +64,7 @@ def get_word_dict():
         for field in movie_reviews.fileids(category):
             for words in movie_reviews.words(field):
                 word_freq_dict[words] += 1
-    words_sort_list = word_freq_dict.items()
+    words_sort_list = list(word_freq_dict.items())
     words_sort_list.sort(cmp=lambda a, b: b[1] - a[1])
     for index, word in enumerate(words_sort_list):
         words_freq_sorted.append((word[0], index))
@@ -80,7 +80,8 @@ def sort_files():
     files_list = list()
     neg_file_list = movie_reviews.fileids('neg')
     pos_file_list = movie_reviews.fileids('pos')
-    files_list = list(chain.from_iterable(zip(neg_file_list, pos_file_list)))
+    files_list = list(
+        chain.from_iterable(list(zip(neg_file_list, pos_file_list))))
     return files_list
 
 

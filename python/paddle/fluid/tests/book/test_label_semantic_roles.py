@@ -181,7 +181,7 @@ def train(use_cuda, save_dirname=None, is_local=True):
 
         start_time = time.time()
         batch_id = 0
-        for pass_id in xrange(PASS_NUM):
+        for pass_id in range(PASS_NUM):
             for data in train_data():
                 cost = exe.run(main_program,
                                feed=feeder.feed(data),
@@ -189,10 +189,10 @@ def train(use_cuda, save_dirname=None, is_local=True):
                 cost = cost[0]
 
                 if batch_id % 10 == 0:
-                    print("avg_cost:" + str(cost))
+                    print(("avg_cost:" + str(cost)))
                     if batch_id != 0:
-                        print("second per batch: " + str((time.time(
-                        ) - start_time) / batch_id))
+                        print(("second per batch: " + str(
+                            (time.time() - start_time) / batch_id)))
                     # Set the threshold low to speed up the CI test
                     if float(cost) < 60.0:
                         if save_dirname is not None:
@@ -333,9 +333,9 @@ def infer(use_cuda, save_dirname=None):
                           },
                           fetch_list=fetch_targets,
                           return_numpy=False)
-        print(results[0].recursive_sequence_lengths())
+        print((results[0].recursive_sequence_lengths()))
         np_data = np.array(results[0])
-        print("Inference Shape: ", np_data.shape)
+        print(("Inference Shape: ", np_data.shape))
 
 
 def main(use_cuda, is_local=True):

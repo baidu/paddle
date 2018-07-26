@@ -14,8 +14,8 @@
 
 import sys
 import re
-from graphviz import GraphPreviewGenerator
-import proto.framework_pb2 as framework_pb2
+from .graphviz import GraphPreviewGenerator
+from .proto import framework_pb2
 from google.protobuf import text_format
 
 _vartype2str_ = [

@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from program_utils import *
-from ufind import *
+from .program_utils import *
+from .ufind import *

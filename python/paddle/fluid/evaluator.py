@@ -15,11 +15,11 @@
 import warnings
 import numpy as np
 
-import layers
-from framework import Program, Variable, program_guard
-import unique_name
-from layer_helper import LayerHelper
-from initializer import Constant
+from . import layers
+from .framework import Program, Variable, program_guard
+from . import unique_name
+from .layer_helper import LayerHelper
+from .initializer import Constant
 
 __all__ = [
     'ChunkEvaluator',

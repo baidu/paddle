@@ -26,7 +26,7 @@ http://research.microsoft.com/en-us/um/beijing/projects/letor/LETOR4.0/Data/MQ20
 import os
 import functools
 import rarfile
-from common import download
+from .common import download
 import numpy as np
 
 # URL = "http://research.microsoft.com/en-us/um/beijing/projects/letor/LETOR4.0/Data/MQ2007.rar"
@@ -330,4 +330,4 @@ if __name__ == "__main__":
     mytest = functools.partial(
         __reader__, filepath="MQ2007/MQ2007/Fold1/sample", format="listwise")
     for label, query in mytest():
-        print label, query
+        print((label, query))

@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import core
+from __future__ import print_function
 import multiprocessing
-import framework
-import executor
+from . import core
+from . import framework
+from . import executor
 import warnings
 import sys
 import os
@@ -94,7 +95,7 @@ class ParallelExecutor(object):
         self._places = []
         self._act_places = []
         if use_cuda:
-            for i in xrange(core.get_cuda_device_count()):
+            for i in range(core.get_cuda_device_count()):
                 p = core.Place()
                 self._act_places.append(core.CUDAPlace(i))
                 p.set_place(self._act_places[-1])
@@ -102,7 +103,7 @@ class ParallelExecutor(object):
         else:
             cpu_num = int(
                 os.environ.get('CPU_NUM', multiprocessing.cpu_count()))
-            for i in xrange(cpu_num):
+            for i in range(cpu_num):
                 p = core.Place()
                 self._act_places.append(core.CPUPlace())
                 p.set_place(self._act_places[-1])
@@ -143,16 +144,16 @@ class ParallelExecutor(object):
         ) if share_vars_from else []
 
         self.persistable_vars = [
-            v.name
-            for v in filter(
-                lambda var: var.persistable and var.type != core.VarDesc.VarType.RAW,
-                main.list_vars())
+            v.name for v in [
+                var for var in main.list_vars()
+                if var.persistable and var.type != core.VarDesc.VarType.RAW
+            ]
         ]
 
         self.executor = core.ParallelExecutor(
             self._places,
             set([
-                p.name for p in main.global_block()._iter_parameters()
+                p.name for p in main.global_block().iter_parameters()
                 if not p.stop_gradient
             ]),
             set(self.persistable_vars), main.desc, loss_name
@@ -227,7 +228,9 @@ class ParallelExecutor(object):
         """
         if feed is None and feed_dict is not None:
             feed = feed_dict
-            print >> sys.stderr, "`feed_dict` is deprecated. Please use `feed=`"
+            print(
+                "`feed_dict` is deprecated. Please use `feed=`",
+                file=sys.stderr)
 
         if isinstance(feed, dict):
             feed_tensor_dict = dict()

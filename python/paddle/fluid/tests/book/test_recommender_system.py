@@ -304,7 +304,7 @@ def infer(use_cuda, save_dirname=None):
                           },
                           fetch_list=fetch_targets,
                           return_numpy=False)
-        print("inferred score: ", np.array(results[0]))
+        print(("inferred score: ", np.array(results[0])))
 
 
 def main(use_cuda):

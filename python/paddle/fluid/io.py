@@ -16,6 +16,7 @@ import os
 import errno
 import time
 import shutil
+import six
 
 from paddle.fluid.evaluator import Evaluator
 from paddle.fluid.framework import Program, Parameter, default_main_program, default_startup_program, Variable
@@ -92,34 +93,34 @@ def save_vars(executor,
     """
     Save variables to the given directory by executor.
 
-    There are two ways to specify variables to be saved: The first way, list 
-    variables in a list and assign it to the `vars`. The second way, assign the 
-    `main_program` with an existing program, then all variables in the program 
-    will be saved. The first way has a higher priority. In other words, if `vars` 
+    There are two ways to specify variables to be saved: The first way, list
+    variables in a list and assign it to the `vars`. The second way, assign the
+    `main_program` with an existing program, then all variables in the program
+    will be saved. The first way has a higher priority. In other words, if `vars`
     are assigned, the `main_program` and the `predicate` will be ignored.
 
-    The `dirname` are used to specify the folder where to save variables. 
-    If you prefer to save variables in separate files in the folder `dirname`, 
-    set `filename` None; if you prefer to save all variables in a single file, 
+    The `dirname` are used to specify the folder where to save variables.
+    If you prefer to save variables in separate files in the folder `dirname`,
+    set `filename` None; if you prefer to save all variables in a single file,
     use `filename` to specify it.
 
     Args:
         executor(Executor): The executor to run for saving variables.
         dirname(str): The directory path.
-        main_program(Program|None): The program whose variables will be saved. 
-                                    If it is None, the default main program will 
+        main_program(Program|None): The program whose variables will be saved.
+                                    If it is None, the default main program will
                                     be used automatically.
                                     Default: None
-        vars(list[Variable]|None): The list that contains all variables to save. 
+        vars(list[Variable]|None): The list that contains all variables to save.
                                    It has a higher priority than the `main_program`.
                                    Default: None
-        predicate(function|None): If it is not None, only variables in the 
-                                  `main_program` that makes predicate(variable)==True 
-                                  will be saved. It only works when we are using the 
-                                  `main_program` to specify variables (In other words 
+        predicate(function|None): If it is not None, only variables in the
+                                  `main_program` that makes predicate(variable)==True
+                                  will be saved. It only works when we are using the
+                                  `main_program` to specify variables (In other words
                                   `vars` is None).
                                   Default: None
-        filename(str|None): The file which to save all variables. If you prefer to save 
+        filename(str|None): The file which to save all variables. If you prefer to save
                             variables separately, set it to None.
                             Default: None
 
@@ -149,7 +150,7 @@ def save_vars(executor,
 
             # The second usage: using `vars` to specify variables
             var_list = [var_a, var_b, var_c]
-            fluid.io.save_vars(executor=exe, dirname=path, vars=var_list, 
+            fluid.io.save_vars(executor=exe, dirname=path, vars=var_list,
                                filename="vars_file")
             # var_a, var_b and var_c will be saved. And they are going to be
             # saved in the same file named 'var_file' in the path "./my_paddle_model".
@@ -163,7 +164,7 @@ def save_vars(executor,
         save_vars(
             executor,
             dirname=dirname,
-            vars=filter(predicate, main_program.list_vars()),
+            vars=list(filter(predicate, main_program.list_vars())),
             filename=filename)
     else:
         save_program = Program()
@@ -203,14 +204,14 @@ def save_params(executor, dirname, main_program=None, filename=None):
     This function filters out all parameters from the give `main_program`
     and then save them to the folder `dirname` or the file `filename`.
 
-    Use the `dirname` to specify the saving folder. If you would like to 
-    save parameters in separate files, set `filename` None; if you would 
-    like to save all parameters in a single file, use `filename` to specify 
+    Use the `dirname` to specify the saving folder. If you would like to
+    save parameters in separate files, set `filename` None; if you would
+    like to save all parameters in a single file, use `filename` to specify
     the file name.
 
-    NOTICE: Some variables are not Parameter while they are necessary for 
-    training. So you can NOT save and continue your training just by 
-    `save_params()` and `load_params()`. Please use `save_persistables()` 
+    NOTICE: Some variables are not Parameter while they are necessary for
+    training. So you can NOT save and continue your training just by
+    `save_params()` and `load_params()`. Please use `save_persistables()`
     and `load_persistables()` instead.
 
     Args:
@@ -220,8 +221,8 @@ def save_params(executor, dirname, main_program=None, filename=None):
                                     saved. If it is None, the default
                                     main program will be used automatically.
                                     Default: None
-        filename(str|None): The file to save all parameters. If you prefer 
-                            to save parameters in differnet files, set it 
+        filename(str|None): The file to save all parameters. If you prefer
+                            to save parameters in differnet files, set it
                             to None.
                             Default: None
 
@@ -234,7 +235,7 @@ def save_params(executor, dirname, main_program=None, filename=None):
             exe = fluid.Executor(fluid.CPUPlace())
             param_path = "./my_paddle_model"
             prog = fluid.default_main_program()
-            fluid.io.save_params(executor=exe, dirname=param_path, 
+            fluid.io.save_params(executor=exe, dirname=param_path,
                                  main_program=None)
     """
     save_vars(
@@ -248,23 +249,23 @@ def save_params(executor, dirname, main_program=None, filename=None):
 
 def save_persistables(executor, dirname, main_program=None, filename=None):
     """
-    This function filters out all variables with `persistable==True` from the 
-    give `main_program` and then saves these variables to the folder `dirname` 
+    This function filters out all variables with `persistable==True` from the
+    give `main_program` and then saves these variables to the folder `dirname`
     or file `filename`.
 
-    The `dirname` is used to specify the folder where persistable variables 
-    are going to be saved. If you would like to save variables in separate 
-    files, set `filename` None; if you would like to save all variables in a 
+    The `dirname` is used to specify the folder where persistable variables
+    are going to be saved. If you would like to save variables in separate
+    files, set `filename` None; if you would like to save all variables in a
     single file, use `filename` to specify the file name.
 
     Args:
         executor(Executor): The executor to run for saving persistable variables.
         dirname(str): The directory path.
-        main_program(Program|None): The program whose persistbale variables will 
-                                    be saved. If it is None, the default main 
+        main_program(Program|None): The program whose persistbale variables will
+                                    be saved. If it is None, the default main
                                     program will be used automatically.
                                     Default: None
-        filename(str|None): The file to saved all variables. If you prefer to 
+        filename(str|None): The file to saved all variables. If you prefer to
                             save variables in differnet files, set it to None.
                             Default: None
 
@@ -277,7 +278,7 @@ def save_persistables(executor, dirname, main_program=None, filename=None):
             exe = fluid.Executor(fluid.CPUPlace())
             param_path = "./my_paddle_model"
             prog = fluid.default_main_program()
-            fluid.io.save_persistables(executor=exe, dirname=param_path, 
+            fluid.io.save_persistables(executor=exe, dirname=param_path,
                                        main_program=None)
     """
     save_vars(
@@ -298,34 +299,34 @@ def load_vars(executor,
     """
     Load variables from the given directory by executor.
 
-    There are two ways to specify variables to be loaded: The first way, list 
-    variables in a list and assign it to the `vars`. The second way, assign the 
-    `main_program` with an existing program, then all variables in the program 
-    will be loaded. The first way has a higher priority. In other words if `vars` 
+    There are two ways to specify variables to be loaded: The first way, list
+    variables in a list and assign it to the `vars`. The second way, assign the
+    `main_program` with an existing program, then all variables in the program
+    will be loaded. The first way has a higher priority. In other words if `vars`
     are assigned, the `main_program` and the `predicate` will be ignored.
 
-    The `dirname` are used to specify the folder where to load variables. 
-    If variables were saved in separate files in the folder `dirname`, 
-    set `filename` None; if all variables were saved in a single file, 
+    The `dirname` are used to specify the folder where to load variables.
+    If variables were saved in separate files in the folder `dirname`,
+    set `filename` None; if all variables were saved in a single file,
     use `filename` to specify it.
 
     Args:
         executor(Executor): The executor to run for loading variables.
         dirname(str): The directory path.
-        main_program(Program|None): The program whose variables will be loaded. 
-                                    If it is None, the default main program will 
+        main_program(Program|None): The program whose variables will be loaded.
+                                    If it is None, the default main program will
                                     be used automatically.
                                     Default: None
-        vars(list[Variable]|None): The list that contains all variables to load. 
+        vars(list[Variable]|None): The list that contains all variables to load.
                                    It has a higher priority than the `main_program`.
                                    Default: None
-        predicate(function|None): If it is not None, only variables in the 
-                                  `main_program` that makes predicate(variable)==True 
-                                  will be loaded. It only works when we are using the 
-                                  `main_program` to specify variables (In other words 
+        predicate(function|None): If it is not None, only variables in the
+                                  `main_program` that makes predicate(variable)==True
+                                  will be loaded. It only works when we are using the
+                                  `main_program` to specify variables (In other words
                                   `vars` is None).
                                   Default: None
-        filename(str|None): The file which saved all required variables. If variables 
+        filename(str|None): The file which saved all required variables. If variables
                             were saved in differnet files, set it to None.
                             Default: None
 
@@ -355,9 +356,9 @@ def load_vars(executor,
 
             # The second usage: using `vars` to specify variables
             var_list = [var_a, var_b, var_c]
-            fluid.io.load_vars(executor=exe, dirname=path, vars=var_list, 
+            fluid.io.load_vars(executor=exe, dirname=path, vars=var_list,
                                filename="vars_file")
-            # var_a, var_b and var_c will be loaded. And they are supposed to haven 
+            # var_a, var_b and var_c will be loaded. And they are supposed to haven
             # been saved in the same file named 'var_file' in the path "./my_paddle_model".
     """
     if vars is None:
@@ -369,7 +370,7 @@ def load_vars(executor,
         load_vars(
             executor,
             dirname=dirname,
-            vars=filter(predicate, main_program.list_vars()),
+            vars=list(filter(predicate, main_program.list_vars())),
             filename=filename)
     else:
         load_prog = Program()
@@ -410,15 +411,15 @@ def load_params(executor, dirname, main_program=None, filename=None):
     and then trys to load these parameters from the folder `dirname` or
     the file `filename`.
 
-    Use the `dirname` to specify the folder where parameters were saved. If 
-    parameters were saved in separate files in the folder `dirname`, set 
-    `filename` None; if all parameters were saved in a single file, use 
+    Use the `dirname` to specify the folder where parameters were saved. If
+    parameters were saved in separate files in the folder `dirname`, set
+    `filename` None; if all parameters were saved in a single file, use
     `filename` to specify the file name.
 
-    NOTICE: Some variables are not Parameter while they are necessary for 
-    training. So you can NOT save and continue your training just by 
-    `save_params()` and `load_params()`. Please use `save_persistables()` 
-    and `load_persistables()` instead. 
+    NOTICE: Some variables are not Parameter while they are necessary for
+    training. So you can NOT save and continue your training just by
+    `save_params()` and `load_params()`. Please use `save_persistables()`
+    and `load_persistables()` instead.
 
     Args:
         executor(Executor): The executor to run for loading parameters.
@@ -427,7 +428,7 @@ def load_params(executor, dirname, main_program=None, filename=None):
                                     loaded. If it is None, the default
                                     main program will be used automatically.
                                     Default: None
-        filename(str|None): The file which saved all parameters. If parameters 
+        filename(str|None): The file which saved all parameters. If parameters
                             were saved in differnet files, set it to None.
                             Default: None
 
@@ -440,7 +441,7 @@ def load_params(executor, dirname, main_program=None, filename=None):
             exe = fluid.Executor(fluid.CPUPlace())
             param_path = "./my_paddle_model"
             prog = fluid.default_main_program()
-            fluid.io.load_params(executor=exe, dirname=param_path, 
+            fluid.io.load_params(executor=exe, dirname=param_path,
                                 main_program=None)
     """
     load_vars(
@@ -453,23 +454,23 @@ def load_params(executor, dirname, main_program=None, filename=None):
 
 def load_persistables(executor, dirname, main_program=None, filename=None):
     """
-    This function filters out all variables with `persistable==True` from the 
-    give `main_program` and then trys to load these variables from the folder 
+    This function filters out all variables with `persistable==True` from the
+    give `main_program` and then trys to load these variables from the folder
     `dirname` or the file `filename`.
 
-    Use the `dirname` to specify the folder where persistable variables were 
-    saved. If variables were saved in separate files, set `filename` None; 
-    if all variables were saved in a single file, use `filename` to specify 
+    Use the `dirname` to specify the folder where persistable variables were
+    saved. If variables were saved in separate files, set `filename` None;
+    if all variables were saved in a single file, use `filename` to specify
     the file name.
 
     Args:
         executor(Executor): The executor to run for loading persistable variables.
         dirname(str): The directory path.
-        main_program(Program|None): The program whose persistbale variables will 
-                                    be loaded. If it is None, the default main 
+        main_program(Program|None): The program whose persistbale variables will
+                                    be loaded. If it is None, the default main
                                     program will be used automatically.
                                     Default: None
-        filename(str|None): The file which saved all variables. If variables were 
+        filename(str|None): The file which saved all variables. If variables were
                             saved in differnet files, set it to None.
                             Default: None
 
@@ -482,7 +483,7 @@ def load_persistables(executor, dirname, main_program=None, filename=None):
             exe = fluid.Executor(fluid.CPUPlace())
             param_path = "./my_paddle_model"
             prog = fluid.default_main_program()
-            fluid.io.load_persistables(executor=exe, dirname=param_path, 
+            fluid.io.load_persistables(executor=exe, dirname=param_path,
                                        main_program=None)
     """
     load_vars(
@@ -561,20 +562,20 @@ def save_inference_model(dirname,
 
     Args:
         dirname(str): The directory path to save the inference model.
-        feeded_var_names(list[str]): Names of variables that need to be feeded data 
+        feeded_var_names(list[str]): Names of variables that need to be feeded data
                                      during inference.
-        target_vars(list[Variable]): Variables from which we can get inference 
+        target_vars(list[Variable]): Variables from which we can get inference
                                      results.
         executor(Executor): The executor that saves the inference model.
-        main_program(Program|None): The original program, which will be pruned to 
-                                    build the inference model. If is setted None, 
+        main_program(Program|None): The original program, which will be pruned to
+                                    build the inference model. If is setted None,
                                     the default main program will be used.
                                     Default: None.
-        model_filename(str|None): The name of file to save the inference program 
-                                  itself. If is setted None, a default filename 
+        model_filename(str|None): The name of file to save the inference program
+                                  itself. If is setted None, a default filename
                                   `__model__` will be used.
-        params_filename(str|None): The name of file to save all related parameters. 
-                                   If it is setted None, parameters will be saved 
+        params_filename(str|None): The name of file to save all related parameters.
+                                   If it is setted None, parameters will be saved
                                    in separate files .
 
     Returns:
@@ -592,20 +593,34 @@ def save_inference_model(dirname,
             fluid.io.save_inference_model(dirname=path, feeded_var_names=['img'],
                          target_vars=[predict_var], executor=exe)
 
-            # In this exsample, the function will prune the default main program 
-            # to make it suitable for infering the `predict_var`. The pruned 
-            # inference program is going to be saved in the "./infer_model/__model__" 
+            # In this exsample, the function will prune the default main program
+            # to make it suitable for infering the `predict_var`. The pruned
+            # inference program is going to be saved in the "./infer_model/__model__"
             # and parameters are going to be saved in separate files under folder
-            # "./infer_model". 
+            # "./infer_model".
 
     """
-    if isinstance(feeded_var_names, basestring):
+    if isinstance(feeded_var_names, six.binary_type):
         feeded_var_names = [feeded_var_names]
+    elif isinstance(feeded_var_names, six.text_type):
+        feeded_var_names = [feeded_var_names.encode()]
     else:
         if len(feeded_var_names) > 0:
             if not (bool(feeded_var_names) and all(
-                    isinstance(name, basestring) for name in feeded_var_names)):
-                raise ValueError("'feed_var_names' should be a list of str.")
+                    isinstance(name, six.binary_type)
+                    for name in feeded_var_names)):
+                if not (all(
+                        isinstance(name, six.text_type)
+                        for name in feeded_var_names)):
+                    import sys
+                    print([type(name) for name in feeded_var_names])
+                    sys.stdout.flush()
+                    raise ValueError(
+                        "'feed_var_names' should be a list of str.")
+                else:
+                    feeded_var_names = [
+                        name.encode() for name in feeded_var_names
+                    ]
 
     if isinstance(target_vars, Variable):
         target_vars = [target_vars]
@@ -662,22 +677,22 @@ def load_inference_model(dirname,
         dirname(str): The directory path
         executor(Executor): The executor to run for loading inference model.
         model_filename(str|None): The name of file to load inference program.
-                                  If it is None, the default filename 
+                                  If it is None, the default filename
                                   '__model__' will be used.
                                   Default: None
         params_filename(str|None): The name of file to load all parameters.
-                                   It is only used for the case that all 
-                                   parameters were saved in a single binary 
-                                   file. If parameters were saved in separate 
+                                   It is only used for the case that all
+                                   parameters were saved in a single binary
+                                   file. If parameters were saved in separate
                                    files, set it as 'None'.
 
     Returns:
         tuple: The return of this function is a tuple with three elements:
-        (program, feed_target_names, fetch_targets). The `program` is a 
-        Program, it's the program for inference. The `feed_target_names` is 
-        a list of str, it contains Names of variables that need to feed 
-        data in the inference program. The `fetch_targets` is a list of 
-        Variable. It contains variables from which we can get inference 
+        (program, feed_target_names, fetch_targets). The `program` is a
+        Program, it's the program for inference. The `feed_target_names` is
+        a list of str, it contains Names of variables that need to feed
+        data in the inference program. The `fetch_targets` is a list of
+        Variable. It contains variables from which we can get inference
         results.
 
     Raises:
@@ -688,17 +703,17 @@ def load_inference_model(dirname,
 
             exe = fluid.Executor(fluid.CPUPlace())
             path = "./infer_model"
-            [inference_program, feed_target_names, fetch_targets] = 
+            [inference_program, feed_target_names, fetch_targets] =
                 fluid.io.load_inference_model(dirname=path, executor=exe)
             results = exe.run(inference_program,
                           feed={feed_target_names[0]: tensor_img},
                           fetch_list=fetch_targets)
 
-            # In this exsample, the inference program was saved in the 
-            # "./infer_model/__model__" and parameters were saved in 
-            # separate files in ""./infer_model". 
-            # After getting inference program, feed target names and 
-            # fetch targets, we can use an Executor to run the inference 
+            # In this exsample, the inference program was saved in the
+            # "./infer_model/__model__" and parameters were saved in
+            # separate files in ""./infer_model".
+            # After getting inference program, feed target names and
+            # fetch targets, we can use an Executor to run the inference
             # program to get the inference result.
 
     """

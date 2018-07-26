@@ -18,7 +18,7 @@ from ..framework import convert_np_dtype_to_dtype_
 from ..framework import Variable
 from ..initializer import Constant, force_init_on_cpu
 from ..core import VarDesc
-from layer_function_generator import templatedoc
+from .layer_function_generator import templatedoc
 import numpy
 
 __all__ = [

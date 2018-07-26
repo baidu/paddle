@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import paddle
 import paddle.fluid as fluid
 import numpy as np
@@ -173,19 +171,20 @@ def train(use_cuda, train_program, params_dirname):
             # get avg cost
             avg_cost = np.array(avg_cost_set).mean()
 
-            print("avg_cost: %s" % avg_cost)
+            print(("avg_cost: %s" % avg_cost))
 
             if float(avg_cost) < 100.0:  # Large value to increase CI speed
                 trainer.save_params(params_dirname)
             else:
-                print('BatchID {0}, Test Loss {1:0.2}'.format(event.epoch + 1,
-                                                              float(avg_cost)))
+                print(
+                    ('BatchID {0}, Test Loss {1:0.2}'.format(event.epoch + 1,
+                                                             float(avg_cost))))
                 if math.isnan(float(avg_cost)):
                     sys.exit("got NaN loss, training failed.")
 
         elif isinstance(event, fluid.EndStepEvent):
-            print("Step {0}, Epoch {1} Metrics {2}".format(
-                event.step, event.epoch, map(np.array, event.metrics)))
+            print(("Step {0}, Epoch {1} Metrics {2}".format(
+                event.step, event.epoch, list(map(np.array, event.metrics)))))
             if event.step == 1:  # Run 2 iterations to speed CI
                 trainer.save_params(params_dirname)
                 trainer.stop()
@@ -249,7 +248,7 @@ def infer(use_cuda, inference_program, params_dirname):
         },
         return_numpy=False)
 
-    print("infer results: ", np.array(results[0]).shape)
+    print(("infer results: ", np.array(results[0]).shape))
 
 
 def main(use_cuda):

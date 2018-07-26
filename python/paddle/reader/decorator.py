@@ -21,6 +21,7 @@ from threading import Thread
 import subprocess
 
 from six.moves.queue import Queue
+from six.moves import zip_longest
 import itertools
 import random
 import zlib
@@ -42,7 +43,7 @@ def map_readers(func, *readers):
         rs = []
         for r in readers:
             rs.append(r())
-        for e in itertools.imap(func, *rs):
+        for e in map(func, *rs):
             yield e
 
     return reader
@@ -148,16 +149,16 @@ def compose(*readers, **kwargs):
         for r in readers:
             rs.append(r())
         if not check_alignment:
-            for outputs in itertools.izip(*rs):
-                yield sum(map(make_tuple, outputs), ())
+            for outputs in zip(*rs):
+                yield sum(list(map(make_tuple, outputs)), ())
         else:
-            for outputs in itertools.izip_longest(*rs):
+            for outputs in zip_longest(*rs):
                 for o in outputs:
                     if o is None:
                         # None will be not be present if compose is aligned
                         raise ComposeNotAligned(
                             "outputs of readers are not aligned.")
-                yield sum(map(make_tuple, outputs), ())
+                yield sum(list(map(make_tuple, outputs)), ())
 
     return reader
 
@@ -306,7 +307,7 @@ def xmap_readers(mapper, reader, process_num, buffer_size, order=False):
         args = (in_queue, out_queue, mapper, out_order) if order else (
             in_queue, out_queue, mapper)
         workers = []
-        for i in xrange(process_num):
+        for i in range(process_num):
             worker = Thread(target=target, args=args)
             worker.daemon = True
             workers.append(worker)

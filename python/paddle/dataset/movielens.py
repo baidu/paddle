@@ -187,7 +187,7 @@ def max_movie_id():
     Get the maximum value of movie id.
     """
     __initialize_meta_info__()
-    return reduce(__max_index_info__, MOVIE_INFO.viewvalues()).index
+    return reduce(__max_index_info__, list(MOVIE_INFO.values())).index
 
 
 def max_user_id():
@@ -195,7 +195,7 @@ def max_user_id():
     Get the maximum value of user id.
     """
     __initialize_meta_info__()
-    return reduce(__max_index_info__, USER_INFO.viewvalues()).index
+    return reduce(__max_index_info__, list(USER_INFO.values())).index
 
 
 def __max_job_id_impl__(a, b):
@@ -210,7 +210,7 @@ def max_job_id():
     Get the maximum value of job id.
     """
     __initialize_meta_info__()
-    return reduce(__max_job_id_impl__, USER_INFO.viewvalues()).job_id
+    return reduce(__max_job_id_impl__, list(USER_INFO.values())).job_id
 
 
 def movie_categories():
@@ -243,7 +243,7 @@ def unittest():
     for test_count, _ in enumerate(test()()):
         pass
 
-    print train_count, test_count
+    print((train_count, test_count))
 
 
 def fetch():

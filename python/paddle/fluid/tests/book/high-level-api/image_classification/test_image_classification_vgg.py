@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import paddle
 import paddle.fluid as fluid
 import numpy
@@ -84,7 +82,7 @@ def train(use_cuda, train_program, params_dirname):
             avg_cost, accuracy = trainer.test(
                 reader=test_reader, feed_order=['pixel', 'label'])
 
-            print('Loss {0:2.2}, Acc {1:2.2}'.format(avg_cost, accuracy))
+            print(('Loss {0:2.2}, Acc {1:2.2}'.format(avg_cost, accuracy)))
 
             if accuracy > 0.01:  # Low threshold for speeding up CI
                 if params_dirname is not None:
@@ -113,7 +111,7 @@ def infer(use_cuda, inference_program, params_dirname=None):
     tensor_img = numpy.random.rand(1, 3, 32, 32).astype("float32")
     results = inferencer.infer({'pixel': tensor_img})
 
-    print("infer results: ", results)
+    print(("infer results: ", results))
 
 
 def main(use_cuda):

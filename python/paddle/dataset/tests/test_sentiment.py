@@ -24,9 +24,8 @@ from nltk.corpus import movie_reviews
 class TestSentimentMethods(unittest.TestCase):
     def test_get_word_dict(self):
         word_dict = st.get_word_dict()[0:10]
-        test_word_list = [(u',', 0), (u'the', 1), (u'.', 2), (u'a', 3),
-                          (u'and', 4), (u'of', 5), (u'to', 6), (u"'", 7),
-                          (u'is', 8), (u'in', 9)]
+        test_word_list = [(',', 0), ('the', 1), ('.', 2), ('a', 3), ('and', 4),
+                          ('of', 5), ('to', 6), ("'", 7), ('is', 8), ('in', 9)]
         for idx, each in enumerate(word_dict):
             self.assertEqual(each, test_word_list[idx])
         self.assertTrue("/root/.cache/paddle/dataset" in nltk.data.path)

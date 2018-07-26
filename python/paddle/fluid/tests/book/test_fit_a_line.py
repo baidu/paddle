@@ -114,7 +114,7 @@ def infer(use_cuda, save_dirname=None):
         test_reader = paddle.batch(
             paddle.dataset.uci_housing.test(), batch_size=batch_size)
 
-        test_data = test_reader().next()
+        test_data = next(test_reader())
         test_feat = numpy.array(
             [data[0] for data in test_data]).astype("float32")
         test_label = numpy.array(
@@ -124,9 +124,9 @@ def infer(use_cuda, save_dirname=None):
         results = exe.run(inference_program,
                           feed={feed_target_names[0]: numpy.array(test_feat)},
                           fetch_list=fetch_targets)
-        print("infer shape: ", results[0].shape)
-        print("infer results: ", results[0])
-        print("ground truth: ", test_label)
+        print(("infer shape: ", results[0].shape))
+        print(("infer results: ", results[0]))
+        print(("ground truth: ", test_label))
 
 
 def main(use_cuda, is_local=True):

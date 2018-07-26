@@ -98,7 +98,7 @@ def train(use_cuda, train_program, params_dirname):
                 reader=test_reader,
                 feed_order=['firstw', 'secondw', 'thirdw', 'forthw', 'nextw'])
             avg_cost = outs[0]
-            print("loss= ", avg_cost)
+            print(("loss= ", avg_cost))
 
             if avg_cost < 10.0:
                 trainer.save_params(params_dirname)
@@ -149,7 +149,7 @@ def infer(use_cuda, inference_program, params_dirname=None):
             'forthw': fourth_word
         },
         return_numpy=False)
-    print(np.array(result[0]))
+    print((np.array(result[0])))
 
 
 def main(use_cuda, is_sparse):

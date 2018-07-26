@@ -18,16 +18,15 @@ import errno
 import shutil
 import time
 
-import core
-
-import data_feeder
-import executor
-import framework
-import io
+from . import core
+from . import data_feeder
+from . import executor
+from . import framework
+from . import io
 # optimizer is same as the parameter of Trainer.__init__. Rename it to opt_module
-import optimizer as opt_module
-import parallel_executor
-from transpiler import distribute_transpiler
+from . import optimizer as opt_module
+from . import parallel_executor
+from .transpiler import distribute_transpiler
 
 __all__ = [
     'Trainer', 'BeginEpochEvent', 'EndEpochEvent', 'BeginStepEvent',
@@ -73,7 +72,7 @@ class BeginStepEvent(object):
         self.step = step_id
         self.fetch_metrics = True
         """
-        If fetch_metrics is true, the metrics will be fetched at the 
+        If fetch_metrics is true, the metrics will be fetched at the
         EndStepEvent. Default is True.
         """
 
@@ -614,11 +613,12 @@ def build_feed_var_list(program, feed_order):
         if not isinstance(feed_order, dict):
             raise TypeError(
                 "The 'feed_order' should be either None, list or dict.")
-        if not sorted(feed_order.values()) == range(len(feed_order)):
+        if not sorted(feed_order.values()) == list(range(len(feed_order))):
             raise ValueError(
                 "The values of 'feed_order' should be a permutation of [0, len(feed_order))"
             )
-        sorted_pair_list = sorted(feed_order.items(), key=lambda item: item[1])
+        sorted_pair_list = sorted(
+            list(feed_order.items()), key=lambda item: item[1])
         feed_var_list = [
             program.global_block().var(pair[0]) for pair in sorted_pair_list
         ]
@@ -644,14 +644,14 @@ def save_checkpoint(executor,
                     pserver_endpoints=None):
     """
     This function filters out all checkpoint variables from the give
-    main_program and then saves these variables to the `checkpoint_dir` 
+    main_program and then saves these variables to the `checkpoint_dir`
     directory.
 
     In the training precess, we generally save a checkpoint in each
-    iteration. So there might be a lot of checkpoints in the 
-    `checkpoint_dir`. To avoid them taking too much disk space, the 
-    `max_num_checkpoints` are introduced to limit the total number of 
-    checkpoints. If the number of existing checkpints is greater than 
+    iteration. So there might be a lot of checkpoints in the
+    `checkpoint_dir`. To avoid them taking too much disk space, the
+    `max_num_checkpoints` are introduced to limit the total number of
+    checkpoints. If the number of existing checkpints is greater than
     the `max_num_checkpoints`, oldest ones will be scroll deleted.
 
     A variable is a checkpoint variable and will be saved if it meets
@@ -663,21 +663,21 @@ def save_checkpoint(executor,
     Args:
         executor(Executor): The executor to run for save checkpoint.
         checkpoint_dir(str): The folder where to save checkpoints.
-        trainer_id(int): currect trainer id, if id is equal to 0, the trainer 
+        trainer_id(int): currect trainer id, if id is equal to 0, the trainer
             is chief.
-        trainer_args(dict|None): Current training arguments. Such as 'epoch_id' 
+        trainer_args(dict|None): Current training arguments. Such as 'epoch_id'
             and 'step_id'.
             Defaut: None
         main_program(Program): The program whose checkpoint variables will
             be saved.
-        max_num_checkpoints(int): The max number of total number of existing 
+        max_num_checkpoints(int): The max number of total number of existing
             checkpoints.
             Default: 3
         lookup_table(string|None): the lookup table name, when use distribute
             lookup table, we can get lookup table name by DistributeTranspiler.
-            table_name 
-        pserver_endpoints(list|None): the parameter server ip:port list.  
-            when use distribute lookup table, we can get pserver_endpoints by 
+            table_name
+        pserver_endpoints(list|None): the parameter server ip:port list.
+            when use distribute lookup table, we can get pserver_endpoints by
             distribute arguments.
 
     Returns:
@@ -747,8 +747,8 @@ def load_checkpoint(executor,
     `checkpoint_dir` directory.
 
     In the training precess, we generally save a checkpoint in each
-    iteration. So there are more than one checkpoint in the 
-    `checkpoint_dir` (each checkpoint has its own sub folder), use 
+    iteration. So there are more than one checkpoint in the
+    `checkpoint_dir` (each checkpoint has its own sub folder), use
     `serial` to specify which serial of checkpoint you would like to
     load.
 
@@ -819,9 +819,9 @@ def load_checkpoint(executor,
 
 def clean_checkpoint(checkpoint_dir, delete_dir=False):
     """
-    clean the checkpoint dir, when the train exits normally, 
+    clean the checkpoint dir, when the train exits normally,
     the trainer will call clean_checkpoint to delete checkpoint directory saved before.
-    delete_dir only works when the directory is empty, otherwise, OSError is raised.  
+    delete_dir only works when the directory is empty, otherwise, OSError is raised.
 
     : param checkpoint_dir
     : param delete_dir
@@ -889,7 +889,7 @@ def _load_persist_vars_without_grad(executor,
 
 def _load_lookup_table_vars(executor, dirname, program, pserver_id, table_name):
     """
-    The parameter server will load lookup table's local file in 
+    The parameter server will load lookup table's local file in
     selectedrows variable.
 
     Args:
@@ -940,7 +940,7 @@ def _load_lookup_table_vars(executor, dirname, program, pserver_id, table_name):
 def _save_persist_vars_without_grad(executor, dirname, program):
     """
     This function filters out all checkpoint variables from the give
-    program and then save these variables to a sub-folder '__model__' of 
+    program and then save these variables to a sub-folder '__model__' of
     the given directory.
 
     A variable is a checkpoint variable if it meets all following
@@ -969,7 +969,7 @@ def _save_persist_vars_without_grad(executor, dirname, program):
 
             # In this example, `_save_persist_vars_without_grad` function
             # will first filters out all checkpoint variables in the default
-            # main program, and then saves these variables to the folder 
+            # main program, and then saves these variables to the folder
             # "./my_paddle_model/__model__".
     """
     cur_dir = _get_model_dir(dirname)
@@ -988,7 +988,7 @@ def _save_pserver_vars_by_notify(executor, dirname, lookup_table,
     """
     This function will send checkpoint notify message from Trainer 0
     to all the pservers.
-    The checkpoint notify message contains lookup table name, 
+    The checkpoint notify message contains lookup table name,
     the absolute path on pserver to save lookup_table.
 
     Args:
@@ -996,13 +996,13 @@ def _save_pserver_vars_by_notify(executor, dirname, lookup_table,
         dirname(str): The folder where to save checkpoints.
         lookup_table(string): the lookup table name, when use distribute
             lookup table, we can get lookup table name by DistributeTranspiler.
-            table_name 
-        ps_endpoint_list(list): the parameter server ip:port list.  
-            when use distribute lookup table, we can get ps_endpoint_list by 
+            table_name
+        ps_endpoint_list(list): the parameter server ip:port list.
+            when use distribute lookup table, we can get ps_endpoint_list by
             distribute arguments.
     Return:
         None
-    
+
     Examples:
         .. code-block:: python
 
@@ -1013,7 +1013,7 @@ def _save_pserver_vars_by_notify(executor, dirname, lookup_table,
             ps_endpoints = ["127.0.0.1:6000","127.0.0.1:6001"]
 
             _save_pserver_vars_by_notify(executor=exe,
-                    dirname=param_path, lookup_table=table_name, 
+                    dirname=param_path, lookup_table=table_name,
                     ps_endpoint_list=ps_endpoints)
     """
     cur_dir = _get_lookuptable_dir(dirname)
@@ -1036,7 +1036,7 @@ def _save_trainer_args(dirname, trainer_id, trainer_args):
 
     cur_dir = _get_trainer_dir(dirname, trainer_id)
 
-    for name, value in trainer_args.iteritems():
+    for name, value in list(trainer_args.items()):
         args_file = os.path.join(cur_dir, name)
         with open(args_file, 'w') as f:
             f.write(str(value))
@@ -1045,7 +1045,7 @@ def _save_trainer_args(dirname, trainer_id, trainer_args):
 
 def _load_trainer_args(checkpoint_dir, serial, trainer_id, trainer_args):
     """
-    trainer will load some args from it's independent directory, 
+    trainer will load some args from it's independent directory,
     such as epoch_id and step_id.
 
     Args:
@@ -1168,10 +1168,10 @@ def _scroll_delete(dirname, max_num_checkpoints=3):
         serial_num = _get_dir_serial(serial)
         serial_map[serial_num] = serial
 
-    if len(serial_map.keys()) <= max_num_checkpoints:
+    if len(list(serial_map.keys())) <= max_num_checkpoints:
         return
 
-    serials = serial_map.keys()
+    serials = list(serial_map.keys())
     serials.sort(reverse=True)
     serials = serials[max_num_checkpoints:]
     for serial in serials:

@@ -136,7 +136,7 @@ class TestXmap(unittest.TestCase):
                     reader = paddle.reader.xmap_readers(mapper,
                                                         reader_creator_10(0),
                                                         tNum, size, order)
-                    for n in xrange(3):
+                    for n in range(3):
                         result = []
                         for i in reader():
                             result.append(i)
@@ -156,7 +156,7 @@ class TestPipeReader(unittest.TestCase):
 
         import tempfile
 
-        records = [str(i) for i in xrange(5)]
+        records = [str(i) for i in range(5)]
         temp = tempfile.NamedTemporaryFile()
         try:
             with open(temp.name, 'w') as f:

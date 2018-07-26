@@ -70,7 +70,9 @@ def __build_dict(tar_file, dict_size, save_path, lang):
         fout.write("%s\n%s\n%s\n" % (START_MARK, END_MARK, UNK_MARK))
         for idx, word in enumerate(
                 sorted(
-                    word_dict.iteritems(), key=lambda x: x[1], reverse=True)):
+                    iter(list(word_dict.items())),
+                    key=lambda x: x[1],
+                    reverse=True)):
             if idx + 3 == dict_size: break
             fout.write("%s\n" % (word[0]))
 

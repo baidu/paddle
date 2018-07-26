@@ -20,10 +20,10 @@ User can also implement their own learning_rate_decay
 strategy according to this module.
 """
 
-import control_flow
-import nn
-import ops
-import tensor
+from . import control_flow
+from . import nn
+from . import ops
+from . import tensor
 from ..initializer import init_on_cpu
 from ..framework import default_main_program, Parameter
 

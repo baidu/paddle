@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import sys
 
 import paddle
@@ -157,8 +155,8 @@ for pass_id in range(PASS_NUM):
             fetch_list=[avg_cost, batch_acc, batch_size])
         accuracy.add(value=acc, weight=weight)
         pass_acc = accuracy.eval()
-        print("loss:" + str(loss) + " acc:" + str(acc) + " pass_acc:" + str(
-            pass_acc))
+        print(("loss:" + str(loss) + " acc:" + str(acc) + " pass_acc:" +
+               str(pass_acc)))
         # this model is slow, so if we can train two mini batch, we think it works properly.
         if i > 0:
             exit(0)

@@ -14,49 +14,49 @@
 
 from __future__ import print_function
 # import all class inside framework into fluid module
-import framework
-from framework import *
+from . import framework
+from .framework import *
 # import all class inside executor into fluid module
-import executor
-from executor import *
+from . import executor
+from .executor import *
 
-import trainer
-from trainer import Trainer
-from trainer import BeginEpochEvent
-from trainer import EndEpochEvent
-from trainer import BeginStepEvent
-from trainer import EndStepEvent
-from trainer import CheckpointConfig
+from . import trainer
+from .trainer import Trainer
+from .trainer import BeginEpochEvent
+from .trainer import EndEpochEvent
+from .trainer import BeginStepEvent
+from .trainer import EndStepEvent
+from .trainer import CheckpointConfig
 
-import inferencer
-from inferencer import Inferencer
+from . import inferencer
+from .inferencer import Inferencer
 
-import io
-import evaluator
-import initializer
-import layers
-import contrib
-import nets
-import optimizer
-import backward
-import regularizer
-import average
-import metrics
-import transpiler
-from param_attr import ParamAttr, WeightNormParamAttr
-from data_feeder import DataFeeder
-from core import LoDTensor, LoDTensorArray, CPUPlace, CUDAPlace, CUDAPinnedPlace, Scope
-from transpiler import DistributeTranspiler, InferenceTranspiler, \
+from . import io
+from . import evaluator
+from . import initializer
+from . import layers
+from . import contrib
+from . import nets
+from . import optimizer
+from . import backward
+from . import regularizer
+from . import average
+from . import metrics
+from . import transpiler
+from .param_attr import ParamAttr, WeightNormParamAttr
+from .data_feeder import DataFeeder
+from .core import LoDTensor, LoDTensorArray, CPUPlace, CUDAPlace, CUDAPinnedPlace, Scope
+from .transpiler import DistributeTranspiler, InferenceTranspiler, \
     memory_optimize, release_memory, DistributeTranspilerConfig
-from concurrency import (Go, make_channel, channel_send, channel_recv,
-                         channel_close, Select)
-from lod_tensor import create_lod_tensor, create_random_int_lodtensor
-import clip
-import profiler
-import unique_name
-import recordio_writer
-import parallel_executor
-from parallel_executor import *
+from .concurrency import (Go, make_channel, channel_send, channel_recv,
+                          channel_close, Select)
+from .lod_tensor import create_lod_tensor, create_random_int_lodtensor
+from . import clip
+from . import profiler
+from . import unique_name
+from . import recordio_writer
+from . import parallel_executor
+from .parallel_executor import *
 from paddle.fluid.layers.math_op_patch import monkey_patch_variable
 
 Tensor = LoDTensor
@@ -99,8 +99,8 @@ def __bootstrap__():
         None
     """
     import sys
-    import core
     import os
+    from . import core
 
     in_test = 'unittest' in sys.modules
 

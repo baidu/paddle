@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from initializer import Initializer, Xavier, Constant
-from regularizer import WeightDecayRegularizer
+from .initializer import Initializer, Xavier, Constant
+from .regularizer import WeightDecayRegularizer
 
 __all__ = [
     'ParamAttr',
@@ -134,7 +134,7 @@ class ParamAttr(object):
             return [ParamAttr._to_attr(a) for a in arg]
         elif isinstance(arg, ParamAttr):
             return arg
-        elif isinstance(arg, str) or isinstance(arg, unicode):
+        elif isinstance(arg, str) or isinstance(arg, str):
             return ParamAttr(name=arg)
         elif isinstance(arg, Initializer):
             return ParamAttr(initializer=arg)

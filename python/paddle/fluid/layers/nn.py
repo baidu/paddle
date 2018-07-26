@@ -33,11 +33,12 @@ from ..layer_helper import LayerHelper
 from ..initializer import Normal, Constant
 from ..framework import Variable
 from ..param_attr import ParamAttr
-from layer_function_generator import autodoc, templatedoc
-from tensor import concat
-import utils
+from .layer_function_generator import autodoc, templatedoc
+from .tensor import concat
+from . import utils
 import random
 from .. import unique_name
+from functools import reduce
 
 __all__ = [
     'fc',
@@ -4843,7 +4844,7 @@ def dice_loss(input, label, epsilon=0.00001):
             loss = fluid.layers.dice_loss(input=predictions, label=label, 2)
     """
     label = one_hot(label, depth=input.shape[-1])
-    reduce_dim = range(1, len(input.shape))
+    reduce_dim = list(range(1, len(input.shape)))
     inse = reduce_sum(input * label, dim=reduce_dim)
     dice_denominator = reduce_sum(
         input, dim=reduce_dim) + reduce_sum(

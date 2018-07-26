@@ -91,7 +91,7 @@ class TestParallelExecutorBase(unittest.TestCase):
             first_loss, = run_executor(
                 exe=exe, feed=feed_dict, fetch_list=[loss.name])
 
-            for i in xrange(iter):
+            for i in range(iter):
                 run_executor(exe=exe, feed=feed_dict, fetch_list=[])
 
             last_loss, = run_executor(
@@ -99,8 +99,8 @@ class TestParallelExecutorBase(unittest.TestCase):
             end = time.time()
 
             if batch_size is not None:
-                print "%.4f Instance per second" % (
-                    (batch_size * iter + 2) / (end - begin))
+                print(("%.4f Instance per second" % (
+                    (batch_size * iter + 2) / (end - begin))))
 
             avg_last_loss_val = np.array(last_loss).mean()
             avg_first_loss_val = np.array(first_loss).mean()
@@ -108,6 +108,6 @@ class TestParallelExecutorBase(unittest.TestCase):
                     float(avg_first_loss_val)):
                 sys.exit("got NaN loss, training failed.")
 
-            print first_loss, last_loss
+            print((first_loss, last_loss))
             # self.assertGreater(first_loss[0], last_loss[0])
             return first_loss, last_loss

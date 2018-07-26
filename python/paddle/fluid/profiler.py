@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import core
+from . import core
 from contextlib import contextmanager
 import os
 
@@ -224,7 +224,7 @@ def profiler(state, sorted_key=None, profile_path='/tmp/profile'):
 
     If the state == 'All', a profile proto file will be written to
     `profile_path`. This file records timeline information during the execution.
-    Then users can visualize this file to see the timeline, please refer 
+    Then users can visualize this file to see the timeline, please refer
     https://github.com/PaddlePaddle/Paddle/blob/develop/doc/fluid/howto/optimization/timeline.md
 
     Args:

@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import os
-import core
 import contextlib
+from . import core
 __all__ = [
     'convert_reader_to_recordio_file', 'convert_reader_to_recordio_files'
 ]

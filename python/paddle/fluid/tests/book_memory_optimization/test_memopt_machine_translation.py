@@ -118,14 +118,14 @@ def main():
     feeder = fluid.DataFeeder(feed_list, place)
 
     batch_id = 0
-    for pass_id in xrange(10):
+    for pass_id in range(10):
         for data in train_data():
             outs = exe.run(fluid.default_main_program(),
                            feed=feeder.feed(data),
                            fetch_list=[avg_cost])
             avg_cost_val = np.array(outs[0])
-            print('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
-                  " avg_cost=" + str(avg_cost_val))
+            print(('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
+                   " avg_cost=" + str(avg_cost_val)))
             if batch_id > 2:
                 exit(0)
             if math.isnan(float(avg_cost_val)):

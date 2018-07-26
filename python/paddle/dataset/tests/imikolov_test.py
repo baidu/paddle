@@ -59,7 +59,7 @@ class TestMikolov(unittest.TestCase):
         self.assertEqual(first_line, read_line)
 
     def test_total(self):
-        _, idx = zip(*WORD_DICT.items())
+        _, idx = list(zip(*list(WORD_DICT.items())))
         self.assertEqual(sorted(idx)[-1], len(WORD_DICT) - 1)
 
 

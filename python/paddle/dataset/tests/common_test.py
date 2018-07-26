@@ -36,7 +36,7 @@ class TestCommon(unittest.TestCase):
     def test_split(self):
         def test_reader():
             def reader():
-                for x in xrange(10):
+                for x in range(10):
                     yield x
 
             return reader
@@ -49,7 +49,7 @@ class TestCommon(unittest.TestCase):
 
     def test_cluster_file_reader(self):
         _, temp_path = tempfile.mkstemp()
-        for x in xrange(5):
+        for x in range(5):
             with open(temp_path + '/%05d.test' % x) as f:
                 f.write('%d\n' % x)
         reader = paddle.dataset.common.cluster_files_reader(
@@ -63,7 +63,7 @@ class TestCommon(unittest.TestCase):
 
         def test_reader():
             def reader():
-                for x in xrange(record_num):
+                for x in range(record_num):
                     yield x
 
             return reader

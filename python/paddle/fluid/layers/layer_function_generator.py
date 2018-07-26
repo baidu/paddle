@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import re
-import cStringIO
 import functools
 import warnings
 import string
 
+from six.moves import cStringIO
 from ..proto import framework_pb2
 from ..framework import OpProtoHolder, Variable
 from ..layer_helper import LayerHelper
@@ -70,7 +70,7 @@ def _generate_doc_string_(op_proto):
     if not isinstance(op_proto, framework_pb2.OpProto):
         raise TypeError("OpProto should be `framework_pb2.OpProto`")
 
-    buf = cStringIO.StringIO()
+    buf = cStringIO()
     buf.write(escape_math(op_proto.comment))
     buf.write('\nArgs:\n')
     for each_input in op_proto.inputs:
@@ -119,9 +119,9 @@ def generate_layer_fn(op_type):
     """
     op_proto = OpProtoHolder.instance().get_op_proto(op_type)
     not_intermediate_outputs = \
-        filter(lambda output: not output.intermediate, op_proto.outputs)
+        [output for output in op_proto.outputs if not output.intermediate]
     intermediate_outputs = \
-        filter(lambda output: output.intermediate, op_proto.outputs)
+        [output for output in op_proto.outputs if output.intermediate]
 
     if len(not_intermediate_outputs) != 1:
         raise ValueError("Only one non intermediate output operator can be",

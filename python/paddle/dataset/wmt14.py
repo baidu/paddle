@@ -154,8 +154,8 @@ def get_dict(dict_size, reverse=True):
     tar_file = paddle.dataset.common.download(URL_TRAIN, 'wmt14', MD5_TRAIN)
     src_dict, trg_dict = __read_to_dict(tar_file, dict_size)
     if reverse:
-        src_dict = {v: k for k, v in src_dict.items()}
-        trg_dict = {v: k for k, v in trg_dict.items()}
+        src_dict = {v: k for k, v in list(src_dict.items())}
+        trg_dict = {v: k for k, v in list(trg_dict.items())}
     return src_dict, trg_dict
 
 

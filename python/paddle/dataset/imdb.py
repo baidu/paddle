@@ -42,13 +42,13 @@ def tokenize(pattern):
         # sequential access of member files, other than
         # tarfile.extractfile, which does random access and might
         # destroy hard disks.
-        tf = tarf.next()
+        tf = next(tarf)
         while tf != None:
             if bool(pattern.match(tf.name)):
                 # newline and punctuations removal and ad-hoc tokenization.
                 yield tarf.extractfile(tf).read().rstrip("\n\r").translate(
                     None, string.punctuation).lower().split()
-            tf = tarf.next()
+            tf = next(tarf)
 
 
 def build_dict(pattern, cutoff):
@@ -62,11 +62,11 @@ def build_dict(pattern, cutoff):
             word_freq[word] += 1
 
     # Not sure if we should prune less-frequent words here.
-    word_freq = filter(lambda x: x[1] > cutoff, word_freq.items())
+    word_freq = [x for x in list(word_freq.items()) if x[1] > cutoff]
 
     dictionary = sorted(word_freq, key=lambda x: (-x[1], x[0]))
     words, _ = list(zip(*dictionary))
-    word_idx = dict(zip(words, xrange(len(words))))
+    word_idx = dict(list(zip(words, list(range(len(words))))))
     word_idx['<unk>'] = len(words)
     return word_idx
 

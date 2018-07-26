@@ -175,15 +175,15 @@ def train(use_cuda, save_dirname=None):
     feeder = fluid.DataFeeder(feed_list, place)
 
     batch_id = 0
-    for pass_id in xrange(2):
+    for pass_id in range(2):
         for data in train_data():
             outs = exe.run(framework.default_main_program(),
                            feed=feeder.feed(data),
                            fetch_list=[avg_cost])
 
             avg_cost_val = np.array(outs[0])
-            print('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
-                  " avg_cost=" + str(avg_cost_val))
+            print(('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
+                   " avg_cost=" + str(avg_cost_val)))
             if math.isnan(float(avg_cost_val[0])):
                 sys.exit("got NaN loss, training failed.")
             if batch_id > 3:
@@ -241,10 +241,10 @@ def infer(use_cuda, save_dirname=None):
                           },
                           fetch_list=fetch_targets,
                           return_numpy=False)
-        print(results[0].recursive_sequence_lengths())
+        print((results[0].recursive_sequence_lengths()))
         np_data = np.array(results[0])
-        print("Inference shape: ", np_data.shape)
-        print("Inference results: ", np_data)
+        print(("Inference shape: ", np_data.shape))
+        print(("Inference results: ", np_data))
 
 
 def main(use_cuda):

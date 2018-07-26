@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import paddle
 import paddle.fluid as fluid
 from functools import partial
@@ -99,21 +97,21 @@ def train(use_cuda, train_program, params_dirname):
             avg_cost, acc = trainer.test(
                 reader=test_reader, feed_order=['words', 'label'])
 
-            print("avg_cost: %s" % avg_cost)
-            print("acc     : %s" % acc)
+            print(("avg_cost: %s" % avg_cost))
+            print(("acc     : %s" % acc))
 
             if acc > 0.2:  # Smaller value to increase CI speed
                 trainer.save_params(params_dirname)
                 trainer.stop()
 
             else:
-                print('BatchID {0}, Test Loss {1:0.2}, Acc {2:0.2}'.format(
-                    event.epoch + 1, avg_cost, acc))
+                print(('BatchID {0}, Test Loss {1:0.2}, Acc {2:0.2}'.format(
+                    event.epoch + 1, avg_cost, acc)))
                 if math.isnan(avg_cost):
                     sys.exit("got NaN loss, training failed.")
         elif isinstance(event, fluid.EndStepEvent):
-            print("Step {0}, Epoch {1} Metrics {2}".format(
-                event.step, event.epoch, map(np.array, event.metrics)))
+            print(("Step {0}, Epoch {1} Metrics {2}".format(
+                event.step, event.epoch, list(map(np.array, event.metrics)))))
             if event.step == 1:  # Run 2 iterations to speed CI
                 trainer.save_params(params_dirname)
                 trainer.stop()
@@ -155,7 +153,7 @@ def infer(use_cuda, inference_program, params_dirname=None):
     tensor_words = fluid.create_random_int_lodtensor(
         recursive_seq_lens, base_shape, place, low=0, high=len(word_dict) - 1)
     results = inferencer.infer({'words': tensor_words})
-    print("infer results: ", results)
+    print(("infer results: ", results))
 
 
 def main(use_cuda):

@@ -305,6 +305,6 @@ class InferenceTranspiler(object):
             args += current_op.output_arg_names
         args = list(set(args))  # unique the input and output arguments
 
-        for var in self.block.vars.keys():
+        for var in list(self.block.vars.keys()):
             if var not in args:
                 self.block._remove_var(var)

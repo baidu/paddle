@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from distribute_transpiler import DistributeTranspiler, DistributeTranspilerConfig
-from inference_transpiler import InferenceTranspiler
-from memory_optimization_transpiler import memory_optimize, release_memory
-from ps_dispatcher import HashName, RoundRobin
+from .distribute_transpiler import DistributeTranspiler, DistributeTranspilerConfig
+from .inference_transpiler import InferenceTranspiler
+from .memory_optimization_transpiler import memory_optimize, release_memory
+from .ps_dispatcher import HashName, RoundRobin
 
 __all__ = [
     "DistributeTranspiler", "InferenceTranspiler", "memory_optimize",

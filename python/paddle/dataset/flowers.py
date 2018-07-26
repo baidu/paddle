@@ -28,10 +28,10 @@ Graphics and Image Processing (2008)
 http://www.robots.ox.ac.uk/~vgg/publications/papers/nilsback08.{pdf,ps.gz}.
 
 """
-import cPickle
+import pickle
 import itertools
 import functools
-from common import download
+from .common import download
 import tarfile
 import scipy.io as scio
 from paddle.dataset.image import *
@@ -116,10 +116,10 @@ def reader_creator(data_file,
                 file = file.strip()
                 batch = None
                 with open(file, 'r') as f:
-                    batch = cPickle.load(f)
+                    batch = pickle.load(f)
                 data = batch['data']
                 labels = batch['label']
-                for sample, label in itertools.izip(data, batch['label']):
+                for sample, label in zip(data, batch['label']):
                     yield sample, int(label) - 1
             if not cycle:
                 break

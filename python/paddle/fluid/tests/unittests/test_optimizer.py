@@ -287,7 +287,7 @@ class TestAdamOptimizer(unittest.TestCase):
 
         # Check accumulators
         accumulators = adam_optimizer.get_accumulators()
-        self.assertEqual(len(accumulators), 4)
+        self.assertEqual(len(accumulators), 2)
         self.assertTrue(adam_optimizer.get_moment1_str() in accumulators)
         self.assertTrue(adam_optimizer.get_moment2_str() in accumulators)
         moment1_acc = accumulators[adam_optimizer.get_moment1_str()]
@@ -354,7 +354,7 @@ class TestAdamaxOptimizer(unittest.TestCase):
 
         # Check accumulators
         accumulators = adamax_optimizer.get_accumulators()
-        self.assertEqual(len(accumulators), 3)
+        self.assertEqual(len(accumulators), 2)
         self.assertTrue(adamax_optimizer.get_moment_str() in accumulators)
         self.assertTrue(adamax_optimizer.get_inf_norm_str() in accumulators)
         moment_acc = accumulators[adamax_optimizer.get_moment_str()]

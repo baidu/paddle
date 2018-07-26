@@ -76,15 +76,15 @@ class TestMNISTIfElseOp(unittest.TestCase):
         PASS_NUM = 100
         for pass_id in range(PASS_NUM):
             for data in train_reader():
-                x_data = np.array(map(lambda x: x[0], data)).astype("float32")
-                y_data = np.array(map(lambda x: x[1], data)).astype("int64")
+                x_data = np.array([x[0] for x in data]).astype("float32")
+                y_data = np.array([x[1] for x in data]).astype("int64")
                 y_data = np.expand_dims(y_data, axis=1)
 
                 outs = exe.run(prog,
                                feed={'x': x_data,
                                      'y': y_data},
                                fetch_list=[avg_loss])
-                print outs[0]
+                print((outs[0]))
                 if outs[0] < 1.0:
                     return
         self.assertFalse(True)
@@ -131,15 +131,15 @@ class TestMNISTIfElseOp(unittest.TestCase):
         PASS_NUM = 100
         for pass_id in range(PASS_NUM):
             for data in train_reader():
-                x_data = np.array(map(lambda x: x[0], data)).astype("float32")
-                y_data = np.array(map(lambda x: x[1], data)).astype("int64")
+                x_data = np.array([x[0] for x in data]).astype("float32")
+                y_data = np.array([x[1] for x in data]).astype("int64")
                 y_data = y_data.reshape((y_data.shape[0], 1))
 
                 outs = exe.run(prog,
                                feed={'x': x_data,
                                      'y': y_data},
                                fetch_list=[avg_loss])
-                print outs[0]
+                print((outs[0]))
                 if outs[0] < 1.0:
                     return
         self.assertFalse(True)

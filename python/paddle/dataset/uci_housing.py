@@ -49,9 +49,12 @@ def feature_range(maximums, minimums):
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     feature_num = len(maximums)
-    ax.bar(range(feature_num), maximums - minimums, color='r', align='center')
+    ax.bar(list(range(feature_num)),
+           maximums - minimums,
+           color='r',
+           align='center')
     ax.set_title('feature scale')
-    plt.xticks(range(feature_num), feature_names)
+    plt.xticks(list(range(feature_num)), feature_names)
     plt.xlim([-1, feature_num])
     fig.set_figheight(6)
     fig.set_figwidth(10)
@@ -71,7 +74,7 @@ def load_data(filename, feature_num=14, ratio=0.8):
     maximums, minimums, avgs = data.max(axis=0), data.min(axis=0), data.sum(
         axis=0) / data.shape[0]
     feature_range(maximums[:-1], minimums[:-1])
-    for i in xrange(feature_num - 1):
+    for i in range(feature_num - 1):
         data[:, i] = (data[:, i] - avgs[i]) / (maximums[i] - minimums[i])
     offset = int(data.shape[0] * ratio)
     UCI_TRAIN_DATA = data[:offset]

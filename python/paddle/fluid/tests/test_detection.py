@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
 from paddle.fluid.framework import Program, program_guard
@@ -47,7 +46,7 @@ class TestDetection(unittest.TestCase):
                 scores=scores, loc=loc, prior_box=pb, prior_box_var=pbv)
             self.assertIsNotNone(out)
             self.assertEqual(out.shape[-1], 6)
-        print(str(program))
+        print((str(program)))
 
     def test_detection_api(self):
         program = Program()
@@ -82,7 +81,7 @@ class TestDetection(unittest.TestCase):
             self.assertIsNotNone(trg)
             self.assertIsNotNone(trg_weight)
 
-        print(str(program))
+        print((str(program)))
 
     def test_ssd_loss(self):
         program = Program()
@@ -106,7 +105,7 @@ class TestDetection(unittest.TestCase):
             loss = layers.ssd_loss(loc, scores, gt_box, gt_label, pb, pbv)
             self.assertIsNotNone(loss)
             self.assertEqual(loss.shape[-1], 1)
-        print(str(program))
+        print((str(program)))
 
 
 class TestPriorBox(unittest.TestCase):
@@ -197,7 +196,7 @@ class TestDetectionMAP(unittest.TestCase):
             map_out = layers.detection_map(detect_res, label, 21)
             self.assertIsNotNone(map_out)
             self.assertEqual(map_out.shape, (1, ))
-        print(str(program))
+        print((str(program)))
 
 
 if __name__ == '__main__':

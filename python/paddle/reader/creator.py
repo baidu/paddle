@@ -67,10 +67,10 @@ def recordio(paths, buf_size=100):
 
     import recordio as rec
     import paddle.reader.decorator as dec
-    import cPickle as pickle
+    import pickle as pickle
 
     def reader():
-        if isinstance(paths, basestring):
+        if isinstance(paths, str):
             path = paths
         else:
             path = ",".join(paths)

@@ -15,7 +15,7 @@
 All util layers.
 """
 
-from layer_function_generator import autodoc
+from .layer_function_generator import autodoc
 from ..framework import unique_name
 from ..layer_helper import LayerHelper
 from ..annotations import deprecated

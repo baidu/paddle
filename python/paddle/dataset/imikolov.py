@@ -64,11 +64,11 @@ def build_dict(min_word_freq=50):
             # remove <unk> for now, since we will set it as last index
             del word_freq['<unk>']
 
-        word_freq = filter(lambda x: x[1] > min_word_freq, word_freq.items())
+        word_freq = [x for x in list(word_freq.items()) if x[1] > min_word_freq]
 
         word_freq_sorted = sorted(word_freq, key=lambda x: (-x[1], x[0]))
         words, _ = list(zip(*word_freq_sorted))
-        word_idx = dict(zip(words, xrange(len(words))))
+        word_idx = dict(list(zip(words, list(range(len(words))))))
         word_idx['<unk>'] = len(words)
 
     return word_idx

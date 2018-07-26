@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import paddle
 import paddle.fluid as fluid
 import contextlib
@@ -165,10 +163,10 @@ def train(net_type, use_cuda, save_dirname, is_local):
                     acc_value = numpy.array(acc_list).mean()
                     avg_loss_value = numpy.array(avg_loss_list).mean()
 
-                    print(
+                    print((
                         'PassID {0:1}, BatchID {1:04}, Test Loss {2:2.2}, Acc {3:2.2}'.
                         format(pass_id, batch_id + 1,
-                               float(avg_loss_value), float(acc_value)))
+                               float(avg_loss_value), float(acc_value))))
 
                     if acc_value > 0.01:  # Low threshold for speeding up CI
                         fluid.io.save_inference_model(save_dirname, ["pixel"],
@@ -241,7 +239,7 @@ def infer(use_cuda, save_dirname=None):
             np.testing.assert_almost_equal(
                 results[0][i], transpiler_results[0][i], decimal=5)
 
-        print("infer results: ", results[0])
+        print(("infer results: ", results[0]))
 
         fluid.io.save_inference_model(save_dirname, feed_target_names,
                                       fetch_targets, exe,

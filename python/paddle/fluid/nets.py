@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import layers
+from . import layers
 
 __all__ = [
     "simple_img_conv_pool",
@@ -210,7 +210,7 @@ def img_conv_group(input,
     conv_with_batchnorm = __extend_list__(conv_with_batchnorm)
     conv_batchnorm_drop_rate = __extend_list__(conv_batchnorm_drop_rate)
 
-    for i in xrange(len(conv_num_filter)):
+    for i in range(len(conv_num_filter)):
         local_conv_act = conv_act
         if conv_with_batchnorm[i]:
             local_conv_act = None
@@ -488,10 +488,11 @@ def scaled_dot_product_attention(queries,
         trans_x = layers.transpose(x, perm=[0, 2, 1, 3])
         return layers.reshape(
             x=trans_x,
-            shape=map(int, [
-                trans_x.shape[0], trans_x.shape[1],
-                trans_x.shape[2] * trans_x.shape[3]
-            ]))
+            shape=list(
+                map(int, [
+                    trans_x.shape[0], trans_x.shape[1], trans_x.shape[2] *
+                    trans_x.shape[3]
+                ])))
 
     q, k, v = __compute_qkv(queries, keys, values, num_heads)
 

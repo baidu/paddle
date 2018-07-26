@@ -199,14 +199,14 @@ def train_main(use_cuda, is_sparse, is_local=True):
         feeder = fluid.DataFeeder(feed_list, place)
 
         batch_id = 0
-        for pass_id in xrange(1):
+        for pass_id in range(1):
             for data in train_data():
                 outs = exe.run(main_program,
                                feed=feeder.feed(data),
                                fetch_list=[avg_cost])
                 avg_cost_val = np.array(outs[0])
-                print('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
-                      " avg_cost=" + str(avg_cost_val))
+                print(('pass_id=' + str(pass_id) + ' batch=' + str(batch_id) +
+                       " avg_cost=" + str(avg_cost_val)))
                 if batch_id > 3:
                     break
                 batch_id += 1
@@ -273,7 +273,7 @@ def decode_main(use_cuda, is_sparse):
     feeder = fluid.DataFeeder(feed_list, place)
 
     for data in train_data():
-        feed_dict = feeder.feed(map(lambda x: [x[0]], data))
+        feed_dict = feeder.feed([[x[0]] for x in data])
         feed_dict['init_ids'] = init_ids
         feed_dict['init_scores'] = init_scores
 
@@ -282,7 +282,7 @@ def decode_main(use_cuda, is_sparse):
             feed=feed_dict,
             fetch_list=[translation_ids, translation_scores],
             return_numpy=False)
-        print result_ids.recursive_sequence_lengths()
+        print((result_ids.recursive_sequence_lengths()))
         break
 
 

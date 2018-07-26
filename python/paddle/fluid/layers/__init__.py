@@ -12,25 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ops
-from ops import *
-import nn
-from nn import *
-import io
-from io import *
-import tensor
-from tensor import *
-import control_flow
-from control_flow import *
-import device
-from device import *
-import math_op_patch
-from math_op_patch import *
-import detection
-from detection import *
-import metric_op
-from metric_op import *
-from learning_rate_scheduler import *
+from . import ops
+from .ops import *
+from . import nn
+from .nn import *
+from . import io
+from .io import *
+from . import tensor
+from .tensor import *
+from . import control_flow
+from .control_flow import *
+from . import device
+from .device import *
+from . import math_op_patch
+from .math_op_patch import *
+from . import detection
+from .detection import *
+from . import metric_op
+from .metric_op import *
+from .learning_rate_scheduler import *
 
 __all__ = []
 __all__ += nn.__all__

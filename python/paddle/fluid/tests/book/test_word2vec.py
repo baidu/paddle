@@ -85,9 +85,11 @@ def train(use_cuda, is_sparse, is_parallel, save_dirname, is_local=True):
         pd = fluid.layers.ParallelDo(places)
         with pd.do():
             avg_cost, predict_word = __network__(
-                map(pd.read_input, [
-                    first_word, second_word, third_word, forth_word, next_word
-                ]))
+                list(
+                    map(pd.read_input, [
+                        first_word, second_word, third_word, forth_word,
+                        next_word
+                    ])))
             pd.write_output(avg_cost)
 
         avg_cost = fluid.layers.mean(pd())
@@ -202,9 +204,9 @@ def infer(use_cuda, save_dirname=None):
                           },
                           fetch_list=fetch_targets,
                           return_numpy=False)
-        print(results[0].recursive_sequence_lengths())
+        print((results[0].recursive_sequence_lengths()))
         np_data = np.array(results[0])
-        print("Inference Shape: ", np_data.shape)
+        print(("Inference Shape: ", np_data.shape))
 
 
 def main(use_cuda, is_sparse, is_parallel):

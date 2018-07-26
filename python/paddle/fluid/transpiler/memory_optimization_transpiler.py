@@ -16,6 +16,7 @@ from collections import defaultdict
 from .. import core
 from ..framework import Program, default_main_program, Parameter
 from ..backward import _rename_arg_
+from functools import reduce
 
 dtype_to_size = {
     core.VarDesc.VarType.FP16: 2,
@@ -107,7 +108,7 @@ class ControlFlowGraph(object):
         # Repeatedly apply liveness updates until the algorithm stablize
         # on a complete set live input vars and live output vars.
         while True:
-            for i in reversed(range(self.op_size)):
+            for i in reversed(list(range(self.op_size))):
                 live_in[i] = set(self._live_in[i])
                 live_out[i] = set(self._live_out[i])
                 for s in self._successors[i]:
@@ -172,9 +173,10 @@ class ControlFlowGraph(object):
             is_forward = i < self._forward_num
             in_diff, out_diff = self._get_diff(self._live_in[i],
                                                self._live_out[i])
-            can_optimize = filter(
-                lambda x: self._check_var_validity(block_desc, x, is_forward),
-                in_diff)
+            can_optimize = [
+                x for x in in_diff
+                if self._check_var_validity(block_desc, x, is_forward)
+            ]
             if can_optimize:
                 index = i + fwd_id + 1 if is_forward else i - self._forward_num + bwd_id + 1
                 delete_op = block_desc._insert_op(index)
@@ -213,9 +215,10 @@ class ControlFlowGraph(object):
             block_desc = op.block()
             is_forward = i < self._forward_num
             if self.pool:
-                defs_can_optimize = filter(
-                    lambda x: self._check_var_validity(block_desc, x, is_forward),
-                    self._defs[i])
+                defs_can_optimize = [
+                    x for x in self._defs[i]
+                    if self._check_var_validity(block_desc, x, is_forward)
+                ]
                 out_pair = [
                     (x, self._find_var(block_desc, x, is_forward).shape())
                     for x in defs_can_optimize
@@ -243,11 +246,11 @@ class ControlFlowGraph(object):
                             continue
 
                         if PRINT_LOG:
-                            print(("Hit Cache !!!! cache pool index "
-                                   "is %d, var name is %s, "
-                                   "cached var name is %s, "
-                                   "var shape is %s ") % (index, x, cache_var,
-                                                          str(cache_shape)))
+                            print((("Hit Cache !!!! cache pool index "
+                                    "is %d, var name is %s, "
+                                    "cached var name is %s, "
+                                    "var shape is %s ") % (index, x, cache_var,
+                                                           str(cache_shape))))
                         self.pool.pop(index)
                         if x == cache_var:
                             break
@@ -261,9 +264,10 @@ class ControlFlowGraph(object):
                         break
 
             in_diff, _ = self._get_diff(self._live_in[i], self._live_out[i])
-            can_optimize = filter(
-                lambda x: self._check_var_validity(block_desc, x, is_forward),
-                in_diff)
+            can_optimize = [
+                x for x in in_diff
+                if self._check_var_validity(block_desc, x, is_forward)
+            ]
             if can_optimize:
                 for var_name in can_optimize:
                     self.pool.append((var_name, self._find_var(

@@ -63,7 +63,7 @@ def train(use_cuda, train_program, params_dirname):
             if event.step == 10:
                 test_metrics = trainer.test(
                     reader=test_reader, feed_order=['x', 'y'])
-                print test_metrics
+                print(test_metrics)
                 '''
                 ...
                 ['25.768919467926025']
@@ -94,7 +94,7 @@ def infer(use_cuda, inference_program, params_dirname=None):
     tensor_x = numpy.random.uniform(0, 10, [batch_size, 13]).astype("float32")
 
     results = inferencer.infer({'x': tensor_x})
-    print("infer results: ", results[0])
+    print(("infer results: ", results[0]))
 
 
 def main(use_cuda):

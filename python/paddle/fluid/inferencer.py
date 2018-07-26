@@ -14,14 +14,14 @@
 
 import contextlib
 
-import core
+from . import core
 
-import executor
-import framework
-import io
-import parallel_executor
-import unique_name
-from trainer import check_and_get_place
+from . import executor
+from . import framework
+from . import io
+from . import parallel_executor
+from . import unique_name
+from .trainer import check_and_get_place
 
 __all__ = ['Inferencer', ]
 

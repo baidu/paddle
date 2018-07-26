@@ -20,7 +20,7 @@ from ..layer_helper import LayerHelper
 from ..initializer import Normal, Constant
 from ..framework import Variable
 from ..param_attr import ParamAttr
-import nn
+from . import nn
 
 __all__ = ['accuracy', 'auc']
 

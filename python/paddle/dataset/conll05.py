@@ -87,12 +87,12 @@ def corpus_reader(data_path, words_name, props_name):
             sentences = []
             labels = []
             one_seg = []
-            for word, label in itertools.izip(words_file, props_file):
+            for word, label in zip(words_file, props_file):
                 word = word.strip()
                 label = label.strip().split()
 
                 if len(label) == 0:  # end of sentence
-                    for i in xrange(len(one_seg[0])):
+                    for i in range(len(one_seg[0])):
                         a_kind_lable = [x[i] for x in one_seg]
                         labels.append(a_kind_lable)
 

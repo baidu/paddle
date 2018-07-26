@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import print_function
+
 import argparse
 import paddle.fluid as fluid
 import paddle
@@ -61,14 +61,14 @@ def train(use_cuda, train_program, params_dirname):
             avg_cost, acc = trainer.test(
                 reader=test_reader, feed_order=['img', 'label'])
 
-            print("avg_cost: %s" % avg_cost)
-            print("acc     : %s" % acc)
+            print(("avg_cost: %s" % avg_cost))
+            print(("acc     : %s" % acc))
 
             if acc > 0.2:  # Smaller value to increase CI speed
                 trainer.save_params(params_dirname)
             else:
-                print('BatchID {0}, Test Loss {1:0.2}, Acc {2:0.2}'.format(
-                    event.epoch + 1, avg_cost, acc))
+                print(('BatchID {0}, Test Loss {1:0.2}, Acc {2:0.2}'.format(
+                    event.epoch + 1, avg_cost, acc)))
                 if math.isnan(avg_cost):
                     sys.exit("got NaN loss, training failed.")
 
@@ -96,7 +96,7 @@ def infer(use_cuda, inference_program, params_dirname=None):
 
     results = inferencer.infer({'img': tensor_img})
 
-    print("infer results: ", results[0])
+    print(("infer results: ", results[0]))
 
 
 def main(use_cuda):
