@@ -9,19 +9,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
+
 limitations under the License. */
 
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/detection/poly_util.h"
 
 namespace paddle {
 namespace operators {
 
 using Tensor = framework::Tensor;
 using LoDTensor = framework::LoDTensor;
-
-constexpr int64_t kOutputDim = 6;
-constexpr int64_t kBBoxSize = 4;
 
 class MultiClassNMSOp : public framework::OperatorWithKernel {
  public:
@@ -42,10 +40,15 @@ class MultiClassNMSOp : public framework::OperatorWithKernel {
                       "The rank of Input(BBoxes) must be 3.");
     PADDLE_ENFORCE_EQ(score_dims.size(), 3,
                       "The rank of Input(Scores) must be 3.");
-    PADDLE_ENFORCE_EQ(box_dims[2], 4,
-                      "The 2nd dimension of Input(BBoxes) must be 4, "
-                      "represents the layout of coordinate "
-                      "[xmin, ymin, xmax, ymax]");
+    PADDLE_ENFORCE(box_dims[2] == 4 || box_dims[2] == 8 || box_dims[2] == 16 
+                || box_dims[2] == 24 || box_dims[2] == 32,
+                   "The 2nd dimension of Input(BBoxes) must be 4 or 8, "
+                   "represents the layout of coordinate "
+                   "[xmin, ymin, xmax, ymax] or "
+                   "4 points: [x1, y1, x2, y2, x3, y3, x4, y4] or "
+                   "8 points: [xi, yi] i= 1,2,...,8 or "
+                   "12 points: [xi, yi] i= 1,2,...,12 or "
+                   "16 points: [xi, yi] i= 1,2,...,16");
     PADDLE_ENFORCE_EQ(box_dims[1], score_dims[2],
                       "The 1st dimensiong of Input(BBoxes) must be equal to "
                       "3rd dimension of Input(Scores), which represents the "
@@ -53,7 +56,7 @@ class MultiClassNMSOp : public framework::OperatorWithKernel {
 
     // Here the box_dims[0] is not the real dimension of output.
     // It will be rewritten in the computing kernel.
-    ctx->SetOutputDim("Out", {box_dims[1], 6});
+    ctx->SetOutputDim("Out", {box_dims[1], box_dims[2] + 2});
   }
 
  protected:
@@ -128,6 +131,21 @@ static inline T JaccardOverlap(const T* box1, const T* box2,
   }
 }
 
+template <class T>
+T PolyIoU(const T* box1, const T* box2, const size_t box_size,
+          const bool normalized) {
+  T bbox1_area = PolyArea<T>(box1, box_size, normalized);
+  T bbox2_area = PolyArea<T>(box2, box_size, normalized);
+  T inter_area = PolyOverlapArea<T>(box1, box2, box_size, normalized);
+  if (bbox1_area == 0 || bbox2_area == 0 || inter_area == 0) {
+    // If coordinate values are is invalid
+    // if area size <= 0,  return 0.
+    return T(0.);
+  } else {
+    return inter_area / (bbox1_area + bbox2_area - inter_area);
+  }
+}
+
 template <typename T>
 class MultiClassNMSKernel : public framework::OpKernel<T> {
  public:
@@ -137,6 +155,8 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
     // The total boxes for each instance.
     int64_t num_boxes = bbox.dims()[0];
     // 4: [xmin ymin xmax ymax]
+    // 8: [x1 y1 x2 y2 x3 y3 x4 y4]
+    // 16, 24, or 32: [x1 y1 x2 y2 ...  xn yn], n = 8, 12 or 16
     int64_t box_size = bbox.dims()[1];
 
     std::vector<T> scores_data(num_boxes);
@@ -154,8 +174,19 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
       for (size_t k = 0; k < selected_indices->size(); ++k) {
         if (keep) {
           const int kept_idx = (*selected_indices)[k];
-          T overlap = JaccardOverlap<T>(bbox_data + idx * box_size,
+          T overlap = T(0.);
+          // 4: [xmin ymin xmax ymax]
+          if (box_size == 4) {
+            overlap = JaccardOverlap<T>(bbox_data + idx * box_size,
                                         bbox_data + kept_idx * box_size, true);
+          }
+          // 8: [x1 y1 x2 y2 x3 y3 x4 y4] or 16, 24, 32
+          if (box_size == 8 || box_size == 16 || box_size == 24 
+                            || box_size == 32) {
+            overlap =
+                PolyIoU<T>(bbox_data + idx * box_size,
+                           bbox_data + kept_idx * box_size, box_size, true);
+          }
           keep = overlap <= adaptive_threshold;
         } else {
           break;
@@ -228,7 +259,9 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
   void MultiClassOutput(const Tensor& scores, const Tensor& bboxes,
                         const std::map<int, std::vector<int>>& selected_indices,
                         Tensor* outs) const {
-    int predict_dim = scores.dims()[1];
+    int64_t predict_dim = scores.dims()[1];
+    int64_t box_size = bboxes.dims()[1];
+    int64_t out_dim = bboxes.dims()[1] + 2;
     auto* scores_data = scores.data<T>();
     auto* bboxes_data = bboxes.data<T>();
     auto* odata = outs->data<T>();
@@ -240,11 +273,11 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
       const std::vector<int>& indices = it.second;
       for (size_t j = 0; j < indices.size(); ++j) {
         int idx = indices[j];
-        const T* bdata = bboxes_data + idx * kBBoxSize;
-        odata[count * kOutputDim] = label;           // label
-        odata[count * kOutputDim + 1] = sdata[idx];  // score
-        // xmin, ymin, xmax, ymax
-        std::memcpy(odata + count * kOutputDim + 2, bdata, 4 * sizeof(T));
+        const T* bdata = bboxes_data + idx * box_size;
+        odata[count * out_dim] = label;           // label
+        odata[count * out_dim + 1] = sdata[idx];  // score
+        // xmin, ymin, xmax, ymax or multi-points coordinates
+        std::memcpy(odata + count * out_dim + 2, bdata, box_size * sizeof(T));
         count++;
       }
     }
@@ -261,6 +294,7 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
     int64_t class_num = score_dims[1];
     int64_t predict_dim = score_dims[2];
     int64_t box_dim = boxes->dims()[2];
+    int64_t out_dim = boxes->dims()[2] + 2;
 
     std::vector<std::map<int, std::vector<int>>> all_indices;
     std::vector<size_t> batch_starts = {0};
@@ -283,7 +317,7 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
       T* od = outs->mutable_data<T>({1}, ctx.GetPlace());
       od[0] = -1;
     } else {
-      outs->mutable_data<T>({num_kept, kOutputDim}, ctx.GetPlace());
+      outs->mutable_data<T>({num_kept, out_dim}, ctx.GetPlace());
       for (int64_t i = 0; i < batch_size; ++i) {
         Tensor ins_score = scores->Slice(i, i + 1);
         ins_score.Resize({class_num, predict_dim});
@@ -311,10 +345,11 @@ class MultiClassNMSOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
     AddInput("BBoxes",
-             "(Tensor) A 3-D Tensor with shape [N, M, 4] represents the "
+             "(Tensor) A 3-D Tensor with shape "
+             "[N, M, 4 or 8 16 24 32] represents the "
              "predicted locations of M bounding bboxes, N is the batch size. "
              "Each bounding box has four coordinate values and the layout is "
-             "[xmin, ymin, xmax, ymax].");
+             "[xmin, ymin, xmax, ymax], when box size equals to 4.");
     AddInput("Scores",
              "(Tensor) A 3-D Tensor with shape [N, C, M] represents the "
              "predicted confidence predictions. N is the batch size, C is the "
@@ -351,8 +386,12 @@ class MultiClassNMSOpMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("Out",
               "(LoDTensor) A 2-D LoDTensor with shape [No, 6] represents the "
               "detections. Each row has 6 values: "
-              "[label, confidence, xmin, ymin, xmax, ymax], No is the total "
-              "number of detections in this mini-batch. For each instance, "
+              "[label, confidence, xmin, ymin, xmax, ymax] or "
+              "(LoDTensor) A 2-D LoDTensor with shape [No, 10] represents the "
+              "detections. Each row has 10 values: "
+              "[label, confidence, x1, y1, x2, y2, x3, y3, x4, y4]. No is the "
+              "total number of detections in this mini-batch."
+              "For each instance, "
               "the offsets in first dimension are called LoD, the number of "
               "offset is N + 1, if LoD[i + 1] - LoD[i] == 0, means there is "
               "no detected bbox.");

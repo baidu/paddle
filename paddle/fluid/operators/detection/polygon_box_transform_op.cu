@@ -32,9 +32,9 @@ __global__ void PolygonBoxTransformKernel(const int n, const int h, const int w,
   if (id_n < n && id_h < h && id_w < w) {
     int id = id_n * h * w + w * id_h + id_w;
     if (id_n % 2 == 0) {
-      output[id] = id_w - input[id];
+      output[id] = id_w * 4 - input[id];
     } else {
-      output[id] = id_h - input[id];
+      output[id] = id_h * 4 - input[id];
     }
   }
 }
