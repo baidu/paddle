@@ -14,6 +14,8 @@ limitations under the License. */
 
 #pragma once
 
+#include <iterator>
+#include <set>
 #include <unordered_map>
 #include <vector>
 #include "paddle/fluid/framework/op_registry.h"
@@ -31,19 +33,39 @@ class SplitIdsOpKernel : public framework::OpKernel<T> {
       PADDLE_THROW("SplitIds do not support GPU kernel");
     }
 
-    const auto *ids_var = ctx.InputVar("Ids");
+    const auto ids_vars = ctx.MultiInputVar("Ids");
+
+    PADDLE_ENFORCE_GT(ids_vars.size(), 0, "The number of Ids should > 0");
+    auto *ids_var = ids_vars[0];
+
     if (ids_var->IsType<framework::LoDTensor>()) {
-      const auto &ids_dims = ctx.Input<framework::LoDTensor>("Ids")->dims();
-      const T *ids = ctx.Input<framework::LoDTensor>("Ids")->data<T>();
+      int batch_size = 0;
+      const auto ids_tensors = ctx.MultiInput<framework::LoDTensor>("Ids");
+      for (size_t i = 0; i < ids_tensors.size(); ++i) {
+        batch_size += ids_tensors[i]->dims()[0];
+      }
+      VLOG(4) << "Get Total BatchSize is: " << batch_size;
+
+      std::vector<T> all_ids(batch_size);
+      int offset = 0;
+      for (size_t i = 0; i < ids_tensors.size(); ++i) {
+        const auto *ids = ids_tensors[i];
+        std::memcpy(all_ids.data() + offset, ids->data<T>(),
+                    ids->numel() * sizeof(T));
+        offset += ids->numel();
+      }
+
+      std::set<T> st(all_ids.begin(), all_ids.end());
+      all_ids.assign(st.begin(), st.end());
+
       auto outs = ctx.MultiOutput<framework::LoDTensor>("Out");
       const size_t shard_num = outs.size();
-
       std::vector<std::vector<T>> out_ids;
       out_ids.resize(outs.size());
 
       // split id by their shard_num.
-      for (int i = 0; i < ids_dims[0]; ++i) {
-        T id = ids[i];
+      for (int i = 0; i < all_ids.size(); ++i) {
+        T id = all_ids[i];
         size_t shard_id = static_cast<size_t>(id) % shard_num;
         out_ids[shard_id].push_back(id);
       }
@@ -64,7 +86,7 @@ class SplitIdsOpKernel : public framework::OpKernel<T> {
       PADDLE_ENFORCE_EQ(ids_dims[0],
                         static_cast<int64_t>(ids_selected_rows->rows().size()),
                         "");
-      const T *ids = ids_selected_rows->value().data<T>();
+      const T *ids_data = ids_selected_rows->value().data<T>();
       const auto &ids_rows = ids_selected_rows->rows();
       auto outs = ctx.MultiOutput<framework::SelectedRows>("Out");
       const size_t shard_num = outs.size();
@@ -87,7 +109,7 @@ class SplitIdsOpKernel : public framework::OpKernel<T> {
         T *output = out->mutable_value()->mutable_data<T>(ddim, place);
         for (int64_t i = 0; i < ddim[0]; ++i) {
           memcpy(output + i * row_width,
-                 ids + id_to_index[out->rows()[i]] * row_width,
+                 ids_data + id_to_index[out->rows()[i]] * row_width,
                  row_width * sizeof(T));
         }
       }

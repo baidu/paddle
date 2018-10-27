@@ -12,9 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#include <map>
 #include <set>
-#include <vector>
+#include <unordered_map>
 
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/selected_rows_functor.h"
@@ -230,8 +229,24 @@ template struct SelectedRowsAddToTensor<platform::CPUDeviceContext, int64_t>;
 // add or mul.
 namespace scatter {
 
-size_t FindPos(const std::vector<int64_t>& rows, int64_t value) {
-  return std::find(rows.begin(), rows.end(), value) - rows.begin();
+template <typename DeviceContext, typename T>
+typename std::enable_if<
+    std::is_floating_point<T>::value &&
+    std::is_same<DeviceContext, platform::CPUDeviceContext>::value>::type
+elementwise_add_to(const DeviceContext& ctx, BlasT<DeviceContext, T>* blas,
+                   size_t data_len, const T* in, T* out) {
+  blas->AXPY(data_len, 1., in, out);
+}
+
+template <typename DeviceContext, typename T>
+typename std::enable_if<
+    !std::is_floating_point<T>::value &&
+    std::is_same<DeviceContext, platform::CPUDeviceContext>::value>::type
+elementwise_add_to(const DeviceContext& ctx, BlasT<DeviceContext, T>* blas,
+                   size_t data_len, const T* in, T* out) {
+  for (int64_t i = 0; i < data_len; i++) {
+    out[i] += in[i];
+  }
 }
 
 template <typename T>
@@ -246,48 +261,65 @@ struct MergeAdd<platform::CPUDeviceContext, T> {
   void operator()(const platform::CPUDeviceContext& context,
                   const framework::SelectedRows& input,
                   framework::SelectedRows* output) {
+    std::vector<const framework::SelectedRows*> inputs;
+    inputs.push_back(&input);
+    (*this)(context, inputs, output);
+  }
+
+  void operator()(const platform::CPUDeviceContext& context,
+                  const std::vector<const framework::SelectedRows*>& inputs,
+                  framework::SelectedRows* output) {
+    PADDLE_ENFORCE_GT(inputs.size(), 0, "should have at least one input");
+    auto input_width = inputs[0]->value().dims()[1];
+    auto input_height = inputs[0]->height();
     framework::SelectedRows& out = *output;
-    std::vector<int64_t> input_rows(input.rows());
-
-    std::map<int64_t, std::vector<int64_t>> merge_row_map;
-    for (size_t i = 0; i < input_rows.size(); ++i) {
-      merge_row_map[input_rows[i]].push_back(i);
+    std::set<int64_t> merged_row_set;
+    for (auto* input : inputs) {
+      PADDLE_ENFORCE_EQ(input_width, input->value().dims()[1],
+                        "all input should have same "
+                        "dimension except for the first one");
+      PADDLE_ENFORCE_EQ(input_height, input->height(),
+                        "all input should have same height");
+      merged_row_set.insert(input->rows().begin(), input->rows().end());
     }
-
-    std::vector<int64_t> merge_rows(merge_row_map.size());
-    size_t idx = 0;
-    int64_t input_width = input.value().dims()[1];
-    out.set_height(input.height());
-
-    T* out_data = out.mutable_value()->mutable_data<T>(
-        framework::make_ddim(
-            {static_cast<int64_t>(merge_rows.size()), input_width}),
-        context.GetPlace());
-    const T* in_data = input.value().data<T>();
-
-    for (auto& row_pair : merge_row_map) {
-      auto* out_ptr = out_data + idx * input_width;
-      auto& rows = row_pair.second;
-      merge_rows[idx] = row_pair.first;
-      ++idx;
-      // rows.size() is always larger than 0
-      std::memcpy(out_ptr, in_data + rows[0] * input_width,
-                  sizeof(T) * input_width);
-
-      for (size_t i = 1; i < rows.size(); ++i) {
-        auto* in_ptr = in_data + rows[i] * input_width;
-        for (int64_t j = 0; j < input_width; ++j) {
-          out_ptr[j] += in_ptr[j];
-        }
-      }
+    std::vector<int64_t> merge_rows(merged_row_set.begin(),
+                                    merged_row_set.end());
+    std::unordered_map<int64_t, size_t> rows_to_id;
+    for (size_t i = 0; i < merge_rows.size(); ++i) {
+      rows_to_id[merge_rows[i]] = i;
     }
 
     out.set_rows(merge_rows);
+    out.set_height(input_height);
+    out.mutable_value()->mutable_data<T>(
+        framework::make_ddim(
+            {static_cast<int64_t>(merge_rows.size()), input_width}),
+        context.GetPlace());
+
+    math::SetConstant<platform::CPUDeviceContext, T> constant_functor;
+    constant_functor(context, out.mutable_value(), 0.0);
+
+    auto* out_data = out.mutable_value()->data<T>();
+
+    auto blas = math::GetBlas<platform::CPUDeviceContext, T>(context);
+    for (auto* input : inputs) {
+      auto* input_data = input->value().data<T>();
+      auto& input_rows = input->rows();
+
+      for (size_t i = 0; i < input_rows.size(); i++) {
+        size_t out_i = rows_to_id[input_rows[i]];
+        elementwise_add_to<platform::CPUDeviceContext, T>(
+            context, &blas, static_cast<size_t>(input_width),
+            &input_data[i * input_width], &out_data[out_i * input_width]);
+      }
+    }
   }
 };
 
 template struct MergeAdd<platform::CPUDeviceContext, int>;
 template struct MergeAdd<platform::CPUDeviceContext, int64_t>;
+template struct MergeAdd<platform::CPUDeviceContext, float>;
+template struct MergeAdd<platform::CPUDeviceContext, double>;
 
 template <typename T>
 struct UpdateToTensor<platform::CPUDeviceContext, T> {

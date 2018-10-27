@@ -20,13 +20,16 @@ namespace operators {
 class MergeIdsOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
-    AddInput("Ids", "(LoDTensor) the input ids with shape{batch_num, 1}");
-    AddInput(
-        "X",
-        "(LoDTensors) multi input tensor with shape{batch_num, N}, N is the "
-        "size of embedding table")
+    AddInput("Ids", "(LoDTensor) the input ids with shape{batch_num, 1}")
         .AsDuplicable();
-    AddOutput("Out", "(LoDTensor) The merged outputs of the input tensors.");
+    AddInput("Rows", "(LoDTensor) the input ids with shape{row_size, 1}, ")
+        .AsDuplicable();
+    AddInput("X",
+             "(LoDTensors) multi input tensor with shape{Rows, N}, N is the "
+             "size of embedding table")
+        .AsDuplicable();
+    AddOutput("Out", "(LoDTensor) The merged outputs of the input tensors.")
+        .AsDuplicable();
 
     AddComment(R"DOC(
 Merge multi LoDTensor's into one according to Ids's shard num.
@@ -79,15 +82,19 @@ class MergeIdsOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE(ctx->HasInput("Ids"), "MergeIdsOp must has input Ids.");
-    PADDLE_ENFORCE(ctx->HasInputs("X"), "MergeIdsOp must has input X.");
-    PADDLE_ENFORCE(ctx->HasOutput("Out"), "MergeIdsOp must has output Out.");
+    PADDLE_ENFORCE(ctx->HasInputs("Ids"),
+                   "MergeIdsOp must has multi input Ids.");
+    PADDLE_ENFORCE(ctx->HasInputs("Rows"),
+                   "MergeIdsOp must has multi input Rows.");
+    PADDLE_ENFORCE(ctx->HasInputs("X"), "MergeIdsOp must has multi input X.");
+    PADDLE_ENFORCE(ctx->HasOutputs("Out"),
+                   "MergeIdsOp must has multi output Out.");
 
     auto ids_var_type = ctx->GetInputsVarType("Ids").front();
-    auto ids_dims = ctx->GetInputDim("Ids");
+    auto ids_dims = ctx->GetInputsDim("Ids");
     if (ids_var_type == framework::proto::VarType::LOD_TENSOR) {
-      PADDLE_ENFORCE_EQ(ids_dims.size(), 2);
-      PADDLE_ENFORCE_EQ(ids_dims[1], 1);
+      PADDLE_ENFORCE_EQ(ids_dims[0].size(), 2);
+      PADDLE_ENFORCE_EQ(ids_dims[0][1], 1);
     }
     auto x_var_type = ctx->GetInputsVarType("X");
     for (auto &var_type : x_var_type) {

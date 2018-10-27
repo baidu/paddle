@@ -241,3 +241,69 @@ TEST(selected_rows_functor, gpu_add_to) {
   // row9: 2.0 + 3.0
   EXPECT_EQ(tensor1_cpu_data[9 * row_numel + 6], 5.0);
 }
+
+TEST(selected_rows_functor, gpu_merge_add) {
+  paddle::platform::CUDAPlace gpu_place(0);
+  paddle::platform::CPUPlace cpu_place;
+  paddle::platform::CUDADeviceContext& ctx =
+      *reinterpret_cast<paddle::platform::CUDADeviceContext*>(
+          paddle::platform::DeviceContextPool::Instance().Get(gpu_place));
+  paddle::operators::math::SetConstant<paddle::platform::CUDADeviceContext,
+                                       float>
+      set_const;
+
+  int64_t height = 10;
+  int64_t row_numel = 8;
+
+  std::vector<int64_t> rows1{5, 2, 5, 3, 5};
+  std::unique_ptr<paddle::framework::SelectedRows> selected_rows1{
+      new paddle::framework::SelectedRows(rows1, height)};
+  auto* in1_value = selected_rows1->mutable_value();
+  in1_value->mutable_data<float>(
+      paddle::framework::make_ddim(
+          {static_cast<int64_t>(rows1.size()), row_numel}),
+      gpu_place);
+  set_const(ctx, in1_value, 1.0);
+
+  std::vector<int64_t> rows2{2, 5, 3, 5, 3};
+  std::unique_ptr<paddle::framework::SelectedRows> selected_rows2{
+      new paddle::framework::SelectedRows(rows2, height)};
+  auto* in2_value = selected_rows2->mutable_value();
+  in2_value->mutable_data<float>(
+      paddle::framework::make_ddim(
+          {static_cast<int64_t>(rows2.size()), row_numel}),
+      gpu_place);
+  set_const(ctx, in2_value, 1.0);
+
+  std::unique_ptr<paddle::framework::SelectedRows> output{
+      new paddle::framework::SelectedRows()};
+  output->set_height(height);
+  paddle::operators::math::scatter::MergeAdd<
+      paddle::platform::CUDADeviceContext, float>
+      merge_add_functor;
+
+  std::vector<const paddle::framework::SelectedRows*> inputs;
+  inputs.push_back(selected_rows1.get());
+  inputs.push_back(selected_rows2.get());
+  merge_add_functor(ctx, inputs, output.get());
+
+  paddle::framework::Tensor output_cpu;
+  paddle::framework::TensorCopy(output->value(), cpu_place, ctx, &output_cpu);
+  ctx.Wait();
+
+  EXPECT_EQ(output->height(), height);
+  EXPECT_EQ(output->value().dims(),
+            paddle::framework::make_ddim({3, row_numel}));
+
+  std::vector<int64_t> ret_rows{2, 3, 5};
+  EXPECT_EQ(output->rows(), ret_rows);
+
+  auto* out_data = output_cpu.data<float>();
+  for (size_t i = 0; i < ret_rows.size(); ++i) {
+    for (size_t j = 0; j < row_numel; ++j) {
+      EXPECT_EQ(out_data[i * row_numel + j], ret_rows[i]);
+      std::cout << out_data[i * row_numel + j] << " ";
+    }
+    std::cout << "\n";
+  }
+}

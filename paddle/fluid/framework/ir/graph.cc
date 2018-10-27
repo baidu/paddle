@@ -69,6 +69,12 @@ bool IsDistTrainOp(ir::Node *node, const std::vector<std::string> &send_vars,
           std::find(rpc_vars.begin(), rpc_vars.end(), var) != rpc_vars.end()) {
         return true;
       }
+
+      if (!(var.find(".block") == std::string::npos &&
+            var.find(".pserver") == std::string::npos) &&
+          std::find(rpc_vars.begin(), rpc_vars.end(), var) != rpc_vars.end()) {
+        return true;
+      }
     }
     return false;
   };
