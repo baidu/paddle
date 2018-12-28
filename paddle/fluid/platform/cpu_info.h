@@ -18,9 +18,9 @@ limitations under the License. */
 
 #ifdef _WIN32
 #if defined(__AVX2__)
-#include <immintrin.h>  //avx2
+#include <immintrin.h>  // avx2
 #elif defined(__AVX__)
-#include <intrin.h>  //avx
+#include <intrin.h>  // avx
 #endif               // AVX
 #else                // WIN32
 #ifdef __AVX__

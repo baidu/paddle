@@ -45,4 +45,5 @@ class Conv2DFusionOpMaker : public Conv2DOpMaker {
 
 namespace ops = paddle::operators;
 REGISTER_OPERATOR(conv2d_fusion, ops::ConvOp, ops::Conv2DFusionOpMaker,
-                  ops::ConvOpInferVarType, paddle::framework::EmptyGradOpMaker);
+                  ops::ConvEstimateFlops, ops::ConvOpInferVarType,
+                  paddle::framework::EmptyGradOpMaker);

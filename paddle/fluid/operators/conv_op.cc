@@ -392,17 +392,18 @@ framework::OpKernelType ConvOpGrad::GetExpectedKernelType(
 
 namespace ops = paddle::operators;
 REGISTER_OPERATOR(conv2d, ops::ConvOp, ops::Conv2DOpMaker,
-                  ops::ConvOpInferVarType,
+                  ops::ConvOpInferVarType, ops::ConvEstimateFlops,
                   paddle::framework::DefaultGradOpDescMaker<true>);
 REGISTER_OPERATOR(conv2d_grad, ops::ConvOpGrad);
 
 // depthwise convolution op
 REGISTER_OPERATOR(depthwise_conv2d, ops::ConvOp, ops::Conv2DOpMaker,
+                  ops::ConvEstimateFlops,
                   paddle::framework::DefaultGradOpDescMaker<true>);
 REGISTER_OPERATOR(depthwise_conv2d_grad, ops::ConvOpGrad);
 
 REGISTER_OPERATOR(conv3d, ops::ConvOp, ops::Conv3DOpMaker,
-                  ops::ConvOpInferVarType,
+                  ops::ConvOpInferVarType, ops::ConvEstimateFlops,
                   paddle::framework::DefaultGradOpDescMaker<true>);
 REGISTER_OPERATOR(conv3d_grad, ops::ConvOpGrad);
 

@@ -464,6 +464,11 @@ class OperatorWithKernel : public OperatorBase {
   proto::VarType::Type IndicateDataType(const ExecutionContext& ctx) const;
   void RunImpl(const Scope& scope, const platform::Place& place) const final;
 
+  size_t EstimateFlops(InferShapeContext* ctx) const {
+    auto& info = OpInfoMap::Instance().Get(this->Type());
+    return info.estimate_flops_ ? info.estimate_flops_(ctx) : 0;
+  }
+
   /**
    * Transfer data from scope to a transfered scope. If there is no data need to
    * be tranfered, it returns nullptr.

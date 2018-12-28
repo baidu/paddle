@@ -159,6 +159,19 @@ class CompileTimeInferShapeContext : public InferShapeContext {
     return GetVarTypes(Outputs(name));
   }
 
+  DDim GetOutputDim(const std::string &name) const override {
+    const std::vector<std::string> &arg_names = Outputs(name);
+    PADDLE_ENFORCE_EQ(arg_names.size(), 1UL,
+                      "Input(%s) should hold one element, but now it holds %d",
+                      name, arg_names.size());
+    return this->GetDim(arg_names[0]);
+  }
+
+  std::vector<DDim> GetOutputsDim(const std::string &name) const override {
+    const std::vector<std::string> &arg_names = Outputs(name);
+    return GetDims(arg_names);
+  }
+
   void SetOutputDim(const std::string &name, const DDim &dim) override {
     auto &arg_names = Outputs(name);
     PADDLE_ENFORCE_EQ(arg_names.size(), 1UL,

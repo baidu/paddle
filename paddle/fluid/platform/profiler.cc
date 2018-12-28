@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/platform/profiler.h"
-#include "paddle/fluid/platform/port.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -28,9 +27,12 @@ limitations under the License. */
 #include "glog/logging.h"
 #include "paddle/fluid/framework/block_desc.h"
 #include "paddle/fluid/platform/device_tracer.h"
+#include "paddle/fluid/platform/port.h"
 #include "paddle/fluid/string/printf.h"
 
 DEFINE_bool(enable_rpc_profiler, false, "Enable rpc profiler or not.");
+DEFINE_bool(print_flops, false,
+            "Whether to print the FLOPs and FLOPs per second.");
 
 namespace paddle {
 namespace platform {
@@ -99,8 +101,12 @@ inline uint64_t GetTimeInNsec() {
 }
 
 Event::Event(EventType type, std::string name, uint32_t thread_id,
-             const DeviceContext* dev_ctx)
-    : type_(type), name_(name), thread_id_(thread_id), has_cuda_(false) {
+             const DeviceContext* dev_ctx, size_t flops)
+    : type_(type),
+      name_(name),
+      thread_id_(thread_id),
+      flops_(flops),
+      has_cuda_(false) {
 #ifdef PADDLE_WITH_CUDA
   has_cuda_ = dev_ctx ? platform::is_gpu_place(dev_ctx->GetPlace()) : false;
   if (has_cuda_) {
@@ -163,22 +169,25 @@ void Mark(const std::string& name, const DeviceContext* dev_ctx) {
   GetEventList().Record(EventType::kMark, name, g_thread_id, dev_ctx);
 }
 
-void PushEvent(const std::string& name, const DeviceContext* dev_ctx) {
-  GetEventList().Record(EventType::kPushRange, name, g_thread_id, dev_ctx);
+void PushEvent(const std::string& name, const DeviceContext* dev_ctx,
+               size_t flops) {
+  GetEventList().Record(EventType::kPushRange, name, g_thread_id, dev_ctx,
+                        flops);
 }
 
 void PopEvent(const std::string& name, const DeviceContext* dev_ctx) {
   GetEventList().Record(EventType::kPopRange, name, g_thread_id, dev_ctx);
 }
 
-RecordEvent::RecordEvent(const std::string& name, const DeviceContext* dev_ctx)
+RecordEvent::RecordEvent(const std::string& name, const DeviceContext* dev_ctx,
+                         size_t flops)
     : is_enabled_(false), start_ns_(PosixInNsec()) {
   std::lock_guard<std::mutex> l(profiler_mu);
   if (g_state == ProfilerState::kDisabled) return;
   is_enabled_ = true;
   dev_ctx_ = dev_ctx;
   name_ = name;
-  PushEvent(name_, dev_ctx_);
+  PushEvent(name_, dev_ctx_, flops);
   // Maybe need the same push/pop behavior.
   SetCurAnnotation(name_);
 }
@@ -280,6 +289,7 @@ struct EventItem {
   double max_time;
   double ave_time;
   float ratio;
+  size_t flops;
 };
 
 // Print results
@@ -315,17 +325,35 @@ void PrintProfiler(const std::vector<std::vector<EventItem>>& events_table,
             << "Calls" << std::setw(data_width) << "Total"
             << std::setw(data_width) << "Min." << std::setw(data_width)
             << "Max." << std::setw(data_width) << "Ave."
-            << std::setw(data_width) << "Ratio." << std::endl;
+            << std::setw(data_width) << "Ratio." << std::setw(data_width)
+            << "FLOPs." << std::setw(data_width) << "GFLOPsPerSec."
+            << std::endl;
   for (size_t i = 0; i < events_table.size(); ++i) {
     for (size_t j = 0; j < events_table[i].size(); ++j) {
       const EventItem& event_item = events_table[i][j];
+      double flops_per_sec = event_item.ave_time > 0
+                                 ? static_cast<double>(event_item.flops) /
+                                       static_cast<double>(event_item.ave_time)
+                                 : 0.;
+      flops_per_sec = flops_per_sec * 1e3 / 1e9;
+      std::string str_flops = "";
+      if (event_item.flops) {
+        str_flops =
+            string::Sprintf("%d", static_cast<int64_t>(event_item.flops));
+      }
+      std::string str_flops_per_sec = "";
+      if (flops_per_sec > 0) {
+        str_flops_per_sec = string::Sprintf("%f", flops_per_sec);
+      }
       std::cout << std::setw(name_width) << event_item.name
                 << std::setw(data_width) << event_item.calls
                 << std::setw(data_width) << event_item.total_time
                 << std::setw(data_width) << event_item.min_time
                 << std::setw(data_width) << event_item.max_time
                 << std::setw(data_width) << event_item.ave_time
-                << std::setw(data_width) << event_item.ratio << std::endl;
+                << std::setw(data_width) << event_item.ratio
+                << std::setw(data_width) << str_flops << std::setw(data_width)
+                << str_flops_per_sec << std::endl;
     }
   }
   std::cout << std::endl;
@@ -425,11 +453,12 @@ void ParseEvents(const std::vector<std::vector<Event>>& events,
             max_name_width = std::max(max_name_width, event_name.size());
           }
 
+          size_t flops = rit->flops();
           if (event_idx.find(event_name) == event_idx.end()) {
             event_idx[event_name] = event_items.size();
             EventItem event_item = {event_name, 1,          event_time,
                                     event_time, event_time, event_time,
-                                    0.};
+                                    0.,         flops};
             event_items.push_back(event_item);
           } else {
             int index = event_idx[event_name];
@@ -442,6 +471,8 @@ void ParseEvents(const std::vector<std::vector<Event>>& events,
             // max time
             event_items[index].max_time =
                 std::max(event_time, event_items[index].max_time);
+            // total flops
+            event_items[index].flops += flops;
           }
 
           // remove the push marker from the list
@@ -457,6 +488,7 @@ void ParseEvents(const std::vector<std::vector<Event>>& events,
     for (auto& item : event_items) {
       item.ave_time = item.total_time / item.calls;
       item.ratio = item.total_time / total;
+      item.flops = item.flops / item.calls;
     }
     // sort
     if (sorted_by != EventSortingKey::kDefault) {

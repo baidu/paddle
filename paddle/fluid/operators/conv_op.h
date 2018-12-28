@@ -87,6 +87,24 @@ class ConvOpInferVarType : public framework::PassInDtypeAndVarTypeToOutput {
   }
 };
 
+// calculate floating point operations,
+// not floating point operations per second.
+class ConvEstimateFlops : public framework::EstimateFlopsBase {
+ public:
+  size_t operator()(const framework::InferShapeContext* ctx) const override {
+    auto filter_dims = ctx->GetInputDim("Filter");
+    auto out_dims = ctx->GetOutputDim("Output");
+    int groups = ctx->Attrs().Get<int>("groups");
+    auto omap_dims = framework::slice_ddim(out_dims, 2, out_dims.size());
+    size_t flops = 2 * framework::product(filter_dims) *
+                   framework::product(omap_dims) / groups;
+    if (!ctx->HasInput("Bias")) {
+      flops -= framework::product(out_dims) / out_dims[0];
+    }
+    return flops;
+  }
+};
+
 class ConvOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;

@@ -19,6 +19,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/data_transform.h"
 #include "paddle/fluid/framework/executor.h"
 #include "paddle/fluid/framework/lod_tensor.h"
+#include "paddle/fluid/framework/op_proto_maker.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/framework/shape_inference.h"
 #include "paddle/fluid/framework/transfer_scope_cache.h"
@@ -749,6 +750,19 @@ class RuntimeInferShapeContext : public InferShapeContext {
     return GetVarTypes(OutputVars(name));
   }
 
+  DDim GetOutputDim(const std::string& name) const override {
+    const std::vector<Variable*>& vars = OutputVars(name);
+    PADDLE_ENFORCE_EQ(vars.size(), 1UL,
+                      "Input(%s) should hold one element, but now it holds %d",
+                      name, vars.size());
+    return this->GetDim(vars[0]);
+  }
+
+  std::vector<DDim> GetOutputsDim(const std::string& name) const override {
+    const std::vector<Variable*>& vars = OutputVars(name);
+    return GetDims(vars);
+  }
+
   void SetOutputDim(const std::string& name, const DDim& dim) override {
     auto& vars = OutputVars(name);
     PADDLE_ENFORCE_EQ(vars.size(), 1UL,
@@ -926,9 +940,19 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
 
   RuntimeInferShapeContext infer_shape_ctx(*this, exec_scope, ctx);
   this->InferShape(&infer_shape_ctx);
-  // TODO(panyx0718): ExecutionContext should only depend on RuntimeContext
-  // not Scope. Imperative mode only pass inputs and get outputs.
-  kernel_iter->second(ExecutionContext(*this, exec_scope, *dev_ctx, ctx));
+  if (platform::IsProfileEnabled()) {
+    std::string ename =
+        string::Sprintf("%s%s", Type(), Attr<std::string>("op_namescope"));
+    platform::PushEvent(ename, dev_ctx, EstimateFlops(&infer_shape_ctx));
+
+    kernel_iter->second(ExecutionContext(*this, exec_scope, *dev_ctx, ctx));
+
+    platform::PopEvent(ename, dev_ctx);
+  } else {
+    // TODO(panyx0718): ExecutionContext should only depend on RuntimeContext
+    // not Scope. Imperative mode only pass inputs and get outputs.
+    kernel_iter->second(ExecutionContext(*this, exec_scope, *dev_ctx, ctx));
+  }
 
   if (!transfered_inplace_vars.empty()) {
     // there is inplace variable has been transfered.

@@ -29,12 +29,13 @@ class Event {
   // The DeviceContext is used to get the cuda stream.
   // If CPU profiling mode, can pass nullptr.
   Event(EventType type, std::string name, uint32_t thread_id,
-        const DeviceContext* dev_ctx);
+        const DeviceContext* dev_ctx, size_t flops = 0);
 
   const EventType& type() const;
   std::string name() const { return name_; }
   uint32_t thread_id() const { return thread_id_; }
   bool has_cuda() const { return has_cuda_; }
+  size_t flops() const { return flops_; }
 
 #ifdef PADDLE_WITH_CUDA
   cudaEvent_t event() const { return event_; }
@@ -49,6 +50,7 @@ class Event {
   std::string name_;
   uint32_t thread_id_;
   int64_t cpu_ns_;
+  size_t flops_;
   bool has_cuda_;
 #ifdef PADDLE_WITH_CUDA
   cudaEvent_t event_ = nullptr;
@@ -65,13 +67,15 @@ enum ProfilerState {
 
 void Mark(const std::string& name, const DeviceContext* dev_ctx);
 
-void PushEvent(const std::string& name, const DeviceContext* dev_ctx);
+void PushEvent(const std::string& name, const DeviceContext* dev_ctx,
+               size_t flops = 0);
 
 void PopEvent(const std::string& name, const DeviceContext* dev_ctx);
 
 struct RecordEvent {
   // dev_ctx can be set to nullptr if device is cpu.
-  RecordEvent(const std::string& name, const DeviceContext* dev_ctx);
+  RecordEvent(const std::string& name, const DeviceContext* dev_ctx,
+              size_t flops = 0);
 
   ~RecordEvent();
 

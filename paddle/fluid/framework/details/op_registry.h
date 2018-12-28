@@ -32,7 +32,9 @@ enum OpInfoFillType {
   kOpProtoAndCheckerMaker = 1,
   kGradOpDescMaker = 2,
   kVarTypeInference = 3,
-  kShapeInference = 4
+  kShapeInference = 4,
+  kEstimateFlops = 5,
+  kUnknown = -1
 };
 
 template <typename T>
@@ -48,8 +50,10 @@ struct OpInfoFillTypeID {
                                     ? kVarTypeInference
                                     : (std::is_base_of<InferShapeBase, T>::value
                                            ? kShapeInference
-                                           : static_cast<OpInfoFillType>(
-                                                 -1)))));
+                                           : (std::is_base_of<EstimateFlopsBase,
+                                                              T>::value
+                                                  ? kEstimateFlops
+                                                  : kUnknown)))));
   }
 };
 
@@ -135,6 +139,16 @@ struct OpInfoFiller<T, kShapeInference> {
     info->infer_shape_ = [](InferShapeContext* ctx) {
       T inference;
       inference(ctx);
+    };
+  }
+};
+
+template <typename T>
+struct OpInfoFiller<T, kEstimateFlops> {
+  void operator()(const char* op_tpe, OpInfo* info) const {
+    info->estimate_flops_ = [](InferShapeContext* ctx) {
+      T estimate_flops;
+      return estimate_flops(ctx);
     };
   }
 };
