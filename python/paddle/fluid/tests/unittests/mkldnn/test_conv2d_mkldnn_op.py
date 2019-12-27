@@ -62,6 +62,7 @@ class TestConv2dMKLDNNOp(TestConv2dOp):
         self.fuse_brelu_threshold = 6.0
         self.fuse_residual_connection = False
         self.input_residual_size = None
+        self.dtype = np.float32
         TestConv2dOp.setUp(self)
 
         output = self.outputs['Output']
