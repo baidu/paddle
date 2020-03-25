@@ -15,6 +15,8 @@ limitations under the License. */
 #pragma once
 
 #include <string>
+#include <vector>
+#include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/device_context.h"
 
 namespace paddle {
@@ -29,6 +31,32 @@ class FCFunctor {
                   const T* B = nullptr, bool relu = false,
                   bool weight_pass = false);
 };
+
+template <typename DeviceContext>
+class FCInt8Functor;
+
+template <>
+class FCInt8Functor<platform::CPUDeviceContext> {
+ public:
+  void operator()(const platform::CPUDeviceContext& context, int M, int N,
+                  int K, const framework::Tensor& in,
+                  const framework::Tensor& W, framework::Tensor* Y, float scale,
+                  std::vector<float> weight_scale, const framework::Tensor& B,
+                  bool relu = false, bool weight_pass = false) {}
+};
+
+#ifdef PADDLE_WITH_CUDA
+template <>
+class FCInt8Functor<platform::CUDADeviceContext> {
+ public:
+  void operator()(const platform::CUDADeviceContext& context, int M, int N,
+                  int K, const framework::Tensor& in,
+                  const framework::Tensor& W, framework::Tensor* Y,
+                  float in_scale, std::vector<float> weight_scale,
+                  const framework::Tensor& B, bool relu = false,
+                  bool weight_pass = false);
+};
+#endif
 
 }  // namespace math
 }  // namespace operators

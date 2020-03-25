@@ -106,6 +106,11 @@ class FusedFCElementwiseLayerNormOp : public framework::OperatorWithKernel {
     }
     ctx->ShareLoD("X", "Out");
   }
+  framework::OpKernelType GetExpectedKernelType(
+      const framework::ExecutionContext &ctx) const {
+    auto input_data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
+    return framework::OpKernelType(input_data_type, ctx.GetPlace());
+  }
 };
 
 class FusedFCElementwiseLayerNormOpMaker

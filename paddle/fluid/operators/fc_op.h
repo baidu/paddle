@@ -65,17 +65,27 @@ class FCOpKernel : public framework::OpKernel<T> {
                  padding_weights);
     output->Resize(framework::make_ddim(output_dims));
     output->set_lod(input->lod());
+    T* output_data = output->mutable_data<T>(ctx.GetPlace());
 
     auto out_dims = output->dims();
     auto w_dims0 = padding_weights ? w_dims[0] - 4 : w_dims[0];
     auto w_dims1 = padding_weights ? w_dims[1] - 4 : w_dims[1];
     int M = framework::product(out_dims) / w_dims1;
+    auto& dev_ctx = ctx.template device_context<DeviceContext>();
 
+    if (ctx.HasAttr("enable_int8") && ctx.Attr<bool>("enable_int8")) {
+      float in_scale = ctx.Attr<float>("Input_scale");
+      std::vector<float> weight_scale =
+          ctx.Attr<std::vector<float>>("weight_scale");
+
+      math::FCInt8Functor<DeviceContext> fc_int8_func;
+      fc_int8_func(dev_ctx, M, w_dims1, w_dims0, *input, *w, output, in_scale,
+                   weight_scale, *bias, with_relu, padding_weights);
+      return;
+    }
     const T* input_data = input->data<T>();
     const T* w_data = w->data<T>();
-    T* output_data = output->mutable_data<T>(ctx.GetPlace());
 
-    auto& dev_ctx = ctx.template device_context<DeviceContext>();
     math::FCFunctor<DeviceContext, T> fc;
     fc(dev_ctx, M, w_dims1, w_dims0, input_data, w_data, output_data,
        bias ? bias->data<T>() : NULL, with_relu, padding_weights);

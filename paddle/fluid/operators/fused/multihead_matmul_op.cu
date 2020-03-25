@@ -16,10 +16,11 @@
 #include <paddle/fluid/platform/device_context.h>
 #include <algorithm>
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/memory/malloc.h"
 #include "paddle/fluid/operators/detail/safe_ref.h"
 #include "paddle/fluid/operators/math/blas.h"
-
+#include "paddle/fluid/operators/math/quant.h"
 namespace paddle {
 namespace operators {
 
@@ -242,6 +243,40 @@ __global__ void elt_qk_add(const T *bias_qk, T *qk_buf, int head_num,
   qk_buf[dst_id] += tmp_bias;
 }
 
+__global__ void INT32ToFP32Kernel(int count, const int32_t *in_data,
+                                  float *out_data, int all_head_size,
+                                  float scale0, float scale1, float scale2) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < count) {
+    float scale = 1.;
+    if ((tid / all_head_size) % 3 == 0) {
+      scale = scale0;
+    } else if ((tid / all_head_size) % 3 == 1) {
+      scale = scale1;
+    } else if ((tid / all_head_size) % 3 == 2) {
+      scale = scale2;
+    }
+    out_data[tid] = scale * __int2float_rn(in_data[tid]);
+  }
+}
+
+__global__ void FP32DequantKernel(int count, const float *in_data,
+                                  float *out_data, int all_head_size,
+                                  float scale0, float scale1, float scale2) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < count) {
+    float scale = 1.;
+    if ((tid / all_head_size) % 3 == 0) {
+      scale = scale0;
+    } else if ((tid / all_head_size) % 3 == 1) {
+      scale = scale1;
+    } else if ((tid / all_head_size) % 3 == 2) {
+      scale = scale2;
+    }
+    out_data[tid] = scale * in_data[tid];
+  }
+}
+
 // Compute Q*K->softmax->eltadd
 template <typename T>
 void MatMulWithHeadQK(const platform::CUDADeviceContext &context, int head_num,
@@ -444,7 +479,6 @@ class MultiHeadMatMulV2Kernel : public framework::OpKernel<T> {
                                 "Cannot find QK");
 
     auto *input_d = input->data<T>();
-    auto *w_d = w->data<T>();
     auto *bias_d = bias->data<T>();
     auto *bias_qk_d = bias_qk.data<T>();
     T scale = static_cast<T>(context.Attr<float>("alpha"));
@@ -471,8 +505,7 @@ class MultiHeadMatMulV2Kernel : public framework::OpKernel<T> {
     const Tensor input_matrix =
         framework::ReshapeToMatrix(*input, 2 /*x_num_col_dims */);
     // (hidden, 3 * all_head_size)
-    const Tensor w_matrix =
-        framework::ReshapeToMatrix(*w, 1 /*y_num_col_dims*/);
+    Tensor w_matrix = framework::ReshapeToMatrix(*w, 1 /*y_num_col_dims*/);
 
     Tensor temp_out_tensor;
     auto temp_out_dims =
@@ -480,13 +513,87 @@ class MultiHeadMatMulV2Kernel : public framework::OpKernel<T> {
     temp_out_tensor.Resize({batch * seq_len, framework::product(temp_out_dims) /
                                                  (batch * seq_len)});
     auto *temp_out_data = temp_out_tensor.mutable_data<T>(context.GetPlace());
+    if (context.HasAttr("enable_int8") && context.Attr<bool>("enable_int8")) {
+      PADDLE_ENFORCE_EQ(context.HasAttr("X_scale") &&
+                            context.HasAttr("weight0_scale") &&
+                            context.HasAttr("weight1_scale") &&
+                            context.HasAttr("weight2_scale"),
+                        true, platform::errors::InvalidArgument(
+                                  "mul in multihead_matmul is set to use int8, "
+                                  "but no input scale or weight scale found."));
+      float in_scale = context.Attr<float>("X_scale");
+      std::vector<float> weight0_scale =
+          context.Attr<std::vector<float>>("weight0_scale");
+      std::vector<float> weight1_scale =
+          context.Attr<std::vector<float>>("weight1_scale");
+      std::vector<float> weight2_scale =
+          context.Attr<std::vector<float>>("weight2_scale");
 
-    // (B * S, hidden) * (hidden, 3 * N * H) -> (B * S * 3 * N * H)
-    auto blas = math::GetBlas<platform::CUDADeviceContext, T>(device_ctx);
-    blas.MatMul(input_matrix, w_matrix, &temp_out_tensor);
+      framework::Tensor input_int8;
+      input_int8.Resize(input_matrix.dims());
+      input_int8.mutable_data<int8_t>(context.GetPlace());
+      w_matrix.mutable_data<int8_t>(context.GetPlace());
+      int N = framework::vectorize(w_matrix.dims())[1];
+      int K = framework::vectorize(w_matrix.dims())[0];
+      int M = framework::product(input_matrix.dims()) / K;
+      float scale0 =
+          static_cast<float>(in_scale * weight0_scale[0] / 127. / 127.);
+      float scale1 =
+          static_cast<float>(in_scale * weight1_scale[0] / 127. / 127.);
+      float scale2 =
+          static_cast<float>(in_scale * weight2_scale[0] / 127. / 127.);
+
+      math::QuantFp32ToInt8Functor<platform::CUDADeviceContext> quant_func;
+      quant_func(device_ctx, input_matrix, in_scale / 127., &input_int8);
+
+      const int8_t *input_int8_data = input_int8.data<int8_t>();
+      const int8_t *w_int8_data = w_matrix.data<int8_t>();
+      if (N % 4 == 0) {
+        framework::Tensor x_int8, out_int8;
+        out_int8.Resize(temp_out_tensor.dims());
+        int32_t *out_int8_data =
+            out_int8.mutable_data<int32_t>(context.GetPlace());
+        int32_t alpha = 1;
+        int32_t beta = 0;
+
+        math::GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+        gemm_int8_func(device_ctx, false, false, M, N, K, alpha,
+                       input_int8_data, K, w_int8_data, N, beta, out_int8_data,
+                       N);
+        const int32_t *out_int32_data = out_int8.data<int32_t>();
+        int numel = out_int8.numel();
+        int threads = 1024;
+        int blocks = (numel + threads - 1) / threads;
+        float *output =
+            temp_out_tensor.mutable_data<float>(device_ctx.GetPlace());
+
+        INT32ToFP32Kernel<<<blocks, threads, 0, device_ctx.stream()>>>(
+            numel, out_int32_data, output, all_head_size, scale0, scale1,
+            scale2);
+      } else {
+        framework::Tensor out_f;
+        out_f.Resize(temp_out_tensor.dims());
+        float *out_data_f = out_f.mutable_data<float>(context.GetPlace());
+        float *out_data =
+            temp_out_tensor.mutable_data<float>(context.GetPlace());
+        float alpha = 1.0f;
+        float beta = 0.0f;
+        math::GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+        gemm_int8_func(device_ctx, false, false, M, N, K, alpha,
+                       input_int8_data, K, w_int8_data, N, beta, out_data_f, N);
+        int numel = out_f.numel();
+        int threads = 1024;
+        int blocks = (numel + threads - 1) / threads;
+        FP32DequantKernel<<<blocks, threads, 0, device_ctx.stream()>>>(
+            numel, out_data_f, out_data, all_head_size, scale0, scale1, scale2);
+      }
+    } else {
+      // (B * S, hidden) * (hidden, 3 * N * H) -> (B * S * 3 * N * H)
+      auto blas = math::GetBlas<platform::CUDADeviceContext, T>(device_ctx);
+      blas.MatMul(input_matrix, w_matrix, &temp_out_tensor);
+    }
 
     // temp_out_tensor.Resize(temp_out_dims);
-
     Tensor multihead_temp_tensor;
     // B * head_number * S * S * 1 + B * S * 3 * N * H
     int scratch_size = batch * head_number * seq_len * seq_len * 1;
@@ -495,13 +602,11 @@ class MultiHeadMatMulV2Kernel : public framework::OpKernel<T> {
         multihead_temp_tensor.mutable_data<T>(context.GetPlace());
     auto *qkptr = multihead_temp_data;
     auto *tptr = multihead_temp_data + scratch_size;
-
     auto stream = device_ctx.stream();
     // Do the transpose with bias.
     // BxSx3xNxH => tptr: 3xBxNxSxH.
     TransQKVWithBias(batch, seq_len, head_size, head_number, temp_out_data,
                      bias_d, tptr, stream);
-
     MultiHeadGPUComputeV2<T>(device_ctx, batch, seq_len, head_number, head_size,
                              qkptr, bias_qk_d, tptr, scale, T(0.0));
 

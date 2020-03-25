@@ -26,7 +26,8 @@ namespace ir {
 
 void RunQuantDequant(ir::Graph* graph, Scope* scope, int times,
                      const std::string& op_type, const std::string& quant_type,
-                     const std::string& dequant_type) {
+                     const std::string& dequant_type,
+                     bool use_trt_or_anakin = false) {
   const std::string pattern_name = "quant_dequant_fuse";
   int kNumFields = 5;
   const int kQuantizedWeightOffset = 0;
@@ -131,6 +132,24 @@ void RunQuantDequant(ir::Graph* graph, Scope* scope, int times,
         weight_scale.push_back((range * range) / max_range);
       }
 
+      // If not runing under trt or anakin, modify the weight type from float to
+      // int8
+      if (!use_trt_or_anakin) {
+        auto quantized_op_weight =
+            nodes[i * kNumFields + kQuantizedWeightOffset];
+        auto* weight_tensor =
+            scope->Var(quantized_op_weight->Name())->GetMutable<LoDTensor>();
+        LoDTensor temp_tensor;
+        framework::TensorCopy(*weight_tensor, platform::CPUPlace(),
+                              &temp_tensor);
+        const float* temp_weight_data = temp_tensor.data<float>();
+        int8_t* quantized_weight_data =
+            weight_tensor->mutable_data<int8_t>(platform::CPUPlace());
+        for (int i = 0; i < temp_tensor.numel(); i++) {
+          quantized_weight_data[i] = static_cast<int8_t>(temp_weight_data[i]);
+        }
+      }
+
       // create new op_desc
       auto base_op_desc =
           *nodes[i * kNumFields + kQuantizedOpOffset]->Op()->Proto();
@@ -184,18 +203,28 @@ void QuantDequantFusePass::ApplyImpl(ir::Graph* graph) const {
   const std::string pattern_name = "quant_dequant_fuse";
   FusePassBase::Init(pattern_name, graph);
 
+  const bool use_trt_or_anakin = Get<bool>("use_trt_or_anakin");
+
   std::unordered_set<std::string> dequant_types = {
       "fake_dequantize_max_abs", "fake_channel_wise_dequantize_max_abs"};
   std::unordered_set<std::string> quant_types = {
       "fake_quantize_range_abs_max", "fake_quantize_moving_average_abs_max"};
-  std::unordered_set<std::string> quantized_op_types = {"conv2d", "mul",
-                                                        "depthwise_conv2d"};
+
+  std::unordered_set<std::string> quantized_op_types;
+  if (use_trt_or_anakin) {
+    quantized_op_types = {"conv2d", "mul", "depthwise_conv2d"};
+  } else {
+    quantized_op_types = {"mul"};
+  }
+
   auto* scope = param_scope();
+
   for (auto& dequant_type : dequant_types) {
     for (auto& quant_type : quant_types) {
       for (auto& op_type : quantized_op_types) {
         for (int i = 6; i >= 1; i--) {
-          RunQuantDequant(graph, scope, i, op_type, quant_type, dequant_type);
+          RunQuantDequant(graph, scope, i, op_type, quant_type, dequant_type,
+                          use_trt_or_anakin);
         }
       }
     }

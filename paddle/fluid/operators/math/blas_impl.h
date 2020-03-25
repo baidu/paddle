@@ -27,6 +27,11 @@ struct CBlas;
 template <>
 struct CBlas<int8_t> {
   template <typename... ARGS>
+  static void GEMM(ARGS... args) {
+    PADDLE_THROW("Blas GEMM don't support int8_t");
+  }
+
+  template <typename... ARGS>
   static void VCOPY(ARGS... args) {
     PADDLE_THROW("Blas VCOPY don't support int8_t");
   }
