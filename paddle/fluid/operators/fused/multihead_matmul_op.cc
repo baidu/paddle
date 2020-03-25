@@ -81,6 +81,12 @@ class MultiHeadMatMulV2Op : public framework::OperatorWithKernel {
     context->SetOutputDim("Out", dim_input);
     context->ShareLoD("Input", /*->*/ "Out");
   }
+  framework::OpKernelType GetExpectedKernelType(
+      const framework::ExecutionContext &ctx) const {
+    auto input_data_type =
+        OperatorWithKernel::IndicateVarDataType(ctx, "Input");
+    return framework::OpKernelType(input_data_type, ctx.GetPlace());
+  }
 };
 
 class MultiHeadMatMulV2OpMaker : public framework::OpProtoAndCheckerMaker {

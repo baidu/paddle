@@ -156,7 +156,6 @@ struct CUBlas<platform::float16> {
 
   // NOTES: GEMM_EX can use Tensor Core to accelerate matrix multiply.
   // https://docs.nvidia.com/cuda/cublas/index.html#cublassetmathmode
-  template <typename... ARGS>
   static void GEMM_EX(platform::CUDADeviceContext *dev_ctx,
                       cublasOperation_t transa, cublasOperation_t transb, int m,
                       int n, int k, const void *alpha, const void *A,

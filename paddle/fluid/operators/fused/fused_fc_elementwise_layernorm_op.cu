@@ -15,6 +15,7 @@ limitations under the License. */
 #include <cub/cub.cuh>
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/math/blas.h"
+#include "paddle/fluid/operators/math/quant.h"
 #include "paddle/fluid/platform/cuda_device_function.h"
 
 namespace paddle {
@@ -136,15 +137,58 @@ class FusedFCElementwiseLayerNormOpKernel : public framework::OpKernel<T> {
     int N = w_dims[1];
     int K = w_dims[0];
     int M = framework::product(x->dims()) / K;
-
-    const T* x_data = x->data<T>();
-    const T* w_data = w->data<T>();
     T* out_data = out->mutable_data<T>(ctx.GetPlace());
 
     auto& dev_ctx = ctx.template device_context<platform::CUDADeviceContext>();
-    auto blas = math::GetBlas<platform::CUDADeviceContext, T>(dev_ctx);
-    blas.GEMM(false, false, M, N, K, static_cast<T>(1.0), x_data, K, w_data, N,
-              static_cast<T>(0.0), out_data, N);
+    if (ctx.HasAttr("enable_int8") && ctx.Attr<bool>("enable_int8")) {
+      float in_scale = ctx.Attr<float>("X_scale");
+      std::vector<float> weight_scale =
+          ctx.Attr<std::vector<float>>("weight_scale");
+
+      PADDLE_ENFORCE_EQ(weight_scale.size(), 1,
+                        "weight scale size shoud be equal to 1");
+
+      framework::Tensor x_int8;
+      x_int8.Resize(x->dims());
+      x_int8.mutable_data<int8_t>(ctx.GetPlace());
+
+      math::QuantFp32ToInt8Functor<platform::CUDADeviceContext> quant_func;
+      quant_func(dev_ctx, *x, in_scale / 127., &x_int8);
+      // the float here represents the output type
+      const int8_t* x_int8_data = x_int8.data<int8_t>();
+      const int8_t* w_int8_data = w->data<int8_t>();
+
+      if (N % 4 == 0) {
+        framework::Tensor x_int8, out_int8;
+        out_int8.Resize(out->dims());
+        int32_t* out_int8_data = out_int8.mutable_data<int32_t>(ctx.GetPlace());
+        int32_t alpha = 1;
+        int32_t beta = 0;
+        float scale =
+            static_cast<float>(in_scale * weight_scale[0] / 127. / 127.);
+        math::GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+        gemm_int8_func(dev_ctx, false, false, M, N, K, alpha, x_int8_data, K,
+                       w_int8_data, N, beta, out_int8_data, N);
+        math::INT32ToFP32Functor<platform::CUDADeviceContext>
+            int32_to_fp32_func;
+        int32_to_fp32_func(dev_ctx, out_int8, out, scale);
+      } else {
+        float* out_data_f = out->mutable_data<float>(ctx.GetPlace());
+        float alpha =
+            static_cast<float>(in_scale * weight_scale[0] / 127. / 127.);
+        float beta = 0.0f;
+        math::GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+        gemm_int8_func(dev_ctx, false, false, M, N, K, alpha, x_int8_data, K,
+                       w_int8_data, N, beta, out_data_f, N);
+      }
+    } else {
+      const T* x_data = x->data<T>();
+      const T* w_data = w->data<T>();
+
+      auto blas = math::GetBlas<platform::CUDADeviceContext, T>(dev_ctx);
+      blas.GEMM(false, false, M, N, K, static_cast<T>(1.0), x_data, K, w_data,
+                N, static_cast<T>(0.0), out_data, N);
+    }
 
     auto* y = ctx.Input<framework::Tensor>("Y");
     auto* bias_0 = ctx.Input<framework::Tensor>("Bias0");

@@ -220,6 +220,14 @@ void FCElementwiseLayerNormFusePass::ApplyImpl(ir::Graph *graph) const {
     new_desc.SetAttr("begin_norm_axis",
                      layer_norm->Op()->GetAttr("begin_norm_axis"));
     new_desc.SetAttr("activation_type", fc->Op()->GetAttr("activation_type"));
+    auto *fc_op_desc = fc->Op();
+    if (fc_op_desc->HasAttr("enable_int8")) {
+      new_desc.SetAttr("enable_int8", fc_op_desc->GetAttr("enable_int8"));
+      new_desc.SetAttr("X_scale", fc_op_desc->GetAttr("Input_scale"));
+      new_desc.SetAttr("weight_scale", fc_op_desc->GetAttr("weight_scale"));
+      if (fc_op_desc->HasAttr("out_scale"))
+        new_desc.SetAttr("out_scale", fc_op_desc->GetAttr("out_scale"));
+    }
 
     auto fused_node = graph->CreateOpNode(&new_desc);  // OpDesc will be copied.
 

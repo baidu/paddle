@@ -676,11 +676,14 @@ class MidWiseTransformIterator<T, platform::CUDADeviceContext>
 
 template <typename Functor, typename T, typename DeviceContext,
           typename OutType = T>
-class TransformFunctor {
+class TransformFunctor;
+
+template <typename Functor, typename T, typename OutType>
+class TransformFunctor<Functor, T, platform::CPUDeviceContext, OutType> {
  public:
   TransformFunctor(const framework::Tensor *x, const framework::Tensor *y,
-                   framework::Tensor *z, const DeviceContext &ctx, Functor func,
-                   const bool is_xsize_larger = true)
+                   framework::Tensor *z, const platform::CPUDeviceContext &ctx,
+                   Functor func, const bool is_xsize_larger = true)
       : x_(x->data<T>()),
         y_(y->data<T>()),
         z_(z->mutable_data<OutType>(ctx.GetPlace())),
@@ -694,29 +697,35 @@ class TransformFunctor {
   }
 
   inline void Run() const {
-    platform::Transform<DeviceContext> trans;
+    platform::Transform<platform::CPUDeviceContext> trans;
     trans(ctx_, x_, x_ + nx_, y_, z_, func_);
   }
 
   inline void RunRowWise(int n, int pre) const {
-    platform::Transform<DeviceContext> trans;
+    platform::Transform<platform::CPUDeviceContext> trans;
     if (is_xsize_larger_) {
       trans(ctx_, x_, x_ + nx_,
-            RowwiseTransformIterator<T, DeviceContext>(y_, n), z_, func_);
+            RowwiseTransformIterator<T, platform::CPUDeviceContext>(y_, n), z_,
+            func_);
     } else {
       trans(ctx_, y_, y_ + nx_,
-            RowwiseTransformIterator<T, DeviceContext>(x_, n), z_, func_);
+            RowwiseTransformIterator<T, platform::CPUDeviceContext>(x_, n), z_,
+            func_);
     }
   }
 
   inline void RunMidWise(int n, int pre, int post) const {
-    platform::Transform<DeviceContext> trans;
+    platform::Transform<platform::CPUDeviceContext> trans;
     if (is_xsize_larger_) {
-      trans(ctx_, x_, x_ + nx_,
-            MidWiseTransformIterator<T, DeviceContext>(y_, n, post), z_, func_);
+      trans(
+          ctx_, x_, x_ + nx_,
+          MidWiseTransformIterator<T, platform::CPUDeviceContext>(y_, n, post),
+          z_, func_);
     } else {
-      trans(ctx_, y_, y_ + nx_,
-            MidWiseTransformIterator<T, DeviceContext>(x_, n, post), z_, func_);
+      trans(
+          ctx_, y_, y_ + nx_,
+          MidWiseTransformIterator<T, platform::CPUDeviceContext>(x_, n, post),
+          z_, func_);
     }
   }
 
@@ -725,10 +734,85 @@ class TransformFunctor {
   const T *y_;
   OutType *z_;
   int64_t nx_;
-  const DeviceContext &ctx_;
+  const platform::CPUDeviceContext &ctx_;
   Functor func_;
   bool is_xsize_larger_;
 };
+
+#ifdef __NVCC__
+
+template <typename Functor, typename T, typename OutType>
+__global__ void NormalElementwiseKernel(const size_t total, const T *x_data,
+                                        const T *y_data, OutType *out_data,
+                                        int pre, int n, int post,
+                                        Functor func) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < total) {
+    int idx = tid / post % n;
+    out_data[tid] = func(x_data[tid], y_data[idx]);
+  }
+}
+
+template <typename Functor, typename T, typename OutType>
+class TransformFunctor<Functor, T, platform::CUDADeviceContext, OutType> {
+ public:
+  TransformFunctor(const framework::Tensor *x, const framework::Tensor *y,
+                   framework::Tensor *z, const platform::CUDADeviceContext &ctx,
+                   Functor func, const bool is_xsize_larger = true)
+      : x_(x->data<T>()),
+        y_(y->data<T>()),
+        z_(z->mutable_data<OutType>(ctx.GetPlace())),
+        nx_(x->numel()),
+        ctx_(ctx),
+        func_(func),
+        is_xsize_larger_(is_xsize_larger) {
+    if (is_xsize_larger_ == false) {
+      nx_ = y->numel();
+    }
+  }
+
+  inline void Run() const {
+    int thread = 512;
+    int block = (nx_ + thread - 1) / thread;
+    NormalElementwiseKernel<<<block, thread, 0, ctx_.stream()>>>(
+        nx_, x_, y_, z_, nx_, 1, 1, func_);
+  }
+
+  inline void RunRowWise(int n, int pre) const {
+    int thread = 512;
+    int block = (nx_ + thread - 1) / thread;
+
+    if (is_xsize_larger_) {
+      NormalElementwiseKernel<<<block, thread, 0, ctx_.stream()>>>(
+          nx_, x_, y_, z_, pre, n, 1, func_);
+    } else {
+      NormalElementwiseKernel<<<block, thread, 0, ctx_.stream()>>>(
+          nx_, y_, x_, z_, pre, n, 1, func_);
+    }
+  }
+
+  inline void RunMidWise(int n, int pre, int post) const {
+    int thread = 512;
+    int block = (nx_ + thread - 1) / thread;
+    if (is_xsize_larger_) {
+      NormalElementwiseKernel<<<block, thread, 0, ctx_.stream()>>>(
+          nx_, x_, y_, z_, pre, n, post, func_);
+    } else {
+      NormalElementwiseKernel<<<block, thread, 0, ctx_.stream()>>>(
+          nx_, y_, x_, z_, pre, n, post, func_);
+    }
+  }
+
+ private:
+  const T *x_;
+  const T *y_;
+  OutType *z_;
+  int64_t nx_;
+  const platform::CUDADeviceContext &ctx_;
+  Functor func_;
+  bool is_xsize_larger_;
+};
+#endif
 
 template <typename T, typename DX_OP, typename DY_OP>
 struct ElemwiseGradNoBroadcast {

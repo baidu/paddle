@@ -446,6 +446,10 @@ static int BuildFusionV2(Graph* graph, const std::string& name_scope,
       Node* reshape2, Node* reshape2_qkv_out, Node* scale, Node* scale_out) {
     auto scale_attr = boost::get<float>(scale->Op()->GetAttr("scale"));
 
+    auto* mul0_op_desc = mul0->Op();
+    auto* mul1_op_desc = mul1->Op();
+    auto* mul2_op_desc = mul2->Op();
+
     // mul (B * S * Hidden) x (Hidden * 3 * N * H) = (B * S * 3 * N * H)
     // bias (B * S * 3 * N * H) + bias (3 * N * H)
     // Transpose (B * S * 3 * N * H) -> (3 * B * N * S * H)
@@ -459,13 +463,6 @@ static int BuildFusionV2(Graph* graph, const std::string& name_scope,
         scope->FindVar(eltadd1_b->Name())->GetMutable<LoDTensor>();
     auto* bv_tensor =
         scope->FindVar(eltadd2_b->Name())->GetMutable<LoDTensor>();
-
-    auto* wq_data = wq_tensor->mutable_data<float>(platform::CPUPlace());
-    auto* wk_data = wk_tensor->mutable_data<float>(platform::CPUPlace());
-    auto* wv_data = wv_tensor->mutable_data<float>(platform::CPUPlace());
-    auto* bq_data = bq_tensor->mutable_data<float>(platform::CPUPlace());
-    auto* bk_data = bk_tensor->mutable_data<float>(platform::CPUPlace());
-    auto* bv_data = bv_tensor->mutable_data<float>(platform::CPUPlace());
 
     auto combined_w_dims =
         framework::make_ddim({wq_tensor->dims()[0], 3, wq_tensor->dims()[1]});
@@ -490,22 +487,56 @@ static int BuildFusionV2(Graph* graph, const std::string& name_scope,
     auto* combined_w_node = graph->CreateVarNode(&combined_w_desc);
     auto* combined_w_tensor =
         scope->Var(combined_w_node->Name())->GetMutable<LoDTensor>();
-
     combined_w_tensor->Resize(combined_w_dims);
-    auto* combined_w_data =
-        combined_w_tensor->mutable_data<float>(platform::CPUPlace());
-    std::vector<float*> w_vec = {wq_data, wk_data, wv_data};
-    int dims_h = combined_w_dims[0], dims_w = combined_w_dims[2];
+
     // Combine the three fc weights together.
-    for (int i = 0; i < dims_h; i++) {
-      for (int j = 0; j < 3; j++) {
-        for (int k = 0; k < dims_w; k++) {
-          int out_index = i * (3 * dims_w) + j * dims_w + k;
-          int in_index = i * dims_w + k;
-          combined_w_data[out_index] = w_vec[j][in_index];
+    if (mul0_op_desc->HasAttr("enable_int8") &&
+        boost::get<bool>(mul0_op_desc->GetAttr("enable_int8"))) {
+      auto* combined_w_data =
+          combined_w_tensor->mutable_data<int8_t>(platform::CPUPlace());
+
+      auto* wq_data = wq_tensor->data<int8_t>();
+      auto* wk_data = wk_tensor->data<int8_t>();
+      auto* wv_data = wv_tensor->data<int8_t>();
+
+      std::vector<int8_t*> w_vec = {wq_data, wk_data, wv_data};
+      int dims_h = combined_w_dims[0], dims_w = combined_w_dims[2];
+
+      for (int i = 0; i < dims_h; i++) {
+        for (int j = 0; j < 3; j++) {
+          for (int k = 0; k < dims_w; k++) {
+            int out_index = i * (3 * dims_w) + j * dims_w + k;
+            int in_index = i * dims_w + k;
+            combined_w_data[out_index] = w_vec[j][in_index];
+          }
+        }
+      }
+    } else {
+      auto* combined_w_data =
+          combined_w_tensor->mutable_data<float>(platform::CPUPlace());
+
+      auto* wq_data = wq_tensor->data<float>();
+      auto* wk_data = wk_tensor->data<float>();
+      auto* wv_data = wv_tensor->data<float>();
+
+      std::vector<float*> w_vec = {wq_data, wk_data, wv_data};
+      int dims_h = combined_w_dims[0], dims_w = combined_w_dims[2];
+
+      for (int i = 0; i < dims_h; i++) {
+        for (int j = 0; j < 3; j++) {
+          for (int k = 0; k < dims_w; k++) {
+            int out_index = i * (3 * dims_w) + j * dims_w + k;
+            int in_index = i * dims_w + k;
+            combined_w_data[out_index] = w_vec[j][in_index];
+          }
         }
       }
     }
+
+    auto* bq_data = bq_tensor->data<float>();
+    auto* bk_data = bk_tensor->data<float>();
+    auto* bv_data = bv_tensor->data<float>();
+
     scope->EraseVars({mul0_w->Name(), mul1_w->Name(), mul2_w->Name()});
     auto* combined_bias_node = graph->CreateVarNode(&combined_bias_desc);
     auto* combined_bias_tensor =
@@ -537,6 +568,27 @@ static int BuildFusionV2(Graph* graph, const std::string& name_scope,
     multihead_op_desc.SetOutput("Out", {reshape2_qkv_out->Name()});
     multihead_op_desc.SetAttr("alpha", scale_attr);
     multihead_op_desc.SetAttr("head_number", head_number);
+
+    if (mul0_op_desc->HasAttr("enable_int8") &&
+        boost::get<bool>(mul0_op_desc->GetAttr("enable_int8"))) {
+      PADDLE_ENFORCE_EQ(mul0_op_desc->HasAttr("X_scale") &&
+                            mul0_op_desc->HasAttr("weight_scale") &&
+                            mul1_op_desc->HasAttr("weight_scale") &&
+                            mul2_op_desc->HasAttr("weight_scale"),
+                        true,
+                        platform::errors::InvalidArgument(
+                            "mul in multihead_matmul is set to use int8, but "
+                            "no input scale or weight scales found."));
+      multihead_op_desc.SetAttr("enable_int8",
+                                mul0_op_desc->GetAttr("enable_int8"));
+      multihead_op_desc.SetAttr("X_scale", mul0_op_desc->GetAttr("X_scale"));
+      multihead_op_desc.SetAttr("weight0_scale",
+                                mul0_op_desc->GetAttr("weight_scale"));
+      multihead_op_desc.SetAttr("weight1_scale",
+                                mul1_op_desc->GetAttr("weight_scale"));
+      multihead_op_desc.SetAttr("weight2_scale",
+                                mul2_op_desc->GetAttr("weight_scale"));
+    }
 
     auto* multihead = graph->CreateOpNode(&multihead_op_desc);
 

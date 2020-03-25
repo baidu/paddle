@@ -15,6 +15,7 @@ limitations under the License. */
 #include <algorithm>
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/fc.h"
+#include "paddle/fluid/operators/math/quant.h"
 
 namespace paddle {
 namespace operators {
@@ -125,8 +126,74 @@ class FCFunctor<platform::CUDADeviceContext, T> {
   }
 };
 
+void FCInt8Functor<platform::CUDADeviceContext>::operator()(
+    const platform::CUDADeviceContext& context, const int M, const int N,
+    const int K, const framework::Tensor& in, const framework::Tensor& W,
+    framework::Tensor* Y, float in_scale, std::vector<float> weight_scale,
+    const framework::Tensor& B, bool relu, bool weight_pass) {
+  PADDLE_ENFORCE_EQ(weight_pass, false,
+                    platform::errors::PermissionDenied(
+                        "Weight padding in fc can not be used in GPU scope."));
+
+  framework::Tensor x_int8;
+  // modify
+  x_int8.Resize(in.dims());
+  x_int8.mutable_data<int8_t>(context.GetPlace());
+
+  QuantFp32ToInt8Functor<platform::CUDADeviceContext> quant_func;
+  quant_func(context, in, in_scale / 127., &x_int8);
+  // the float here represents the output type
+  const int8_t* x_int8_data = x_int8.data<int8_t>();
+  const int8_t* w_int8_data = W.data<int8_t>();
+
+  if (N % 4 == 0) {
+    framework::Tensor x_int8, out_int8;
+    out_int8.Resize(Y->dims());
+    int32_t* out_int8_data = out_int8.mutable_data<int32_t>(context.GetPlace());
+    int32_t alpha = 1;
+    int32_t beta = 0;
+    float scale = static_cast<float>(in_scale * weight_scale[0] / 127. / 127.);
+    GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+    gemm_int8_func(context, false, false, M, N, K, alpha, x_int8_data, K,
+                   w_int8_data, N, beta, out_int8_data, N);
+    INT32ToFP32Functor<platform::CUDADeviceContext> int32_to_fp32_func;
+    int32_to_fp32_func(context, out_int8, Y, scale);
+  } else {
+    float* y_data = Y->mutable_data<float>(context.GetPlace());
+    float alpha = static_cast<float>(in_scale * weight_scale[0] / 127. / 127.);
+    float beta = 0.0f;
+    GEMMINT8Functor<platform::CUDADeviceContext> gemm_int8_func;
+    gemm_int8_func(context, false, false, M, N, K, alpha, x_int8_data, K,
+                   w_int8_data, N, beta, y_data, N);
+  }
+
+  const float* bias = B.data<float>();
+  if (bias == NULL) {
+    return;
+  }
+  float* y_data = Y->mutable_data<float>(context.GetPlace());
+  const int kThreadsPerBlock = 1024;
+  int max_threads = context.GetMaxPhysicalThreadCount();
+  int num_threads = std::min(kThreadsPerBlock, (((N + 31) >> 5) << 5));
+  int num_blocks = std::max(max_threads / num_threads, 1);
+  if (relu) {
+    InplaceAddReluKernel<
+        float, true,
+        num_threads><<<num_blocks, num_threads, 0, context.stream()>>>(N, bias,
+                                                                       y_data);
+  } else {
+    InplaceAddReluKernel<
+        float, false,
+        num_threads><<<num_blocks, num_threads, 0, context.stream()>>>(N, bias,
+                                                                       y_data);
+  }
+}
+
 template class FCFunctor<platform::CUDADeviceContext, float>;
 template class FCFunctor<platform::CUDADeviceContext, double>;
+template class QuantFp32ToInt8Functor<platform::CUDADeviceContext>;
+template class GEMMINT8Functor<platform::CUDADeviceContext>;
+template class INT32ToFP32Functor<platform::CUDADeviceContext>;
 
 }  // namespace math
 }  // namespace operators

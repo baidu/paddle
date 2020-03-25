@@ -159,6 +159,14 @@ void IRPassManager::CreatePasses(Argument *argument,
       pass->Set("use_fc_padding", new bool(use_fc_padding));
     }
 
+    if (pass_name == "quant_conv2d_dequant_fuse_pass") {
+      bool use_anakin =
+          argument->Has("use_anakin") ? argument->use_anakin() : false;
+      bool use_tensorrt =
+          argument->Has("use_tensorrt") ? argument->use_tensorrt() : false;
+      pass->Set("use_trt_or_anakin", new bool(use_anakin || use_tensorrt));
+    }
+
     pre_pass = pass_name;
 
     passes_.emplace_back(std::move(pass));
