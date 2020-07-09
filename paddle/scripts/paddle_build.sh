@@ -218,6 +218,7 @@ EOF
     # Disable UNITTEST_USE_VIRTUALENV in docker because
     # docker environment is fully controlled by this script.
     # See /Paddle/CMakeLists.txt, UNITTEST_USE_VIRTUALENV option.
+    set +e
     cmake .. \
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Release} \
         ${PYTHON_FLAGS} \
@@ -241,7 +242,9 @@ EOF
         -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/paddle/build} \
         -DWITH_GRPC=${grpc_flag} \
         -DWITH_LITE=${WITH_LITE:-OFF}
-
+    if [ $? -ne 0 ]; then
+        exit 7;
+    fi
 }
 
 function cmake_gen() {
@@ -293,6 +296,7 @@ function check_style() {
 #=================================================
 
 function build_base() {
+    set +e
     if [ "$SYSTEM" == "Linux" ];then
       if [ `nproc` -gt 16 ];then
           parallel_number=$(expr `nproc` - 8)
@@ -309,8 +313,10 @@ function build_base() {
     if [[ "$ENABLE_MAKE_CLEAN" != "OFF" ]]; then
         make clean
     fi
-
     make install -j ${parallel_number}
+    if [ $? -ne 0 ]; then
+        exit 7;
+    fi
 }
 
 function build_size() {

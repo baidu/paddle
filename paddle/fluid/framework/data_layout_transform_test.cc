@@ -35,8 +35,8 @@ TEST(DataTransform, DataLayoutFunction) {
 
   paddle::framework::TransDataLayout(kernel_nhwc, kernel_ncwh, in, &out);
 
-  EXPECT_TRUE(out.layout() == paddle::framework::DataLayout::kNCHW);
-  EXPECT_TRUE(out.dims() == paddle::framework::make_ddim({2, 2, 3, 1}));
+  EXPECT_TRUE(out.layout() == paddle::framework::DataLayout::kNCHW)
+  EXPECT_TRUE(out.dims() == paddle::framework::make_ddim({2, 2, 3, 1}))
 
   TransDataLayout(kernel_ncwh, kernel_nhwc, in, &out);
 
