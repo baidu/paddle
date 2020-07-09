@@ -173,9 +173,9 @@ class TraceKernel : public framework::OpKernel<T> {
     auto* input = context.Input<framework::Tensor>("Input");
     auto* out = context.Output<framework::Tensor>("Out");
 
-    const int64_t offset = context.Attr<int>("offset");
-    const int64_t dim1 = context.Attr<int>("dim1");
-    const int64_t dim2 = context.Attr<int>("dim2");
+    const int64_t offset = context.Attr<int>("diagonal");
+    const int64_t dim1 = context.Attr<int>("start_axis");
+    const int64_t dim2 = context.Attr<int>("stop_axis");
 
     auto output_dims = out->dims();
 
@@ -204,9 +204,9 @@ class TraceGradKernel : public framework::OpKernel<T> {
     auto* d_x =
         context.Output<framework::Tensor>(framework::GradVarName("Input"));
 
-    int64_t offset = context.Attr<int>("offset");
-    int64_t dim1 = context.Attr<int>("dim1");
-    int64_t dim2 = context.Attr<int>("dim2");
+    int64_t offset = context.Attr<int>("diagonal");
+    int64_t dim1 = context.Attr<int>("start_axis");
+    int64_t dim2 = context.Attr<int>("stop_axis");
 
     auto input_dims = d_x->dims();
     auto input_stride = framework::stride(input_dims);

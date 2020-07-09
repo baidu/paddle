@@ -1572,7 +1572,7 @@ def clamp(input, min=None, max=None, output=None, name=None):
 
     return output
 
-def trace(input, offset=0, dim1=0, dim2=1, out=None, name=None):
+def trace(input, diagonal=0, start_axis=0, stop_axis=1, name=None):
     """
 	:alias_main: paddle.trace
 	:alias: paddle.trace,paddle.tensor.trace,paddle.tensor.math.trace
@@ -1582,20 +1582,20 @@ def trace(input, offset=0, dim1=0, dim2=1, out=None, name=None):
     If ``input`` is 2D, returns the sum of diagonal. 
 
     If ``input`` has larger dimensions, then returns an tensor of diagonals sum, diagonals be taken from
-    the 2D planes specified by dim1 and dim2. By default, the 2D planes formed by the first and second dimensions 
+    the 2D planes specified by start_axis and stop_axis. By default, the 2D planes formed by the first and second dimensions 
     of the input tensor.
 
-    The argument ``offset`` determines where diagonals are taken from input tensor:
+    The argument ``diagonal`` determines where diagonals are taken from input tensor:
 
-    - If offset = 0, it is the main diagonal.
-    - If offset > 0, it is above the main diagonal.
-    - If offset < 0, it is below the main diagonal.
+    - If diagonal = 0, it is the main diagonal.
+    - If diagonal > 0, it is above the main diagonal.
+    - If diagonal < 0, it is below the main diagonal.
     
     Args:
         input(Variable): The input tensor. Must be at least 2-dimensional. The input data type should be float32, float64, int32, int64.
-        offset(int, optional): Which diagonals in input tensor will be taken. Default: 0 (main diagonals).
-        dim1(int, optional): The first dimension with respect to take diagonal. Default: 0.
-        dim2(int, optional): The second dimension with respect to take diagonal. Default: 1.
+        diagonal(int, optional): Which diagonals in input tensor will be taken. Default: 0 (main diagonals).
+        start_axis(int, optional): The first dimension with respect to take diagonal. Default: 0.
+        stop_axis(int, optional): The second dimension with respect to take diagonal. Default: 1.
         name (str, optional): Normally there is no need for user to set this property. For more information, please refer to :ref:`api_guide_Name`. Default: None.
 
     Returns:
@@ -1617,13 +1617,13 @@ def trace(input, offset=0, dim1=0, dim2=1, out=None, name=None):
                 case2 = dg.to_variable(case2)
                 case3 = dg.to_variable(case3)
                 data1 = paddle.trace(case1) # data1.shape = [1]
-                data2 = paddle.trace(case2, offset=1, dim1=1, dim2=2) # data2.shape = [3]
-                data3 = paddle.trace(case3, offset=-3, dim1=1, dim2=-1) # data2.shape = [3, 5]
+                data2 = paddle.trace(case2, diagonal=1, start_axis=1, stop_axis=2) # data2.shape = [3]
+                data3 = paddle.trace(case3, diagonal=-3, start_axis=1, stop_axis=-1) # data2.shape = [3, 5]
     """
     inputs = {'Input': [input]}
-    attrs = {'offset': offset, 'dim1': dim1, 'dim2': dim2}
+    attrs = {'diagonal': diagonal, 'start_axis': start_axis, 'stop_axis': stop_axis}
 
-    def __check_input(input, offset, dim1, dim2):
+    def __check_input(input, diagonal, start_axis, stop_axis):
         check_dtype(input.dtype, 'Input',
                     ['int32', 'int64', 'float16', 'float32', 'float64'],
                     'trace')
@@ -1634,37 +1634,34 @@ def trace(input, offset=0, dim1=0, dim2=1, out=None, name=None):
                 "But received Input's dimensional: %s.\n" %  \
                 len(input_shape)
 
-        dim1_ = dim1 if dim1 >= 0 else len(input_shape) + dim1
-        dim2_ = dim2 if dim2 >= 0 else len(input_shape) + dim2
+        start_axis_ = start_axis if start_axis >= 0 else len(input_shape) + start_axis
+        stop_axis_ = stop_axis if stop_axis >= 0 else len(input_shape) + stop_axis
 
-        assert dim1_ < len(input_shape),     \
-            "The argument dim1 is out of range (expected to be in range of [%d, %d], but got %d).\n"  \
-            % (-(len(input_shape)), len(input_shape) - 1, dim1)
+        assert start_axis_ < len(input_shape),     \
+            "The argument start_axis is out of range (expected to be in range of [%d, %d], but got %d).\n"  \
+            % (-(len(input_shape)), len(input_shape) - 1, start_axis)
 
-        assert dim2_ < len(input_shape),   \
-            "The argument dim2 is out of range (expected to be in range of [%d, %d], but got %d).\n"   \
-            % (-(len(input_shape)), len(input_shape) - 1, dim2)
+        assert stop_axis_ < len(input_shape),   \
+            "The argument stop_axis is out of range (expected to be in range of [%d, %d], but got %d).\n"   \
+            % (-(len(input_shape)), len(input_shape) - 1, stop_axis)
 
 
-        assert  dim1_ != dim2_,   \
-               "dim1 and dim2 cannot be the same dimension." \
-                "But received dim1 = %d, dim2 = %d\n"%(dim1, dim2)
+        assert  start_axis_ != stop_axis_,   \
+               "start_axis and stop_axis cannot be the same dimension." \
+                "But received start_axis = %d, stop_axis = %d\n"%(start_axis, stop_axis)
 
     if not in_dygraph_mode():
-        __check_input(input, offset, dim1, dim2)
+        __check_input(input, diagonal, start_axis, stop_axis)
     helper = LayerHelper('trace', **locals())
 
-    if out is None:
-        out = helper.create_variable_for_type_inference(dtype=input.dtype)
-    else:
-        check_variable_and_dtype(out, 'out', ['float16', 'float32', 'float64', 'int32', 'int64'], 'trace')
+    out = helper.create_variable_for_type_inference(dtype=input.dtype)
 
     helper.append_op(
         type='trace',
         inputs={'Input': [input]},
-        attrs={'offset': offset,
-               'dim1': dim1,
-               'dim2': dim2},
+        attrs={'diagonal': diagonal,
+               'start_axis': start_axis,
+               'stop_axis': stop_axis},
         outputs={'Out': [out]})
     return out
 

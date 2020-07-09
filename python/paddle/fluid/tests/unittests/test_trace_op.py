@@ -38,7 +38,7 @@ class TestTraceOp(OpTest):
     def init_config(self):
         self.case = np.random.randn(20, 6).astype('float64')
         self.inputs = {'Input': self.case}
-        self.attrs = {'offset': 0, 'dim1': 0, 'dim2': 1}
+        self.attrs = {'diagonal': 0, 'start_axis': 0, 'stop_axis': 1}
         self.target = np.trace(self.inputs['Input'])
 
 
@@ -46,24 +46,24 @@ class TestTraceOpCase1(TestTraceOp):
     def init_config(self):
         self.case = np.random.randn(2, 20, 2, 3).astype('float32')
         self.inputs = {'Input': self.case}
-        self.attrs = {'offset': 1, 'dim1': 0, 'dim2': 2}
+        self.attrs = {'diagonal': 1, 'start_axis': 0, 'stop_axis': 2}
         self.target = np.trace(
             self.inputs['Input'],
-            offset=self.attrs['offset'],
-            axis1=self.attrs['dim1'],
-            axis2=self.attrs['dim2'])
+            offset=self.attrs['diagonal'],
+            axis1=self.attrs['start_axis'],
+            axis2=self.attrs['stop_axis'])
 
 
 class TestTraceOpCase2(TestTraceOp):
     def init_config(self):
         self.case = np.random.randn(2, 20, 2, 3).astype('float32')
         self.inputs = {'Input': self.case}
-        self.attrs = {'offset': -5, 'dim1': 1, 'dim2': -1}
+        self.attrs = {'diagonal': -5, 'start_axis': 1, 'stop_axis': -1}
         self.target = np.trace(
             self.inputs['Input'],
-            offset=self.attrs['offset'],
-            axis1=self.attrs['dim1'],
-            axis2=self.attrs['dim2'])
+            offset=self.attrs['diagonal'],
+            axis1=self.attrs['start_axis'],
+            axis2=self.attrs['stop_axis'])
 
 
 class TestTraceAPICase(unittest.TestCase):
@@ -71,7 +71,7 @@ class TestTraceAPICase(unittest.TestCase):
         case = np.random.randn(2, 20, 2, 3).astype('float32')
         data1 = fluid.data(name='data1', shape=[2, 20, 2, 3], dtype='float32')
         out1 = tensor.trace(data1)
-        out2 = tensor.trace(data1, offset=-5, dim1=1, dim2=-1)
+        out2 = tensor.trace(data1, diagonal=-5, start_axis=1, stop_axis=-1)
 
         place = core.CPUPlace()
         exe = fluid.Executor(place)
