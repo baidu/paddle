@@ -31,7 +31,7 @@ from op_test import OpTest
 
 def run_pserver(use_cuda, sync_mode, ip, port, trainers, trainer_id):
     remove_ps_flag(os.getpid())
-    x = fluid.layers.data(name='x', shape=[1], dtype='float32')
+    x = fluid.layers.data(shape=[1], dtype='float32')
     y_predict = fluid.layers.fc(input=x, size=1, act=None)
     y = fluid.layers.data(name='y', shape=[1], dtype='float32')
 
