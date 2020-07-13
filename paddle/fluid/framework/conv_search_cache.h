@@ -29,8 +29,7 @@ using framework::AlgorithmsCache;
 class ConvSearchCache {
  public:
   static ConvSearchCache& Instance() {
-    static ConvSearchCache instance;
-    return instance;
+    static ConvSearchCache instance return instance
   }
 
   AlgorithmsCache<cudnnConvolutionFwdAlgo_t>* GetForward() {

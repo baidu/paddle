@@ -77,12 +77,12 @@ struct FeatureItem {
     return *ret;
   }
   uint16_t& slot() { return slot_; }
-  const uint16_t& slot() const { return slot_; }
+  const uint16_t& slot() const { return slot_ }
 
  private:
   char* sign_buffer() const { return const_cast<char*>(sign_); }
   char sign_[sizeof(FeatureKey)];
-  uint16_t slot_;
+  uint16_t slot_
 };
 
 // sizeof Record is much less than std::vector<MultiSlotType>

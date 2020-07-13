@@ -218,6 +218,7 @@ EOF
     # Disable UNITTEST_USE_VIRTUALENV in docker because
     # docker environment is fully controlled by this script.
     # See /Paddle/CMakeLists.txt, UNITTEST_USE_VIRTUALENV option.
+    set +e
     cmake .. \
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Release} \
         ${PYTHON_FLAGS} \
@@ -240,7 +241,11 @@ EOF
         -DPY_VERSION=${PY_VERSION:-2.7} \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/paddle/build} \
         -DWITH_GRPC=${grpc_flag} \
-        -DWITH_LITE=${WITH_LITE:-OFF}
+        -DWITH_LITE=${WITH_LITE:-OFF};build_error=$?
+    echo "build_error: $build_error"
+    if [ "$build_error" != 0 ];then
+        exit 7;
+    fi
 
 }
 
@@ -293,6 +298,7 @@ function check_style() {
 #=================================================
 
 function build_base() {
+    set +e
     if [ "$SYSTEM" == "Linux" ];then
       if [ `nproc` -gt 16 ];then
           parallel_number=$(expr `nproc` - 8)
@@ -310,7 +316,11 @@ function build_base() {
         make clean
     fi
 
-    make install -j ${parallel_number}
+    make install -j ${parallel_number};build_error=$?
+    echo "build_error: $build_error"
+    if [ "$build_error" != 0 ];then
+        exit 7;
+    fi
 }
 
 function build_size() {
@@ -657,7 +667,7 @@ EOF
 function assert_api_spec_approvals() {
     /bin/bash ${PADDLE_ROOT}/tools/check_api_approvals.sh
     if [ "$?" != 0 ];then
-       exit 1
+       exit 6
     fi
 }
 
@@ -1171,10 +1181,16 @@ EOF
       parallel_number=$1
     fi
     startTime_s=`date +%s` 
-    cmake .. -DWITH_DISTRIBUTE=OFF -DON_INFER=ON -DCUDA_ARCH_NAME=${CUDA_ARCH_NAME:-Auto}
-
-    make -j ${parallel_number} fluid_lib_dist
-    make -j ${parallel_number} inference_lib_dist
+    set +e
+    cmake .. -DWITH_DISTRIBUTE=OFF -DON_INFER=ON -DCUDA_ARCH_NAME=${CUDA_ARCH_NAME:-Auto};excode_fluid=$?
+    echo "cmake: $excode_fluid"
+    make -j ${parallel_number} fluid_lib_dist;excode_fluid=$?
+    echo "make1: $excode_fluid"
+    make -j ${parallel_number} inference_lib_dist;excode_fluid=$?
+    echo "make2: $excode_fluid"
+    if [ "$excode_fluid" != 0 ];then
+        exit 7;
+    fi
     endTime_s=`date +%s`
     echo "Build Time: $[ $endTime_s - $startTime_s ]s"
     build_size "fluid_inference"
