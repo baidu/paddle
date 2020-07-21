@@ -15,6 +15,12 @@ find_path(NCCL_INCLUDE_DIR nccl.h
 )
 
 if(WITH_NCCL)
+    if(NOT NCCL_INCLUDE_DIR)
+        message(FATAL_ERROR "Cannot find nccl.h. "
+            "You can set WITH_NCCL=OFF if you don't want to use nccl, or install nccl with \"apt install\". "
+            "Please refer to https://docs.nvidia.com/deeplearning/nccl/install-guide/index.html#down for detail information.")
+    endif()
+
     file(READ ${NCCL_INCLUDE_DIR}/nccl.h NCCL_VERSION_FILE_CONTENTS)
 
     string(REGEX MATCH "define NCCL_VERSION_CODE +([0-9]+)"

@@ -14,6 +14,12 @@ find_path(CUDNN_INCLUDE_DIR cudnn.h
     NO_DEFAULT_PATH
 )
 
+find_path(CUDNN_INCLUDE_VERSION_DIR cudnn_version.h
+    PATHS ${CUDNN_ROOT} ${CUDNN_ROOT}/include
+    $ENV{CUDNN_ROOT} $ENV{CUDNN_ROOT}/include ${CUDA_TOOLKIT_INCLUDE}
+    NO_DEFAULT_PATH
+)
+
 get_filename_component(__libpath_hist ${CUDA_CUDART_LIBRARY} PATH)
 
 set(TARGET_ARCH "x86_64")
@@ -60,32 +66,52 @@ else()
     set(CUDNN_FOUND OFF)
 endif()
 
-if(CUDNN_FOUND)
-    file(READ ${CUDNN_INCLUDE_DIR}/cudnn.h CUDNN_VERSION_FILE_CONTENTS)
+function(parse_cudnn_version CUDNN_HEADER_FILEPATH)
+    file(READ ${CUDNN_HEADER_FILEPATH} CUDNN_VERSION_FILE_CONTENTS)
 
+    # CUDNN_VERSION
+    string(REGEX MATCH "define CUDNN_VERSION +([0-9]+)"
+        CUDNN_VERSION_LOCAL "${CUDNN_VERSION_FILE_CONTENTS}")
+    string(REGEX REPLACE "define CUDNN_VERSION +([0-9]+)" "\\1"
+        CUDNN_VERSION_LOCAL "${CUDNN_VERSION_LOCAL}")
+    set(CUDNN_VERSION ${CUDNN_VERSION_LOCAL} PARENT_SCOPE)
+
+    # CUDNN_MAJOR_VERSION
+    string(REGEX MATCH "define CUDNN_MAJOR +([0-9]+)" CUDNN_MAJOR_VERSION_LOCAL
+        "${CUDNN_VERSION_FILE_CONTENTS}")
+    string(REGEX REPLACE "define CUDNN_MAJOR +([0-9]+)" "\\1"
+        CUDNN_MAJOR_VERSION_LOCAL "${CUDNN_MAJOR_VERSION_LOCAL}")
+    set(CUDNN_MAJOR_VERSION ${CUDNN_MAJOR_VERSION_LOCAL} PARENT_SCOPE)
+
+    # CUDNN_MINOR_VERSION
+    string(REGEX MATCH "define CUDNN_MINOR +([0-9]+)" CUDNN_MINOR_VERSION_LOCAL
+        "${CUDNN_VERSION_FILE_CONTENTS}")
+    string(REGEX REPLACE "define CUDNN_MINOR +([0-9]+)" "\\1"
+        CUDNN_MINOR_VERSION_LOCAL "${CUDNN_MINOR_VERSION_LOCAL}")
+    set(CUDNN_MINOR_VERSION ${CUDNN_MINOR_VERSION_LOCAL} PARENT_SCOPE)
+
+    # CUDNN_PATCHLEVEL_VERSION
+    string(REGEX MATCH "define CUDNN_PATCHLEVEL +([0-9]+)"
+        CUDNN_PATCHLEVEL_VERSION_LOCAL "${CUDNN_VERSION_FILE_CONTENTS}")
+    string(REGEX REPLACE "define CUDNN_PATCHLEVEL +([0-9]+)" "\\1"
+        CUDNN_PATCHLEVEL_VERSION_LOCAL "${CUDNN_PATCHLEVEL_VERSION_LOCAL}")
+    set(CUDNN_PATCHLEVEL_VERSION ${CUDNN_PATCHLEVEL_VERSION_LOCAL} PARENT_SCOPE)
+endfunction()
+
+if(CUDNN_FOUND)
     get_filename_component(CUDNN_LIB_PATH ${CUDNN_LIBRARY} DIRECTORY)
 
-    string(REGEX MATCH "define CUDNN_VERSION +([0-9]+)"
-        CUDNN_VERSION "${CUDNN_VERSION_FILE_CONTENTS}")
-    string(REGEX REPLACE "define CUDNN_VERSION +([0-9]+)" "\\1"
-        CUDNN_VERSION "${CUDNN_VERSION}")
+    parse_cudnn_version(${CUDNN_INCLUDE_DIR}/cudnn.h)
+    if(NOT CUDNN_VERSION)
+        if(CUDNN_INCLUDE_VERSION_DIR)
+            # For cudnn 8, CUDNN_VERSION is redorced in a separate header file.
+            parse_cudnn_version(${CUDNN_INCLUDE_DIR}/cudnn_version.h)
+        endif()
+    endif()
 
     if("${CUDNN_VERSION}" STREQUAL "2000")
         message(STATUS "Current cuDNN version is v2. ")
     else()
-        string(REGEX MATCH "define CUDNN_MAJOR +([0-9]+)" CUDNN_MAJOR_VERSION
-            "${CUDNN_VERSION_FILE_CONTENTS}")
-        string(REGEX REPLACE "define CUDNN_MAJOR +([0-9]+)" "\\1"
-            CUDNN_MAJOR_VERSION "${CUDNN_MAJOR_VERSION}")
-        string(REGEX MATCH "define CUDNN_MINOR +([0-9]+)" CUDNN_MINOR_VERSION
-            "${CUDNN_VERSION_FILE_CONTENTS}")
-        string(REGEX REPLACE "define CUDNN_MINOR +([0-9]+)" "\\1"
-            CUDNN_MINOR_VERSION "${CUDNN_MINOR_VERSION}")
-        string(REGEX MATCH "define CUDNN_PATCHLEVEL +([0-9]+)"
-            CUDNN_PATCHLEVEL_VERSION "${CUDNN_VERSION_FILE_CONTENTS}")
-        string(REGEX REPLACE "define CUDNN_PATCHLEVEL +([0-9]+)" "\\1"
-            CUDNN_PATCHLEVEL_VERSION "${CUDNN_PATCHLEVEL_VERSION}")
-
         if(NOT CUDNN_MAJOR_VERSION)
             set(CUDNN_VERSION "???")
         else()
@@ -96,7 +122,6 @@ if(CUDNN_FOUND)
         endif()
 
         message(STATUS "Current cuDNN header is ${CUDNN_INCLUDE_DIR}/cudnn.h. "
-            "Current cuDNN version is v${CUDNN_MAJOR_VERSION}.${CUDNN_MINOR_VERSION}. ")
-
+            "Current cuDNN version is v${CUDNN_MAJOR_VERSION}.${CUDNN_MINOR_VERSION}.${CUDNN_PATCHLEVEL_VERSION} ")
     endif()
 endif()

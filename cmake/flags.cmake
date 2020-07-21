@@ -107,17 +107,6 @@ if(NOT UINT64_MAX_EXISTS)
   endif()
 endif()
 
-SET(CMAKE_EXTRA_INCLUDE_FILES "pthread.h")
-CHECK_TYPE_SIZE(pthread_spinlock_t SPINLOCK_FOUND)
-CHECK_TYPE_SIZE(pthread_barrier_t BARRIER_FOUND)
-if(SPINLOCK_FOUND)
-  add_definitions(-DPADDLE_USE_PTHREAD_SPINLOCK)
-endif(SPINLOCK_FOUND)
-if(BARRIER_FOUND)
-  add_definitions(-DPADDLE_USE_PTHREAD_BARRIER)
-endif(BARRIER_FOUND)
-SET(CMAKE_EXTRA_INCLUDE_FILES "")
-
 # Only one sanitizer is allowed in compile time
 string(TOLOWER "${SANITIZER_TYPE}" sanitizer_type)
 if(sanitizer_type STREQUAL "address")
