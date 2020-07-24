@@ -24,6 +24,12 @@ void ReaderBase::ReadNext(std::vector<LoDTensor> *out) {
   ReadNextImpl(out);
 }
 
+std::shared_ptr<std::vector<LoDTensor>> ReaderBase::ReadNextShared() {
+  std::lock_guard<std::mutex> lock(mu_);
+  PADDLE_ENFORCE_EQ(status_, ReaderStatus::kRunning);
+  return ReadNextSharedImpl();
+}
+
 void ReaderBase::InsertDecoratedReader(
     const std::shared_ptr<ReaderBase> &decorated_reader) {
   std::lock_guard<std::mutex> guard(mu_);

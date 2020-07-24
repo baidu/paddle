@@ -71,6 +71,49 @@ class BufferedReader : public framework::DecoratedReader {
 #endif
 };
 
+class SharedBufferedReader : public framework::DecoratedReader {
+  using TensorVec = std::vector<framework::LoDTensor>;
+  using VecFuture = std::future<TensorVec>;
+
+ public:
+  SharedBufferedReader(const std::shared_ptr<framework::ReaderBase>& reader,
+                       const platform::Place& place, size_t buffer_size);
+
+  ~SharedBufferedReader() override;
+
+ private:
+  void ReadTillBufferFullAsync();
+
+  void ReadAsync(size_t i);
+
+ protected:
+  void ShutdownImpl() override;
+  void StartImpl() override;
+  std::shared_ptr<std::vector<framework::LoDTensor>> ReadNextSharedImpl()
+      override;
+
+ private:
+  ThreadPool thread_pool_;
+  platform::Place place_;
+  const size_t buffer_size_;
+
+  std::queue<std::future<int64_t>> position_;
+
+  // The buffer for reading data.
+  // NOTE: the simplest way to implement buffered reader is do not use any
+  // buffer, just read async and create futures as buffer size. However, to
+  // malloc tensors every time is extremely slow. Here we store all data in
+  // buffers and prevent alloc every time.
+  std::vector<std::shared_ptr<TensorVec>> cpu_buffer_;
+  std::vector<std::shared_ptr<TensorVec>> gpu_buffer_;
+  int64_t prev_pos_{-1L};
+#ifdef PADDLE_WITH_CUDA
+  cudaStream_t compute_stream_;
+  std::shared_ptr<platform::CudaStreamObject> stream_;
+  std::vector<std::shared_ptr<platform::CudaEventObject>> events_;
+#endif
+};
+
 }  // namespace reader
 }  // namespace operators
 }  // namespace paddle

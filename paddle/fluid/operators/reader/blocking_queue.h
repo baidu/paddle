@@ -20,6 +20,8 @@
 
 #include "paddle/fluid/platform/enforce.h"
 
+#include "paddle/fluid/platform/timer.h"
+
 namespace paddle {
 namespace operators {
 namespace reader {
@@ -42,9 +44,13 @@ class BlockingQueue {
   }
 
   bool Send(const T& elem) {
+    platform::Timer timer;
+    timer.Start();
     std::unique_lock<std::mutex> lock(mutex_);
     send_cv_.wait(
         lock, [&] { return queue_.size() < capacity_ || closed_ || killed_; });
+    timer.Pause();
+    VLOG(0) << "BlockingQueue: Send: lock time: " << timer.ElapsedSec() << " s";
     EnforceNotKilled();
     if (closed_) {
       VLOG(5)
@@ -55,6 +61,7 @@ class BlockingQueue {
         queue_.size(), capacity_,
         platform::errors::PermissionDenied(
             "The queue size cannot exceed the set queue capacity."));
+    VLOG(0) << "BlockingQueue: Send an elem";
     queue_.push_back(elem);
     receive_cv_.notify_one();
     return true;
@@ -74,25 +81,47 @@ class BlockingQueue {
         queue_.size(), capacity_,
         platform::errors::PermissionDenied(
             "The queue size cannot exceed the set queue capacity."));
+    VLOG(0) << "BlockingQueue: Send an elem by move";
     queue_.emplace_back(std::move(elem));
     receive_cv_.notify_one();
     return true;
   }
 
   bool Receive(T* elem) {
+    platform::Timer timer;
+    timer.Start();
     std::unique_lock<std::mutex> lock(mutex_);
     receive_cv_.wait(lock,
                      [&] { return !queue_.empty() || closed_ || killed_; });
     EnforceNotKilled();
+    timer.Pause();
+    VLOG(0) << "BlockingQueue: Receive: lock time: " << timer.ElapsedSec()
+            << " s";
     if (!queue_.empty()) {
+      timer.Start();
       PADDLE_ENFORCE_NOT_NULL(
           elem, platform::errors::InvalidArgument(
                     "The holder to receive queue data is null pointer."));
       *elem = queue_.front();
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: read time: " << timer.ElapsedSec()
+              << " s";
+      VLOG(0) << "BlockingQueue: queue_.front data ptr: "
+              << reinterpret_cast<uintptr_t>(&(queue_.front()));
+      VLOG(0) << "BlockingQueue: elem data ptr: "
+              << reinterpret_cast<uintptr_t>(elem);
+      timer.Start();
       if (LIKELY(!speed_test_mode_)) {
         queue_.pop_front();
       }
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: pop time: " << timer.ElapsedSec()
+              << " s";
+      timer.Start();
       send_cv_.notify_one();
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: notify time: " << timer.ElapsedSec()
+              << " s";
       return true;
     } else {
       PADDLE_ENFORCE_EQ(closed_, true,
@@ -101,6 +130,51 @@ class BlockingQueue {
                             "when pop data, it should be closed."));
       VLOG(3) << "queue is closed! return nothing.";
       return false;
+    }
+  }
+
+  T Receive() {
+    platform::Timer timer;
+    timer.Start();
+    std::unique_lock<std::mutex> lock(mutex_);
+    receive_cv_.wait(lock,
+                     [&] { return !queue_.empty() || closed_ || killed_; });
+    EnforceNotKilled();
+    timer.Pause();
+    VLOG(0) << "BlockingQueue: Receive: lock time: " << timer.ElapsedSec()
+            << " s";
+
+    if (!queue_.empty()) {
+      T elem;
+      timer.Start();
+      elem = queue_.front();
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: read time: " << timer.ElapsedSec()
+              << " s";
+      VLOG(0) << "BlockingQueue: queue_.front data ptr: "
+              << reinterpret_cast<uintptr_t>(&(queue_.front()));
+      VLOG(0) << "BlockingQueue: elem data ptr: "
+              << reinterpret_cast<uintptr_t>(&elem);
+      timer.Start();
+      if (LIKELY(!speed_test_mode_)) {
+        queue_.pop_front();
+      }
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: pop time: " << timer.ElapsedSec()
+              << " s";
+      timer.Start();
+      send_cv_.notify_one();
+      timer.Pause();
+      VLOG(0) << "BlockingQueue: Receive: notify time: " << timer.ElapsedSec()
+              << " s";
+      return elem;
+    } else {
+      PADDLE_ENFORCE_EQ(closed_, true,
+                        platform::errors::PermissionDenied(
+                            "Blocking queue status error, if queue is empty "
+                            "when pop data, it should be closed."));
+      VLOG(3) << "queue is closed! return nothing.";
+      return nullptr;
     }
   }
 

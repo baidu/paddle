@@ -149,9 +149,13 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
             v.desc.need_check_feed() for v in self._feed_list
         ]
         # if only 1 place, do not need to keep order
-        self._blocking_queue = core.init_lod_tensor_blocking_queue(
-            core.Variable(), self._blocking_queue_capacity,
-            len(self._places) > 1)
+        if in_dygraph_mode():
+            self._blocking_queue = core.init_shared_lod_tensor_blocking_queue(
+                core.Variable(), self._blocking_queue_capacity)
+        else:
+            self._blocking_queue = core.init_lod_tensor_blocking_queue(
+                core.Variable(), self._blocking_queue_capacity,
+                len(self._places) > 1)
         self._reader = core.create_py_reader(
             self._blocking_queue, self._var_names, self._shapes, self._dtypes,
             self._need_check_feed, self._places, self._use_buffer_reader, True)
@@ -302,9 +306,15 @@ class _DataLoaderIterMultiProcess(_DataLoaderIterBase):
         self._need_check_feed = [
             v.desc.need_check_feed() for v in self._feed_list
         ]
+
         # if only 1 place, do not need to keep order
-        self._blocking_queue = core.init_lod_tensor_blocking_queue(
-            core.Variable(), self._outstanding_capacity, len(self._places) > 1)
+        if in_dygraph_mode():
+            self._blocking_queue = core.init_shared_lod_tensor_blocking_queue(
+                core.Variable(), self._outstanding_capacity)
+        else:
+            self._blocking_queue = core.init_lod_tensor_blocking_queue(
+                core.Variable(), self._outstanding_capacity,
+                len(self._places) > 1)
         self._reader = core.create_py_reader(
             self._blocking_queue, self._var_names, self._shapes, self._dtypes,
             self._need_check_feed, self._places, self._use_buffer_reader, True)

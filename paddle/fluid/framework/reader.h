@@ -49,6 +49,8 @@ class ReaderBase {
 
   virtual void ReadNext(std::vector<LoDTensor>* out);
 
+  virtual std::shared_ptr<std::vector<LoDTensor>> ReadNextShared();
+
   virtual void Shutdown();
 
   virtual void Start();
@@ -73,6 +75,10 @@ class ReaderBase {
 
  protected:
   virtual void ReadNextImpl(std::vector<LoDTensor>* out) {}
+
+  virtual std::shared_ptr<std::vector<LoDTensor>> ReadNextSharedImpl() {
+    return nullptr;
+  }
 
   virtual void ShutdownImpl() {}
 
@@ -172,6 +178,14 @@ class ReaderHolder {
         platform::errors::InvalidArgument(
             "The underlying reader of ReaderHolder should not be null"));
     reader_->ReadNext(out);
+  }
+
+  std::shared_ptr<std::vector<LoDTensor>> ReadNextShared() {
+    PADDLE_ENFORCE_NOT_NULL(
+        reader_,
+        platform::errors::InvalidArgument(
+            "The underlying reader of ReaderHolder should not be null"));
+    return reader_->ReadNextShared();
   }
 
   void ResetAll() {

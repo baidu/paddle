@@ -25,6 +25,6 @@ reader_library(create_py_reader_op SRCS create_py_reader_op.cc DEPS py_reader)
 
 op_library(read_op DEPS py_reader buffered_reader)
 
-cc_test(reader_blocking_queue_test SRCS reader_blocking_queue_test.cc)
+cc_test(reader_blocking_queue_test SRCS reader_blocking_queue_test.cc DEPS timer)
 # Export local libraries to parent
 # set(READER_LIBRARY ${LOCAL_READER_LIBS} PARENT_SCOPE)

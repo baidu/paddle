@@ -44,6 +44,46 @@ class PyReader : public framework::FileReader {
   std::shared_ptr<LoDTensorBlockingQueue> queue_;
 };
 
+class SharedPyReader : public framework::FileReader {
+ public:
+  explicit SharedPyReader(
+      const std::shared_ptr<SharedLoDTensorBlockingQueue>& queue,
+      const std::vector<framework::DDim>& dims,
+      const std::vector<framework::proto::VarType::Type>& var_types,
+      const std::vector<bool>& need_check_feed);
+
+  std::shared_ptr<std::vector<framework::LoDTensor>> ReadNextShared() override;
+
+  ~SharedPyReader();
+
+  void Shutdown() override;
+
+  void Start() override;
+
+ private:
+  std::shared_ptr<SharedLoDTensorBlockingQueue> queue_;
+};
+
+class MultiPyReader : public framework::FileReader {
+ public:
+  explicit MultiPyReader(
+      const std::shared_ptr<MultiLoDTensorBlockingQueue>& queue,
+      const std::vector<framework::DDim>& dims,
+      const std::vector<framework::proto::VarType::Type>& var_types,
+      const std::vector<bool>& need_check_feed);
+
+  void ReadNext(std::vector<framework::LoDTensor>* out) override;
+
+  ~MultiPyReader();
+
+  void Shutdown() override;
+
+  void Start() override;
+
+ private:
+  std::shared_ptr<MultiLoDTensorBlockingQueue> queue_;
+};
+
 }  // namespace reader
 }  // namespace operators
 }  // namespace paddle
