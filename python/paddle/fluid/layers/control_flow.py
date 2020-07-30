@@ -1580,7 +1580,7 @@ def create_array(dtype):
 
 
 @templatedoc()
-def less_than(x, y, force_cpu=None, cond=None):
+def less_than(x, y, force_cpu=None, cond=None, name=None):
     """
     :alias_main: paddle.less_than
 	:alias: paddle.less_than,paddle.tensor.less_than,paddle.tensor.logic.less_than
@@ -1595,6 +1595,8 @@ def less_than(x, y, force_cpu=None, cond=None):
         cond(Variable, optional): Optional output which can be any created Variable
             that meets the requirements to store the result of *less_than*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
     Returns:
         ${out_comment}.
 
@@ -1649,7 +1651,7 @@ def less_than(x, y, force_cpu=None, cond=None):
 
 
 @templatedoc()
-def less_equal(x, y, cond=None):
+def less_equal(x, y, cond=None, name=None):
     """
     :alias_main: paddle.less_equal
 	:alias: paddle.less_equal,paddle.tensor.less_equal,paddle.tensor.logic.less_equal
@@ -1662,6 +1664,8 @@ def less_equal(x, y, cond=None):
         y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
         cond(Variable, optional): Optional output which can be any created Variable that meets the requirements to store the result of *less_equal*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
@@ -1701,7 +1705,7 @@ def less_equal(x, y, cond=None):
 
 
 @templatedoc()
-def greater_than(x, y, cond=None):
+def greater_than(x, y, cond=None, name=None):
     """
     :alias_main: paddle.greater_than
 	:alias: paddle.greater_than,paddle.tensor.greater_than,paddle.tensor.logic.greater_than
@@ -1714,6 +1718,8 @@ def greater_than(x, y, cond=None):
         y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
         cond(Variable, optional): Optional output which can be any created Variable that meets the requirements to store the result of *greater_than*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x` .
@@ -1752,7 +1758,7 @@ def greater_than(x, y, cond=None):
 
 
 @templatedoc()
-def greater_equal(x, y, cond=None):
+def greater_equal(x, y, cond=None, name=None):
     """
     :alias_main: paddle.greater_equal
 	:alias: paddle.greater_equal,paddle.tensor.greater_equal,paddle.tensor.logic.greater_equal
@@ -1765,6 +1771,8 @@ def greater_equal(x, y, cond=None):
         y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
         cond(Variable, optional): Optional output which can be any created Variable that meets the requirements to store the result of *greater_equal*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
@@ -1804,7 +1812,7 @@ def greater_equal(x, y, cond=None):
     return cond
 
 
-def equal(x, y, cond=None):
+def equal(x, y, cond=None, name=None):
     """
     This layer returns the truth value of :math:`x == y` elementwise.
 
@@ -1814,6 +1822,8 @@ def equal(x, y, cond=None):
         cond(Variable, optional): Optional output which can be any created 
             Variable that meets the requirements to store the result of *equal*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable: output Tensor, it's shape is the same as the input's Tensor,
@@ -1849,7 +1859,7 @@ def equal(x, y, cond=None):
     return cond
 
 
-def not_equal(x, y, cond=None):
+def not_equal(x, y, cond=None, name=None):
     """
     :alias_main: paddle.not_equal
 	:alias: paddle.not_equal,paddle.tensor.not_equal,paddle.tensor.logic.not_equal
@@ -1862,6 +1872,8 @@ def not_equal(x, y, cond=None):
         y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
         cond(Variable, optional): Optional output which can be any created Variable that meets the requirements to store the result of *not_equal*.
             if cond is None, a new Varibale will be created to store the result.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.

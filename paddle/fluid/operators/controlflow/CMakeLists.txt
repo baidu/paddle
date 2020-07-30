@@ -9,4 +9,4 @@ cc_test(conditional_block_op_test SRCS conditional_block_op_test.cc DEPS conditi
 
 target_link_libraries(conditional_block_infer_op conditional_block_op) 
 
-file(APPEND ${pybind_file} "USE_OP(less_than);\nUSE_OP(equal_reduce);\nUSE_OP(logical_and);\nUSE_NO_KERNEL_OP(read_from_array);\n")
+file(APPEND ${pybind_file} "USE_OP(less_than);\nUSE_OP(equal_all);\nUSE_OP(logical_and);\nUSE_NO_KERNEL_OP(read_from_array);\n")

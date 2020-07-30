@@ -20,6 +20,7 @@ import numpy
 import numpy as np
 import paddle
 import paddle.fluid as fluid
+import paddle.fluid.core as core
 from paddle.fluid import Program, program_guard
 
 
@@ -67,6 +68,49 @@ for _type_name in {'float32', 'float64', 'int32', 'int64'}:
     create_test_class('not_equal', _type_name, lambda _a, _b: _a != _b)
 
 
+def create_paddle_case(op_type, callback):
+    class PaddleCls(unittest.TestCase):
+        def setUp(self):
+            self.op_type = op_type
+            self.input_x = np.array([1, 2, 3, 4])
+            self.input_y = np.array([1, 3, 2, 4])
+            self.real_result = callback(self.input_x, self.input_y)
+
+        def test_api(self):
+            with program_guard(Program(), Program()):
+                x = fluid.layers.data(name='x', shape=[4], dtype='int64')
+                y = fluid.layers.data(name='y', shape=[4], dtype='int64')
+                op = eval("paddle.%s" % (self.op_type))
+                out = op(x, y)
+                place = fluid.CPUPlace()
+                if core.is_compiled_with_cuda():
+                    place = paddle.CUDAPlace(0)
+                exe = fluid.Executor(place)
+                res, = exe.run(feed={"x": self.input_x,
+                                     "y": self.input_y},
+                               fetch_list=[out])
+            self.assertEqual((res == self.real_result).all(), True)
+
+        def test_attr_name(self):
+            with program_guard(Program(), Program()):
+                x = fluid.layers.data(name='x', shape=[4], dtype='int32')
+                y = fluid.layers.data(name='y', shape=[4], dtype='int32')
+                op = eval("paddle.%s" % (self.op_type))
+                out = op(x=x, y=y, name="name_%s" % (self.op_type))
+            self.assertEqual("name_%s" % (self.op_type) in out.name, True)
+
+    cls_name = "TestCase_{}".format(op_type)
+    PaddleCls.__name__ = cls_name
+    globals()[cls_name] = PaddleCls
+
+
+create_paddle_case('less_equal', lambda _a, _b: _a <= _b)
+create_paddle_case('greater_than', lambda _a, _b: _a > _b)
+create_paddle_case('greater_equal', lambda _a, _b: _a >= _b)
+create_paddle_case('equal', lambda _a, _b: _a == _b)
+create_paddle_case('not_equal', lambda _a, _b: _a != _b)
+
+
 class TestCompareOpError(unittest.TestCase):
     def test_errors(self):
         with program_guard(Program(), Program()):
@@ -82,7 +126,7 @@ class API_TestElementwise_Equal(unittest.TestCase):
         with fluid.program_guard(fluid.Program(), fluid.Program()):
             label = fluid.layers.assign(np.array([3, 3], dtype="int32"))
             limit = fluid.layers.assign(np.array([3, 2], dtype="int32"))
-            out = paddle.elementwise_equal(x=label, y=limit)
+            out = paddle.equal(x=label, y=limit)
             place = fluid.CPUPlace()
             exe = fluid.Executor(place)
             res, = exe.run(fetch_list=[out])
@@ -91,7 +135,7 @@ class API_TestElementwise_Equal(unittest.TestCase):
         with fluid.program_guard(fluid.Program(), fluid.Program()):
             label = fluid.layers.assign(np.array([3, 3], dtype="int32"))
             limit = fluid.layers.assign(np.array([3, 3], dtype="int32"))
-            out = paddle.elementwise_equal(x=label, y=limit)
+            out = paddle.equal(x=label, y=limit)
             place = fluid.CPUPlace()
             exe = fluid.Executor(place)
             res, = exe.run(fetch_list=[out])

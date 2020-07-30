@@ -15,24 +15,21 @@
 from ..fluid.layer_helper import LayerHelper
 from ..fluid.data_feeder import check_type
 from ..fluid.layers.layer_function_generator import templatedoc
+from .. import fluid
 
 # TODO: define logic functions of a tensor  
-from ..fluid.layers import greater_equal  #DEFINE_ALIAS
-from ..fluid.layers import greater_than  #DEFINE_ALIAS
 from ..fluid.layers import is_empty  #DEFINE_ALIAS
 from ..fluid.layers import isfinite  #DEFINE_ALIAS
-from ..fluid.layers import less_equal  #DEFINE_ALIAS
-from ..fluid.layers import less_than  #DEFINE_ALIAS
 from ..fluid.layers import logical_and  #DEFINE_ALIAS
 from ..fluid.layers import logical_not  #DEFINE_ALIAS
 from ..fluid.layers import logical_or  #DEFINE_ALIAS
 from ..fluid.layers import logical_xor  #DEFINE_ALIAS
-from ..fluid.layers import not_equal  #DEFINE_ALIAS
 from ..fluid.layers import reduce_all  #DEFINE_ALIAS
 from ..fluid.layers import reduce_any  #DEFINE_ALIAS
 
 __all__ = [
     'equal',
+    'equal_all',
     'greater_equal',
     'greater_than',
     'is_empty',
@@ -47,29 +44,24 @@ __all__ = [
     'reduce_all',
     'reduce_any',
     'allclose',
-    'elementwise_equal',
     #       'isnan'
 ]
 
 
-def equal(x, y, axis=-1, name=None):
+def equal_all(x, y, name=None):
     """
-	:alias_main: paddle.equal
-	:alias: paddle.equal,paddle.tensor.equal,paddle.tensor.logic.equal
+	:alias_main: paddle.equal_all
+	:alias: paddle.equal_all,paddle.tensor.equal_all,paddle.tensor.logic.equal_all
 
     This OP returns the truth value of :math:`x == y`. True if two inputs have the same elements, False otherwise.
 
-    **NOTICE**: The output of this OP has no gradient, and this OP supports broadcasting by :attr:`axis`.
+    **NOTICE**: The output of this OP has no gradient.
 
     Args:
         x(Variable): Tensor, data type is float32, float64, int32, int64.
         y(Variable): Tensor, data type is float32, float64, int32, int64.
-        axis(int32, optional): If X.dimension != Y.dimension, Y.dimension
-            must be a subsequence of x.dimension. And axis is the start 
-            dimension index for broadcasting Y onto X. For more detail, 
-            please refer to OP:`elementwise_add`.
-        name(str, optional): Normally there is no need for user to set this property. 
-            For more information, please refer to :ref:`api_guide_Name`.Default: None.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
         Variable: output Tensor, data type is bool, value is [False] or [True].
@@ -77,48 +69,25 @@ def equal(x, y, axis=-1, name=None):
     Examples:
         .. code-block:: python
 
-          import paddle.fluid as fluid
-          import paddle
           import numpy as np
-
-          label = fluid.layers.assign(np.array([3, 4], dtype="int32"))
-          label_1 = fluid.layers.assign(np.array([1, 2], dtype="int32"))
-          limit = fluid.layers.assign(np.array([3, 4], dtype="int32"))
-          out1 = paddle.equal(x=label, y=limit) #out1=[True]
-          out2 = paddle.equal(x=label_1, y=limit) #out2=[False]
-
-        .. code-block:: python
-
-          import paddle.fluid as fluid
           import paddle
-          import numpy as np
+          import paddle.imperative as imperative
 
-          def gen_data():
-              return {
-                    "x": np.ones((2, 3, 4, 5)).astype('float32'),
-                    "y": np.zeros((3, 4)).astype('float32')
-                }
-
-          x = fluid.data(name="x", shape=[2,3,4,5], dtype='float32')
-          y = fluid.data(name="y", shape=[3,4], dtype='float32')
-          out = paddle.equal(x, y, axis=1)
-          place = fluid.CPUPlace()
-          exe = fluid.Executor(place)
-
-          res = exe.run(feed=gen_data(),
-                            fetch_list=[out])
-          print(res[0]) #[False]
+          paddle.enable_imperative()
+          x = imperative.to_variable(np.array([1, 2, 3]))
+          y = imperative.to_variable(np.array([1, 2, 3]))
+          z = imperative.to_variable(np.array([1, 4, 3]))
+          result1 = paddle.equal_all(x, y)
+          print(result1.numpy()) # result1 = [True ]
+          result2 = paddle.equal_all(x, z)
+          print(result2.numpy()) # result2 = [False ]
     """
-    helper = LayerHelper("equal_reduce", **locals())
+
+    helper = LayerHelper("equal_all", **locals())
     out = helper.create_variable_for_type_inference(dtype='bool')
-    attrs = {}
-    attrs['axis'] = axis
     helper.append_op(
-        type='equal_reduce',
-        inputs={'X': [x],
-                'Y': [y]},
-        attrs=attrs,
-        outputs={'Out': [out]})
+        type='equal_all', inputs={'X': [x],
+                                  'Y': [y]}, outputs={'Out': [out]})
     return out
 
 
@@ -208,12 +177,14 @@ def allclose(input, other, rtol=1e-05, atol=1e-08, equal_nan=False, name=None):
     return out
 
 
-def elementwise_equal(x, y, name=None):
+@templatedoc()
+def equal(x, y, name=None):
     """
-	:alias_main: paddle.elementwise_equal
-	:alias: paddle.elementwise_equal,paddle.tensor.elementwise_equal,paddle.tensor.logic.elementwise_equal
+	:alias_main: paddle.equal
+	:alias: paddle.equal,paddle.tensor.equal,paddle.tensor.logic.equal
 
     This layer returns the truth value of :math:`x == y` elementwise.
+    **NOTICE**: The output of this OP has no gradient.
 
     Args:
         x(Variable): Tensor, data type is float32, float64, int32, int64.
@@ -228,21 +199,183 @@ def elementwise_equal(x, y, name=None):
     Examples:
         .. code-block:: python
 
-          import paddle
-          import paddle.fluid as fluid
           import numpy as np
-          label = fluid.layers.assign(np.array([3, 3], dtype="int32"))
-          limit = fluid.layers.assign(np.array([3, 2], dtype="int32"))
-          out1 = paddle.elementwise_equal(x=label, y=limit) #out1=[True, False]
-    """
-    helper = LayerHelper("elementwise_equal", **locals())
-    out = helper.create_variable_for_type_inference(dtype='bool')
-    out.stop_gradient = True
+          import paddle
+          import paddle.imperative as imperative
 
-    helper.append_op(
-        type='equal',
-        inputs={'X': [x],
-                'Y': [y]},
-        outputs={'Out': [out]},
-        attrs={'force_cpu': False})
+          paddle.enable_imperative()
+          x = imperative.to_variable(np.array([1, 2, 3]))
+          y = imperative.to_variable(np.array([1, 3, 2]))
+          result1 = paddle.equal(x, y)
+          print(result1.numpy())  # result1 = [True False False]
+    """
+    out = fluid.layers.equal(x, y, name=name, cond=None)
+    return out
+
+
+@templatedoc()
+def greater_equal(x, y, name=None):
+    """
+    :alias_main: paddle.greater_equal
+	:alias: paddle.greater_equal,paddle.tensor.greater_equal,paddle.tensor.logic.greater_equal
+
+    This OP returns the truth value of :math:`x >= y` elementwise, which is equivalent function to the overloaded operator `>=`.
+    **NOTICE**: The output of this OP has no gradient.
+
+    Args:
+        x(Variable): First input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+    Returns:
+        Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
+
+    Examples:
+        .. code-block:: python
+            import numpy as np
+            import paddle
+            import paddle.imperative as imperative
+
+            paddle.enable_imperative()
+            x = imperative.to_variable(np.array([1, 2, 3]))
+            y = imperative.to_variable(np.array([1, 3, 2]))
+            result1 = paddle.greater_equal(x, y)
+            print(result1.numpy())  # result1 = [True False True]
+    """
+    out = fluid.layers.greater_equal(x, y, name=name, cond=None)
+    return out
+
+
+@templatedoc()
+def greater_than(x, y, name=None):
+    """
+    :alias_main: paddle.greater_than
+	:alias: paddle.greater_than,paddle.tensor.greater_than,paddle.tensor.logic.greater_than
+
+    This OP returns the truth value of :math:`x > y` elementwise, which is equivalent function to the overloaded operator `>`.
+    **NOTICE**: The output of this OP has no gradient.
+
+    Args:
+        x(Variable): First input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+    Returns:
+        Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x` .
+
+    Examples:
+        .. code-block:: python
+            import numpy as np
+            import paddle
+            import paddle.imperative as imperative
+
+            paddle.enable_imperative()
+            x = imperative.to_variable(np.array([1, 2, 3]))
+            y = imperative.to_variable(np.array([1, 3, 2]))
+            result1 = paddle.greater_than(x, y)
+            print(result1.numpy())  # result1 = [False False True]
+    """
+    out = fluid.layers.greater_than(x, y, name=name, cond=None)
+    return out
+
+
+@templatedoc()
+def less_equal(x, y, name=None):
+    """
+    :alias_main: paddle.less_equal
+	:alias: paddle.less_equal,paddle.tensor.less_equal,paddle.tensor.logic.less_equal
+
+    This OP returns the truth value of :math:`x <= y` elementwise, which is equivalent function to the overloaded operator `<=`.
+    **NOTICE**: The output of this OP has no gradient.
+
+    Args:
+        x(Variable): First input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
+
+    Examples:
+        .. code-block:: python
+            import numpy as np
+            import paddle
+            import paddle.imperative as imperative
+
+            paddle.enable_imperative()
+            x = imperative.to_variable(np.array([1, 2, 3]))
+            y = imperative.to_variable(np.array([1, 3, 2]))
+            result1 = paddle.less_equal(x, y)
+            print(result1.numpy())  # result1 = [True True False]
+    """
+    out = fluid.layers.less_equal(x, y, name=name, cond=None)
+    return out
+
+
+@templatedoc()
+def less_than(x, y, name=None):
+    """
+    :alias_main: paddle.less_than
+	:alias: paddle.less_than,paddle.tensor.less_than,paddle.tensor.logic.less_than
+
+    This OP returns the truth value of :math:`x < y` elementwise, which is equivalent function to the overloaded operator `<`.
+    **NOTICE**: The output of this OP has no gradient.
+
+    Args:
+        x(Variable): First input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
+
+    Examples:
+        .. code-block:: python
+            import numpy as np
+            import paddle
+            import paddle.imperative as imperative
+
+            paddle.enable_imperative()
+            x = imperative.to_variable(np.array([1, 2, 3]))
+            y = imperative.to_variable(np.array([1, 3, 2]))
+            result1 = paddle.less_than(x, y)
+            print(result1.numpy())  # result1 = [False True False]
+    """
+    out = fluid.layers.less_than(x, y, force_cpu=False, name=name, cond=None)
+    return out
+
+
+@templatedoc()
+def not_equal(x, y, name=None):
+    """
+    :alias_main: paddle.not_equal
+	:alias: paddle.not_equal,paddle.tensor.not_equal,paddle.tensor.logic.not_equal
+
+    This OP returns the truth value of :math:`x != y` elementwise, which is equivalent function to the overloaded operator `!=`.
+    **NOTICE**: The output of this OP has no gradient.
+
+    Args:
+        x(Variable): First input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        y(Variable): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
+        name(str, optional): The default value is None.  Normally there is no need for
+            user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        Variable, the output data type is bool: The tensor variable storing the output, the output shape is same as input :attr:`x`.
+
+    Examples:
+        .. code-block:: python
+            import numpy as np
+            import paddle
+            import paddle.imperative as imperative
+
+            paddle.enable_imperative()
+            x = imperative.to_variable(np.array([1, 2, 3]))
+            y = imperative.to_variable(np.array([1, 3, 2]))
+            result1 = paddle.not_equal(x, y)
+            print(result1.numpy())  # result1 = [False True True]
+    """
+    out = fluid.layers.not_equal(x, y, name=name, cond=None)
     return out
