@@ -43,13 +43,13 @@ from .. import compat as cpt
 
 __all__ = [
     'SGD', 'Momentum', 'Adagrad', 'Adam', 'Adamax', 'Dpsgd', 'DecayedAdagrad',
-    'Ftrl', 'SGDOptimizer', 'MomentumOptimizer', 'AdagradOptimizer',
+    'Ftrl', 'GFtrl', 'SGDOptimizer', 'MomentumOptimizer', 'AdagradOptimizer',
     'AdamOptimizer', 'AdamaxOptimizer', 'DpsgdOptimizer',
-    'DecayedAdagradOptimizer', 'RMSPropOptimizer', 'FtrlOptimizer', 'Adadelta',
-    'AdadeltaOptimizer', 'ModelAverage', 'LarsMomentum',
-    'LarsMomentumOptimizer', 'DGCMomentumOptimizer', 'LambOptimizer',
-    'ExponentialMovingAverage', 'PipelineOptimizer', 'LookaheadOptimizer',
-    'RecomputeOptimizer'
+    'DecayedAdagradOptimizer', 'RMSPropOptimizer', 'FtrlOptimizer',
+    'GFtrlOptimizer', 'Adadelta', 'AdadeltaOptimizer', 'ModelAverage',
+    'LarsMomentum', 'LarsMomentumOptimizer', 'DGCMomentumOptimizer',
+    'LambOptimizer', 'ExponentialMovingAverage', 'PipelineOptimizer',
+    'LookaheadOptimizer', 'RecomputeOptimizer'
 ]
 
 
@@ -2894,6 +2894,117 @@ class FtrlOptimizer(Optimizer):
         return ftrl_op
 
 
+class GFtrlOptimizer(Optimizer):
+    """
+    G-FTRL (Group-Sparsity-Regularized FTRL) Optimizer.
+
+    The paper that proposed Group-Sparsity-Regularized FTRL (G-FTRL):
+    (https://research.fb.com/wp-content/uploads/2019/09/Feature-Selection-for-Facebook-Feed-Ranking-System-via-a-Group-Sparsity-Regularized-Training-Algorithm.pdf)
+
+    Parameters:
+        learning_rate (float|Variable): Global learning rate.
+        l1 (float): L1 regularization strength, default is 0.0.
+        l2 (float): L2 regularization strength, default is 0.0.
+        lr_power (float): Learning Rate Power, default is -0.5.
+        parameter_list (list, optional):  List of ``Variable`` names to update to minimize ``loss``. \
+            This parameter is required in dygraph mode. \
+            The default value is None in static mode, at this time all parameters will be updated.
+        regularization: A Regularizer, such as :ref:`api_fluid_regularizer_L2DecayRegularizer`. \
+            Optional, default is None.
+        name (str, optional): This parameter is used by developers to print debugging information. \
+            For details, please refer to :ref:`api_guide_Name`. Default is None.
+
+    Raises:
+        ValueError: If learning_rate, rho, epsilon, momentum are None.
+
+    Examples:
+          .. code-block:: python
+
+            import paddle
+            import paddle.fluid as fluid
+            import numpy as np
+
+            place = fluid.CPUPlace()
+            main = fluid.Program()
+            with fluid.program_guard(main):
+                x = fluid.layers.data(name='x', shape=[13], dtype='float32')
+                y = fluid.layers.data(name='y', shape=[1], dtype='float32')
+                y_predict = fluid.layers.fc(input=x, size=1, act=None)
+                cost = fluid.layers.square_error_cost(input=y_predict, label=y)
+                avg_cost = fluid.layers.mean(cost)
+
+                gftrl_optimizer = fluid.optimizer.GFtrl(learning_rate=0.1)
+                gftrl_optimizer.minimize(avg_cost)
+
+                fetch_list = [avg_cost]
+                train_reader = paddle.batch(
+                    paddle.dataset.uci_housing.train(), batch_size=1)
+                feeder = fluid.DataFeeder(place=place, feed_list=[x, y])
+                exe = fluid.Executor(place)
+                exe.run(fluid.default_startup_program())
+                for data in train_reader():
+                    exe.run(main, feed=feeder.feed(data), fetch_list=fetch_list)
+    """
+
+    _squared_acc_str = "squared"
+    _linear_acc_str = "linear"
+
+    def __init__(self,
+                 learning_rate,
+                 l1=0.0,
+                 l2=0.0,
+                 lr_power=-0.5,
+                 parameter_list=None,
+                 regularization=None,
+                 name=None):
+        super(GFtrlOptimizer, self).__init__(
+            learning_rate=learning_rate,
+            parameter_list=parameter_list,
+            regularization=regularization,
+            name=name)
+        assert learning_rate is not None
+
+        self.type = "gftrl"
+        self._l1 = l1
+        self._l2 = l2
+        self._lr_power = lr_power
+
+    def _create_accumulators(self, block, parameters):
+        assert isinstance(block, framework.Block)
+
+        for p in parameters:
+            self._add_accumulator(self._squared_acc_str, p)
+            self._add_accumulator(self._linear_acc_str, p)
+
+    def _append_optimize_op(self, block, param_and_grad):
+        assert isinstance(block, framework.Block)
+
+        squared_acc = self._get_accumulator(self._squared_acc_str,
+                                            param_and_grad[0])
+        linear_acc = self._get_accumulator(self._linear_acc_str,
+                                           param_and_grad[0])
+        gftrl_op = block.append_op(
+            type=self.type,
+            inputs={
+                "Param": param_and_grad[0],
+                "Grad": param_and_grad[1],
+                "SquaredAccumulator": squared_acc,
+                "LinearAccumulator": linear_acc,
+                "LearningRate": self._create_param_lr(param_and_grad),
+            },
+            outputs={
+                "ParamOut": param_and_grad[0],
+                "SquaredAccumOut": squared_acc,
+                "LinearAccumOut": linear_acc
+            },
+            attrs={"l1": self._l1,
+                   "l2": self._l2,
+                   "lr_power": self._lr_power},
+            stop_gradient=True)
+
+        return gftrl_op
+
+
 class LambOptimizer(AdamOptimizer):
     """
     LAMB (Layer-wise Adaptive Moments optimizer for Batching training) Optimizer.
@@ -3062,6 +3173,7 @@ DecayedAdagrad = DecayedAdagradOptimizer
 Adadelta = AdadeltaOptimizer
 RMSProp = RMSPropOptimizer
 Ftrl = FtrlOptimizer
+GFtrl = GFtrlOptimizer
 LarsMomentum = LarsMomentumOptimizer
 Lamb = LambOptimizer
 
