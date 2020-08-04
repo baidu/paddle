@@ -83,6 +83,13 @@ class TrainerFactory(object):
                 if opt_info.get("random_with_lineid") is not None:
                     trainer._set_random_with_lineid(opt_info[
                         "random_with_lineid"])
+                if opt_info.get("nid_slot") is not None:
+                    trainer._set_nid_slot(opt_info["nid_slot"])
+                if opt_info.get("sample_slots") is not None:
+                    x = opt_info["sample_slots"]
+                    if not isinstance(x, list):
+                        x = [x]
+                    trainer._set_sample_slots(x)
 
             if "fleet_desc" in opt_info:
                 device_worker._set_fleet_desc(opt_info["fleet_desc"])

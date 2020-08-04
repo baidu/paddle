@@ -30,7 +30,7 @@ limitations under the License. */
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
+#include "paddle/fluid/framework/lru.h"
 #include "paddle/fluid/framework/archive.h"
 #include "paddle/fluid/framework/blocking_queue.h"
 #include "paddle/fluid/framework/channel.h"
@@ -94,6 +94,7 @@ struct Record {
   uint64_t search_id;
   uint32_t rank;
   uint32_t cmatch;
+  int click;
 };
 
 struct PvInstanceObject {
@@ -187,6 +188,12 @@ class DataFeed {
     place_ = place;
   }
   virtual const paddle::platform::Place& GetPlace() const { return place_; }
+
+  virtual void SetLRU(void* lru) {}
+  virtual void SetSampleSlotsIndex(std::vector<int>& sample_slots_index, std::vector<int>& s2) {}
+  virtual void SetNidSlot(int nid_slot) {}
+  virtual void SetSampleNum(int num) {}
+  virtual void SetEnableSample(bool enable) {}
 
  protected:
   // The following three functions are used to check if it is executed in this
@@ -312,6 +319,34 @@ class InMemoryDataFeed : public DataFeed {
   virtual void SetEnablePvMerge(bool enable_pv_merge);
   virtual void SetCurrentPhase(int current_phase);
   virtual void LoadIntoMemory();
+  virtual void PutToQueue(std::vector<T>& ins_vec);
+  virtual void SampleFromQueue(std::vector<T>& ins_vec);
+  virtual void SetLRU(void* lru) {
+    lru_ = static_cast<LRUCache<uint64_t, T>*>(lru);
+  }
+  virtual void SetSampleSlotsIndex(std::vector<int>& s1, std::vector<int>& s2) {
+    //CHECK(s1.size() == s2.size());
+    sample_slots_index_ = s1;
+    sample_slots_index_2_ = s2;
+    for(int i = 0; i < s1.size(); ++i) {
+    //for(int i : sample_slots_index) {
+      sample_map_[s1[i]].push_back(s1[i]);
+      if (s2.size() > 0) {
+        sample_map_[s1[i]].push_back(s2[i]);
+      //} else {
+      //  sample_map_[s1[i]].push_back(s1[i]);
+      }
+    }
+  }
+  virtual void SetNidSlot(int nid_slot) {
+    nid_slot_ = nid_slot;
+  }
+  virtual void SetSampleNum(int num) {
+    sample_num_ = num;
+  }
+  virtual void SetEnableSample(bool enable) {
+    sample_enable_ = enable;
+  }
 
  protected:
   virtual bool ParseOneInstance(T* instance) = 0;
@@ -334,6 +369,14 @@ class InMemoryDataFeed : public DataFeed {
   paddle::framework::ChannelObject<PvInstance>* input_pv_channel_;
   paddle::framework::ChannelObject<PvInstance>* output_pv_channel_;
   paddle::framework::ChannelObject<PvInstance>* consume_pv_channel_;
+
+  LRUCache<uint64_t, T>* lru_ = nullptr;
+  std::vector<int> sample_slots_index_;
+  std::vector<int> sample_slots_index_2_;
+  std::unordered_map<int, std::vector<int>> sample_map_;
+  int nid_slot_;
+  int sample_num_ = 10;
+  bool sample_enable_ = false;
 };
 
 // This class define the data type of instance(ins_vec) in MultiSlotDataFeed
@@ -632,6 +675,7 @@ paddle::framework::Archive<AR>& operator<<(paddle::framework::Archive<AR>& ar,
   ar << r.uint64_feasigns_;
   ar << r.float_feasigns_;
   ar << r.ins_id_;
+  ar << r.click;
   return ar;
 }
 
@@ -641,6 +685,7 @@ paddle::framework::Archive<AR>& operator>>(paddle::framework::Archive<AR>& ar,
   ar >> r.uint64_feasigns_;
   ar >> r.float_feasigns_;
   ar >> r.ins_id_;
+  ar >> r.click;
   return ar;
 }
 
@@ -670,6 +715,7 @@ class MultiSlotInMemoryDataFeed : public InMemoryDataFeed<Record> {
   MultiSlotInMemoryDataFeed() {}
   virtual ~MultiSlotInMemoryDataFeed() {}
   virtual void Init(const DataFeedDesc& data_feed_desc);
+  //virtual void SetLRU(void* lru) {};
 
  protected:
   virtual bool ParseOneInstance(Record* instance);

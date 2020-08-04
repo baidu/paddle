@@ -1085,8 +1085,9 @@ void FleetWrapper::ShrinkDenseTable(int table_id, Scope* scope,
   push_status.wait();
   auto status = push_status.get();
   if (status != 0) {
-    PADDLE_THORW(platform::errors::Fatal(
-        "push shrink dense param failed, status is [%d].", status));
+   // PADDLE_THORW(platform::errors::Fatal(
+   //     "push shrink dense param failed, status is [%d].", status));
+   VLOG(0) << "push shrink dense param failed, status is " << status;
     sleep(sleep_seconds_before_fail_exit_);
     exit(-1);
   }

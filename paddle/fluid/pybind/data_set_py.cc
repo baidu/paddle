@@ -308,6 +308,21 @@ void BindDataset(py::module *m) {
       .def("set_fleet_send_sleep_seconds",
            &framework::Dataset::SetFleetSendSleepSeconds,
            py::call_guard<py::gil_scoped_release>())
+      .def("set_nid_slot",
+           &framework::Dataset::SetNidSlot,
+           py::call_guard<py::gil_scoped_release>())
+      .def("set_sample_slots",
+           &framework::Dataset::SetSampleSlots,
+           py::call_guard<py::gil_scoped_release>())
+      .def("set_lru_cap",
+           &framework::Dataset::SetLRUCap,
+           py::call_guard<py::gil_scoped_release>())
+      .def("set_sample_num",
+           &framework::Dataset::SetSampleNum,
+           py::call_guard<py::gil_scoped_release>())
+      .def("set_enable_sample",
+            &framework::Dataset::SetEnableSample,
+            py::call_guard<py::gil_scoped_release>())
       .def("enable_pv_merge", &framework::Dataset::EnablePvMerge,
            py::call_guard<py::gil_scoped_release>());
 

@@ -350,6 +350,28 @@ class InMemoryDataset(DatasetBase):
         self.merge_by_lineid = False
         self.fleet_send_sleep_seconds = None
 
+    def set_sample_slots(self, nid, sample_slots, sample_num=10, s2=[], capacity=1000000):
+        s1_index = []
+        s2_index = []
+        i = -1
+        nid_v = 0
+        for slot in self.proto_desc.multi_slot_desc.slots:
+            i += 1
+            #print(slot)
+            if slot.name in sample_slots:
+                s1_index.append(i)
+            elif slot.name in s2:
+                s2_index.append(i)
+            if slot.name == nid:
+                nid_v = i
+        #print("s1_index ", s1_index)
+        #print("s2_index ", s2_index)
+        self.dataset.set_nid_slot(nid_v)
+        self.dataset.set_sample_slots(s1_index, s2_index)#(sample_slots, s2)
+        self.dataset.set_lru_cap(capacity)
+        self.dataset.set_sample_num(sample_num)
+        self.dataset.set_enable_sample(True)
+ 
     def set_feed_type(self, data_feed_type):
         """
         Set data_feed_desc

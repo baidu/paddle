@@ -52,6 +52,8 @@ message TrainerDesc {
   optional bool enable_random_dump = 24 [ default = false ];
   optional bool random_with_lineid = 25 [ default = false ];
   optional int32 dump_interval = 26 [ default = 10000 ];
+  optional string nid_slot = 27 [ default = "" ];
+  repeated string sample_slots = 28;
 
   // device worker parameters
   optional HogwildWorkerParameter hogwild_param = 101;
