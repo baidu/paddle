@@ -84,6 +84,25 @@ std::map<std::string, std::set<std::string>> op_passing_outs_map = {
     {"amp_check_finite_and_scale", {"Out", "FoundInfinite"}},
 };
 
+// NOTE(yangzhang) temporary inplace solution for selected operations
+// with reshape ops being inplace, we can use canonical broadcasting semantics
+// i.e., remove the `axis` argument
+std::map<std::string, std::map<std::string, std::string>>
+    op_forward_input_output_map = {
+        {"reshape2",
+         {
+             {"Out", "X"},
+         }},
+        {"unsqueeze2",
+         {
+             {"Out", "X"},
+         }},
+        {
+            "squeeze2",
+            {{"Out", "X"}},
+        },
+};
+
 // clang-format off
 const char* OUT_INITIALIZER_TEMPLATE =
     R"({"%s", {std::shared_ptr<imperative::VarBase>(new imperative::VarBase(tracer->GenerateUniqueName()))}})";
@@ -111,6 +130,15 @@ const char* OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL = R"(
 const char* OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST = R"(
     outs["%s"] = %s;
 )";
+
+const char* FORWARD_IN_OUT = R"(
+    if (ins["%s"][0]->Var().IsType<paddle::framework::LoDTensor>()) {
+        outs["%s"][0]->MutableVar()->GetMutable<paddle::framework::LoDTensor>()->ShareBufferWith(ins["%s"][0]->Var().Get<paddle::framework::LoDTensor>());
+    } else {
+        PADDLE_THROW("Variables must be of type LoDTensor");
+    }
+)";
+
 // if inputs is list, no need {}
 const char* ARG_OUT_NUM = R"(%sNum)";
 const char* ARG_OUT_NUM_TYPE = R"(size_t )";
@@ -140,6 +168,7 @@ R"(
     imperative::NameVarBaseMap outs = %s;
     imperative::NameVarBaseMap ins = %s;
     %s
+    %s
     tracer->TraceOp("%s", ins, outs, attrs);
     return %s; 
   }   
@@ -161,6 +190,11 @@ static inline bool FindOutsMap(const std::string& op_type,
 static inline bool FindPassingOutsMap(const std::string& op_type,
                                       const std::string& out_name) {
   return op_passing_outs_map[op_type].count(out_name);
+}
+
+static inline bool FindForwardInOutMap(const std::string& op_type,
+                                       const std::string& out_name) {
+  return op_forward_input_output_map[op_type][out_name] != "";
 }
 
 static std::tuple<std::vector<std::string>, std::vector<std::string>>
@@ -226,6 +260,7 @@ GenerateOpFunctions(const std::string& module_name) {
     std::string outs_initializer_with_null = "";
     std::string return_type = "";
     std::string return_str = "";
+    std::string forward_in_out = "";
 
     int outs_num = 0;
     for (auto& output : op_proto->outputs()) {
@@ -276,6 +311,12 @@ GenerateOpFunctions(const std::string& module_name) {
               paddle::string::Sprintf(OUT_INITIALIZER_TEMPLATE, out_name);
         }
         outs_initializer += ",";
+
+        if (FindForwardInOutMap(op_type, out_name)) {
+          auto in_name = op_forward_input_output_map[op_type][out_name];
+          forward_in_out += paddle::string::Sprintf(FORWARD_IN_OUT, in_name,
+                                                    out_name, in_name);
+        }
       }
 
       return_type += out_type;
@@ -309,8 +350,8 @@ GenerateOpFunctions(const std::string& module_name) {
     auto op_function_str = paddle::string::Sprintf(
         OP_FUNCTION_TEMPLATE, return_type, func_name, function_args,
         outs_initializer, ins_initializer,
-        ins_initializer_with_null + outs_initializer_with_null, op_type,
-        return_str);
+        ins_initializer_with_null + outs_initializer_with_null, forward_in_out,
+        op_type, return_str);
 
     // generate pybind item
     auto bind_function_str = paddle::string::Sprintf(
