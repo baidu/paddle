@@ -91,8 +91,8 @@ class MNIST(Dataset):
         self.label_path = label_path
         if self.label_path is None:
             assert download, "label_path not set and auto download disabled"
-            label_url = TRAIN_LABEL_URL if mode == 'train' else TEST_LABEL_URL
-            label_md5 = TRAIN_LABEL_MD5 if mode == 'train' else TEST_LABEL_MD5
+            label_url = TRAIN_LABEL_URL if self.mode == 'train' else TEST_LABEL_URL
+            label_md5 = TRAIN_LABEL_MD5 if self.mode == 'train' else TEST_LABEL_MD5
             self.label_path = _check_exists_and_download(
                 label_path, label_url, label_md5, 'mnist', download)
 

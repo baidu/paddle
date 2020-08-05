@@ -155,5 +155,100 @@ class TestFlowersTest(unittest.TestCase):
         self.assertTrue(label.shape[0] == 1)
 
 
+class TestCifarTrain10(unittest.TestCase):
+    def test_main(self):
+        cifar = Cifar(mode='train10')
+        self.assertTrue(len(cifar) == 50000)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 50000)
+        data, label = cifar[idx]
+        self.assertTrue(len(data.shape) == 1)
+        self.assertTrue(data.shape[0] == 3072)
+        self.assertTrue(0 <= int(label) <= 9)
+
+
+class TestCifarTest10(unittest.TestCase):
+    def test_main(self):
+        cifar = Cifar(mode='test10')
+        self.assertTrue(len(cifar) == 10000)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 10000)
+        data, label = cifar[idx]
+        self.assertTrue(len(data.shape) == 1)
+        self.assertTrue(data.shape[0] == 3072)
+        self.assertTrue(0 <= int(label) <= 9)
+
+
+class TestCifarTrain100(unittest.TestCase):
+    def test_main(self):
+        cifar = Cifar(mode='train100')
+        self.assertTrue(len(cifar) == 50000)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 50000)
+        data, label = cifar[idx]
+        self.assertTrue(len(data.shape) == 1)
+        self.assertTrue(data.shape[0] == 3072)
+        self.assertTrue(0 <= int(label) <= 99)
+
+
+class TestCifarTest100(unittest.TestCase):
+    def test_main(self):
+        cifar = Cifar(mode='test100')
+        self.assertTrue(len(cifar) == 10000)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 10000)
+        data, label = cifar[idx]
+        self.assertTrue(len(data.shape) == 1)
+        self.assertTrue(data.shape[0] == 3072)
+        self.assertTrue(0 <= int(label) <= 99)
+
+
+class TestVOC2012Train(unittest.TestCase):
+    def test_main(self):
+        voc2012 = VOC2012(mode='train')
+        self.assertTrue(len(voc2012) == 2913)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 2913)
+        image, label = voc2012[idx]
+        self.assertTrue(len(image.shape) == 3)
+        self.assertTrue(len(label.shape) == 3)
+
+
+class TestVOC2012Valid(unittest.TestCase):
+    def test_main(self):
+        voc2012 = VOC2012(mode='valid')
+        self.assertTrue(len(voc2012) == 1449)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 1449)
+        image, label = voc2012[idx]
+        self.assertTrue(len(image.shape) == 3)
+        self.assertTrue(len(label.shape) == 3)
+
+
+class TestVOC2012Test(unittest.TestCase):
+    def test_main(self):
+        voc2012 = VOC2012(mode='test')
+        self.assertTrue(len(voc2012) == 1464)
+
+        # traversal whole dataset may cost a
+        # long time, randomly check 1 sample
+        idx = np.random.randint(0, 1464)
+        image, label = voc2012[idx]
+        self.assertTrue(len(image.shape) == 3)
+        self.assertTrue(len(label.shape) == 3)
+
+
 if __name__ == '__main__':
     unittest.main()

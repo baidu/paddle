@@ -15,11 +15,17 @@
 from . import folder
 from . import mnist
 from . import flowers
+from . import cifar
+from . import voc2012
 
 from .folder import *
 from .mnist import *
 from .flowers import *
+from .cifar import *
+from .voc2012 import *
 
 __all__ = folder.__all__ \
-        + mnist.__all__ \
-        + flowers.__all__
+          + mnist.__all__ \
+          + flowers.__all__ \
+          + cifar.__all__ \
+          + voc2012.__all__

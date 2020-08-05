@@ -36,7 +36,7 @@ SETID_MD5 = 'a5357ecc9cb78c4bef273ce3793fc85c'
 # In official 'readme', tstid is the flag of test data
 # and trnid is the flag of train data. But test data is more than train data.
 # So we exchange the train data and test data.
-MODE_FLAG_MAP = {'train': 'tstid', 'test': 'trnid', 'valid': "valid"}
+MODE_FLAG_MAP = {'train': 'tstid', 'test': 'trnid', 'valid': 'valid'}
 
 
 class Flowers(Dataset):
@@ -51,8 +51,8 @@ class Flowers(Dataset):
         setid_file(str): path to subset index file, can be set
             None if :attr:`download` is True. Default None
         mode(str): 'train', 'valid' or 'test' mode. Default 'train'.
-        download(bool): whether auto download mnist dataset if
-            :attr:`image_path`/:attr:`label_path` unset. Default
+        download(bool): whether auto download flower dataset if
+            :attr:`data_file`/:attr:`label_file`/:attr:`setid_file` unset. Default
             True
 
     Examples:
