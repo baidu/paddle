@@ -368,6 +368,7 @@
         "TransformerDecoder.prepare_incremental_cache",
         "LinearChainCRF.forward",
         "CRFDecoding.forward",
-        "SequenceTagging.forward"
+        "SequenceTagging.forward",
+        "testappovetest"
     ]
 }

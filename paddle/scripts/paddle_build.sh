@@ -686,6 +686,13 @@ function assert_api_spec_approvals() {
     fi
 }
 
+function assert_file_diff_approvals() {
+    /bin/bash ${PADDLE_ROOT}/tools/check_file_diff_approvals.sh;file_approval_error=$?
+    if [ "$file_approval_error" != 0 ];then
+       exit 6
+    fi
+}
+
 
 function check_coverage() {
     /bin/bash ${PADDLE_ROOT}/tools/coverage/paddle_coverage.sh
@@ -1389,6 +1396,9 @@ function main() {
       assert_api_approvals)
         assert_api_spec_approvals
         ;;
+      assert_file_approvals)
+        assert_file_diff_approvals
+        ;; 
       maccheck)
         cmake_gen_and_build_mac ${PYTHON_ABI:-""}
         run_mac_test ${PYTHON_ABI:-""} ${PROC_RUN:-1}
