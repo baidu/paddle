@@ -17,9 +17,11 @@
 //
 
 #include <paddle/fluid/framework/op_registry.h>
+
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "gtest/gtest.h"
 #include "paddle/fluid/imperative/execution_context.h"
 #include "paddle/fluid/imperative/infer_shape_context.h"
@@ -384,7 +386,7 @@ TEST(test_layer, test_dygraph_infershape_context) {
   concat_att_map["axis"] = 1;
 
   DygraphInferShapeContext<imperative::VarBase> infer_shape_ctx(
-      &ins, &outs, &concat_att_map);
+      &ins, &outs, &concat_att_map, "dummy");
 
   bool have_x = infer_shape_ctx.HasOutputs("Out");
   ASSERT_EQ(have_x, true);

@@ -62,7 +62,7 @@ if(WITH_PYTHON)
     list(APPEND OP_FUNCTION_GENERETOR_DEPS nccl_context)
   endif(WITH_NCCL)
 
-  add_executable(op_function_generator op_function_generator.cc)
+  add_executable(op_function_generator op_function_generator.cc op_layer_generator.cc)
   target_link_libraries(op_function_generator ${OP_FUNCTION_GENERETOR_DEPS})
   get_property (os_dependency_modules GLOBAL PROPERTY OS_DEPENDENCY_MODULES)
   target_link_libraries(op_function_generator ${os_dependency_modules})

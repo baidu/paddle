@@ -247,7 +247,16 @@ class ExecutionContext {
   virtual std::vector<std::string> OutputNames(const std::string& name) const {
     return op_.Outputs(name);
   }
-
+  virtual std::string GetInputNameByIdx(size_t idx) const {
+    auto& op_proto =
+        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
+    return op_proto->inputs()[idx].name();
+  }
+  virtual std::string GetOutputNameByIdx(size_t idx) const {
+    auto& op_proto =
+        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
+    return op_proto->outputs()[idx].name();
+  }
   virtual bool HasAttr(const std::string& name) const {
     return op_.HasAttr(name);
   }

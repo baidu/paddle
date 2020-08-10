@@ -19,9 +19,12 @@ limitations under the License. */
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "paddle/fluid/framework/data_layout.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
+#include "paddle/fluid/operators/common_infer_kernel_type_functions.h"
+#include "paddle/fluid/operators/common_infer_shape_functions.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.h"
 
 #ifdef PADDLE_WITH_MKLDNN
@@ -38,75 +41,12 @@ class ElementwiseOp : public framework::OperatorWithKernel {
   using Tensor = framework::Tensor;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "X", "ElementwiseOp");
-    OP_INOUT_CHECK(ctx->HasInput("Y"), "Input", "Y", "ElementwiseOp");
-    OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "ElementwiseOp");
-
-    PADDLE_ENFORCE_EQ(
-        ctx->GetInputsVarType("Y").front(),
-        framework::proto::VarType::LOD_TENSOR,
-        platform::errors::InvalidArgument(
-            "The input var's type should be LoDTensor, but the "
-            "received is %s [%s].",
-            ctx->GetInputsVarType("Y").front(), ctx->Inputs("Y").front()));
-
-    if (ctx->GetInputsVarType("X").front() ==
-        framework::proto::VarType::SELECTED_ROWS) {
-      PADDLE_ENFORCE_EQ(
-          ctx->GetInputDim("Y").size(), 1u,
-          platform::errors::InvalidArgument(
-              "For elementwise_op, if X is Sparse(VarType.SELECTED_ROWS"
-              "), Y must be scalar, the size of Y should be 1. "
-              "But reveived the size of Y = %s.",
-              ctx->GetInputDim("Y").size()));
-      PADDLE_ENFORCE_EQ(
-          ctx->GetInputDim("Y")[0], 1,
-          platform::errors::InvalidArgument(
-              "For elementwise_op, if X is Sparse(VarType.SELECTED_ROWS"
-              "), Y must be scalar, the first dimension of Y should be 1. "
-              "But reveived the first dimension of Y = %s.",
-              ctx->GetInputDim("Y")[0]));
-    } else if (ctx->GetInputsVarType("X").front() !=
-               framework::proto::VarType::LOD_TENSOR) {
-      PADDLE_THROW(platform::errors::InvalidArgument(
-          "Input X's type[%s] is not supported by elementwise_op. Please set "
-          "its type to LOD_TENSOR.",
-          ctx->GetInputsVarType("X").front()));
-    }
-
-    if (ctx->GetInputDim("X") == ctx->GetInputDim("Y")) {
-      ctx->ShareDim("X", /*->*/ "Out");
-      ctx->ShareLoD("X", /*->*/ "Out");
-    } else {
-      auto x_dims = ctx->GetInputDim("X");
-      auto y_dims = ctx->GetInputDim("Y");
-      int max_dim = std::max(x_dims.size(), y_dims.size());
-      int axis = ctx->Attrs().Get<int>("axis");
-      axis = (axis == -1 ? std::abs(x_dims.size() - y_dims.size()) : axis);
-      std::vector<int> x_dims_array(max_dim);
-      std::vector<int> y_dims_array(max_dim);
-      std::vector<int> out_dims_array(max_dim);
-      GetBroadcastDimsArrays(x_dims, y_dims, x_dims_array.data(),
-                             y_dims_array.data(), out_dims_array.data(),
-                             max_dim, axis);
-      ctx->SetOutputDim("Out", framework::make_ddim(out_dims_array));
-      // to do
-      ctx->ShareLoD("X", /*->*/ "Out");
-    }
+    return BinaryOpBroadcastInferShape(ctx);
   }
 
   framework::OpKernelType GetExpectedKernelType(
       const framework::ExecutionContext &ctx) const override {
-    auto input_data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
-
-#ifdef PADDLE_WITH_MKLDNN
-    if (platform::CanMKLDNNBeUsed(ctx)) {
-      return framework::OpKernelType(input_data_type, ctx.GetPlace(),
-                                     framework::DataLayout::kMKLDNN,
-                                     framework::LibraryType::kMKLDNN);
-    }
-#endif
-    return framework::OpKernelType(input_data_type, ctx.GetPlace());
+    return BinaryOpInferKernelType(ctx);
   }
 };
 

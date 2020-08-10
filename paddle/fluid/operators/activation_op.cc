@@ -13,11 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/activation_op.h"
+
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+
+#include "paddle/fluid/operators/common_infer_kernel_type_functions.h"
+#include "paddle/fluid/operators/common_infer_shape_functions.h"
 #include "paddle/fluid/operators/mkldnn/mkldnn_activation_op.h"
 #include "paddle/fluid/platform/port.h"
 #ifdef PADDLE_WITH_CUDA
@@ -116,14 +120,14 @@ class ActivationOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext* ctx) const override {
-    ctx->ShareDim("X", /*->*/ "Out");
-    ctx->ShareLoD("X", /*->*/ "Out");
+    return UnaryOpUnchangedInferShape(ctx);
   }
 
  protected:
   framework::OpKernelType GetExpectedKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return GetKernelType(ctx, *this, "X");
+    return UnaryOpInferKernelType(ctx);
+    // return GetKernelType(ctx, *this, "X");
   }
 };
 

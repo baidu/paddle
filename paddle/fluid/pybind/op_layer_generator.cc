@@ -12,19 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/fluid/pybind/op_layer_generator.h"
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <set>
 #include <string>
+#include <utility>
 
 #include "paddle/fluid/framework/op_info.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/framework/variable.h"
-#include "paddle/fluid/pybind/op_layer_generator.h"
 #include "paddle/fluid/pybind/pybind.h"
 #include "paddle/fluid/string/string_helper.h"
 
+namespace paddle {
+
+namespace details {
 // NOTE(zhiqiu): Commonly, the inputs in auto-generated OP function are
 // determined by the OP`s proto automatically, i.e., all the inputs registered
 // in OpMaker.
@@ -85,6 +92,14 @@ std::map<std::string, std::set<std::string>> op_passing_outs_map = {
     {"amp_check_finite_and_scale", {"Out", "FoundInfinite"}},
 };
 
+std::set<std::string> op_need_generate_layer = {
+    "cwise_mul",
+};
+
+std::map<std::string, std::set<std::string>> op_layer_params_map = {
+    {"cwise_mul", {"axis"}},
+};
+
 // clang-format off
 const char* OUT_INITIALIZER_TEMPLATE =
     R"({"%s", {std::shared_ptr<imperative::VarBase>(new imperative::VarBase(tracer->GenerateUniqueName()))}})";
@@ -129,24 +144,47 @@ const char* RETURN_TEMPLATE = R"(outs["%s"][0])";
 const char* FUNCTION_ARGS = R"(%s, const py::args& args)";
 const char* FUNCTION_ARGS_NO_INPUT = R"(const py::args& args)";
 
-const char* OP_FUNCTION_TEMPLATE =
-R"(
-%s %s(%s)
-{
-  framework::AttributeMap attrs;
-  ConstructAttrMapFromPyArgs(&attrs, args);
-  {
-    py::gil_scoped_release release;
-    auto tracer = imperative::GetCurrentTracer();
-    imperative::NameVarBaseMap outs = %s;
-    imperative::NameVarBaseMap ins = %s;
-    %s
-    tracer->TraceOp("%s", ins, outs, attrs);
-    return %s; 
-  }   
-})";
+const char* ATTR_TEMPLATE = R"("%s", %s)";
+const char* MAP_ITEM_TEMPLATE = R"("%s": %s)";
 
-const char* PYBIND_ITEM_TEMPLATE = R"(  %s.def("%s", &%s);)";
+const char* IMPORT_MODULES =
+R"(
+import paddle
+from paddle.fluid.layer_helper import LayerHelper
+from paddle.fluid.framework import in_dygraph_mode
+from paddle.fluid import core
+from paddle.fluid.layers.layer_function_generator import autodoc, templatedoc, _generate_doc_string_
+from paddle.fluid.data_feeder import convert_dtype, check_variable_and_dtype, check_type, check_dtype
+
+
+)";
+
+
+const char* MODULE_ALL_TEMPLATE =
+R"(
+__all__ = [%s]
+
+)";
+
+const char* MODULE_ALL_ITEM_TEMPLATE = R"('%s')";
+
+const char* OP_LAYER_TEMPLATE =
+R"(
+def %s(%s):
+    if in_dygraph_mode():
+        return core.ops.%s(%s)
+    
+    helper = LayerHelper("%s", **locals())
+    # check_variable_and_dtype()  TODO if needed ?
+    %s = helper.create_variable_for_type_inference(dtype=%s.dtype)
+    helper.append_op(
+        type="%s", inputs={%s}, attrs={%s}, outputs={%s})
+    return %s
+)";
+
+
+
+const char* PYBIND_ITEM_TEMPLATE = R"( %s.def("%s", &%s);)";
 
 // clang-format on
 static inline bool FindInsMap(const std::string& op_type,
@@ -159,18 +197,28 @@ static inline bool FindOutsMap(const std::string& op_type,
   return op_outs_map[op_type].count(out_name);
 }
 
+static inline bool FindParamsMap(const std::string& op_type,
+                                 const std::string& param) {
+  return op_layer_params_map[op_type].count(param);
+}
+
+static inline std::string ToLower(const std::string& str) {
+  std::string s = str;
+  std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+  return s;
+}
+
 static inline bool FindPassingOutsMap(const std::string& op_type,
                                       const std::string& out_name) {
   return op_passing_outs_map[op_type].count(out_name);
 }
 
-static std::tuple<std::vector<std::string>, std::vector<std::string>>
-GenerateOpFunctions(const std::string& module_name) {
+static std::vector<std::string> GenerateOpLayers() {
   auto& op_info_map = paddle::framework::OpInfoMap::Instance().map();
 
-  std::vector<std::string> op_function_list, bind_function_list;
+  std::vector<std::string> op_layers;
   auto& all_kernels = paddle::framework::OperatorWithKernel::AllOpKernels();
-
+  std::string module_all = "";
   for (auto& pair : op_info_map) {
     auto& op_info = pair.second;
     auto op_proto = op_info.proto_;
@@ -178,195 +226,116 @@ GenerateOpFunctions(const std::string& module_name) {
       continue;
     }
     auto& op_type = op_proto->type();
+    if (op_need_generate_layer.count(op_type) == 0) {
+      continue;
+    }
     // Skip ooerator which is not inherit form OperatorWithKernel, like while,
     // since only OperatorWithKernel can run in dygraph mode.
     if (!all_kernels.count(op_type)) {
       continue;
     }
-    std::string input_args = "";
+    std::string layer_args = "";
     std::string ins_initializer = "{";
     std::string ins_initializer_with_null = "";
     std::string py_arg = "";
+    std::string core_ops_args = "";
+    std::string append_op_inputs = "";
+    std::string append_op_outputs = "";
+    std::string append_op_attrs = "";
     for (auto& input : op_proto->inputs()) {
       auto& in_name = input.name();
       // skip those dispensable inputs, like ResidualData in conv2d
       if (input.dispensable() && !FindInsMap(op_type, in_name)) {
         continue;
       }
-      const auto in_type = input.duplicable() ? VAR_LIST_TYPE : VAR_TYPE;
-      auto input_arg = paddle::string::Sprintf(ARG_TEMPLATE, in_type, in_name);
-      input_args += input_arg;
-      input_args += ",";
 
-      if (input.dispensable()) {
-        const auto in_template = input.duplicable()
-                                     ? INPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST
-                                     : INPUT_INITIALIZER_TEMPLATE_WITH_NULL;
-        ins_initializer_with_null +=
-            paddle::string::Sprintf(in_template, in_name, in_name, in_name);
-      } else {
-        const auto in_template = input.duplicable()
-                                     ? INPUT_LIST_INITIALIZER_TEMPLATE
-                                     : INPUT_INITIALIZER_TEMPLATE;
-        ins_initializer +=
-            paddle::string::Sprintf(in_template, in_name, in_name);
-        ins_initializer += ",";
+      // const auto in_type = input.duplicable() ? VAR_LIST_TYPE : VAR_TYPE;
+      // auto input_arg = paddle::string::Sprintf(ARG_TEMPLATE, in_type,
+      // in_name);
+      layer_args += ToLower(in_name);
+      layer_args += ", ";
+
+      // if (input.dispensable()) {
+      //   const auto in_template = input.duplicable()
+      //                                ?
+      //                                INPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST
+      //                                : INPUT_INITIALIZER_TEMPLATE_WITH_NULL;
+      //   ins_initializer_with_null +=
+      //       paddle::string::Sprintf(in_template, in_name, in_name, in_name);
+      // } else {
+      //   const auto in_template = input.duplicable()
+      //                                ? INPUT_LIST_INITIALIZER_TEMPLATE
+      //                                : INPUT_INITIALIZER_TEMPLATE;
+      //   ins_initializer +=
+      //       paddle::string::Sprintf(in_template, in_name, in_name);
+      //   ins_initializer += ",";
+      // }
+      append_op_inputs +=
+          paddle::string::Sprintf(MAP_ITEM_TEMPLATE, in_name, ToLower(in_name));
+      append_op_inputs += ", ";
+    }
+    core_ops_args += layer_args;
+
+    for (auto& attr : op_proto->attrs()) {
+      auto& attr_name = attr.name();
+      if (!FindParamsMap(op_type, attr_name)) {
+        continue;
       }
+      layer_args += ToLower(attr_name);
+      core_ops_args +=
+          paddle::string::Sprintf(ATTR_TEMPLATE, attr_name, ToLower(attr_name));
+      core_ops_args += ", ";
+      append_op_attrs += paddle::string::Sprintf(MAP_ITEM_TEMPLATE, attr_name,
+                                                 ToLower(attr_name));
+      append_op_attrs += ", ";
     }
-    if (ins_initializer.back() == ',') {
-      ins_initializer.pop_back();
-    }
-    ins_initializer += "}";
 
-    if (input_args.back() == ',') {
-      input_args.pop_back();
-    }
+    auto first_input = layer_args[0];
 
-    // Generate outs initializer
-    std::string outs_initializer = "{";
-    std::string outs_initializer_with_null = "";
-    std::string return_type = "";
-    std::string return_str = "";
-
-    int outs_num = 0;
+    std::string out = "";
     for (auto& output : op_proto->outputs()) {
       auto& out_name = output.name();
       // skip those dispensable oututs
       if (output.dispensable() && !FindOutsMap(op_type, out_name)) {
         continue;
       }
-      const auto out_type = output.duplicable() ? VAR_LIST_TYPE : VAR_TYPE;
-      const auto return_template =
-          output.duplicable() ? RETURN_LIST_TEMPLATE : RETURN_TEMPLATE;
-      if (FindPassingOutsMap(op_type, out_name)) {
-        if (input_args != "") {
-          input_args += ",";
-        }
-        input_args += out_type;
-        input_args += out_name;
-
-        if (output.dispensable()) {
-          const auto out_template =
-              output.duplicable() ? OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST
-                                  : OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL;
-          outs_initializer_with_null +=
-              paddle::string::Sprintf(out_template, out_name, out_name);
-        } else {
-          const auto out_template = output.duplicable()
-                                        ? INPUT_LIST_INITIALIZER_TEMPLATE
-                                        : INPUT_INITIALIZER_TEMPLATE;
-          outs_initializer +=
-              paddle::string::Sprintf(out_template, out_name, out_name);
-          outs_initializer += ",";
-        }
-      } else {
-        // There are few Operators that have duplicable output, like `Out` in
-        // split op. We need to specify the number of variables for the
-        // duplicable output, as the argument OutNum;
-        if (output.duplicable()) {
-          if (input_args != "") {
-            input_args += ",";
-          }
-          auto out_num_str = paddle::string::Sprintf(ARG_OUT_NUM, out_name);
-          input_args += ARG_OUT_NUM_TYPE;
-          input_args += out_num_str;
-          outs_initializer += paddle::string::Sprintf(
-              OUT_DUPLICABLE_INITIALIZER_TEMPLATE, out_name, out_num_str);
-        } else {
-          outs_initializer +=
-              paddle::string::Sprintf(OUT_INITIALIZER_TEMPLATE, out_name);
-        }
-        outs_initializer += ",";
+      if (out != "") {
+        continue;  // TODO(zhiqiu): handle multiple out
       }
+      append_op_outputs += paddle::string::Sprintf(MAP_ITEM_TEMPLATE, out_name,
+                                                   ToLower(out_name));
+      out = ToLower(out_name);
+    }
+    // generate op layer body
+    auto op_layer_str = paddle::string::Sprintf(
+        OP_LAYER_TEMPLATE, op_type, layer_args, op_type, core_ops_args, op_type,
+        out, first_input, op_type, append_op_inputs, append_op_attrs,
+        append_op_outputs, out);
 
-      return_type += out_type;
-      return_type += ",";
-      return_str += paddle::string::Sprintf(return_template, out_name);
-      return_str += ",";
-      outs_num += 1;
-    }
-    if (outs_initializer.back() == ',') {
-      outs_initializer.pop_back();
-      return_type.pop_back();
-      return_str.pop_back();
-    }
-    outs_initializer += "}";
-    if (outs_num == 0) {
-      return_type = "void";
-    }
-    if (outs_num > 1) {
-      return_str = paddle::string::Sprintf(RETURN_TUPLE_TEMPLATE, return_str);
-      return_type = paddle::string::Sprintf(RETURN_TUPLE_TYPE, return_type);
-    }
-    std::string function_args = "";
-    if (input_args == "") {
-      function_args = FUNCTION_ARGS_NO_INPUT;
-    } else {
-      function_args = paddle::string::Sprintf(FUNCTION_ARGS, input_args);
-    }
+    module_all += paddle::string::Sprintf(MODULE_ALL_ITEM_TEMPLATE, op_type);
+    module_all += ", ";
 
-    std::string func_name = "imperative_" + op_type;
-    // generate op funtcion body
-    auto op_function_str = paddle::string::Sprintf(
-        OP_FUNCTION_TEMPLATE, return_type, func_name, function_args,
-        outs_initializer, ins_initializer,
-        ins_initializer_with_null + outs_initializer_with_null, op_type,
-        return_str);
-
-    // generate pybind item
-    auto bind_function_str = paddle::string::Sprintf(
-        PYBIND_ITEM_TEMPLATE, module_name, op_type, func_name);
-
-    op_function_list.emplace_back(std::move(op_function_str));
-    bind_function_list.emplace_back(std::move(bind_function_str));
+    op_layers.emplace_back(std::move(op_layer_str));
   }
-  return std::make_tuple(op_function_list, bind_function_list);
+  std::string module_all_str =
+      paddle::string::Sprintf(MODULE_ALL_TEMPLATE, module_all);
+  op_layers.emplace_back(std::move(module_all_str));
+  return op_layers;
 }
 
-int main(int argc, char* argv[]) {
-  if (argc != 2) {
-    std::cerr << "argc must be 2" << std::endl;
-    return -1;
-  }
+}  // namespace details
+}  // namespace paddle
 
-  std::vector<std::string> headers{"\"paddle/fluid/imperative/tracer.h\""};
+int gen_op_layers(std::string path) {
+  std::cout << path << std::endl;
+  std::ofstream out(path, std::ios::out);
 
-  std::ofstream out(argv[1], std::ios::out);
+  auto op_layers = paddle::details::GenerateOpLayers();
 
-  out << "#pragma once\n\n";
-
-  for (auto& header : headers) {
-    out << "#include  " + header + "\n";
-  }
-
-  auto op_funcs = GenerateOpFunctions("m");
-
-  out << "namespace py = pybind11;"
-      << "\n";
-  out << "namespace paddle {\n"
-      << "namespace pybind {\n";
-  out << paddle::string::join_strings(std::get<0>(op_funcs), '\n');
-  out << "\n\n";
-
-  out << "inline void BindOpFunctions(pybind11::module *module) {\n"
-      << "  auto m = module->def_submodule(\"ops\");\n\n";
-
-  out << paddle::string::join_strings(std::get<1>(op_funcs), '\n');
-  out << "\n";
-  out << "}\n\n"
-      << "} // namespace pybind\n"
-      << "} // namespace paddle\n";
+  out << paddle::details::IMPORT_MODULES;
+  out << paddle::string::join_strings(op_layers, '\n');
+  std::cout << paddle::string::join_strings(op_layers, '\n') << std::endl;
 
   out.close();
-
-  // TODO(zhiqiu): better way for generate python layer
-
-  std::string pybind_path = argv[1];
-  std::cout << pybind_path << std::endl;
-  std::string op_layer_file_path =
-      pybind_path.substr(0, pybind_path.find("/paddle/fluid")) +
-      "/python/paddle/gen_layers.py";
-  gen_op_layers(op_layer_file_path);
-
   return 0;
 }

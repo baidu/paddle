@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "paddle/fluid/imperative/prepared_operator.h"
+
 #include <sstream>
+
 #include "paddle/fluid/imperative/execution_context.h"
 #include "paddle/fluid/imperative/infer_shape_context.h"
 #include "paddle/fluid/imperative/infer_var_type_context.h"
@@ -137,7 +139,8 @@ static void PreparedOpRunImpl(
   // TODO(zjl): remove scope in dygraph
   framework::Scope scope;
 
-  DygraphInferShapeContext<VarType> infer_shape_ctx(&ins, &outs, &attrs);
+  DygraphInferShapeContext<VarType> infer_shape_ctx(&ins, &outs, &attrs,
+                                                    op.Type());
   static_cast<const framework::OperatorWithKernel&>(op).InferShape(
       &infer_shape_ctx);
 

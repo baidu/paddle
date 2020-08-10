@@ -16,6 +16,7 @@ limitations under the License. */
 
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/framework/attribute.h"
 #include "paddle/fluid/framework/ddim.h"
 #include "paddle/fluid/framework/framework.pb.h"
@@ -52,7 +53,8 @@ class InferShapeContext {
                              const std::vector<DDim> &dims) = 0;
   virtual void SetReaderDims(const std::string &name,
                              const std::vector<DDim> &dims);
-
+  virtual std::string GetInputNameByIdx(size_t idx) const = 0;
+  virtual std::string GetOutputNameByIdx(size_t idx) const = 0;
   virtual AttrReader Attrs() const = 0;
   virtual std::vector<std::string> Inputs(const std::string &name) const = 0;
   virtual std::vector<std::string> Outputs(const std::string &name) const = 0;

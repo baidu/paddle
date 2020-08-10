@@ -13,12 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/framework/op_desc.h"
+
 #include <algorithm>
 #include <functional>
 #include <mutex>  // NOLINT
 #include <string>
 #include <unordered_map>
 #include <utility>
+
 #include "glog/logging.h"
 #include "paddle/fluid/framework/block_desc.h"
 #include "paddle/fluid/framework/op_call_stack.h"
@@ -50,6 +52,18 @@ class CompileTimeInferShapeContext : public InferShapeContext {
   std::vector<std::string> Inputs(const std::string &name) const override;
 
   std::vector<std::string> Outputs(const std::string &name) const override;
+
+  std::string GetInputNameByIdx(size_t idx) const override {
+    auto &op_proto =
+        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
+    return op_proto->inputs()[idx].name();
+  }
+
+  std::string GetOutputNameByIdx(size_t idx) const override {
+    auto &op_proto =
+        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
+    return op_proto->outputs()[idx].name();
+  }
 
   void ShareDim(const std::string &in, const std::string &out, size_t i = 0,
                 size_t j = 0) override {
