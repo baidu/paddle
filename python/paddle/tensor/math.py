@@ -129,63 +129,66 @@ __all__ = [
 # yapf: enable.
 
 @templatedoc()
-def pow(input, exponent, name=None):
+def power(x, exponent, name=None):
     """
-	:alias_main: paddle.pow
-	:alias: paddle.pow,paddle.tensor.pow,paddle.tensor.math.pow
+	:alias_main: paddle.power
+	:alias: paddle.power,paddle.tensor.power,paddle.tensor.math.power
 
-    This is Pow Activation Operator.
+    :math:``out = x^{exponent}``    
 
-    :math:`out = input^{exponent}`
-
-    Args:
-        input(Variable): A ``Tensor`` or ``LoDTensor`` . The data type is ``float32`` or ``float64``.
-        exponent(float32|Variable): A scalar with type ``float32`` or a ``Tensor`` with shape [1] and type ``float32``.
-        name(str, optional): The default value is None. Normally there is no need for user to set this property.
-            For more information, please refer to :ref:`api_guide_Name` .
+    x(Tensor): A ``Tensor`` with type ``float32`` or ``float64``.
+    exponent(float32|Tensor): A scalar with type ``float32`` or a ``Tensor`` with shape [1] and type ``float32``.
+    name(str, optional): The default value is None. Normally there is no need for user to set this property. 
+    For more information, please refer to :ref:`api_guide_Name` .
 
     Returns:
-        Variable: A ``Tensor`` or ``LoDTensor``. The data type is same as ``input``.
+        Tensor: A ``Tensor`` with type same as ``x``.
 
     Examples:
 
         .. code-block:: python
 
             import paddle
-            import paddle.fluid as fluid
+            import numpy as numpy
 
-            x = fluid.data(name="x", shape=[32,32], dtype="float32")
+            paddle.enable_imperative()
 
-            # example 1: argument exponent is float
-            y_1 = paddle.pow(x, 2.0)
-            # y_1 is x^{2.0}
-
-            # example 2: argument exponent is Variable
-            exponent_tensor = fluid.layers.fill_constant([1], "float32", 3.0)
-            y_2 = paddle.pow(x, exponent_tensor)
-            # y_2 is x^{3.0}
+            # example 1: exponent is a float
+            x_data = np.array([1, 2, 3])
+            exponent = 2
+            x = paddle.imperative.to_variable(x_data)
+            res = paddle.power(x, exponent)
+            print(res.numpy()) # [1 4 9]
+            
+            # example 2: exponent is a Variable
+            exponent = paddle.fill_constant(shape=[1], value=2, dtype='float32')
+            res = paddle.power(x, exponent)
+            print(res.numpy()) # [1 4 9]
     """
+    # in dynamic graph mode
     if in_dygraph_mode():
-        return core.ops.pow(input, "exponent", exponent)
-
-    helper = LayerHelper('pow', **locals())
-    inputs = {'X': input}
-    attrs = {}
-    if isinstance(exponent, Variable):
-        exponent.stop_gradient = True
-        inputs['FactorTensor'] = exponent
+        # exponent is scalar
+        if isinstance(exponent, (int, long, float)):
+            return core.ops.pow(x, 'factor', exponent)
+        # exponent is Tensor
+        else:
+            return _elementwise_op_in_dygraph(
+                x, exponent, axis=-1, act=None, op_name='elementwise_pow')
+    # in static graph mode
     else:
-        attrs['factor'] = exponent
-
-    out = helper.create_variable_for_type_inference(dtype=input.dtype)
-    check_dtype(
-        out.dtype, out.name,
-        convert_dtype(input.dtype), 'pow',
-        '(The out data type in pow must be the same with input data type.)')
-
-    helper.append_op(
-        type='pow', inputs=inputs, outputs={'Out': out}, attrs=attrs)
-    return out
+        # exponent is scalar
+        if isinstance(exponent, (int, long, float)):
+            helper = LayerHelper('pow', **locals())
+            inputs = {'X': x}
+            attrs = {'factor': exponent}
+            out = helper.create_variable_for_type_inference(dtype=x.dtype)
+            helper.append_op(
+                type='pow', inputs=inputs, outputs={'Out': out}, attrs=attrs)
+            return out
+        # exponent is Tensor
+        else:
+            y = exponent
+            return _elementwise_op(LayerHelper('elementwise_pow', **locals()))
 
 
 @dygraph_only

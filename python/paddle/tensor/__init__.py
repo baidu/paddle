@@ -120,7 +120,7 @@ from .math import floor  #DEFINE_ALIAS
 from .math import increment  #DEFINE_ALIAS
 from .math import log  #DEFINE_ALIAS
 from .math import multiplex  #DEFINE_ALIAS
-from .math import pow  #DEFINE_ALIAS
+from .math import power  #DEFINE_ALIAS
 from .math import reciprocal  #DEFINE_ALIAS
 from .math import reduce_max  #DEFINE_ALIAS
 from .math import reduce_min  #DEFINE_ALIAS
