@@ -26,6 +26,7 @@ from paddle.fluid import backward
 from paddle.fluid.dygraph import layers
 from paddle.fluid.layers import nn
 from paddle.fluid.dygraph.base import switch_to_static_graph
+from paddle.fluid.data_feeder import check_type
 
 __all__ = ['TranslatedLayer']
 
@@ -42,7 +43,6 @@ def _load_program_desc(model_file_path):
     if not core._is_program_version_supported(program_desc._version()):
         raise ValueError("Unsupported program version: %d\n" %
                          program_desc._version())
-
     return program_desc
 
 
@@ -146,12 +146,13 @@ def _append_loaded_suffix_to_var(program_desc):
 @switch_to_static_graph
 def _build_program_by_desc(program_desc):
     prog = framework.Program()
-    prog.desc = program_desc
-    prog.blocks = [
-        framework.Block(prog, i)
-        for i in six.moves.range(prog.desc.num_blocks())
-    ]
-    prog._sync_with_cpp()
+    with framework.program_guard(prog, framework.Program()):
+        prog.desc = program_desc
+        prog.blocks = [
+            framework.Block(prog, i)
+            for i in six.moves.range(prog.desc.num_blocks())
+        ]
+        prog._sync_with_cpp()
     return prog
 
 
@@ -298,7 +299,7 @@ class _ProgramHolder(object):
             for i, out in enumerate(self._output_descs):
                 var = program.global_block().var(out.name())
                 var = nn.scale(
-                    var, 1., name="static_model_runner/scale_{}".format(i))
+                    var, 1., name="translated_layer/scale_{}".format(i))
                 scale_output_vars.append(var)
         # 2. update output names & descs
         for i, var in enumerate(scale_output_vars):
@@ -676,90 +677,9 @@ class TranslatedLayer(layers.Layer):
     @staticmethod
     def _execution_method_creator(method_name, program_holder):
         def __impl__(self, *input):
-            # 1. prepare inputs, outputs, attrs
-            input_vars = []
-            for i, value in enumerate(input):
-                if not isinstance(value, (np.ndarray, core.VarBase)):
-                    raise TypeError(
-                        "The type of input in TranslatedLayer must be numpy array or Variable(VarBase), but received %s."
-                        % type(value))
-                # NOTE: In order to unify the API, firstly convert the input to VarBase
-                if isinstance(value, np.ndarray):
-                    var = core.VarBase(
-                        value=value,
-                        name=program_holder.input_names[i],
-                        persistable=False,
-                        place=framework._current_expected_place(),
-                        zero_copy=True)
-                else:
-                    var = value
-                    # NOTE: we changed var name here, 
-                    # but it may be an important name set by user
-                    var.name = program_holder.input_names[i]
-                input_vars.append(var)
-
-            persistable_vars = []
-            for var_name in program_holder.persistable_names:
-                if var_name in self._parameters:
-                    persistable_vars.append(self._parameters[var_name])
-                elif var_name in self._buffers:
-                    persistable_vars.append(self._buffers[var_name])
-                else:
-                    raise ValueError(
-                        "The persistable variable %s is not exists in current TranslatedLayer."
-                        % var_name)
-
-            output_vars = []
-            for var_desc in program_holder.output_decs:
-                var = core.VarBase(var_desc.dtype(),
-                                   var_desc.shape(),
-                                   var_desc.name(), var_desc.type(), False)
-                output_vars.append(var)
-
-            # hold forward variables
-            tmp_scope_vec = core.VarBase(core.VarDesc.VarType.FP32, [],
-                                         "program_out_scope",
-                                         core.VarDesc.VarType.STEP_SCOPES, True)
-            tmp_scope_vec.value().set_scope(program_holder.scope)
-
-            # 2. run prorgam by op
-            trace_program = program_holder.infer_program if self._is_test else program_holder.train_program
-            end_op_index = program_holder.infer_program.block(0).op_size()
-            framework._dygraph_tracer().trace_op(
-                type='run_program',
-                inputs={'X': input_vars,
-                        'Params': persistable_vars},
-                outputs={'Out': output_vars,
-                         'OutScope': tmp_scope_vec},
-                attrs={
-                    'global_block': trace_program.block(0),
-                    'start_op_index': 0,
-                    'end_op_index': end_op_index,
-                    'is_test': self._is_test
-                })
-
-            # NOTE: [ why need set param's gradient type here ]
-            # if user set sparse gradient mode, the param's gradient
-            # will be SelectedRows, not LoDTensor. But tracer will just
-            # set param grad VarBase by forward VarBase(LoDTensor)
-            # If we don't change grad_var type here, RunProgramOp need
-            # transform SelectedRows to LoDTensor forcely, it may not
-            # be user wanted result.
-            for persistable_var in persistable_vars:
-                grad_var_name = var.name + core.grad_var_suffix()
-                grad_var = trace_program.block(0).find_var(
-                    cpt.to_bytes(grad_var_name))
-                # NOTE: cannot find var desc maybe not problem, 
-                # such as in batch_norm
-                if grad_var is None:
-                    continue
-                persistable_var._set_grad_type(grad_var.type())
-
-            # 3. prepare output, keep same form with inputs
-            outs = output_vars
-            if len(output_vars) == 1:
-                outs = output_vars[0]
-            return outs
+            if framework.in_dygraph_mode():
+                return self.__dynamic_mode_impl__(program_holder, *input)
+            return self.__static_mode_impl__(program_holder, *input)
 
         __impl__.__name__ = method_name
         return __impl__
@@ -769,3 +689,259 @@ class TranslatedLayer(layers.Layer):
 
     def eval(self):
         self._is_test = True
+
+    def program(self, method_name='forward'):
+        if not isinstance(method_name, six.string_types):
+            raise ValueError(
+                "Input `method_name` type error, expected str, but received %s."
+                % type(method_name))
+        program_holder = self._program_holder_dict.get(method_name, None)
+        if program_holder is None:
+            raise RuntimeError(
+                "The method `%s` is not in current TranslatedLayer." %
+                method_name)
+        trace_program = program_holder.infer_program if self._is_test else program_holder.train_program
+        return _build_program_by_desc(trace_program)
+
+    def __dynamic_mode_impl__(self, program_holder, *input):
+        # 1. prepare inputs, outputs, attrs
+        input_vars = []
+        for i, value in enumerate(input):
+            if not isinstance(value, (np.ndarray, core.VarBase)):
+                raise TypeError(
+                    "The type of input in TranslatedLayer must be numpy array or Variable(VarBase), but received %s."
+                    % type(value))
+            # NOTE: In order to unify the API, firstly convert the input to VarBase
+            if isinstance(value, np.ndarray):
+                var = core.VarBase(
+                    value=value,
+                    name=program_holder.input_names[i],
+                    persistable=False,
+                    place=framework._current_expected_place(),
+                    zero_copy=True)
+            else:
+                var = value
+                # NOTE: we changed var name here, 
+                # but it may be an important name set by user
+                var.name = program_holder.input_names[i]
+            input_vars.append(var)
+
+        persistable_vars = []
+        for var_name in program_holder.persistable_names:
+            if var_name in self._parameters:
+                persistable_vars.append(self._parameters[var_name])
+            elif var_name in self._buffers:
+                persistable_vars.append(self._buffers[var_name])
+            else:
+                raise ValueError(
+                    "The persistable variable %s is not exists in current TranslatedLayer."
+                    % var_name)
+
+        output_vars = []
+        for var_desc in program_holder.output_decs:
+            var = core.VarBase(var_desc.dtype(),
+                               var_desc.shape(),
+                               var_desc.name(), var_desc.type(), False)
+            output_vars.append(var)
+
+        # hold forward variables
+        tmp_scope_vec = core.VarBase(core.VarDesc.VarType.FP32, [],
+                                     "program_out_scope",
+                                     core.VarDesc.VarType.STEP_SCOPES, True)
+        tmp_scope_vec.value().set_scope(program_holder.scope)
+
+        # 2. run prorgam by op
+        trace_program = program_holder.infer_program if self._is_test else program_holder.train_program
+        end_op_index = program_holder.infer_program.block(0).op_size()
+        framework._dygraph_tracer().trace_op(
+            type='run_program',
+            inputs={'X': input_vars,
+                    'Params': persistable_vars},
+            outputs={'Out': output_vars,
+                     'OutScope': tmp_scope_vec},
+            attrs={
+                'global_block': trace_program.block(0),
+                'start_op_index': 0,
+                'end_op_index': end_op_index,
+                'is_test': self._is_test
+            })
+
+        # NOTE(chenweihang): [ why need set param's gradient type here ]
+        # if user set sparse gradient mode, the param's gradient
+        # will be SelectedRows, not LoDTensor. But tracer will just
+        # set param grad VarBase by forward VarBase(LoDTensor)
+        # If we don't change grad_var type here, RunProgramOp need
+        # transform SelectedRows to LoDTensor forcely, it may not
+        # be user wanted result.
+        for persistable_var in persistable_vars:
+            grad_var_name = var.name + core.grad_var_suffix()
+            grad_var = trace_program.block(0).find_var(
+                cpt.to_bytes(grad_var_name))
+            # NOTE: cannot find var desc maybe not problem, 
+            # such as in batch_norm
+            if grad_var is None:
+                continue
+            persistable_var._set_grad_type(grad_var.type())
+
+        # 3. prepare output, keep same form with inputs
+        outs = output_vars
+        if len(output_vars) == 1:
+            outs = output_vars[0]
+        return outs
+
+    def __static_mode_impl__(self, program_holder, *input):
+        # NOTE(chenweihang): [TranslatedLayer execution in dy2static]
+        # When the translatedLayer is executed in static graph mode, 
+        # we cannot directly execute run_program_op, which will cause
+        # the program information of the original model to be lost, 
+        # so here we need to restore the block, variable, operator 
+        # and other members of the program according to the 
+        # program desc information
+        # TODO(chenweihang): Now only supports TranslatedLayer executed
+        # in dynamic to static mode, not supports executed TranslatedLayer
+        # in static mode, which need to rebuild startup_program of 
+        # current layer
+
+        # 1. input check
+        input_vars = []
+        for i, var in enumerate(input):
+            check_type(var, program_holder.input_names[i], framework.Variable,
+                       'TranslatedLayer')
+            # NOTE: we changed var name here, 
+            # but it may be an important name set by user
+            var.name = program_holder.input_names[i]
+            input_vars.append(var)
+
+        # 2. recover forward program
+        # NOTE(chenweihang): Here we only need to recover forward
+        # part of program, because in static mode, the backward part
+        # will be appended later by minimize or backward
+        # NOTE(chenweihang): Here we use default program directly,
+        # this is consisstent with Layer.LayerObjectHelper
+        tmp_program = _build_program_by_desc
+
+
+######### Debug Functions ##########
+
+
+# NOTE: The StaticModelRunner is still unstable at this stage. 
+# I hope to keep this debugging tool, and it can be deleted 
+# after the function is stable.
+class DescParser():
+    @classmethod
+    def print_program_desc(cls, prog, skip_op_callstack=True):
+        block_idx = 0
+        for i in six.moves.range(prog.num_blocks()):
+            block = prog.block(i)
+            cls.print_block_desc(block, block_idx, skip_op_callstack)
+            block_idx += 1
+
+    @classmethod
+    def print_block_desc(cls, block, block_idx, skip_op_callstack=True):
+        indent = 0
+
+        print("{0}{1} // block {2}".format(
+            cls._get_indent_space(indent), '{', block_idx))
+
+        indent += 1
+        # sort all vars
+        all_vars = block.all_vars()
+        for var in all_vars:
+            print("{}{}".format(
+                cls._get_indent_space(indent), cls.var_desc_to_code(var)))
+
+        if len(all_vars) > 0:
+            print("")
+
+        for i in six.moves.range(block.op_size()):
+            op = block.op(i)
+            print("{}{}".format(
+                cls._get_indent_space(indent),
+                cls.op_desc_to_code(op, skip_op_callstack)))
+        indent -= 1
+
+        print("{0}{1}".format(cls._get_indent_space(indent), '}'))
+
+    @classmethod
+    def var_desc_to_code(cls, var):
+        if var.type() == core.VarDesc.VarType.SELECTED_ROWS or var.type(
+        ) == core.VarDesc.VarType.LOD_TENSOR:
+            var_str = "{name} : fluid.{type}.shape{shape}.astype({dtype})".\
+                format(i="{", e="}", name=var.name(), type=var.type(), shape=var.shape(), dtype=var.dtype())
+        else:
+            var_str = "{name} : fluid.{type})".\
+                format(i="{", e="}", name=var.name(), type=var.type())
+
+        var_str = "var " + var_str
+
+        if var.persistable():
+            var_str = "persist " + var_str
+
+        return var_str
+
+    @classmethod
+    def op_desc_to_code(cls, op, skip_op_callstack=True):
+        outputs_str = "{"
+        for i in range(0, len(op.output_names())):
+            outputs_str += "{name}=".format(name=op.output_names()[i])
+            o = op.output(op.output_names()[i])
+            outputs_str += "{value}".format(value=o)
+            if i != len(op.output_names()) - 1:
+                outputs_str += ", "
+        outputs_str += "}"
+
+        inputs_str = "{"
+        for i in range(0, len(op.input_names())):
+            inputs_str += "{name}=".format(name=op.input_names()[i])
+            o = op.input(op.input_names()[i])
+            inputs_str += "{value}".format(value=o)
+
+            if i != len(op.input_names()) - 1:
+                inputs_str += ", "
+        inputs_str += "}"
+
+        attr_names = sorted(op.attr_names())
+        attrs_str = ""
+        for i in range(0, len(attr_names)):
+            name = attr_names[i]
+            if skip_op_callstack and name == "op_callstack":
+                continue
+
+            attr_type = op.attr_type(name)
+            if attr_type == core.AttrType.BLOCK:
+                a = "{name} = block[{value}]".format(
+                    name=name, type=attr_type, value=op._block_attr_id(name))
+                attrs_str += a
+                if i != len(attr_names) - 1:
+                    attrs_str += ", "
+                continue
+
+            if attr_type == core.AttrType.BLOCKS:
+                a = "{name} = blocks{value}".format(
+                    name=name, type=attr_type, value=op._blocks_attr_ids(name))
+                attrs_str += a
+                if i != len(attr_names) - 1:
+                    attrs_str += ", "
+                continue
+
+            a = "{name} = {value}".format(
+                name=name, type=attr_type, value=op.attr(name))
+            attrs_str += a
+            if i != len(attr_names) - 1:
+                attrs_str += ", "
+
+        if outputs_str != "{}":
+            op_str = "{outputs} = {op_type}(inputs={inputs}, {attrs})".\
+                format(outputs = outputs_str, op_type=op.type(), inputs=inputs_str, attrs=attrs_str)
+        else:
+            op_str = "{op_type}(inputs={inputs}, {attrs})".\
+                format(op_type=op.type(), inputs=inputs_str, attrs=attrs_str)
+        return op_str
+
+    @classmethod
+    def _get_indent_space(cls, indent, space_num=4):
+        ret = ""
+        for i in range(0, indent * space_num):
+            ret += " "
+
+        return ret
