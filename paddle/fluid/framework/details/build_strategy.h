@@ -55,7 +55,7 @@ struct BuildStrategy {
   // For CPU, if you want to fix the order of summing to make the result
   // of kAllReduce and kReduce no diff, you can add
   // `FLAGS_cpu_deterministic=true` to env.
-  enum class ReduceStrategy { kAllReduce = 0, kReduce = 1 };
+  enum class ReduceStrategy { kAllReduce = 0, kReduce = 1, kUserDefined = 2 };
 
   enum class GradientScaleStrategy {
     kCoeffNumDevice = 0,

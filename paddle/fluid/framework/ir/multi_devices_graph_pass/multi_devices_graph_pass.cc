@@ -220,36 +220,39 @@ void MultiDevSSAGraphBuilderBase::ApplyImpl(ir::Graph *graph) const {
         CreateComputationalOps(&result, node, places_.size());
       }
 
-      // Insert collective ops if nranks > 1
-      if (!is_forwarding && Get<size_t>(details::kNRanks) > 1) {
-        auto &op_desc = *(node->Op());
-        bool is_bk_op = details::IsOpRole(op_desc, OpRole::kBackward);
-        // optimize op is already processed in DealWithSpecialOp,
-        // here we only consider backward op
-        if (!is_bk_op) continue;
+      if (strategy_.reduce_ !=
+          details::BuildStrategy::ReduceStrategy::kUserDefined) {
+        // Insert collective ops if nranks > 1
+        if (!is_forwarding && Get<size_t>(details::kNRanks) > 1) {
+          auto &op_desc = *(node->Op());
+          bool is_bk_op = details::IsOpRole(op_desc, OpRole::kBackward);
+          // optimize op is already processed in DealWithSpecialOp,
+          // here we only consider backward op
+          if (!is_bk_op) continue;
 
-        /*
-         * the op that will generate the gradient of on parameter will have
-         one attr op_role_var
-         * to record the parameter and gradient, like:
-          attrs {
-            name: "op_role_var"
-            type: STRINGS
-            strings: "fc_1.b_0"
-            strings: "fc_1.b_0@GRAD"
-          }
-         */
+          /*
+           * the op that will generate the gradient of on parameter will have
+           one attr op_role_var
+           * to record the parameter and gradient, like:
+            attrs {
+              name: "op_role_var"
+              type: STRINGS
+              strings: "fc_1.b_0"
+              strings: "fc_1.b_0@GRAD"
+            }
+           */
 
-        // Currently, we assume that once gradient is generated, it can be
-        // broadcast, and each gradient is only broadcast once.
-        auto backward_vars = details::GetOpRoleVarsOrEmpty(op_desc);
-        for (size_t i = 0; i < backward_vars.size(); i += 2) {
-          auto &p_name = backward_vars[i];
-          auto &g_name = backward_vars[i + 1];
-          VLOG(10) << "Bcast " << g_name << " for parameter " << p_name
-                   << " op_type " << node->Op()->Type();
-          if (NeedCollectiveForGrad(g_name, sorted_ops)) {
-            InsertCollectiveOp(&result, p_name, g_name);
+          // Currently, we assume that once gradient is generated, it can be
+          // broadcast, and each gradient is only broadcast once.
+          auto backward_vars = details::GetOpRoleVarsOrEmpty(op_desc);
+          for (size_t i = 0; i < backward_vars.size(); i += 2) {
+            auto &p_name = backward_vars[i];
+            auto &g_name = backward_vars[i + 1];
+            VLOG(10) << "Bcast " << g_name << " for parameter " << p_name
+                     << " op_type " << node->Op()->Type();
+            if (NeedCollectiveForGrad(g_name, sorted_ops)) {
+              InsertCollectiveOp(&result, p_name, g_name);
+            }
           }
         }
       }
@@ -745,14 +748,17 @@ bool ReduceSSAGraphBuilder::DealWithSpecialOp(ir::Graph *result,
 }
 
 void ReduceSSAGraphBuilder::InsertPostprocessOps(ir::Graph *result) const {
-  if (UseGPU()) {
-    if (strategy_.fuse_broadcast_ops_ == true) {
-      CreateFusedBroadcastOp(result, bcast_var_name_set_);
-    } else {
-      for (size_t dev_id = 0; dev_id < bcast_var_name_set_.size(); ++dev_id) {
-        auto &to_bcast_set = bcast_var_name_set_[dev_id];
-        for (auto &bcast_name : to_bcast_set) {
-          CreateBroadcastOp(result, bcast_name, dev_id);
+  if (strategy_.reduce_ !=
+      details::BuildStrategy::ReduceStrategy::kUserDefined) {
+    if (UseGPU()) {
+      if (strategy_.fuse_broadcast_ops_ == true) {
+        CreateFusedBroadcastOp(result, bcast_var_name_set_);
+      } else {
+        for (size_t dev_id = 0; dev_id < bcast_var_name_set_.size(); ++dev_id) {
+          auto &to_bcast_set = bcast_var_name_set_[dev_id];
+          for (auto &bcast_name : to_bcast_set) {
+            CreateBroadcastOp(result, bcast_name, dev_id);
+          }
         }
       }
     }
