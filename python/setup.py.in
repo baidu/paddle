@@ -234,9 +234,9 @@ if sys.version_info >= (3,7):
         setup_requires_tmp+=[setup_requires_i]
     setup_requires = setup_requires_tmp
 
-if '${CMAKE_SYSTEM_PROCESSOR}' not in ['arm', 'armv7-a', 'aarch64']:
+if '${CMAKE_SYSTEM_PROCESSOR}' not in ['arm', 'armv7-a', 'aarch64']:	
     setup_requires+=['opencv-python']
-
+    
 # the prefix is sys.prefix which should always be usr
 paddle_bins = ''
 
