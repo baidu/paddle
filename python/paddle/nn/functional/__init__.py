@@ -25,6 +25,8 @@ from . import extension
 __all__ += extension.__all__
 from . import common
 __all__ += common.__all__
+from . import pooling
+__all__ += pooling.__all__
 from .activation import brelu  #DEFINE_ALIAS
 from .activation import elu  #DEFINE_ALIAS
 from .activation import erf  #DEFINE_ALIAS
@@ -160,6 +162,10 @@ from .pooling import pool2d  #DEFINE_ALIAS
 from .pooling import pool3d  #DEFINE_ALIAS
 from .pooling import adaptive_pool2d  #DEFINE_ALIAS
 from .pooling import adaptive_pool3d  #DEFINE_ALIAS
+from .pooling import max_pool1d  #DEFINE_ALIAS
+from .pooling import avg_pool1d  #DEFINE_ALIAS
+from .pooling import adaptive_max_pool1d  #DEFINE_ALIAS
+from .pooling import adaptive_avg_pool1d  #DEFINE_ALIAS
 # from .rnn import gru_unit        #DEFINE_ALIAS
 # from .rnn import lstm        #DEFINE_ALIAS
 # from .rnn import lstm_unit        #DEFINE_ALIAS

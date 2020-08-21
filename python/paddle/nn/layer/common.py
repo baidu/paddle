@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: define the common classes to build a neural network  
+# TODO: define the common classes to build a neural network
 from ...fluid.dygraph import BilinearTensorProduct  #DEFINE_ALIAS
 from ...fluid.dygraph import Pool2D  #DEFINE_ALIAS
 from ...fluid.dygraph import Embedding  #DEFINE_ALIAS
@@ -28,6 +28,10 @@ __all__ = [
     'Linear',
     'UpSample',
     'Pad2D',
+    'AvgPool1d',
+    'MaxPool1d',
+    'AdaptiveAvgPool1d',
+    'AdaptiveMaxPool1d',
     'ReflectionPad1d',
     'ReplicationPad1d',
     'ConstantPad1d',
@@ -57,9 +61,9 @@ class UpSample(layers.Layer):
         'nearest' : Nearest neighbor interpolation
         'bicubic' : Bicubic interpolation
 
-    Linear interpolation is the method of using a line connecting two known quantities 
-    to determine the value of an unknown quantity between the two known quantities. 
-    
+    Linear interpolation is the method of using a line connecting two known quantities
+    to determine the value of an unknown quantity between the two known quantities.
+
     Nearest neighbor interpolation is to perform nearest neighbor interpolation
     in both the 3rd dimension(in height direction) and the 4th dimension(in width
     direction) on input tensor.
@@ -69,7 +73,7 @@ class UpSample(layers.Layer):
     W-direction in this op) on a rectilinear 2D grid. The key idea is
     to perform linear interpolation first in one direction, and then
     again in the other direction.
-    
+
     Bicubic interpolation is an extension of cubic interpolation for interpolating
     data points on a two-dimensional regular grid. The interpolated surface is
     smoother than corresponding surfaces obtained by bilinear interpolation or
@@ -116,7 +120,7 @@ class UpSample(layers.Layer):
               output: (N,C,H_out,W_out) where:
               H_out = round(H_{in} * scale_{factor})
               W_out = round(W_{in} * scale_{factor})
-        
+
         Bilinear interpolation:
           if:
               align_corners = False , align_mode = 0
@@ -163,25 +167,25 @@ class UpSample(layers.Layer):
 
     https://en.wikipedia.org/wiki/Linear_interpolation.
     For details of linear interpolation, please refer to Wikipedia:
-    
+
     For details of nearest neighbor interpolation, please refer to Wikipedia:
     https://en.wikipedia.org/wiki/Nearest-neighbor_interpolation.
-    
+
     For details of bilinear interpolation, please refer to Wikipedia:
     https://en.wikipedia.org/wiki/Bilinear_interpolation.
-    
+
     For details of bicubic interpolation, please refer to Wikipedia:
     https://en.wikipedia.org/wiki/Bicubic_interpolation
-    
+
     For details of trilinear interpolation, please refer to Wikipedia:
     https://en.wikipedia.org/wiki/Trilinear_interpolation.
-    
+
     Parameters:
         input (Variable): 3-D, 4-D or 5-D Tensor, its data type is float32, float64, or uint8,
                           its data format is specified by :attr:`data_format`.
         size (list|tuple|Variable|None): Output shape of image resize
-             layer, the shape is (out_w, ) when input is a 3-D Tensor, the shape is (out_h, out_w) 
-             when input is a 4-D Tensor and is (out_d, out_h, out_w) when input is a 5-D Tensor. 
+             layer, the shape is (out_w, ) when input is a 3-D Tensor, the shape is (out_h, out_w)
+             when input is a 4-D Tensor and is (out_d, out_h, out_w) when input is a 5-D Tensor.
              Default: None. If a list, each element can be an integer or a Tensor Variable of shape: [1].
              If a Tensor Variable, its dimensions size should be a 1.
         scale_factor (float|Variable|None): The multiplier for the input height or width. At
@@ -277,8 +281,8 @@ class Pad2D(layers.Layer):
     If mode is 'reflect', paddings[0] and paddings[1] must be no greater
     than height-1. And the width dimension has the same condition.
     Parameters:
-        paddings (int | List[int32]): The padding size. If padding is a int, uses the same 
-            padding in all boundaries, if padding is a List, it must contain four integers, 
+        paddings (int | List[int32]): The padding size. If padding is a int, uses the same
+            padding in all boundaries, if padding is a List, it must contain four integers,
             (padding_top, padding_bottom, padding_left, padding_right).
             Default is [0, 0, 0, 0].
         mode (str): Three modes: 'constant' (default), 'reflect', 'edge' .
@@ -290,7 +294,7 @@ class Pad2D(layers.Layer):
         data_format (str): An string from: "NHWC", "NCHW". Specify the data format of
                            the input data.
                            Default is  "NCHW"
-    Returns: 
+    Returns:
         None
     Examples:
         .. code-block:: text
@@ -348,6 +352,310 @@ class Pad2D(layers.Layer):
             data_format=self._data_format)
 
 
+class AvgPool1d(layers.Layer):
+    """
+    This operation applies a 1D average pooling over an input signal composed
+    of several input planes, based on the input, output_size, return_indices parameters.
+    Input(X) and output(Out) are in NCL format, where N is batch
+    size, C is the number of channels, L is the length of the feature.
+    The output tensor shape will be [N, C, output_size].
+
+    The output value of the layer with input size (N, C, L),
+    output (N, C, L_{out}) and kernel_size k can be precisely described as
+    For average pool1d:
+
+    ..  math::
+
+       Output(N_i, C_i, l) &= mean(Input[N_i, C_i, stride \times l:stride \times l+k])
+
+
+    Args:
+        kernel_size (int|list|tuple): The pool kernel size. If pool kernel size is a tuple or list,
+            it must contain one integers.
+        stride (int|list|tuple): The pool stride size. If pool stride size is a tuple or list,
+            it must contain one integers.
+        padding (string|int|list|tuple): The pool padding. If `pool_padding` is a string, either 'VALID' or
+            'SAME' which is the padding algorithm. If pool padding size is a tuple or list,
+            it could be the following forms: `[pad_left, pad_right]`. If padding is non-zero,
+            then the input is implicitly zero-padded on both sides for padding number of points.
+        count_include_pad (bool): Whether to exclude padding points in average pooling
+                          mode, default is `true`.
+        ceil_mode (bool): ${ceil_mode_comment}Whether to use the ceil function to calculate output height and width.
+            If it is set to False, the floor function will be used. Default False
+        name(str, optional): For detailed information, please refer
+                             to :ref:`api_guide_Name`. Usually name is no need to set and
+                             None by default.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: If `use_cudnn` is not a bool value.
+        ValueError: If `padding` is a string, but not "SAME" or "VALID".
+        ValueError: If `padding` is "VALID", but `ceil_mode` is True.
+        ValueError: If `padding` is a list or tuple but its length greater than 1.
+        ShapeError: If the input is not a 3-D.
+        ShapeError: If the output's shape calculated is not greater than 0.
+
+
+    Examples:
+
+        .. code-block:: python
+          import paddle
+          import paddle.nn as nn
+          paddle.disable_static()
+
+          data = paddle.to_tensor(np.random.uniform(-1, 1, [1, 3, 32]).astype(np.float32))
+          AvgPool1d = nn.AvgPool1d(kernel_size=2, stride=2, padding=0)
+          pool_out = AvgPool1d(data)
+          # pool_out shape: [1, 3, 16]
+
+    """
+
+    def __init__(self,
+                 kernel_size,
+                 stride=None,
+                 padding=0,
+                 count_include_pad=True,
+                 ceil_mode=False,
+                 name=None):
+        super(AvgPool1d, self).__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.ceil_mode = ceil_mode
+        self.count_include_pad = count_include_pad
+        self.name = name
+
+    def forward(self, x):
+        out = F.avg_pool1d(x, self.kernel_size, self.stride, self.padding,
+                           self.count_include_pad, self.ceil_mode, self.name)
+        return out
+
+
+class MaxPool1d(layers.Layer):
+    """
+    Applies a 1D max pooling over an input signal composed of several input planes based
+    on the input, output_size, return_indices parameters.
+    Input(X) and output(Out) are in NCL format, where N is batch
+    size, C is the number of channels, L is the length of the feature.
+
+    The output value of the layer with input size (N, C, L),
+    output (N, C, L_{out}) and kernel_size k can be precisely described as
+    For average pool1d:
+
+    ..  math::
+
+       Output(N_i, C_i, l) &=  max(Input[N_i, C_i, stride \times l:stride \times l+k])}
+
+    Args:
+        kernel_size (int|list|tuple): The pool kernel size. If pool kernel size is a tuple or list,
+            it must contain one integers.
+        stride (int|list|tuple): The pool stride size. If pool stride size is a tuple or list,
+            it must contain one integers.
+        padding (string|int|list|tuple): The pool padding. If `pool_padding` is a string, either 'VALID' or
+            'SAME' which is the padding algorithm. If pool padding size is a tuple or list,
+            it could be the following forms: `[pad_left, pad_right]`.
+        return_indices (bool): Whether return the max indices along with the outputs. default is `False`.
+        ceil_mode (bool): Whether to use the ceil function to calculate output height and width. False is the default.
+            If it is set to False, the floor function will be used. Default False
+        name(str, optional): For detailed information, please refer
+                             to :ref:`api_guide_Name`. Usually name is no need to set and
+                             None by default.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: If `use_cudnn` is not a bool value.
+        ValueError: If `padding` is a string, but not "SAME" or "VALID".
+        ValueError: If `padding` is "VALID", but `ceil_mode` is True.
+        ValueError: If `padding` is a list or tuple but its length greater than 1.
+        ShapeError: If the input is not a 3-D.
+        ShapeError: If the output's shape calculated is not greater than 0.
+
+
+    Examples:
+
+        .. code-block:: python
+
+          import paddle
+          import paddle.nn as nn
+          paddle.disable_static()
+
+          data = paddle.to_tensor(np.random.uniform(-1, 1, [1, 3, 32]).astype(np.float32))
+          MaxPool1d = nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
+          pool_out = MaxPool1d(data)
+          # pool_out shape: [1, 3, 16]
+
+          MaxPool1d = nn.MaxPool1d(kernel_size=2, stride=2, padding=0, return_indices=True)
+          pool_out, indices = MaxPool1d(data)
+          # pool_out shape: [1, 3, 16], indices shape: [1, 3, 16]
+
+    """
+
+    def __init__(self,
+                 kernel_size,
+                 stride=None,
+                 padding=0,
+                 return_indices=False,
+                 ceil_mode=False,
+                 name=None):
+        super(MaxPool1d, self).__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.ceil_mode = ceil_mode
+        self.return_indices = return_indices
+        self.name = name
+
+    def forward(self, input):
+        out = F.max_pool1d(input, self.kernel_size, self.stride, self.padding,
+                           self.return_indices, self.ceil_mode, self.name)
+        return out
+
+
+class AdaptiveAvgPool1d(layers.Layer):
+    """
+
+    This operation applies a 1D adaptive average pooling over an input signal composed
+    of several input planes, based on the input, output_size, return_indices parameters.
+    Input(X) and output(Out) are in NCL format, where N is batch
+    size, C is the number of channels, L is the length of the feature.
+    The output tensor shape will be [N, C, output_size].
+
+    For average adaptive pool1d:
+
+    ..  math::
+
+       lstart &= floor(i * L_{in} / L_{out})
+
+       lend &= ceil((i + 1) * L_{in} / L_{out})
+
+       Output(i) &= \\frac{sum(Input[lstart:lend])}{(lstart - lend)}
+
+    Args:
+        output_size (int|list|tuple): The pool kernel size. If pool kernel size is a tuple or list,
+            it must contain one int.
+        name(str, optional): For detailed information, please refer
+                             to :ref:`api_guide_Name`. Usually name is no need to set and
+                             None by default.
+
+    Returns:
+        None.
+
+    Raises:
+        ValueError: 'pool_size' should be a integer or list or tuple with length as 1.
+
+    Examples:
+        .. code-block:: python
+
+          # average adaptive pool1d
+          # suppose input data in shape of [N, C, L], `output_size` is m or [m],
+          # output shape is [N, C, m], adaptive pool divide L dimension
+          # of input data into m grids averagely and performs poolings in each
+          # grid to get output.
+          # adaptive max pool performs calculations as follow:
+          #
+          #     for i in range(m):
+          #         lstart = floor(i * L / m)
+          #         lend = ceil((i + 1) * L / m)
+          #         output[:, :, i] = sum(input[:, :, lstart: lend])/(lstart - lend)
+          #
+          import paddle
+          import paddle.nn as nn
+          paddle.disable_static()
+
+          data = paddle.to_tensor(np.random.uniform(-1, 1, [1, 3, 32]).astype(np.float32))
+          AdaptiveAvgPool1d = nn.AdaptiveAvgPool1d(output_size=16)
+          pool_out = AdaptiveAvgPool1d(data)
+          # pool_out shape: [1, 3, 16]
+    """
+
+    def __init__(self, output_size, name=None):
+        super(AdaptiveAvgPool1d, self).__init__()
+        self.output_size = output_size
+        self.name = name
+
+    def forward(self, input):
+        return F.adaptive_avg_pool1d(input, self.output_size, self.name)
+
+
+class AdaptiveMaxPool1d(layers.Layer):
+    """
+
+    This operation applies a 1D adaptive max pooling over an input signal composed
+    of several input planes, based on the input, output_size, return_indices parameters.
+    Input(X) and output(Out) are in NCL format, where N is batch
+    size, C is the number of channels, L is the length of the feature.
+    The output tensor shape will be [N, C, output_size].
+
+    For max adaptive pool1d:
+
+    ..  math::
+
+       lstart &= floor(i * L_{in} / L_{out})
+
+       lend &= ceil((i + 1) * L_{in} / L_{out})
+
+       Output(i) &= max(Input[lstart:lend])}
+
+    Args:
+        output_size (int|list|tuple): The pool kernel size. If pool kernel size is a tuple or list,
+            it must contain one int.
+        return_indices (bool): If true, the index of max pooling point will be returned along
+            with outputs. It cannot be set in average pooling type. Default False.
+        name(str, optional): For detailed information, please refer
+                             to :ref:`api_guide_Name`. Usually name is no need to set and
+                             None by default.
+    Returns:
+        None.
+
+    Raises:
+        ValueError: 'pool_size' should be a integer or list or tuple with length as 1.
+
+    Examples:
+        .. code-block:: python
+
+          # max adaptive pool1d
+          # suppose input data in shape of [N, C, L], `output_size` is m or [m],
+          # output shape is [N, C, m], adaptive pool divide L dimension
+          # of input data into m grids averagely and performs poolings in each
+          # grid to get output.
+          # adaptive max pool performs calculations as follow:
+          #
+          #     for i in range(m):
+          #         lstart = floor(i * L / m)
+          #         lend = ceil((i + 1) * L / m)
+          #         output[:, :, i] = max(input[:, :, lstart: lend])
+          #
+                    import paddle
+          import paddle.nn as nn
+          paddle.disable_static()
+
+          data = paddle.to_tensor(np.random.uniform(-1, 1, [1, 3, 32]).astype(np.float32))
+          AdaptiveMaxPool1d = nn.AdaptiveMaxPool1d(output_size=16)
+          pool_out = AdaptiveMaxPool1d(data)
+          # pool_out shape: [1, 3, 16]
+
+          # for return_indices = true
+          AdaptiveMaxPool1d = nn.AdaptiveMaxPool1d(output_size=16, return_indices=True)
+          pool_out, indices = AdaptiveMaxPool1d(data)
+          # pool_out shape: [1, 3, 16], indices shape: [1, 3, 16]
+
+    """
+
+    def __init__(self, output_size, return_indices=False, name=None):
+        super(AdaptiveMaxPool1d, self).__init__()
+        self.output_size = output_size
+        self.return_indices = return_indices
+        self.name = name
+
+    def forward(self, input):
+        return F.adaptive_max_pool1d(input, self.output_size,
+                                     self.return_indices, self.name)
+
+
 class ReflectionPad1d(layers.Layer):
     """
     This interface is used to construct a callable object of the ``ReflectionPad1d`` class.
@@ -360,8 +668,8 @@ class ReflectionPad1d(layers.Layer):
            Default is  "NCL"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -419,8 +727,8 @@ class ReplicationPad1d(layers.Layer):
            Default is  "NCL"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -434,7 +742,7 @@ class ReplicationPad1d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -479,8 +787,8 @@ class ConstantPad1d(layers.Layer):
            Default is  "NCL"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -495,7 +803,7 @@ class ConstantPad1d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -542,8 +850,8 @@ class ConstantPad2d(layers.Layer):
            Default is  "NCHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -558,7 +866,7 @@ class ConstantPad2d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -607,8 +915,8 @@ class ZeroPad2d(layers.Layer):
            Default is  "NCHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -622,7 +930,7 @@ class ZeroPad2d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -669,8 +977,8 @@ class ReplicationPad2d(layers.Layer):
            Default is  "NCHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -684,7 +992,7 @@ class ReplicationPad2d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -731,8 +1039,8 @@ class ReflectionPad2d(layers.Layer):
            Default is  "NCHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -746,7 +1054,7 @@ class ReflectionPad2d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -796,8 +1104,8 @@ class ConstantPad3d(layers.Layer):
            Default is  "NCDHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -812,7 +1120,7 @@ class ConstantPad3d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -861,8 +1169,8 @@ class ReplicationPad3d(layers.Layer):
            Default is  "NCDHW"
         name (str, optional) : The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
-        
-    Returns: 
+
+    Returns:
         None
 
     Examples:
@@ -876,7 +1184,7 @@ class ReplicationPad3d(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
@@ -918,7 +1226,7 @@ class CosineSimilarity(layers.Layer):
     Parameters:
         dim (int): Dimension of vectors to compute cosine similarity. Default is 1.
         eps(float): Small value to avoid division by zero. Default is 1e-8.
-    Returns: 
+    Returns:
         None
 
     Examples:
@@ -939,7 +1247,7 @@ class CosineSimilarity(layers.Layer):
 
     Code Examples:
         .. code-block:: python
-        
+
             import paddle
             import paddle.nn as nn
             import numpy as np
