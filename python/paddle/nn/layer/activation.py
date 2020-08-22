@@ -18,6 +18,7 @@ __all__ = [
     'ELU',
     'GELU',
     'Hardshrink',
+    'Tanh',
     'Hardtanh',
     'PReLU',
     'ReLU',
@@ -180,6 +181,39 @@ class Hardshrink(layers.Layer):
 
     def forward(self, x):
         return F.hardshrink(x, self._threshold, self._name)
+
+
+class Tanh(layers.Layer):
+    """
+
+    .. math::
+
+        Tanh(x) = (exp(x) - exp(-x))/(exp(x) + exp(-x))
+
+    Shape:
+        - input: Tensor with any shape.
+        - output: Tensor with the same shape as input.
+
+    Examples:
+
+        .. code-block:: python
+
+        import paddle
+        import numpy as np
+
+        paddle.disable_static()
+
+        x = paddle.to_variable(np.array([-1, 0.5, 1]))
+        m = paddle.nn.Tanh()
+        out = m(x) # [-0.761594, 0.462117, 0.761594]
+    """
+
+    def __init__(self, name=None):
+        super(Tanh, self).__init__()
+        self._name = name
+
+    def forward(self, x):
+        return F.tanh(x, self._name)
 
 
 class Hardtanh(layers.Layer):

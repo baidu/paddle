@@ -58,8 +58,6 @@ from ..fluid.layers import atan    #DEFINE_ALIAS
 from ..fluid.layers import erf    #DEFINE_ALIAS
 from ..fluid.layers import sqrt    #DEFINE_ALIAS
 from ..fluid.layers import sin    #DEFINE_ALIAS
-from ..fluid.layers import tanh    #DEFINE_ALIAS
-
 from ..fluid.layers import increment    #DEFINE_ALIAS
 from ..fluid.layers import multiplex    #DEFINE_ALIAS
 from ..fluid.layers import sums    #DEFINE_ALIAS
@@ -1715,3 +1713,42 @@ def prod(x, axis=None, keepdim=False, dtype=None, name=None):
             x = layers.cast(x, dtype)
 
     return layers.reduce_prod(input=x, dim=axis, keep_dim=keepdim, name=name)
+
+
+def tanh(x, name=None):
+    """
+
+    .. math::
+
+        tanh(x) = (exp(x) - exp(-x))/(exp(x) + exp(-x))
+
+    Args:
+        x (Tensor): The input Tensor with data type float32, float16.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type and shape as ``x`` .
+
+    Examples:
+
+        .. code-block:: python
+
+        import paddle
+        import numpy as np
+
+        paddle.disable_static()
+
+        x = paddle.to_variable(np.array([-1, 0.5, 1]))
+        out = paddle.tanh(x) # [-0.761594, 0.462117, 0.761594]
+
+
+    """
+    if in_dygraph_mode():
+        return core.ops.tanh(x)
+
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'], 'tanh')
+    helper = LayerHelper('tanh', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(type='tanh', inputs={'X': x}, outputs={'Out': out})
+    return out

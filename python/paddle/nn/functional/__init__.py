@@ -31,6 +31,7 @@ from .activation import brelu  #DEFINE_ALIAS
 from .activation import elu  #DEFINE_ALIAS
 from .activation import erf  #DEFINE_ALIAS
 from .activation import gelu  #DEFINE_ALIAS
+from .activation import tanh  #DEFINE_ALIAS
 from .activation import hardshrink  #DEFINE_ALIAS
 from .activation import hardtanh  #DEFINE_ALIAS
 from .activation import hard_sigmoid  #DEFINE_ALIAS

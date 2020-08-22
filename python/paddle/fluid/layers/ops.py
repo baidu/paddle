@@ -28,11 +28,11 @@ __activations_noattr__ = [
     'tanh_shrink',
     'softplus',
     'softsign',
+    'tanh',
 ]
 
 __unary_func__ = [
     'exp',
-    'tanh',
     'atan',
     'sqrt',
     'rsqrt',
