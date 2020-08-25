@@ -140,10 +140,6 @@ class MNIST(Dataset):
                                                       cols)).astype('float32')
                     offset_img += struct.calcsize(fmt_images)
 
-                    images = images / 255.0
-                    images = images * 2.0
-                    images = images - 1.0
-
                     for i in range(buffer_size):
                         self.images.append(images[i, :])
                         self.labels.append(
