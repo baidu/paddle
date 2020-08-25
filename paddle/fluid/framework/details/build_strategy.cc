@@ -138,19 +138,21 @@ class ParallelExecutorPassBuilder : public ir::PassBuilder {
   }
 
   void AppendMultiGraphOptPasses() {
-    // NOTE: fuse_all_reduce_ops will count the number of all_reduce operator
-    // first, if the number is zero, fuse_all_reduce_ops will do nothing.
-    AppendPassWithCheck(strategy_.fuse_all_reduce_ops_,
-                        "fuse_all_reduce_op_pass");
-    AppendPrintGraphPass("multi_devices_print_pass", "_multi_devices_graph");
+    if (strategy_.reduce_ != BuildStrategy::ReduceStrategy::kUserDefined) {
+      // NOTE: fuse_all_reduce_ops will count the number of all_reduce operator
+      // first, if the number is zero, fuse_all_reduce_ops will do nothing.
+      AppendPassWithCheck(strategy_.fuse_all_reduce_ops_,
+                          "fuse_all_reduce_op_pass");
+      AppendPrintGraphPass("multi_devices_print_pass", "_multi_devices_graph");
 
-    // experimental shows that the program will be faster if append
-    // all_reduce_deps_pass here.
-    bool append_all_reduce_deps_pass =
-        !strategy_.enable_parallel_graph_ &&
-        (SeqOnlyAllReduceOps(strategy_) ||
-         strategy_.reduce_ == BuildStrategy::ReduceStrategy::kAllReduce);
-    AppendPassWithCheck(append_all_reduce_deps_pass, "all_reduce_deps_pass");
+      // experimental shows that the program will be faster if append
+      // all_reduce_deps_pass here.
+      bool append_all_reduce_deps_pass =
+          !strategy_.enable_parallel_graph_ &&
+          (SeqOnlyAllReduceOps(strategy_) ||
+           strategy_.reduce_ == BuildStrategy::ReduceStrategy::kAllReduce);
+      AppendPassWithCheck(append_all_reduce_deps_pass, "all_reduce_deps_pass");
+    }
 
     bool append_backward_optimizer_op_deps_pass =
         strategy_.num_trainers_ > 1 && !strategy_.async_mode_ &&
@@ -172,10 +174,13 @@ class ParallelExecutorPassBuilder : public ir::PassBuilder {
 #endif
     AppendPassWithCheck(strategy_.fuse_elewise_add_act_ops_,
                         "fuse_elewise_add_act_pass");
-    // for single card training, fuse_all_reduce_ops is unnecessary.
-    // coalesce_grad_tensor_pass should be before of MultiDevPass.
-    AppendPassWithCheck(strategy_.fuse_all_reduce_ops_,
-                        "coalesce_grad_tensor_pass");
+    if (strategy_.reduce_ != BuildStrategy::ReduceStrategy::kUserDefined) {
+      // for single card training, fuse_all_reduce_ops is unnecessary.
+      // coalesce_grad_tensor_pass should be before of MultiDevPass.
+      AppendPassWithCheck(strategy_.fuse_all_reduce_ops_,
+                          "coalesce_grad_tensor_pass");
+    }
+
     // Fuse all the optimization operators.
     // NOTE: fuse_all_xx_ops will count the number of xx operator first,
     // if the number is zero, fuse_all_reduce_ops will do nothing.
@@ -231,6 +236,7 @@ class ParallelExecutorPassBuilder : public ir::PassBuilder {
               AppendPass("all_reduce_mode_multi_devices_pass").get();
           break;
         case BuildStrategy::ReduceStrategy::kReduce:
+        case BuildStrategy::ReduceStrategy::kUserDefined:
           multi_devices_pass =
               AppendPass("reduce_mode_multi_devices_pass").get();
           break;

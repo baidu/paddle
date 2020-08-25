@@ -119,6 +119,9 @@ class GraphExecutionOptimizer(MetaOptimizerBase):
                     dist_strategy.fuse_all_reduce_ops
         local_build_strategy.nccl_comm_num = \
                     dist_strategy.nccl_comm_num
+        if dist_strategy.localsgd:
+            local_build_strategy.reduce_strategy = \
+                    paddle.fluid.BuildStrategy.ReduceStrategy.UserDefined
 
         if self.user_defined_strategy.recompute == True:
             logging.warn(
