@@ -84,7 +84,12 @@ def check_indent(cdline):
 
 
 # srccom: raw comments in the source,including ''' and original indent
-def sampcd_extract_and_run(srccom, name, htype="def", hname=""):
+def sampcd_extract_and_run(srccom,
+                           name,
+                           htype="def",
+                           hname="",
+                           srcfile="",
+                           api11=""):
     """
     Extract and run sample codes from source comment and
     the result will be returned.
@@ -134,9 +139,12 @@ def sampcd_extract_and_run(srccom, name, htype="def", hname=""):
                     "Deprecated sample code style:\n\n    Examples:\n\n        >>>codeline\n        >>>codeline\n\n\n ",
                     "Please use '.. code-block:: python' to ",
                     "format sample code.\n")
+                print("Not sample code style: %s, %s, %s" %
+                      (api11, srcfile, hname))
                 result = False
         else:
             print("Error: No sample code!\n")
+            print("No sample code: %s, %s, %s" % (api11, srcfile, hname))
             result = False
 
     for y in range(1, len(sampcd_begins) + 1):
@@ -168,7 +176,7 @@ def sampcd_extract_and_run(srccom, name, htype="def", hname=""):
             sampcd = '\nimport os\n' + 'os.environ["CUDA_VISIBLE_DEVICES"] = ""\n' + sampcd
         if sys.argv[1] == "gpu":
             sampcd = '\nimport os\n' + 'os.environ["CUDA_VISIBLE_DEVICES"] = "0"\n' + sampcd
-        sampcd += '\nprint(' + '\"' + name + ' sample code is executed successfully!\")'
+        #sampcd += '\nprint(' + '\"' + name + ' sample code is executed successfully!\")'
 
         if len(sampcd_begins) > 1:
             tfname = name + "_example_" + str(y) + ".py"
@@ -193,7 +201,9 @@ def sampcd_extract_and_run(srccom, name, htype="def", hname=""):
         err = "".join(error.decode(encoding='utf-8'))
 
         if subprc.returncode != 0:
-            print("\nSample code error found in ", name, ":\n")
+            #print("\nSample code error found in ", name, ":\n")
+            print("Sample code error found in %s, %s, %s" %
+                  (api11, srcfile, name))
             sampcd_header_print(name, sampcd, htype, hname)
             print("subprocess return code: ", str(subprc.returncode))
             print("Error Raised from Sample Code ", name, " :\n")
@@ -362,7 +372,9 @@ def srccoms_extract(srcfile, wlist):
                               ", but it deserves.")
                         continue
                     else:
-                        if not sampcd_extract_and_run(fcombody, fn, "def", fn):
+                        api_fn = api_methods_dic["%s%s" % (srcfile_str, fn)]
+                        if not sampcd_extract_and_run(fcombody, fn, "def", fn,
+                                                      srcfile.name, api_fn):
                             process_result = False
 
             if srcls[i].startswith('class '):
@@ -379,8 +391,9 @@ def srccoms_extract(srcfile, wlist):
                     # class comment
                     classcom = single_defcom_extract(i, srcls, True)
                     if classcom != "":
-                        if not sampcd_extract_and_run(classcom, cn, "class",
-                                                      cn):
+                        api_cn = api_methods_dic["%s%s" % (srcfile_str, cn)]
+                        if not sampcd_extract_and_run(classcom, cn, "class", cn,
+                                                      srcfile.name, api_cn):
 
                             process_result = False
                     else:
@@ -430,8 +443,11 @@ def srccoms_extract(srcfile, wlist):
                                 thismtdcom = single_defcom_extract(0,
                                                                    thismethod)
                                 if thismtdcom != "":
+                                    api_mn = api_methods_dic["%s%s" % (
+                                        srcfile_str, name)]
                                     if not sampcd_extract_and_run(
-                                            thismtdcom, name, "method", name):
+                                            thismtdcom, name, "method", name,
+                                            srcfile.name, api_mn):
                                         process_result = False
 
     return process_result
@@ -458,10 +474,15 @@ def get_filenames():
     filenames = []
     global methods
     global whl_error
+    global api_methods_dic
     methods = []
     whl_error = []
+    api_methods_dic = {}
+    methods_rm = []
     get_incrementapi()
     API_spec = 'dev_pr_diff_api.spec'
+    exception_get_filename = []
+    exception_get_method = []
     with open(API_spec) as f:
         for line in f.readlines():
             api = line.replace('\n', '')
@@ -480,6 +501,7 @@ def get_filenames():
                 filename = ''
                 print("\nWARNING:----Exception in get api filename----\n")
                 print("\n" + api + ' module is ' + module + "\n")
+                exception_get_filename.append(api)
             if filename != '':
                 # rm contrib file
                 if filename.startswith(
@@ -501,12 +523,24 @@ def get_filenames():
                 print("\nWARNING:----Exception in get api methods----\n")
                 print("\n" + line + "\n")
                 print("\n" + api + ' method is None!!!' + "\n")
+                exception_get_method.append(api)
             for j in range(2, len(module.split('.'))):
                 method = method + '%s.' % module.split('.')[j]
             method = method + name
+            api_methods_dic[method] = api
             if method not in methods:
                 methods.append(method)
-    os.remove(API_spec)
+            if inspect.ismethod(eval(api)):
+                methods_rm.append(method)
+    print("api_methods_dic: ")
+    print(api_methods_dic)
+    print(len(api_methods_dic))
+    print('methods: %s' % methods)
+    print('------------------------------------')
+    print('methods_rm: %s' % methods_rm)
+    print('exception_get_filename: %s' % exception_get_filename)
+    print('exception_get_method: %s' % exception_get_method)
+    #os.remove(API_spec)
     return filenames
 
 
@@ -528,6 +562,7 @@ def get_incrementapi():
         return api_md5
 
     dev_api = get_api_md5('paddle/fluid/API_DEV.spec')
+    dev_api = []
     pr_api = get_api_md5('paddle/fluid/API_PR.spec')
     with open('dev_pr_diff_api.spec', 'w') as f:
         for key in pr_api:
@@ -564,7 +599,8 @@ def get_wlist():
     return wlist
 
 
-wlist = get_wlist()
+#wlist = get_wlist()
+wlist = []
 
 if len(sys.argv) < 2:
     print("Error: inadequate number of arguments")
@@ -575,8 +611,9 @@ if len(sys.argv) < 2:
     sys.exit("lack arguments")
 else:
     if sys.argv[1] == "gpu":
-        for _gnw in gpu_not_white:
-            wlist.remove(_gnw)
+        pass
+        #for _gnw in gpu_not_white:
+        #    wlist.remove(_gnw)
     elif sys.argv[1] != "cpu":
         print("Unrecognized argument:'", sys.argv[1], "' , 'cpu' or 'gpu' is ",
               "desired\n")
@@ -587,6 +624,8 @@ else:
         os.mkdir("./samplecode_temp")
     cpus = multiprocessing.cpu_count()
     filenames = get_filenames()
+    print("ALL FILE: %s" % filenames)
+
     if len(filenames) == 0 and len(whl_error) == 0:
         print("-----API_PR.spec is the same as API_DEV.spec-----")
         exit(0)
