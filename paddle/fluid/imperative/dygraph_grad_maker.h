@@ -281,6 +281,10 @@ class TracedGradOp {
     return op_->Attr<T>(name);
   }
 
+  void SetOrderedInputNames() { op_->SetInnerOpInputNames(); }
+
+  void SetOrderedOutputNames() { op_->SetInnerOpOutputNames(); }
+
  private:
   template <TracedVarRole kRole>
   static std::vector<std::shared_ptr<VariableWrapper>> ToVarWrapperList(

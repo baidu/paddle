@@ -103,5 +103,9 @@ def get_all_ops_desc():
 
 
 all_op_protos_dict = get_all_ops_desc()
-result = json.dumps(all_op_protos_dict)
+result = json.dumps(
+    all_op_protos_dict,
+    sort_keys=True,
+    indent=2,
+    separators=(', ', ': '), )
 print(result)

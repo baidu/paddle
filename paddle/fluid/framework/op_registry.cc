@@ -21,12 +21,16 @@ namespace framework {
 
 std::unique_ptr<OperatorBase> OpRegistry::CreateOp(
     const std::string& type, const VariableNameMap& inputs,
-    const VariableNameMap& outputs, AttributeMap attrs, bool attr_check) {
+    const VariableNameMap& outputs, AttributeMap attrs,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names, bool attr_check) {
   auto& info = OpInfoMap::Instance().Get(type);
   if (attr_check && info.Checker() != nullptr) {
     info.Checker()->Check(&attrs);
   }
   auto op = info.Creator()(type, inputs, outputs, attrs);
+  op->SetOrderedInputNames(input_names);
+  op->SetOrderedOutputNames(output_names);
   return std::unique_ptr<OperatorBase>(op);
 }
 
@@ -45,7 +49,8 @@ static VariableNameMap ConvertOpDescVarsToVarNameMap(
 }
 
 std::unique_ptr<OperatorBase> OpRegistry::CreateOp(
-    const proto::OpDesc& op_desc) {
+    const proto::OpDesc& op_desc, const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names) {
   VLOG(1) << "CreateOp directly from OpDesc is deprecated. It should only be"
              "used in unit tests. Use CreateOp(const OpDesc& op_desc) "
              "instead.";
@@ -56,12 +61,18 @@ std::unique_ptr<OperatorBase> OpRegistry::CreateOp(
     attrs[attr.name()] = GetAttrValue(attr);
   }
 
-  return CreateOp(op_desc.type(), inputs, outputs, attrs);
+  return CreateOp(op_desc.type(), inputs, outputs, attrs, input_names,
+                  output_names);
 }
 
 std::unique_ptr<OperatorBase> OpRegistry::CreateOp(const OpDesc& op_desc) {
   return CreateOp(op_desc.Type(), op_desc.Inputs(), op_desc.Outputs(),
-                  op_desc.GetAttrMap());
+                  op_desc.GetAttrMap(), op_desc.OrderedInputNames(),
+                  op_desc.OrderedOutputNames());
+}
+
+std::unique_ptr<OperatorBase> OpRegistry::CreateOp(const std::string& type) {
+  return CreateOp(type, {}, {}, {}, {}, {}, false);
 }
 
 }  // namespace framework

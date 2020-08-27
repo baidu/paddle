@@ -18,7 +18,9 @@ limitations under the License. */
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/attribute.h"
+#include "paddle/fluid/framework/op_info.h"
 #include "paddle/fluid/framework/type_defs.h"
 #include "paddle/fluid/framework/var_desc.h"
 
@@ -27,6 +29,13 @@ namespace framework {
 
 class BlockDesc;
 class ProgramDesc;
+
+// If an op's OpInfo has proto, it is a forward op; otherwise, it is a grad op
+static inline bool IsOpInfoHasProto(std::string type) {
+  auto &op_proto = paddle::framework::OpInfoMap::Instance().Get(type).proto_;
+  return op_proto != nullptr;
+}
+
 class OpDesc {
  public:
   OpDesc() {}
@@ -46,7 +55,10 @@ class OpDesc {
 
   std::string Type() const { return desc_.type(); }
 
-  void SetType(const std::string &type) { desc_.set_type(type); }
+  void SetType(const std::string &type) {
+    desc_.set_type(type);
+    InitOrderedInputOutputNamesForForwardOp();
+  }
 
   const std::vector<std::string> &Input(const std::string &name) const;
 
@@ -138,6 +150,50 @@ class OpDesc {
 
   const BlockDesc *Block() const { return this->block_; }
 
+  const std::vector<std::string> &OrderedInputNames() const {
+    return input_names_;
+  }
+
+  const std::vector<std::string> &OrderedOutputNames() const {
+    return output_names_;
+  }
+
+  void InitOrderedInputOutputNamesForForwardOp() {
+    if (IsOpInfoHasProto(Type())) {
+      auto &op_proto =
+          paddle::framework::OpInfoMap::Instance().Get(Type()).proto_;
+      if (input_names_.empty()) {
+        for (auto &in : op_proto->inputs()) {
+          input_names_.emplace_back(in.name());
+        }
+      }
+      if (output_names_.empty()) {
+        for (auto &out : op_proto->outputs()) {
+          output_names_.emplace_back(out.name());
+        }
+      }
+    }
+  }
+
+  std::string GetInputNameByIdx(size_t idx) const {
+    PADDLE_ENFORCE_LT(idx, input_names_.size(),
+                      platform::errors::OutOfRange(
+                          "The index should be less than the size of inputs of "
+                          "operator %s, but got index is %d and size is %d",
+                          Type(), idx, input_names_.size()));
+    return input_names_[idx];
+  }
+
+  std::string GetOutputNameByIdx(size_t idx) const {
+    PADDLE_ENFORCE_LT(
+        idx, output_names_.size(),
+        platform::errors::OutOfRange(
+            "The index should be less than the size of outputs of "
+            "operator %s, but got index is %d and size is %d",
+            Type(), idx, output_names_.size()));
+    return output_names_[idx];
+  }
+
  private:
   template <typename MapType>
   static std::vector<typename MapType::key_type> MapKeys(const MapType &map) {
@@ -155,6 +211,9 @@ class OpDesc {
   VariableNameMap inputs_;
   // output arg name => output variable names
   VariableNameMap outputs_;
+  // keep input/output order, so we can get name by idx
+  std::vector<std::string> input_names_;
+  std::vector<std::string> output_names_;
   AttributeMap attrs_;
 
   // need_update_ indicate there some local changes not be synchronized. If

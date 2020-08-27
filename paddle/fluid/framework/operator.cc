@@ -343,13 +343,14 @@ OperatorBase::OperatorBase(const std::string& type,
       // NOTE(zjl): why op_info may be nullptr?
       info_(OpInfoMap::Instance().GetNullable(type)) {
   // In dygraph mode, all the OperatorBase will be constructed by function:
-  // framework::OpRegistry::CreateOp(type, {}, {}, {}, false).
+  // framework::OpRegistry::CreateOp(type, {}, {}, {}, false, {}, {}).
   // Inputs, outputs and attrs will be set to empty map
   // to improve the execution efficiency of dygraph.
   if (inputs_.size() > 0 || outputs_.size() > 0) {
     GenerateTemporaryNames();
     CheckAllInputOutputSet();
   }
+  InitOrderedInputOutputNamesForForwardOp();
 }
 
 std::vector<std::string> OperatorBase::InputVars() const {
@@ -413,6 +414,24 @@ void OperatorBase::GenerateTemporaryNames() {
         output_name += type_;
         output_name += "@";
         output_name += std::to_string(gUniqId.fetch_add(1));
+      }
+    }
+  }
+}
+
+void OperatorBase::InitOrderedInputOutputNamesForForwardOp() {
+  if (info_) {
+    auto op_proto = info_->proto_;
+    if (op_proto) {
+      if (input_names_.empty()) {
+        for (auto& in : op_proto->inputs()) {
+          input_names_.emplace_back(in.name());
+        }
+      }
+      if (output_names_.empty()) {
+        for (auto& out : op_proto->outputs()) {
+          output_names_.emplace_back(out.name());
+        }
       }
     }
   }
@@ -618,26 +637,11 @@ class RuntimeInferShapeContext : public InferShapeContext {
   }
 
   std::string GetInputNameByIdx(size_t idx) const override {
-    auto& op_proto =
-        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
-    PADDLE_ENFORCE_LT(idx, op_proto->inputs().size(),
-                      platform::errors::OutOfRange(
-                          "The index should be less than the size of inputs of "
-                          "operator %s, but got index is %d and size is %d",
-                          op_.Type(), idx, op_proto->inputs().size()));
-    return op_proto->inputs()[idx].name();
+    return op_.GetInputNameByIdx(idx);
   }
 
   std::string GetOutputNameByIdx(size_t idx) const override {
-    auto& op_proto =
-        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
-    PADDLE_ENFORCE_LT(
-        idx, op_proto->outputs().size(),
-        platform::errors::OutOfRange(
-            "The index should be less than the size of outputs of "
-            "operator %s, but got index is %d and size is %d",
-            op_.Type(), idx, op_proto->outputs().size()));
-    return op_proto->outputs()[idx].name();
+    return op_.GetOutputNameByIdx(idx);
   }
 
   void ShareDim(const std::string& in, const std::string& out, size_t i = 0,

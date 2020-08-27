@@ -54,26 +54,11 @@ class CompileTimeInferShapeContext : public InferShapeContext {
   std::vector<std::string> Outputs(const std::string &name) const override;
 
   std::string GetInputNameByIdx(size_t idx) const override {
-    auto &op_proto =
-        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
-    PADDLE_ENFORCE_LT(idx, op_proto->inputs().size(),
-                      platform::errors::OutOfRange(
-                          "The index should be less than the size of inputs of "
-                          "operator %s, but got index is %d and size is %d",
-                          op_.Type(), idx, op_proto->inputs().size()));
-    return op_proto->inputs()[idx].name();
+    return op_.GetInputNameByIdx(idx);
   }
 
   std::string GetOutputNameByIdx(size_t idx) const override {
-    auto &op_proto =
-        paddle::framework::OpInfoMap::Instance().Get(op_.Type()).proto_;
-    PADDLE_ENFORCE_LT(
-        idx, op_proto->outputs().size(),
-        platform::errors::OutOfRange(
-            "The index should be less than the size of outputs of "
-            "operator %s, but got index is %d and size is %d",
-            op_.Type(), idx, op_proto->outputs().size()));
-    return op_proto->outputs()[idx].name();
+    return op_.GetOutputNameByIdx(idx);
   }
 
   void ShareDim(const std::string &in, const std::string &out, size_t i = 0,
@@ -346,6 +331,7 @@ OpDesc::OpDesc(const std::string &type, const VariableNameMap &inputs,
   outputs_ = outputs;
   attrs_ = attrs;
   need_update_ = true;
+  InitOrderedInputOutputNamesForForwardOp();
   block_ = nullptr;
 }
 
@@ -360,6 +346,8 @@ void OpDesc::CopyFrom(const OpDesc &op_desc) {
   inputs_ = op_desc.inputs_;
   outputs_ = op_desc.outputs_;
   attrs_ = op_desc.attrs_;
+  input_names_ = op_desc.input_names_;
+  output_names_ = op_desc.output_names_;
   need_update_ = true;
 }
 
@@ -398,6 +386,7 @@ OpDesc::OpDesc(const proto::OpDesc &desc, BlockDesc *block)
     }
   }
   this->block_ = block;
+  InitOrderedInputOutputNamesForForwardOp();
 }
 
 proto::OpDesc *OpDesc::Proto() {
@@ -426,6 +415,11 @@ void OpDesc::SetInput(const std::string &param_name,
                       const std::vector<std::string> &args) {
   need_update_ = true;
   inputs_[param_name] = args;
+  // Only add input_names_ for grad op
+  // For forward op, use the input names in its proto directly
+  if (!IsOpInfoHasProto(Type())) {
+    input_names_.emplace_back(param_name);
+  }
 }
 
 const std::vector<std::string> &OpDesc::Output(const std::string &name) const {
@@ -453,6 +447,11 @@ void OpDesc::SetOutput(const std::string &param_name,
                        const std::vector<std::string> &args) {
   need_update_ = true;
   this->outputs_[param_name] = args;
+  // Only add output_names_ for grad op
+  // For forward op, use the output names in its proto directly
+  if (!IsOpInfoHasProto(Type())) {
+    output_names_.emplace_back(param_name);
+  }
 }
 
 bool OpDesc::HasProtoAttr(const std::string &name) const {

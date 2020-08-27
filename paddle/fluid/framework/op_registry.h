@@ -23,6 +23,7 @@ limitations under the License. */
 #include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #define GLOG_NO_ABBREVIATED_SEVERITIES  // msvc conflict logging with windows.h
 #include "glog/logging.h"               // For VLOG()
@@ -90,15 +91,20 @@ class OpRegistry {
    *            attr_check is set to false, otherwise it will be failed
    *            when check function called.
    */
-  static std::unique_ptr<OperatorBase> CreateOp(const std::string& type,
-                                                const VariableNameMap& inputs,
-                                                const VariableNameMap& outputs,
-                                                AttributeMap attrs,
-                                                bool attr_check = true);
+  static std::unique_ptr<OperatorBase> CreateOp(
+      const std::string& type, const VariableNameMap& inputs,
+      const VariableNameMap& outputs, AttributeMap attrs,
+      const std::vector<std::string>& input_names = {},
+      const std::vector<std::string>& output_names = {},
+      bool attr_check = true);
 
-  static std::unique_ptr<OperatorBase> CreateOp(const proto::OpDesc& op_desc);
+  static std::unique_ptr<OperatorBase> CreateOp(
+      const proto::OpDesc& op_desc,
+      const std::vector<std::string>& input_names = {},
+      const std::vector<std::string>& output_names = {});
 
   static std::unique_ptr<OperatorBase> CreateOp(const OpDesc& op_desc);
+  static std::unique_ptr<OperatorBase> CreateOp(const std::string& type);
 };
 
 template <typename PlaceType, bool at_end, size_t I, typename... KernelType>

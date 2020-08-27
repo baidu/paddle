@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "paddle/fluid/imperative/tracer.h"
+
 #include <set>
 #include <unordered_set>
 #include <utility>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/imperative/amp_auto_cast.h"
 #include "paddle/fluid/imperative/op_base.h"
@@ -47,7 +49,7 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
                      const NameVarBaseMap& outs, framework::AttributeMap attrs,
                      const platform::Place& place, bool trace_backward) {
   VLOG(1) << "Trace Op: " << type;
-  auto op = framework::OpRegistry::CreateOp(type, {}, {}, {}, false);
+  auto op = framework::OpRegistry::CreateOp(type);
   const auto& op_info = op->Info();
   auto* attr_checker = op_info.Checker();
   if (attr_checker) {

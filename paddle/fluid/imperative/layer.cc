@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include "paddle/fluid/imperative/layer.h"
+
 #include <algorithm>
 #include <queue>
 #include <utility>
+
 #include "paddle/fluid/framework/framework.pb.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/variable_helper.h"
@@ -279,7 +281,8 @@ std::shared_ptr<VarBase> VarBase::NewVarBase(const platform::Place& dst_place,
 }
 
 void OpBase::SetType(const std::string& type) {
-  op_ = framework::OpRegistry::CreateOp(type, {}, {}, {}, false);
+  op_ = framework::OpRegistry::CreateOp(type);
+  InitOrderedInputOutputNamesForForwardOp();
 }
 
 void OpBase::ClearBackwardTrace() {
@@ -298,6 +301,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
       op_kernel, platform::errors::PermissionDenied(
                      "Only support operator with kernel in Dygraph mode."));
   auto& info = op.Info();
+
   if (info.infer_var_type_) {
     RuntimeInferVarTypeContext<VarType> infer_var_type_ctx(ins, outs, attrs);
     info.infer_var_type_(&infer_var_type_ctx);

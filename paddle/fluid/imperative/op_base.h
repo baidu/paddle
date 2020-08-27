@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/type_defs.h"
 #include "paddle/fluid/imperative/type_defs.h"
 #include "paddle/fluid/imperative/variable_wrapper.h"
@@ -26,6 +27,12 @@
 
 namespace paddle {
 namespace imperative {
+
+// If an op's OpInfo has proto, it is a forward op; otherwise, it is a grad op
+static inline bool IsOpInfoHasProto(std::string type) {
+  auto& op_proto = paddle::framework::OpInfoMap::Instance().Get(type).proto_;
+  return op_proto != nullptr;
+}
 
 // TODO(zjl): to support py_func layer
 class OpBase {
@@ -62,6 +69,22 @@ class OpBase {
     return *op_;
   }
 
+  void SetInnerOpInputNames() const {
+    PADDLE_ENFORCE_NOT_NULL(
+        op_, platform::errors::PreconditionNotMet(
+                 "OpBase::SetInnerOpInputNames() should be called after "
+                 "OpBase::SetType() is called"));
+    return op_->SetOrderedInputNames(input_names_);
+  }
+
+  void SetInnerOpOutputNames() const {
+    PADDLE_ENFORCE_NOT_NULL(
+        op_, platform::errors::PreconditionNotMet(
+                 "OpBase::SetInnerOpInputNames() should be called after "
+                 "OpBase::SetType() is called"));
+    return op_->SetOrderedOutputNames(output_names_);
+  }
+
   void ClearBackwardTrace();
 
   NameVarMap<VariableWrapper>* GetMutableOutsMap() { return &outs_; }
@@ -86,6 +109,9 @@ class OpBase {
     auto& in_vars = ins_[name];
     *(in_vars.MutableVarList()) = std::move(vars);
     in_vars.SetIsGrad(is_grad);
+    if (!IsOpInfoHasProto(Type())) {
+      input_names_.emplace_back(name);
+    }
   }
 
   void SetOutput(const std::string& name, VariableWrapperList vars,
@@ -93,6 +119,34 @@ class OpBase {
     auto& out_vars = outs_[name];
     *(out_vars.MutableVarList()) = std::move(vars);
     out_vars.SetIsGrad(is_grad);
+    if (!IsOpInfoHasProto(Type())) {
+      output_names_.emplace_back(name);
+    }
+  }
+
+  const std::vector<std::string>& OrderedInputNames() const {
+    return input_names_;
+  }
+
+  const std::vector<std::string>& OrderedOutputNames() const {
+    return output_names_;
+  }
+
+  void InitOrderedInputOutputNamesForForwardOp() {
+    auto& op_proto =
+        paddle::framework::OpInfoMap::Instance().Get(Type()).proto_;
+    if (op_proto) {
+      if (input_names_.empty()) {
+        for (auto& in : op_proto->inputs()) {
+          input_names_.emplace_back(in.name());
+        }
+      }
+      if (output_names_.empty()) {
+        for (auto& out : op_proto->outputs()) {
+          output_names_.emplace_back(out.name());
+        }
+      }
+    }
   }
 
   void SetAttrMap(const framework::AttributeMap& attrs) { attrs_ = attrs; }
@@ -177,6 +231,8 @@ class OpBase {
   size_t id_{-1UL};
 
   std::vector<std::function<void()>> backward_hooks_;
+  std::vector<std::string> input_names_;
+  std::vector<std::string> output_names_;
 };
 
 class GradOpNode {

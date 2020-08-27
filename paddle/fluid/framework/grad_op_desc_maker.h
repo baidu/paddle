@@ -20,6 +20,7 @@ limitations under the License. */
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/op_call_stack.h"
 #include "paddle/fluid/framework/op_desc.h"
 #include "paddle/fluid/framework/operator.h"
@@ -225,6 +226,8 @@ class SingleGradOpMaker<imperative::OpBase>
       imperative::TracedGradOp traced_grad_op(node);
       try {
         this->Apply(&traced_grad_op);
+        traced_grad_op.SetOrderedInputNames();
+        traced_grad_op.SetOrderedOutputNames();
       } catch (platform::EnforceNotMet& exception) {
         framework::AppendErrorOpHint(traced_grad_op.Type(), &exception);
         throw std::move(exception);
