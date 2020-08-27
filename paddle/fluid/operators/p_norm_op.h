@@ -20,15 +20,19 @@ namespace paddle {
 namespace operators {
 
 inline void GetDims(const framework::DDim& dim, int axis, int* pre, int* n,
-                    int* post) {
+                    int* post, bool asvector) {
   *pre = 1;
   *post = 1;
   *n = dim[axis];
-  for (int i = 0; i < axis; ++i) {
-    (*pre) *= dim[i];
-  }
-  for (int i = axis + 1; i < dim.size(); ++i) {
-    (*post) *= dim[i];
+  if (asvector) {
+    *n = product(dim);
+  } else {
+    for (int i = 0; i < axis; ++i) {
+      (*pre) *= dim[i];
+    }
+    for (int i = axis + 1; i < dim.size(); ++i) {
+      (*post) *= dim[i];
+    }
   }
 }
 
@@ -43,9 +47,10 @@ class PnormKernel : public framework::OpKernel<T> {
     auto xdim = in_x->dims();
     float porder = ctx.Attr<float>("porder");
     int axis = ctx.Attr<int>("axis");
+    bool asvector = ctx.Attr<bool>("asvector");
     if (axis < 0) axis = xdim.size() + axis;
     int pre, n, post;
-    GetDims(xdim, axis, &pre, &n, &post);
+    GetDims(xdim, axis, &pre, &n, &post, asvector);
 
     auto* place = ctx.template device_context<DeviceContext>().eigen_device();
 
@@ -91,9 +96,10 @@ class PnormGradKernel : public framework::OpKernel<T> {
     float porder = ctx.Attr<float>("porder");
 
     int axis = ctx.Attr<int>("axis");
+    bool asvector = ctx.Attr<bool>("asvector");
     if (axis < 0) axis = xdim.size() + axis;
     int pre, n, post;
-    GetDims(xdim, axis, &pre, &n, &post);
+    GetDims(xdim, axis, &pre, &n, &post, asvector);
     Eigen::DSizes<int, 3> shape(pre, n, post);
     Eigen::DSizes<int, 3> rshape(pre, 1, post);
 

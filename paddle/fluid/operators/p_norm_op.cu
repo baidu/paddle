@@ -129,9 +129,10 @@ class PnormCUDAKernel : public framework::OpKernel<T> {
     auto ndim = out_norm->dims();
     float porder = ctx.Attr<float>("porder");
     int axis = ctx.Attr<int>("axis");
+    bool asvector = ctx.Attr<bool>("asvector");
     if (axis < 0) axis = xdim.size() + axis;
     int pre, n, post;
-    GetDims(xdim, axis, &pre, &n, &post);
+    GetDims(xdim, axis, &pre, &n, &post, asvector);
 
     auto& dev_ctx = ctx.cuda_device_context();
 
@@ -230,9 +231,10 @@ class PnormGradCUDAKernel : public framework::OpKernel<T> {
     float porder = ctx.Attr<float>("porder");
     T eps = static_cast<T>(ctx.Attr<float>("epsilon"));
     int axis = ctx.Attr<int>("axis");
+    bool asvector = ctx.Attr<bool>("asvector");
     if (axis < 0) axis = xdim.size() + axis;
     int pre, n, post;
-    GetDims(xdim, axis, &pre, &n, &post);
+    GetDims(xdim, axis, &pre, &n, &post, asvector);
 
     auto& dev_ctx = ctx.cuda_device_context();
 

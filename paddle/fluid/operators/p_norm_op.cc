@@ -42,6 +42,11 @@ class PnormOpMaker : public framework::OpProtoAndCheckerMaker {
         "keepdim",
         "(bool, default false) Whether to keep the dimensions as the input.")
         .SetDefault(false);
+
+    AddAttr<bool>("asvector",
+                  "(bool, default false) as vector norm when axis is None and "
+                  "input is matrix, ")
+        .SetDefault(false);
     AddOutput("Out", "(Tensor) Output result tensor of p-norm");
     AddComment(R"DOC(
 Pnorm Operator.
@@ -96,10 +101,15 @@ class PnormOp : public framework::OperatorWithKernel {
                           "Current Input(X)'s shape is=[%s].",
                           axis, x_rank, x_dim));
 
-    if (axis < 0) axis = x_dim.size() + axis;
     std::vector<int> reduce_dims;
-    for (int i = 0; i < x_dim.size(); ++i) {
-      if (i != axis) reduce_dims.emplace_back(x_dim[i]);
+    bool asvector = ctx->Attrs().Get<bool>("asvector");
+    if (asvector) {
+      reduce_dims.emplace_back(1);
+    } else {
+      if (axis < 0) axis = x_dim.size() + axis;
+      for (int i = 0; i < x_dim.size(); ++i) {
+        if (i != axis) reduce_dims.emplace_back(x_dim[i]);
+      }
     }
     x_dim[axis] = 1;
 
