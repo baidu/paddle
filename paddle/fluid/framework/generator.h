@@ -27,9 +27,15 @@ limitations under the License. */
 namespace paddle {
 namespace framework {
 
+struct Generator;
+
+const std::shared_ptr<Generator>& getDefaultCUDAGenerator(
+    int64_t device_id = -1);
+
 struct GeneratorState {
   int64_t device = -1;
   uint64_t current_seed = 34342423252;
+  uint64_t thread_offset;
   std::mt19937_64 cpu_engine;
 };
 
@@ -65,6 +71,16 @@ struct Generator {
 
   uint64_t Random64();
 
+  void SetIsInitPyCUDA(bool);
+
+  bool GetIsInitPyCUDA() const;
+
+  std::pair<uint64_t, uint64_t> IncrementOffset(uint64_t total_numel,
+                                                uint64_t grid_size,
+                                                uint64_t block_size,
+                                                uint64_t engine_calls_num);
+  std::pair<uint64_t, uint64_t> IncrementOffset(uint64_t increament_offset);
+
   bool is_init_py = false;
 
   // CPU Generator singleton
@@ -87,6 +103,7 @@ struct Generator {
   static std::shared_ptr<Generator> gen_instance_;
   std::shared_ptr<GeneratorState> state_;
   mutable std::mutex mutex;
+  bool is_init_py_cuda_ = false;
 
   Generator(const Generator& other, const std::lock_guard<std::mutex>&)
       : state_(std::make_shared<GeneratorState>(*(other.state_))) {}

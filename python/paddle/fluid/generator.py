@@ -30,31 +30,58 @@ class Generator(object):
         if self.device == "CPU":
             self.generator = core.Generator()
             # self.generator.manual_seed(seed_in)
+        elif self.device == "CUDA":
+            self.cuda_generator = core.default_cuda_generator(-1)
+            self.cuda_generator.is_init_py_cuda = True
         else:
             raise ValueError(
                 "generator class with device %s does not exist, currently only support generator with device 'CPU' "
                 % device)
 
     def get_state(self):
-        return self.generator.get_state()
+        if self.device == "CUDA":
+            return self.cuda_generator.get_state()
+        else:
+            return self.generator.get_state()
 
     def set_state(self, state):
-        self.generator.set_state(state)
+        if self.device == "CUDA":
+            self.cuda_generator.set_state(state)
+        else:
+            self.generator.set_state(state)
 
     def manual_seed(self, seed):
-        self.generator.manual_seed(seed)
+        if self.device == "CUDA":
+            self.cuda_generator.manual_seed(seed)
+        else:
+            self.generator.manual_seed(seed)
 
     def seed(self):
-        return self.generator.seed()
+        if self.device == "CUDA":
+            return self.cuda_generator.seed()
+        else:
+            return self.generator.seed()
 
     def initial_seed(self):
-        return self.generator.initial_seed()
+        if self.device == "CUDA":
+            return self.cuda_generator.initial_seed()
+        else:
+            return self.generator.initial_seed()
 
     def random(self):
-        return self.generator.random()
+        if self.device == "CUDA":
+            return self.cuda_generator.random()
+        else:
+            return self.generator.random()
 
     def get_cpu_engine(self):
-        return self.generator.get_cpu_engine()
+        if self.device == "CUDA":
+            return self.cuda_generator.get_cpu_engine()
+        else:
+            return self.generator.get_cpu_engine()
 
     def set_cpu_engine(self, cpu_engine):
-        self.generator.set_cpu_engine(cpu_engine)
+        if self.device == "CUDA":
+            self.cuda_generator.set_cpu_engine(cpu_engine)
+        else:
+            self.generator.set_cpu_engine(cpu_engine)

@@ -18,6 +18,7 @@ limitations under the License. */
 #include <thrust/random.h>
 #include <thrust/transform.h>
 #include <string>
+#include "paddle/fluid/framework/generator.h"
 #include "paddle/fluid/memory/memcpy.h"
 #include "paddle/fluid/operators/dropout_op.h"
 #include "paddle/fluid/platform/dynload/curand.h"
@@ -96,6 +97,42 @@ __global__ void RandomGeneratorWithSeed(const size_t n, const int* seed,
   }
 }
 
+template <typename T, typename MaskType>
+__global__ void RandomGeneratorWithGenerator(const size_t n, uint64_t seed,
+                                             const float dropout_prob,
+                                             const T* src, MaskType* mask_data,
+                                             T* dst, bool is_upscale_in_train,
+                                             uint64_t increment) {
+  curandStatePhilox4_32_10_t state;
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  int step_size = 0;
+
+  MaskType mask;
+  T dest;
+  for (; idx < n; idx += blockDim.x * gridDim.x) {
+    T s = src[idx];
+    if (step_size == 0) {
+      curand_init(seed, idx, increment, &state);
+      step_size = blockDim.x * gridDim.x;
+    } else {
+      curand_init(seed, idx, increment, &state);
+    }
+    if (curand_uniform(&state) < dropout_prob) {
+      mask = 0;
+      dest = 0;
+    } else {
+      mask = 1;
+      if (is_upscale_in_train) {
+        dest = s / static_cast<T>(1.0f - dropout_prob);
+      } else {
+        dest = s;
+      }
+    }
+    mask_data[idx] = mask;
+    dst[idx] = dest;
+  }
+}
+
 // It seems that Eigen::Tensor::setRandom in GPU will SEGFAULT.
 // Use std::random and thrust::random(thrust is a std library in CUDA) to
 // implement uniform random.
@@ -134,6 +171,7 @@ class GPUDropoutKernel : public framework::OpKernel<T> {
 
       int threads = 512;
       int grid = (x_numel + threads - 1) / threads;
+
       if (seed && platform::is_gpu_place(seed->place())) {
         auto seed_gpu_data = seed->data<int>();
         RandomGeneratorWithSeed<T, uint8_t><<<grid, threads, 0, stream>>>(
@@ -150,9 +188,19 @@ class GPUDropoutKernel : public framework::OpKernel<T> {
             context.Attr<bool>("fix_seed") ? context.Attr<int>("seed") : rnd();
       }
 
-      RandomGenerator<T, uint8_t><<<grid, threads, 0, stream>>>(
-          size, seed_data, dropout_prob, x_data, mask_data, y_data,
-          upscale_in_train);
+      int64_t device_id = -1;
+      auto gen_cuda = framework::getDefaultCUDAGenerator(device_id);
+      auto seed_offset = gen_cuda->IncrementOffset(1);
+      if (gen_cuda->GetIsInitPyCUDA()) {
+        RandomGeneratorWithGenerator<T, uint8_t><<<grid, threads, 0, stream>>>(
+            size, seed_offset.first, dropout_prob, x_data, mask_data, y_data,
+            upscale_in_train, seed_offset.second);
+      } else {
+        RandomGenerator<T, uint8_t><<<grid, threads, 0, stream>>>(
+            size, seed_data, dropout_prob, x_data, mask_data, y_data,
+            upscale_in_train);
+      }
+
     } else {
       auto X = EigenMatrix<T>::Reshape(*x, 1);
       auto Y = EigenMatrix<T>::Reshape(*y, 1);

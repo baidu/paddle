@@ -29,11 +29,12 @@ namespace py = pybind11;
 
 namespace paddle {
 namespace pybind {
-void BindGenerator(py::module* m) {
-  py::class_<framework::GeneratorState>(*m, "GeneratorState", "");
-  py::class_<std::mt19937_64>(*m, "mt19937_64", "");
+void BindGenerator(py::module* m_ptr) {
+  auto& m = *m_ptr;
+  py::class_<framework::GeneratorState>(m, "GeneratorState", "");
+  py::class_<std::mt19937_64>(m, "mt19937_64", "");
   py::class_<framework::Generator, std::shared_ptr<framework::Generator>>(
-      *m, "Generator")
+      m, "Generator")
       .def(py::init([]() { return framework::Generator::GetInstanceX(); }),
            py::return_value_policy::reference)
       .def("get_state", &framework::Generator::GetState,
@@ -45,7 +46,10 @@ void BindGenerator(py::module* m) {
       .def("random", &framework::Generator::Random64)
       .def("get_cpu_engine", &framework::Generator::GetCPUEngine,
            py::return_value_policy::move)
-      .def("set_cpu_engine", &framework::Generator::SetCPUEngine);
+      .def("set_cpu_engine", &framework::Generator::SetCPUEngine)
+      .def_property("is_init_py_cuda", &framework::Generator::GetIsInitPyCUDA,
+                    &framework::Generator::SetIsInitPyCUDA);
+  m.def("default_cuda_generator", &framework::getDefaultCUDAGenerator);
 }  // end Generator
 }  // end namespace pybind
 }  // end namespace paddle
