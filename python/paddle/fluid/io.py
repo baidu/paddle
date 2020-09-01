@@ -40,6 +40,7 @@ from . import unique_name
 from .reader import *
 from . import core
 from .. import compat as cpt
+from .incubate.checkpoint import dataloader_auto_checkpoint as dacp
 
 batch = paddle.batch
 
@@ -285,6 +286,9 @@ def save_vars(executor,
         save_to_memory = True
 
     main_program = _get_valid_program(main_program)
+
+    if dacp._is_restoring(executor, main_program):
+        return
 
     if vars is None:
         return save_vars(
