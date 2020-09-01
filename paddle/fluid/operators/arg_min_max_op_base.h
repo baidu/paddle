@@ -70,6 +70,10 @@ struct VisitDataArgMinMaxFunctor {
     auto axis = ctx.Attr<int64_t>("axis");
     auto keepdims = ctx.Attr<bool>("keepdims");
     const bool& flatten = ctx.Attr<bool>("flatten");
+    // paddle do not have the scalar tensor, just return the shape [1] tensor
+    if (flatten) {
+      keepdims = true;
+    }
 
     // if flatten, will construct the new dims for the cacluate
     framework::DDim x_dims;
@@ -124,13 +128,13 @@ class ArgMinMaxKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto& dtype = ctx.Attr<int>("dtype");
     if (dtype < 0) {
-      framework::VisitDataType(
+      framework::VisitDataTypeInt(
           static_cast<framework::proto::VarType::Type>(
               framework::proto::VarType::INT64),
           VisitDataArgMinMaxFunctor<DeviceContext, T, EnumArgMinMaxValue>(ctx));
       return;
     }
-    framework::VisitDataType(
+    framework::VisitDataTypeInt(
         static_cast<framework::proto::VarType::Type>(dtype),
         VisitDataArgMinMaxFunctor<DeviceContext, T, EnumArgMinMaxValue>(ctx));
   }
@@ -153,6 +157,7 @@ class ArgMinMaxOp : public framework::OperatorWithKernel {
     int64_t axis = ctx->Attrs().Get<int64_t>("axis");
     bool keepdims = ctx->Attrs().Get<bool>("keepdims");
     const bool& flatten = ctx->Attrs().Get<bool>("flatten");
+    auto x_rank = x_dims.size();
 
     PADDLE_ENFORCE_GE(axis, -x_dims.size(),
                       platform::errors::InvalidArgument(
@@ -164,15 +169,32 @@ class ArgMinMaxOp : public framework::OperatorWithKernel {
         platform::errors::InvalidArgument(
             "'axis'(%d) must be less than Rank(X)(%d).", axis, x_dims.size()));
 
+    if (axis < 0) axis += x_rank;
+
+    // check the element num of sorted axis is not be larger than INT_MAX
+    if (ctx->IsRuntime()) {
+      const int& dtype = ctx->Attrs().Get<int>("dtype");
+      if (dtype == framework::proto::VarType::INT32) {
+        int64_t all_element_num = 0;
+        if (flatten) {
+          all_element_num = framework::product(x_dims);
+        } else {
+          all_element_num = x_dims[axis];
+        }
+        PADDLE_ENFORCE_LE(
+            all_element_num, INT_MAX,
+            "The element num of the argmin/argmax input at axis is "
+            "%d, is larger than int32 maximum value:%d, you must "
+            "set the dtype of argmin/argmax to 'int64'.",
+            all_element_num, INT_MAX);
+      }
+    }
+
     std::vector<int64_t> vec;
     if (flatten) {
       // if is flatten, will return the only on element
-      if (keepdims) {
-        vec.emplace_back(static_cast<int64_t>(1));
-      }
+      vec.emplace_back(static_cast<int64_t>(1));
     } else {
-      auto x_rank = x_dims.size();
-      if (axis < 0) axis += x_rank;
       for (int64_t i = 0; i < axis; i++) vec.emplace_back(x_dims[i]);
       if (keepdims) {
         vec.emplace_back(static_cast<int64_t>(1));
@@ -194,10 +216,15 @@ class BaseArgMinMaxOpMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("Out", "Output tensor.");
     AddAttr<int64_t>("axis", "The axis in which to compute the arg indics.");
     AddAttr<bool>("keepdims", "Keep the dim that to reduce.").SetDefault(false);
-    AddAttr<int>("dtype", "Keep the dim that to reduce.").SetDefault(-1);
     AddAttr<bool>("flatten",
                   "Flatten the input value, and search the min or max indices")
         .SetDefault(false);
+    AddAttr<int>("dtype",
+                 "(int, 3), the dtype of indices, the indices dtype must be "
+                 "int32, int64."
+                 "default dtype is int64, and proto value is 3.")
+        .SetDefault(3)
+        .InEnum({2, 3});
     AddComment(string::Sprintf(R"DOC(
       %s Operator.
 

@@ -50,6 +50,14 @@ class TopkV2Op : public framework::OperatorWithKernel {
       PADDLE_ENFORCE_GE(
           input_dims[axis], k,
           "input of topk op must have >= %d columns in axis of %d", k, axis);
+      const int& dtype = ctx->Attrs().Get<int>("dtype");
+      if (dtype == framework::proto::VarType::INT32) {
+        PADDLE_ENFORCE_LE(input_dims[axis], INT_MAX,
+                          "The element num at the topk axis in topk is "
+                          "%d, is larger than int32 maximum value:%d, you must "
+                          "set the dtype of topk to 'int64'.",
+                          input_dims[axis], INT_MAX);
+      }
     }
 
     framework::DDim dims = input_dims;
@@ -104,6 +112,12 @@ For matrices, this operator computes the top k entries in each row. )DOC");
     AddAttr<bool>("sorted",
                   "control flag whether to return elements in sorted order")
         .SetDefault(true);
+    AddAttr<int>("dtype",
+                 "(int, 3), the dtype of indices, the indices dtype must be "
+                 "int32, int64."
+                 "default dtype is int64, and proto value is 3.")
+        .SetDefault(3)
+        .InEnum({2, 3});
   }
 };
 

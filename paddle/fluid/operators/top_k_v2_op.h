@@ -47,7 +47,7 @@ inline void GetDims(const framework::DDim& dim, int axis, int* pre, int* n,
 }
 
 template <typename T, typename Type>
-static void FullTopK(Type input_height, Type input_width, int input_dim,
+static void FullTopK(int64_t input_height, int64_t input_width, int input_dim,
                      const framework::Tensor* input, T* t_out, Type* t_indices,
                      const int& k, const bool& largest, const bool& sorted) {
   // when the k is small, will the partial sort
@@ -57,18 +57,20 @@ static void FullTopK(Type input_height, Type input_width, int input_dim,
 #pragma omp parallel for
 #endif
   // Eigen::DSizes<int, 2> flat2dims(input_height, input_width);
-  for (Type i = 0; i < input_height; ++i) {
+  for (int64_t i = 0; i < input_height; ++i) {
     std::vector<std::pair<T, Type>> col_vec;
     col_vec.reserve(input_width);
     if (input_dim == 1) {
       auto e_input = EigenVector<T>::Flatten(*input);
-      for (Type j = 0; j < input_width; ++j) {
-        col_vec.emplace_back(std::pair<T, Type>(e_input(j), j));
+      for (int64_t j = 0; j < input_width; ++j) {
+        col_vec.emplace_back(
+            std::pair<T, Type>(e_input(j), static_cast<Type>(j)));
       }
     } else {
       auto e_input = EigenMatrix<T>::Reshape(*input, input_dim - 1);
-      for (Type j = 0; j < input_width; ++j) {
-        col_vec.emplace_back(std::pair<T, Type>(e_input(i, j), j));
+      for (int64_t j = 0; j < input_width; ++j) {
+        col_vec.emplace_back(
+            std::pair<T, Type>(e_input(i, j), static_cast<Type>(j)));
       }
     }
     if (partial_sort_flag) {
@@ -125,7 +127,7 @@ static void FullTopK(Type input_height, Type input_width, int input_dim,
         }
       }
     }
-    for (Type j = 0; j < k; ++j) {
+    for (int j = 0; j < k; ++j) {
       t_out[i * k + j] = col_vec[j].first;
       t_indices[i * k + j] = col_vec[j].second;
     }
@@ -133,8 +135,9 @@ static void FullTopK(Type input_height, Type input_width, int input_dim,
 }
 
 template <typename T, typename Type>
-static void FullTopKAssign(const Type& input_height, const Type& input_width,
-                           const int& input_dim, const framework::Tensor* input,
+static void FullTopKAssign(const int64_t& input_height,
+                           const int64_t& input_width, const int& input_dim,
+                           const framework::Tensor* input,
                            const framework::Tensor* indices, T* output_data,
                            const int& k) {
 #ifdef PADDLE_WITH_MKLML
@@ -145,23 +148,27 @@ static void FullTopKAssign(const Type& input_height, const Type& input_width,
       auto e_input = EigenVector<T>::Flatten(*input);
       auto e_indices = EigenVector<Type>::Flatten(*indices);
       for (Type j = 0; j < k; ++j) {
-        output_data[i * input_width + e_indices(j)] = e_input(j);
+        output_data[i * input_width + static_cast<int64_t>(e_indices(j))] =
+            e_input(j);
       }
     } else {
       auto e_input = EigenMatrix<T>::Reshape(*input, input_dim - 1);
       auto e_indices = EigenMatrix<Type>::Reshape(*indices, input_dim - 1);
-      for (Type j = 0; j < k; ++j) {
-        output_data[i * input_width + e_indices(i, j)] = e_input(i, j);
+      for (int64_t j = 0; j < k; ++j) {
+        output_data[i * input_width + static_cast<int64_t>(e_indices(i, j))] =
+            e_input(i, j);
       }
     }
   }
 }
 
-template <typename DeviceContext, typename T>
-class TopkV2Kernel : public framework::OpKernel<T> {
- public:
-  void Compute(const framework::ExecutionContext& context) const override {
-    // Get the top k elements of each row of input tensor
+template <typename T>
+struct TopKV2Functor {
+  const framework::ExecutionContext& context;
+  explicit TopKV2Functor(const framework::ExecutionContext& context)
+      : context(context) {}
+  template <typename IndType>
+  void apply() {
     auto* input = context.Input<Tensor>("X");
     auto* output = context.Output<Tensor>("Out");
     auto* indices = context.Output<Tensor>("Indices");
@@ -186,13 +193,13 @@ class TopkV2Kernel : public framework::OpKernel<T> {
     }
 
     T* output_data = output->mutable_data<T>(context.GetPlace());
-    int64_t* indices_data = indices->mutable_data<int64_t>(context.GetPlace());
+    IndType* indices_data = indices->mutable_data<IndType>(context.GetPlace());
     const auto& out_dims = output->dims();
     if (axis + 1 == in_dims.size()) {
       const int64_t& input_height = framework::product(
           framework::slice_ddim(in_dims, 0, in_dims.size() - 1));
       const int64_t& input_width = in_dims[in_dims.size() - 1];
-      FullTopK<T, int64_t>(input_height, input_width, in_dims.size(), input,
+      FullTopK<T, IndType>(input_height, input_width, in_dims.size(), input,
                            output_data, indices_data, k, largest, sorted);
     } else {
       // if the topk dims is not last dim, will tranpose and do topk
@@ -235,24 +242,38 @@ class TopkV2Kernel : public framework::OpKernel<T> {
       T* t_out = tmp_out.mutable_data<T>(trans_out_dims, context.GetPlace());
       Tensor tmp_indices;
       auto* t_ind =
-          tmp_indices.mutable_data<int64_t>(trans_out_dims, context.GetPlace());
+          tmp_indices.mutable_data<IndType>(trans_out_dims, context.GetPlace());
 
       // get the TopK value
-      FullTopK<T, int64_t>(input_height, input_width, in_dims.size(),
+      FullTopK<T, IndType>(input_height, input_width, in_dims.size(),
                            &trans_inp, t_out, t_ind, k, largest, sorted);
       // transpose back
-      TransCompute<platform::CPUDeviceContext, int64_t>(
+      TransCompute<platform::CPUDeviceContext, IndType>(
           ndims, dev_context, tmp_indices, indices, trans);
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, tmp_out,
                                                   output, trans);
     }
   }
 };
-
 template <typename DeviceContext, typename T>
-class TopkV2GradKernel : public framework::OpKernel<T> {
+class TopkV2Kernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
+    // Get the top k elements of each row of input tensor
+    const int& dtype = context.Attr<int>("dtype");
+    framework::VisitDataTypeInt(
+        static_cast<framework::proto::VarType::Type>(dtype),
+        TopKV2Functor<T>(context));
+  }
+};
+
+template <typename T>
+struct TopkV2GradFunctor {
+  const framework::ExecutionContext& context;
+  explicit TopkV2GradFunctor(const framework::ExecutionContext& context)
+      : context(context) {}
+  template <typename IndType>
+  void apply() {
     auto* x = context.Input<Tensor>("X");
     auto* out_grad = context.Input<Tensor>(framework::GradVarName("Out"));
     auto* indices = context.Input<Tensor>("Indices");
@@ -278,8 +299,8 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
       // init the output grad with 0, because some input elements has no grad
       memset(x_grad_data, 0, x_grad->numel() * sizeof(T));
       // Assign the output_grad to input_grad
-      FullTopKAssign(input_height, input_width, in_dims.size(), out_grad,
-                     indices, x_grad_data, k);
+      FullTopKAssign<T, IndType>(input_height, input_width, in_dims.size(),
+                                 out_grad, indices, x_grad_data, k);
     } else {
       // can not assign grad to input_grad, must do the transpose
       std::vector<int> trans;
@@ -301,7 +322,7 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
       Tensor trans_dO;
       trans_dO.mutable_data<T>(trans_dims, context.GetPlace());
       Tensor trans_ind;
-      trans_ind.mutable_data<int64_t>(trans_dims, context.GetPlace());
+      trans_ind.mutable_data<IndType>(trans_dims, context.GetPlace());
       int ndims = trans.size();
       auto& dev_context =
           context.template device_context<platform::CPUDeviceContext>();
@@ -309,7 +330,7 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
       // Do transpose
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, *out_grad,
                                                   &trans_dO, trans);
-      TransCompute<platform::CPUDeviceContext, int64_t>(
+      TransCompute<platform::CPUDeviceContext, IndType>(
           ndims, dev_context, *indices, &trans_ind, trans);
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_in_dims, 0, trans_in_dims.size() - 1));
@@ -320,13 +341,23 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
       T* t_out = tmp_out.mutable_data<T>(trans_in_dims, context.GetPlace());
       memset(t_out, 0, x_grad->numel() * sizeof(T));
 
-      FullTopKAssign<T, int64_t>(input_height, input_width, in_dims.size(),
+      FullTopKAssign<T, IndType>(input_height, input_width, in_dims.size(),
                                  &trans_dO, &trans_ind, t_out, k);
 
       // Transpose back
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, tmp_out,
                                                   x_grad, trans);
     }
+  }
+};
+template <typename DeviceContext, typename T>
+class TopkV2GradKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& context) const override {
+    const int& dtype = context.Attr<int>("dtype");
+    framework::VisitDataTypeInt(
+        static_cast<framework::proto::VarType::Type>(dtype),
+        TopkV2GradFunctor<T>(context));
   }
 };
 

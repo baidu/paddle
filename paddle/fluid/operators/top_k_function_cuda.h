@@ -69,29 +69,29 @@ inline static int GetDesiredBlockDim(int dim) {
   }
 }
 
-template <typename T>
-__global__ void InitIndex(T* indices, T num_rows, T num_cols) {
+template <typename T, typename IndType = int64_t>
+__global__ void InitIndex(T* indices, int64_t num_rows, int64_t num_cols) {
   int col_id = threadIdx.x;
   int row_id = blockIdx.x;
 
   for (int64_t j = row_id; j < num_rows; j += gridDim.x) {
     for (int64_t i = col_id; i < num_cols; i += blockDim.x) {
-      indices[j * num_cols + i] = i;
+      indices[j * num_cols + i] = static_cast<IndType>(i);
     }
   }
 }
 
-template <typename T>
+template <typename T, typename IndType = int64_t>
 struct Pair {
   __device__ __forceinline__ Pair() {}
-  __device__ __forceinline__ Pair(T value, int64_t id) : v(value), id(id) {}
+  __device__ __forceinline__ Pair(T value, IndType id) : v(value), id(id) {}
 
-  __device__ __forceinline__ void set(T value, int64_t id) {
+  __device__ __forceinline__ void set(T value, IndType id) {
     v = value;
     id = id;
   }
 
-  __device__ __forceinline__ void operator=(const Pair<T>& in) {
+  __device__ __forceinline__ void operator=(const Pair<T, IndType>& in) {
     v = in.v;
     id = in.id;
   }
@@ -103,11 +103,11 @@ struct Pair {
   __device__ __forceinline__ bool operator>(const T value) const {
     return (v > value);
   }
-  __device__ __forceinline__ bool operator<(const Pair<T>& in) const {
+  __device__ __forceinline__ bool operator<(const Pair<T, IndType>& in) const {
     return (v < in.v) || ((v == in.v) && (id > in.id));
   }
 
-  __device__ __forceinline__ bool operator>(const Pair<T>& in) const {
+  __device__ __forceinline__ bool operator>(const Pair<T, IndType>& in) const {
     return (v > in.v) || ((v == in.v) && (id < in.id));
   }
 
@@ -115,9 +115,10 @@ struct Pair {
   int64_t id;
 };
 
-template <typename T>
-__device__ __forceinline__ void AddTo(Pair<T> topk[], const Pair<T>& p,
-                                      int beam_size, const bool& largest) {
+template <typename T, typename IndType = int64_t>
+__device__ __forceinline__ void AddTo(Pair<T, IndType> topk[],
+                                      const Pair<T, IndType>& p, int beam_size,
+                                      const bool& largest) {
   for (int k = beam_size - 2; k >= 0; k--) {
     if (largest) {
       if (topk[k] < p) {
@@ -138,19 +139,19 @@ __device__ __forceinline__ void AddTo(Pair<T> topk[], const Pair<T>& p,
   topk[0] = p;
 }
 
-template <typename T, int BlockSize>
-__device__ __forceinline__ void GetTopK(Pair<T> topk[], const T* src, int idx,
-                                        int dim, int beam_size,
+template <typename T, int BlockSize, typename IndType = int64_t>
+__device__ __forceinline__ void GetTopK(Pair<T, IndType> topk[], const T* src,
+                                        int idx, int dim, int beam_size,
                                         const bool& largest) {
   while (idx < dim) {
     if (largest) {
       if (topk[beam_size - 1] < src[idx]) {
-        Pair<T> tmp(src[idx], idx);
+        Pair<T, IndType> tmp(src[idx], static_cast<IndType>(idx));
         AddTo<T>(topk, tmp, beam_size, largest);
       }
     } else {
       if (topk[beam_size - 1] > src[idx]) {
-        Pair<T> tmp(src[idx], idx);
+        Pair<T, IndType> tmp(src[idx], static_cast<IndType>(idx));
         AddTo<T>(topk, tmp, beam_size, largest);
       }
     }
@@ -158,23 +159,24 @@ __device__ __forceinline__ void GetTopK(Pair<T> topk[], const T* src, int idx,
   }
 }
 
-template <typename T, int BlockSize>
-__device__ __forceinline__ void GetTopK(Pair<T> topk[], const T* src, int idx,
-                                        int dim, const Pair<T>& max,
+template <typename T, int BlockSize, typename IndType = int64_t>
+__device__ __forceinline__ void GetTopK(Pair<T, IndType> topk[], const T* src,
+                                        int idx, int dim,
+                                        const Pair<T, IndType>& max,
                                         int beam_size, const bool& largest) {
   while (idx < dim) {
     if (largest) {
       if (topk[beam_size - 1] < src[idx]) {
-        Pair<T> tmp(src[idx], idx);
+        Pair<T, IndType> tmp(src[idx], static_cast<IndType>(idx));
         if (tmp < max) {
-          AddTo<T>(topk, tmp, beam_size, largest);
+          AddTo<T, IndType>(topk, tmp, beam_size, largest);
         }
       }
     } else {
       if (topk[beam_size - 1] > src[idx]) {
-        Pair<T> tmp(src[idx], idx);
+        Pair<T, IndType> tmp(src[idx], static_cast<IndType>(idx));
         if (tmp > max) {
-          AddTo<T>(topk, tmp, beam_size, largest);
+          AddTo<T, IndType>(topk, tmp, beam_size, largest);
         }
       }
     }
@@ -182,28 +184,29 @@ __device__ __forceinline__ void GetTopK(Pair<T> topk[], const T* src, int idx,
   }
 }
 
-template <typename T, int MaxLength, int BlockSize>
-__device__ __forceinline__ void ThreadGetTopK(Pair<T> topk[], int* beam,
-                                              int beam_size, const T* src,
-                                              bool* firstStep, bool* is_empty,
-                                              Pair<T>* max, int dim,
+template <typename T, int MaxLength, int BlockSize, typename IndType = int64_t>
+__device__ __forceinline__ void ThreadGetTopK(Pair<T, IndType> topk[],
+                                              int* beam, int beam_size,
+                                              const T* src, bool* firstStep,
+                                              bool* is_empty,
+                                              Pair<T, IndType>* max, int dim,
                                               const int tid, bool largest) {
   if (*beam > 0) {
     int length = (*beam) < beam_size ? *beam : beam_size;
     if (*firstStep) {
       *firstStep = false;
-      GetTopK<T, BlockSize>(topk, src, tid, dim, length, largest);
+      GetTopK<T, BlockSize, IndType>(topk, src, tid, dim, length, largest);
     } else {
       for (int k = 0; k < MaxLength; k++) {
         if (k < MaxLength - (*beam)) {
           topk[k] = topk[k + *beam];
         } else {
-          topk[k].set(-static_cast<T>(INFINITY), -1);
+          topk[k].set(-static_cast<T>(INFINITY), static_cast<IndType>(-1));
         }
       }
       if (!(*is_empty)) {
-        GetTopK<T, BlockSize>(topk + MaxLength - *beam, src, tid, dim, *max,
-                              length, largest);
+        GetTopK<T, BlockSize, IndType>(topk + MaxLength - *beam, src, tid, dim,
+                                       *max, length, largest);
       }
     }
 
@@ -213,11 +216,12 @@ __device__ __forceinline__ void ThreadGetTopK(Pair<T> topk[], int* beam,
   }
 }
 
-template <typename T, int MaxLength, int BlockSize>
-__device__ __forceinline__ void BlockReduce(Pair<T>* sh_topk, int* maxid,
-                                            Pair<T> topk[], T** topVal,
-                                            int64_t** topIds, int* beam, int* k,
-                                            const int tid, const int warp,
+template <typename T, int MaxLength, int BlockSize, typename IndType = int64_t>
+__device__ __forceinline__ void BlockReduce(Pair<T, IndType>* sh_topk,
+                                            int* maxid, Pair<T, IndType> topk[],
+                                            T** topVal, IndType** topIds,
+                                            int* beam, int* k, const int tid,
+                                            const int warp,
                                             const bool& largest) {
   while (true) {
     __syncthreads();
@@ -289,11 +293,11 @@ __device__ __forceinline__ void BlockReduce(Pair<T>* sh_topk, int* maxid,
  * 4. go to the first setp, until get the topk value.
  */
 
-template <typename T, int MaxLength, int BlockSize>
-__global__ void KeMatrixTopK(T* output, int output_stride, int64_t* indices,
+template <typename T, int MaxLength, int BlockSize, typename IndType = int64_t>
+__global__ void KeMatrixTopK(T* output, int output_stride, IndType* indices,
                              const T* src, int lds, int dim, int k,
                              int grid_dim, int num, bool largest = true) {
-  __shared__ Pair<T> sh_topk[BlockSize];
+  __shared__ Pair<T, IndType> sh_topk[BlockSize];
   const int tid = threadIdx.x;
   const int warp = threadIdx.x / 32;
 
@@ -302,28 +306,29 @@ __global__ void KeMatrixTopK(T* output, int output_stride, int64_t* indices,
     int top_num = k;
     __shared__ int maxid[BlockSize / 2];
     T* out = output + i * output_stride;
-    int64_t* inds = indices + i * k;
-    Pair<T> topk[MaxLength];
+    IndType* inds = indices + i * k;
+    Pair<T, IndType> topk[MaxLength];
     int beam = MaxLength;
-    Pair<T> max;
+    Pair<T, IndType> max;
     bool is_empty = false;
     bool firststep = true;
 
     for (int j = 0; j < MaxLength; j++) {
       if (largest) {
-        topk[j].set(-static_cast<T>(INFINITY), -1);
+        topk[j].set(-static_cast<T>(INFINITY), static_cast<IndType>(-1));
       } else {
-        topk[j].set(static_cast<T>(INFINITY), -1);
+        topk[j].set(static_cast<T>(INFINITY), static_cast<IndType>(-1));
       }
     }
     while (top_num) {
-      ThreadGetTopK<T, MaxLength, BlockSize>(topk, &beam, k, src + i * lds,
-                                             &firststep, &is_empty, &max, dim,
-                                             tid, largest);
+      ThreadGetTopK<T, MaxLength, BlockSize, IndType>(
+          topk, &beam, k, src + i * lds, &firststep, &is_empty, &max, dim, tid,
+          largest);
 
       sh_topk[tid] = topk[0];
-      BlockReduce<T, MaxLength, BlockSize>(sh_topk, maxid, topk, &out, &inds,
-                                           &beam, &top_num, tid, warp, largest);
+      BlockReduce<T, MaxLength, BlockSize, IndType>(sh_topk, maxid, topk, &out,
+                                                    &inds, &beam, &top_num, tid,
+                                                    warp, largest);
     }
   }
 }
@@ -343,26 +348,26 @@ __global__ void AssignGrad(T* x_grad, const int64_t* indices, const T* out_grad,
 }
 
 // the grad assign with the axis
-template <typename T>
-__global__ void AssignGradWithAxis(const T* grad_out, const int64_t* indices,
-                                   T* grad_in, int pre, int post,
-                                   int raw_height, int k) {
+template <typename T, typename IndType>
+__global__ void AssignGradWithAxis(const T* grad_out, const IndType* indices,
+                                   T* grad_in, int64_t pre, int64_t post,
+                                   int64_t raw_height, const int64_t k) {
   // raw_height is the length of topk axis
-  for (int i = blockIdx.x; i < pre; i += gridDim.x) {
-    const int& base_index = i * post * k;
-    const int& base_grad = i * post * raw_height;
-    for (int j = threadIdx.x; j < raw_height * post; j += blockDim.x) {
+  for (int64_t i = blockIdx.x; i < pre; i += gridDim.x) {
+    const auto& base_index = i * post * k;
+    const auto& base_grad = i * post * raw_height;
+    for (int64_t j = threadIdx.x; j < raw_height * post; j += blockDim.x) {
       grad_in[base_grad + j] = static_cast<T>(0);
     }
-    for (int j = threadIdx.x; j < k * post; j += blockDim.x) {
-      const int64_t idx_ij = indices[base_index + j];
+    for (int64_t j = threadIdx.x; j < k * post; j += blockDim.x) {
+      const int64_t idx_ij = static_cast<int64_t>(indices[base_index + j]);
       const int64_t in_ij = base_grad + (idx_ij * post) + (j % post);
       grad_in[in_ij] = grad_out[idx_ij];
     }
   }
 }
 // use the radix sort for the topk
-template <typename T>
+template <typename T, typename IndType = int64_t>
 bool SortTopk(const platform::CUDADeviceContext& ctx,
               const framework::Tensor* input_tensor, const int64_t num_cols,
               const int64_t num_rows, const int k,
@@ -375,7 +380,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
   auto dim = framework::make_ddim(dims);
   input_indices.Resize(dim);
   // input_indices.Resize(num_rows*num_cols);
-  input_indices.mutable_data<int64_t>(ctx.GetPlace());
+  input_indices.mutable_data<IndType>(ctx.GetPlace());
   size_t temp_storage_bytes = -1;
 
   auto ComputeBlockSize = [](int col) {
@@ -390,7 +395,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
     else
       return 64;
   };
-  int block_size = ComputeBlockSize(num_cols);
+  int64_t block_size = ComputeBlockSize(num_cols);
 
   unsigned int maxGridDimX = ctx.GetCUDAMaxGridDimSize().x;
   // actually, int num_rows < max_grid_size
@@ -398,8 +403,8 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
                                ? static_cast<unsigned int>(num_rows)
                                : maxGridDimX;
   // Init a index array
-  InitIndex<int64_t><<<grid_size, block_size, 0, cu_stream>>>(
-      input_indices.data<int64_t>(), num_rows, num_cols);
+  InitIndex<T, IndType><<<grid_size, block_size, 0, cu_stream>>>(
+      input_indices.data<T>(), num_rows, num_cols);
 
   // create iter for counting input
   cub::CountingInputIterator<int64_t> counting_iter(0);
@@ -409,14 +414,14 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
       segment_offsets_t(counting_iter, SegmentOffsetIter(num_cols));
 
   T* sorted_values_ptr;
-  int64_t* sorted_indices_ptr;
+  IndType* sorted_indices_ptr;
 
   Tensor temp_values;
   Tensor temp_indices;
 
   const T* input = input_tensor->data<T>();
   T* values = out_tensor->data<T>();
-  int64_t* indices = indices_tensor->mutable_data<int64_t>(ctx.GetPlace());
+  auto* indices = indices_tensor->mutable_data<IndType>(ctx.GetPlace());
 
   if (k == num_cols) {
     // Doing a full sort.
@@ -426,7 +431,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
     temp_values.Resize(dim);
     temp_indices.Resize(dim);
     sorted_values_ptr = temp_values.mutable_data<T>(ctx.GetPlace());
-    sorted_indices_ptr = temp_indices.mutable_data<int64_t>(ctx.GetPlace());
+    sorted_indices_ptr = temp_indices.mutable_data<IndType>(ctx.GetPlace());
   }
 
   // Get temp storage buffer size, maybe can allocate a fixed buffer to save
@@ -434,7 +439,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
   if (largest) {
     auto err = cub::DeviceSegmentedRadixSort::SortPairsDescending(
         nullptr, temp_storage_bytes, input, sorted_values_ptr,
-        input_indices.data<int64_t>(), sorted_indices_ptr, num_cols * num_rows,
+        input_indices.data<IndType>(), sorted_indices_ptr, num_cols * num_rows,
         num_rows, segment_offsets_t, segment_offsets_t + 1, 0, sizeof(T) * 8,
         cu_stream);
     if (err != cudaSuccess) {
@@ -448,7 +453,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
   } else {
     auto err = cub::DeviceSegmentedRadixSort::SortPairs(
         nullptr, temp_storage_bytes, input, sorted_values_ptr,
-        input_indices.data<int64_t>(), sorted_indices_ptr, num_cols * num_rows,
+        input_indices.data<IndType>(), sorted_indices_ptr, num_cols * num_rows,
         num_rows, segment_offsets_t, segment_offsets_t + 1, 0, sizeof(T) * 8,
         cu_stream);
     if (err != cudaSuccess) {
@@ -465,7 +470,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
   if (largest) {
     auto err = cub::DeviceSegmentedRadixSort::SortPairsDescending(
         temp_storage.data<uint8_t>(), temp_storage_bytes, input,
-        sorted_values_ptr, input_indices.data<int64_t>(), sorted_indices_ptr,
+        sorted_values_ptr, input_indices.data<IndType>(), sorted_indices_ptr,
         num_cols * num_rows, num_rows, segment_offsets_t, segment_offsets_t + 1,
         0, sizeof(T) * 8, cu_stream);
     if (err != cudaSuccess) {
@@ -480,7 +485,7 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
   } else {
     auto err = cub::DeviceSegmentedRadixSort::SortPairs(
         temp_storage.data<uint8_t>(), temp_storage_bytes, input,
-        sorted_values_ptr, input_indices.data<int64_t>(), sorted_indices_ptr,
+        sorted_values_ptr, input_indices.data<IndType>(), sorted_indices_ptr,
         num_cols * num_rows, num_rows, segment_offsets_t, segment_offsets_t + 1,
         0, sizeof(T) * 8, cu_stream);
     if (err != cudaSuccess) {
@@ -498,10 +503,10 @@ bool SortTopk(const platform::CUDADeviceContext& ctx,
     // copy sliced data to output.
     const Eigen::DSizes<Eigen::DenseIndex, 2> slice_indices{0, 0};
     const Eigen::DSizes<Eigen::DenseIndex, 2> slice_sizes{num_rows, k};
-    auto e_indices = EigenMatrix<int64_t>::From(*indices_tensor, dim);
-    auto e_tmp_indices = EigenMatrix<int64_t>::From(temp_indices);
+    auto e_indices = EigenMatrix<IndType>::From(*indices_tensor, dim);
+    auto e_tmp_indices = EigenMatrix<IndType>::From(temp_indices);
 
-    std::vector<int> odims = {static_cast<int>(num_rows), static_cast<int>(k)};
+    std::vector<int64_t> odims = {num_rows, k};
     auto dim = framework::make_ddim(odims);
     auto e_values = EigenMatrix<T>::From(*out_tensor, dim);
     auto e_tmp_values = EigenMatrix<T>::From(temp_values);

@@ -18,17 +18,17 @@ limitations under the License. */
 
 namespace paddle {
 namespace operators {
-
-inline void GetDims(const framework::DDim& dim, int axis, int* pre, int* n,
-                    int* post) {
+template <typename T = int>
+inline void GetDims(const framework::DDim& dim, int axis, T* pre, T* n,
+                    T* post) {
   *pre = 1;
   *post = 1;
-  *n = dim[axis];
+  *n = static_cast<T>(dim[axis]);
   for (int i = 0; i < axis; ++i) {
-    (*pre) *= dim[i];
+    (*pre) *= static_cast<T>(dim[i]);
   }
   for (int i = axis + 1; i < dim.size(); ++i) {
-    (*post) *= dim[i];
+    (*post) *= static_cast<T>(dim[i]);
   }
 }
 

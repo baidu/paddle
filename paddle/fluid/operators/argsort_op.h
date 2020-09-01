@@ -34,24 +34,25 @@ using EigenVector = framework::EigenVector<T, MajorType, IndexType>;
 using Tensor = framework::Tensor;
 
 template <typename T, typename Type>
-static void FullSort(Type input_height, Type input_width, int input_dim,
+static void FullSort(int64_t input_height, int64_t input_width, int input_dim,
                      const framework::Tensor* input, T* t_out, Type* t_indices,
                      bool descending) {
 #ifdef PADDLE_WITH_MKLML
 #pragma omp parallel for
 #endif
-  for (Type i = 0; i < input_height; ++i) {
+  for (int64_t i = 0; i < input_height; ++i) {
     std::vector<std::pair<T, Type>> col_vec;
     col_vec.reserve(input_width);
     if (input_dim == 1) {
       auto e_input = EigenVector<T>::Flatten(*input);
-      for (Type j = 0; j < input_width; ++j) {
-        col_vec.push_back(std::pair<T, Type>(e_input(j), j));
+      for (int64_t j = 0; j < input_width; ++j) {
+        col_vec.push_back(std::pair<T, Type>(e_input(j), static_cast<Type>(j)));
       }
     } else {
       auto e_input = EigenMatrix<T>::Reshape(*input, input_dim - 1);
-      for (Type j = 0; j < input_width; ++j) {
-        col_vec.push_back(std::pair<T, Type>(e_input(i, j), j));
+      for (int64_t j = 0; j < input_width; ++j) {
+        col_vec.push_back(
+            std::pair<T, Type>(e_input(i, j), static_cast<Type>(j)));
       }
     }
     std::sort(col_vec.begin(), col_vec.end(),
@@ -62,7 +63,7 @@ static void FullSort(Type input_height, Type input_width, int input_dim,
                   return l.first < r.first;
               });
 
-    for (Type j = 0; j < input_width; ++j) {
+    for (int64_t j = 0; j < input_width; ++j) {
       t_out[i * input_width + j] = col_vec[j].first;
       t_indices[i * input_width + j] = col_vec[j].second;
     }
@@ -70,33 +71,37 @@ static void FullSort(Type input_height, Type input_width, int input_dim,
 }
 
 template <typename T, typename Type>
-static void FullAssign(Type input_height, Type input_width, int input_dim,
+static void FullAssign(int64_t input_height, int64_t input_width, int input_dim,
                        const framework::Tensor* input,
                        const framework::Tensor* indices, T* t_out) {
 #ifdef PADDLE_WITH_MKLML
 #pragma omp parallel for
 #endif
-  for (Type i = 0; i < input_height; ++i) {
+  for (int64_t i = 0; i < input_height; ++i) {
     if (input_dim == 1) {
       auto e_input = EigenVector<T>::Flatten(*input);
       auto e_indices = EigenVector<Type>::Flatten(*indices);
-      for (Type j = 0; j < input_width; ++j) {
-        t_out[i * input_width + e_indices(j)] = e_input(j);
+      for (int64_t j = 0; j < input_width; ++j) {
+        t_out[i * input_width + static_cast<int64_t>(e_indices(j))] =
+            e_input(j);
       }
     } else {
       auto e_input = EigenMatrix<T>::Reshape(*input, input_dim - 1);
       auto e_indices = EigenMatrix<Type>::Reshape(*indices, input_dim - 1);
-      for (Type j = 0; j < input_width; ++j) {
-        t_out[i * input_width + e_indices(i, j)] = e_input(i, j);
+      for (int64_t j = 0; j < input_width; ++j) {
+        t_out[i * input_width + static_cast<int64_t>(e_indices(i, j))] =
+            e_input(i, j);
       }
     }
   }
 }
 
 template <typename DeviceContext, typename T>
-class ArgsortKernel : public framework::OpKernel<T> {
- public:
-  void Compute(const framework::ExecutionContext& ctx) const override {
+struct ArgsortFunctor {
+  const framework::ExecutionContext& ctx;
+  explicit ArgsortFunctor(const framework::ExecutionContext& ctx) : ctx(ctx) {}
+  template <typename TINDEX>
+  void apply() const {
     auto* input = ctx.Input<framework::Tensor>("X");
     auto* output = ctx.Output<framework::Tensor>("Out");
     auto* indices = ctx.Output<framework::Tensor>("Indices");
@@ -114,9 +119,9 @@ class ArgsortKernel : public framework::OpKernel<T> {
           framework::slice_ddim(in_dims, 0, in_dims.size() - 1));
       const int64_t input_width = in_dims[in_dims.size() - 1];
 
-      int64_t* ids_data = indices->mutable_data<int64_t>(ctx.GetPlace());
-      FullSort<T, int64_t>(input_height, input_width, in_dims.size(), input,
-                           out_data, ids_data, descending);
+      auto* ids_data = indices->mutable_data<TINDEX>(ctx.GetPlace());
+      FullSort<T, TINDEX>(input_height, input_width, in_dims.size(), input,
+                          out_data, ids_data, descending);
     } else {
       // If not full sort do transpose
       std::vector<int> trans;
@@ -152,13 +157,13 @@ class ArgsortKernel : public framework::OpKernel<T> {
       Tensor tmp_indices;
 
       auto* t_ind =
-          tmp_indices.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
+          tmp_indices.mutable_data<TINDEX>(trans_dims, ctx.GetPlace());
 
-      FullSort<T, int64_t>(input_height, input_width, in_dims.size(),
-                           &trans_inp, t_out, t_ind, descending);
+      FullSort<T, TINDEX>(input_height, input_width, in_dims.size(), &trans_inp,
+                          t_out, t_ind, descending);
 
-      indices->mutable_data<int64_t>(ctx.GetPlace());
-      TransCompute<platform::CPUDeviceContext, int64_t>(
+      indices->mutable_data<TINDEX>(ctx.GetPlace());
+      TransCompute<platform::CPUDeviceContext, TINDEX>(
           ndims, dev_ctx, tmp_indices, indices, trans);
       // transpose back
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, tmp_out,
@@ -168,9 +173,24 @@ class ArgsortKernel : public framework::OpKernel<T> {
 };
 
 template <typename DeviceContext, typename T>
-class ArgsortGradientKernel : public framework::OpKernel<T> {
+class ArgsortKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
+    const int& dtype = ctx.Attr<int>("dtype");
+    framework::VisitDataTypeInt(
+        static_cast<framework::proto::VarType::Type>(dtype),
+        ArgsortFunctor<DeviceContext, T>(ctx));
+  }
+};
+
+template <typename DeviceContext, typename T>
+struct ArgsortGradientFunctor {
+  const framework::ExecutionContext& ctx;
+  explicit ArgsortGradientFunctor(const framework::ExecutionContext& ctx)
+      : ctx(ctx) {}
+
+  template <typename TINDEX>
+  void apply() {
     auto* indices = ctx.Input<Tensor>("Indices");
     auto* dX = ctx.Output<Tensor>(framework::GradVarName("X"));
     auto* dO = ctx.Input<Tensor>(framework::GradVarName("Out"));
@@ -192,8 +212,8 @@ class ArgsortGradientKernel : public framework::OpKernel<T> {
           framework::slice_ddim(in_dims, 0, in_dims.size() - 1));
       const int64_t input_width = in_dims[in_dims.size() - 1];
 
-      FullAssign<T, int64_t>(input_height, input_width, in_dims.size(), dO,
-                             indices, dX->data<T>());
+      FullAssign<T, TINDEX>(input_height, input_width, in_dims.size(), dO,
+                            indices, dX->data<T>());
     } else {
       // If not full assign do transpose
       std::vector<int> trans;
@@ -213,14 +233,14 @@ class ArgsortGradientKernel : public framework::OpKernel<T> {
       Tensor trans_dO;
       trans_dO.mutable_data<T>(trans_dims, ctx.GetPlace());
       Tensor trans_ind;
-      trans_ind.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
+      trans_ind.mutable_data<TINDEX>(trans_dims, ctx.GetPlace());
       int ndims = trans.size();
       auto& dev_ctx = ctx.template device_context<platform::CPUDeviceContext>();
       // Do transpose
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, *dO,
                                                   &trans_dO, trans);
-      TransCompute<platform::CPUDeviceContext, int64_t>(
-          ndims, dev_ctx, *indices, &trans_ind, trans);
+      TransCompute<platform::CPUDeviceContext, TINDEX>(ndims, dev_ctx, *indices,
+                                                       &trans_ind, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -229,13 +249,24 @@ class ArgsortGradientKernel : public framework::OpKernel<T> {
       Tensor tmp_out;
       T* t_out = tmp_out.mutable_data<T>(trans_dims, ctx.GetPlace());
 
-      FullAssign<T, int64_t>(input_height, input_width, in_dims.size(),
-                             &trans_dO, &trans_ind, t_out);
+      FullAssign<T, TINDEX>(input_height, input_width, in_dims.size(),
+                            &trans_dO, &trans_ind, t_out);
 
       // transpose back
       TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, tmp_out, dX,
                                                   trans);
     }
+  }
+};
+
+template <typename DeviceContext, typename T>
+class ArgsortGradientKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    const int& dtype = ctx.Attr<int>("dtype");
+    framework::VisitDataTypeInt(
+        static_cast<framework::proto::VarType::Type>(dtype),
+        ArgsortGradientFunctor<DeviceContext, T>(ctx));
   }
 };
 

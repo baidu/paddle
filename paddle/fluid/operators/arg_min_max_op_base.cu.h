@@ -175,12 +175,13 @@ class ArgMinMaxOpCUDAKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto& dtype = ctx.Attr<int>("dtype");
     if (dtype < 0) {
-      framework::VisitDataType(static_cast<framework::proto::VarType::Type>(
-                                   framework::proto::VarType::INT64),
-                               VisitDataCudaArgMinMaxFunctor<T, Reducer>(ctx));
+      framework::VisitDataTypeInt(
+          static_cast<framework::proto::VarType::Type>(
+              framework::proto::VarType::INT64),
+          VisitDataCudaArgMinMaxFunctor<T, Reducer>(ctx));
       return;
     }
-    framework::VisitDataType(
+    framework::VisitDataTypeInt(
         static_cast<framework::proto::VarType::Type>(dtype),
         VisitDataCudaArgMinMaxFunctor<T, Reducer>(ctx));
   }

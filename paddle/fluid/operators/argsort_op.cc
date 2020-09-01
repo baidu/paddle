@@ -41,6 +41,22 @@ class ArgsortOp : public framework::OperatorWithKernel {
         platform::errors::InvalidArgument(
             "'axis'(%d) must be less than num_dims(%d).", axis, num_dims));
 
+    // check the element num of sorted axis is not be larger than INT_MAX
+    if (ctx->IsRuntime()) {
+      const int& dtype = ctx->Attrs().Get<int>("dtype");
+      if (dtype == framework::proto::VarType::INT32) {
+        if (axis < 0) {
+          axis += num_dims;
+        }
+        PADDLE_ENFORCE_LE(
+            in_dims[axis], INT_MAX,
+            "The element num at sorted axis in argsort/sort op is "
+            "%d, is larger than int32 maximum value:%d, you must "
+            "set the dtype of argsort/sort to 'int64'.",
+            in_dims[axis], INT_MAX);
+      }
+    }
+
     ctx->ShareDim("X", "Out");
     ctx->ShareDim("X", "Indices");
     ctx->ShareLoD("X", "Out");
@@ -97,6 +113,13 @@ Output(Indices) gives the sorted order along the given axis Attr(axis).
         "If descending is true, will sort by descending order,"
         "else if false, sort by ascending order. Default value is false.")
         .SetDefault(false);
+
+    AddAttr<int>("dtype",
+                 "(int, 3), the dtype of indices, the indices dtype must be "
+                 "int32, int64."
+                 "default dtype is int64, and proto value is 3.")
+        .SetDefault(3)
+        .InEnum({2, 3});
   }
 };
 

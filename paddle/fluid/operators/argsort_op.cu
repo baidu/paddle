@@ -47,26 +47,28 @@ struct SegmentOffsetIter {
 };
 
 template <typename T>
-static __global__ void FillIndex(T* indices, T num_rows, T num_cols) {
+static __global__ void FillIndex(T* indices, int64_t num_rows,
+                                 int64_t num_cols) {
   int col_id = threadIdx.x;
   int row_id = blockIdx.x;
 
-  for (T j = row_id; j < num_rows; j += gridDim.x) {
-    for (T i = col_id; i < num_cols; i += blockDim.x) {
-      indices[j * num_cols + i] = i;
+  for (int64_t j = row_id; j < num_rows; j += gridDim.x) {
+    for (int i = col_id; i < num_cols; i += blockDim.x) {
+      indices[j * num_cols + i] = static_cast<T>(i);
     }
   }
 }
 
 template <typename T, typename IndType>
 static __global__ void FillGrad(const T* dO, const IndType* indices, T* dX,
-                                IndType num_rows, IndType num_cols) {
+                                int64_t num_rows, int64_t num_cols) {
   int col_id = threadIdx.x;
   int row_id = blockIdx.x;
 
-  for (IndType j = row_id; j < num_rows; j += gridDim.x) {
-    for (IndType i = col_id; i < num_cols; i += blockDim.x) {
-      dX[j * num_cols + indices[j * num_cols + i]] = dO[j * num_cols + i];
+  for (int64_t j = row_id; j < num_rows; j += gridDim.x) {
+    for (int64_t i = col_id; i < num_cols; i += blockDim.x) {
+      dX[j * num_cols + static_cast<int64_t>(indices[j * num_cols + i])] =
+          dO[j * num_cols + i];
     }
   }
 }
@@ -75,20 +77,20 @@ static __global__ void FillGrad(const T* dO, const IndType* indices, T* dX,
 // Default is false.
 template <typename T, typename IndType>
 void ArgFullSort(const platform::CUDADeviceContext& ctx, const Tensor* input,
-                 Tensor* output, Tensor* indices, const IndType num_rows,
-                 const IndType num_cols, const bool descending) {
+                 Tensor* output, Tensor* indices, const int64_t num_rows,
+                 const int64_t num_cols, const bool descending) {
   auto cu_stream = ctx.stream();
 
   Tensor input_indices;
 
-  const std::vector<IndType> dims = {num_rows, num_cols};
+  const std::vector<int64_t> dims = {num_rows, num_cols};
   auto dim = framework::make_ddim(dims);
   input_indices.Resize(dim);
   input_indices.mutable_data<IndType>(ctx.GetPlace());
 
   size_t temp_storage_bytes = -1;
 
-  auto ComputeBlockSize = [](IndType col) {
+  auto ComputeBlockSize = [](int64_t col) {
     if (col > 512)
       return 1024;
     else if (col > 256 && col <= 512)
@@ -121,10 +123,10 @@ void ArgFullSort(const platform::CUDADeviceContext& ctx, const Tensor* input,
   sorted_indices_ptr = ind;
 
   // create iter for counting input
-  cub::CountingInputIterator<IndType> counting_iter(0);
+  cub::CountingInputIterator<int64_t> counting_iter(0);
   // segment_offset is used for move to next row
-  cub::TransformInputIterator<IndType, SegmentOffsetIter,
-                              cub::CountingInputIterator<IndType>>
+  cub::TransformInputIterator<int64_t, SegmentOffsetIter,
+                              cub::CountingInputIterator<int64_t>>
       segment_offsets_t(counting_iter, SegmentOffsetIter(num_cols));
 
   cudaError_t err;
@@ -165,11 +167,11 @@ void ArgFullSort(const platform::CUDADeviceContext& ctx, const Tensor* input,
 
 template <typename T, typename IndType>
 void ArgFullAssign(const platform::CUDADeviceContext& ctx, const Tensor* dO,
-                   const Tensor* indices, Tensor* dX, const IndType num_rows,
-                   const IndType num_cols) {
+                   const Tensor* indices, Tensor* dX, const int64_t num_rows,
+                   const int64_t num_cols) {
   auto cu_stream = ctx.stream();
 
-  auto ComputeBlockSize = [](IndType col) {
+  auto ComputeBlockSize = [](int64_t col) {
     if (col > 512)
       return 1024;
     else if (col > 256 && col <= 512)
@@ -200,6 +202,7 @@ class ArgsortOpCUDAKernel : public framework::OpKernel<T> {
     auto* output = ctx.Output<Tensor>("Out");
     auto* indices = ctx.Output<Tensor>("Indices");
     int axis = ctx.Attr<int>("axis");
+    const int& dtype = ctx.Attr<int>("dtype");
     bool descending = ctx.Attr<bool>("descending");
 
     auto in_dims = input->dims();
@@ -214,8 +217,14 @@ class ArgsortOpCUDAKernel : public framework::OpKernel<T> {
           framework::slice_ddim(in_dims, 0, in_dims.size() - 1));
       const int64_t input_width = in_dims[in_dims.size() - 1];
       const auto& dev_ctx = ctx.cuda_device_context();
-      ArgFullSort<T, int64_t>(dev_ctx, input, output, indices, input_height,
-                              input_width, descending);
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        ArgFullSort<T, int32_t>(dev_ctx, input, output, indices, input_height,
+                                input_width, descending);
+      } else {
+        ArgFullSort<T, int64_t>(dev_ctx, input, output, indices, input_height,
+                                input_width, descending);
+      }
     } else {
       // if not full sort, do transpose first
       std::vector<int> trans;
@@ -250,14 +259,26 @@ class ArgsortOpCUDAKernel : public framework::OpKernel<T> {
 
       Tensor tmp_indices;
       // temp indices for sorting
-      tmp_indices.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
-      indices->mutable_data<int64_t>(ctx.GetPlace());
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        tmp_indices.mutable_data<int32_t>(trans_dims, ctx.GetPlace());
+        indices->mutable_data<int32_t>(ctx.GetPlace());
 
-      ArgFullSort<T, int64_t>(dev_ctx, &trans_inp, &tmp_out, &tmp_indices,
-                              input_height, input_width, descending);
+        ArgFullSort<T, int32_t>(dev_ctx, &trans_inp, &tmp_out, &tmp_indices,
+                                input_height, input_width, descending);
 
-      TransCompute<platform::CUDADeviceContext, int64_t>(
-          ndims, dev_ctx, tmp_indices, indices, trans);
+        TransCompute<platform::CUDADeviceContext, int32_t>(
+            ndims, dev_ctx, tmp_indices, indices, trans);
+      } else {
+        tmp_indices.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
+        indices->mutable_data<int64_t>(ctx.GetPlace());
+
+        ArgFullSort<T, int64_t>(dev_ctx, &trans_inp, &tmp_out, &tmp_indices,
+                                input_height, input_width, descending);
+
+        TransCompute<platform::CUDADeviceContext, int64_t>(
+            ndims, dev_ctx, tmp_indices, indices, trans);
+      }
       // transpose back
       TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, tmp_out,
                                                    output, trans);
@@ -274,6 +295,7 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
     auto* dX = ctx.Output<Tensor>(framework::GradVarName("X"));
     auto* dO = ctx.Input<Tensor>(framework::GradVarName("Out"));
     int axis = ctx.Attr<int>("axis");
+    const int& dtype = ctx.Attr<int>("dtype");
 
     dX->mutable_data<T>(ctx.GetPlace());
     auto dxt = framework::EigenVector<T>::Flatten(*dX);
@@ -293,8 +315,14 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
           framework::slice_ddim(in_dims, 0, in_dims.size() - 1));
       const int64_t input_width = in_dims[in_dims.size() - 1];
       const auto& dev_ctx = ctx.cuda_device_context();
-      ArgFullAssign<T, int64_t>(dev_ctx, dO, indices, dX, input_height,
-                                input_width);
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        ArgFullAssign<T, int32_t>(dev_ctx, dO, indices, dX, input_height,
+                                  input_width);
+      } else {
+        ArgFullAssign<T, int64_t>(dev_ctx, dO, indices, dX, input_height,
+                                  input_width);
+      }
     } else {
       // if not full sort, do transpose first
       std::vector<int> trans;
@@ -314,14 +342,25 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
       Tensor trans_dO;
       trans_dO.mutable_data<T>(trans_dims, ctx.GetPlace());
       Tensor trans_ind;
-      trans_ind.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        trans_ind.mutable_data<int32_t>(trans_dims, ctx.GetPlace());
+      } else {
+        trans_ind.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
+      }
       int ndims = trans.size();
       const auto& dev_ctx = ctx.cuda_device_context();
       // Do transpose
       TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, *dO,
                                                    &trans_dO, trans);
-      TransCompute<platform::CUDADeviceContext, int64_t>(
-          ndims, dev_ctx, *indices, &trans_ind, trans);
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        TransCompute<platform::CUDADeviceContext, int32_t>(
+            ndims, dev_ctx, *indices, &trans_ind, trans);
+      } else {
+        TransCompute<platform::CUDADeviceContext, int64_t>(
+            ndims, dev_ctx, *indices, &trans_ind, trans);
+      }
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -330,8 +369,14 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
       Tensor tmp_out;
       tmp_out.mutable_data<T>(trans_dims, ctx.GetPlace());
 
-      ArgFullAssign<T, int64_t>(dev_ctx, &trans_dO, &trans_ind, &tmp_out,
-                                input_height, input_width);
+      if (static_cast<framework::proto::VarType::Type>(dtype) ==
+          framework::proto::VarType::INT32) {
+        ArgFullAssign<T, int32_t>(dev_ctx, &trans_dO, &trans_ind, &tmp_out,
+                                  input_height, input_width);
+      } else {
+        ArgFullAssign<T, int64_t>(dev_ctx, &trans_dO, &trans_ind, &tmp_out,
+                                  input_height, input_width);
+      }
 
       // transpose back
       TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, tmp_out, dX,
