@@ -172,7 +172,8 @@ def program_equal(a, b):
                         k))
                     return False
             assert (len(a.blocks) == len(b.blocks))
-
+        elif k == '_auto_checkpoint_name':
+            continue
         elif (v != b.__dict__[k]):
             raise ValueError("In program_equal not equal:{0}\n".format(k))
 

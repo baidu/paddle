@@ -36,6 +36,17 @@ if(WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_avoid_twice_initialization)
 endif()
 
+LIST(REMOVE_ITEM TEST_OPS test_auto_checkpoint)
+LIST(REMOVE_ITEM TEST_OPS test_auto_checkpoint2)
+LIST(REMOVE_ITEM TEST_OPS test_dataloader_auto_checkpoint)
+LIST(REMOVE_ITEM TEST_OPS test_dataloader_auto_checkpoint2)
+LIST(REMOVE_ITEM TEST_OPS test_checkpoint_saver)
+if(APPLE OR WIN32)
+    LIST(REMOVE_ITEM TEST_OPS test_hdfs)
+    LIST(REMOVE_ITEM TEST_OPS test_fs_interface)
+    LIST(REMOVE_ITEM TEST_OPS test_fleet_metric)
+endif()
+
 if (NOT ${WITH_GPU})
     LIST(REMOVE_ITEM TEST_OPS test_conv2d_fusion_op)
     LIST(REMOVE_ITEM TEST_OPS test_parallel_dygraph_mnist) # TODO(Yancey1989): parallel dygraph support CPU device in future
@@ -117,7 +128,7 @@ function(bash_test_modules TARGET_NAME)
     endif()
 
     set(options SERIAL)
-    set(oneValueArgs "")
+    set(oneValueArgs TIMEOUT START_BASH)
     set(multiValueArgs MODULES DEPS ENVS LABELS)
     cmake_parse_arguments(bash_test_modules "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -131,13 +142,13 @@ function(bash_test_modules TARGET_NAME)
             COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python 
             TEST_TARGET_NAME=${TARGET_NAME} TEST_TIMEOUT=${timeout} ${bash_test_modules_ENVS}
             WITH_COVERAGE=ON COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
-            bash ${CMAKE_CURRENT_BINARY_DIR}/${bash_test_modules_MODULES}
+            bash ${CMAKE_CURRENT_BINARY_DIR}/${bash_test_modules_START_BASH}
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
         add_test(NAME ${TARGET_NAME}
             COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python 
             TEST_TARGET_NAME=${TARGET_NAME} TEST_TIMEOUT=${timeout} ${bash_test_modules_ENVS}
-            bash ${CMAKE_CURRENT_BINARY_DIR}/${bash_test_modules_MODULES}
+            bash ${CMAKE_CURRENT_BINARY_DIR}/${bash_test_modules_START_BASH}
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
 
@@ -262,13 +273,21 @@ if(WITH_DISTRIBUTE)
         py_test_modules(test_dgc_optimizer MODULES test_dgc_optimizer)
     endif()
     if(NOT APPLE)
-        bash_test_modules(test_listen_and_serv_op MODULES test_listen_and_serv.sh)
-        bash_test_modules(test_launch MODULES test_launch.sh)
+        bash_test_modules(test_listen_and_serv_op START_BASH test_listen_and_serv.sh)
+        bash_test_modules(test_launch START_BASH test_launch.sh)
 
         foreach(TEST_OP ${DIST_TEST_OPS})
-            bash_test_modules(${TEST_OP} MODULES dist_test.sh SERIAL LABELS "RUN_TYPE=EXCLUSIVE")
+            bash_test_modules(${TEST_OP} START_BASH dist_test.sh SERIAL LABELS "RUN_TYPE=EXCLUSIVE")
         endforeach(TEST_OP)
     endif(NOT APPLE)
+endif()
+
+if(NOT APPLE AND NOT WIN32)
+    bash_test_modules(test_auto_checkpoint START_BASH dist_test.sh TIMEOUT 600)
+    bash_test_modules(test_auto_checkpoint2 START_BASH dist_test.sh TIMEOUT 600)
+    bash_test_modules(test_checkpoint_saver START_BASH dist_test.sh TIMEOUT 600)
+    bash_test_modules(test_dataloader_auto_checkpoint START_BASH dist_test.sh TIMEOUT 600)
+    bash_test_modules(test_dataloader_auto_checkpoint2 START_BASH dist_test.sh TIMEOUT 600)
 endif()
 
 py_test_modules(test_parallel_executor_crf MODULES test_parallel_executor_crf)

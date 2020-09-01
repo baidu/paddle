@@ -17,3 +17,4 @@ pyyaml
 decorator
 prettytable
 objgraph
+pathlib
