@@ -20,7 +20,9 @@ namespace framework {
 
 void ReaderBase::ReadNext(std::vector<LoDTensor> *out) {
   std::lock_guard<std::mutex> lock(mu_);
-  PADDLE_ENFORCE_EQ(status_, ReaderStatus::kRunning);
+  PADDLE_ENFORCE_EQ(
+      status_, ReaderStatus::kRunning,
+      platform::errors::Unavailable("The read status is not right."));
   ReadNextImpl(out);
 }
 
