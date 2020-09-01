@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/framework/op_version_registry.h"
 #include "paddle/fluid/operators/arg_min_max_op_base.h"
 
 REGISTER_OPERATOR(
@@ -31,3 +32,19 @@ REGISTER_OP_CPU_KERNEL(
                                     int16_t>,
     paddle::operators::ArgMaxKernel<paddle::platform::CPUDeviceContext,
                                     uint8_t>);
+REGISTER_OP_VERSION(arg_max)
+    .AddCheckpoint(
+        R"ROC(
+              Upgrade argmax add a new attribute [flatten] and modify the attribute of dtype)ROC",
+        paddle::framework::compatible::OpVersionDesc()
+            .NewAttr("flatten",
+                     "In order to compute the argmax over the flattened array "
+                     "when the "
+                     "argument `axis` in python API is None.",
+                     false)
+            .ModifyAttr("dtype",
+                        "change the default value of dtype, the older version "
+                        "is -1, means return the "
+                        "return the int64 indices. The new version is 3, "
+                        "return the int64 indices directly. ",
+                        3));

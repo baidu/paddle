@@ -218,7 +218,7 @@ def create_test_case(op_type):
                 self.assertTrue("test_arg_api" in result.name)
 
         def run_dygraph(self, place):
-            paddle.disable_static()
+            paddle.disable_static(place)
             op = eval("paddle.%s" % (op_type))
             data_tensor = paddle.to_tensor(self.input_data)
 
@@ -240,7 +240,7 @@ def create_test_case(op_type):
             #case 4 
             result_data = op(data_tensor, axis=-1, keepdim=True)
             excepted_data = self.numpy_op(self.input_data, axis=-1)
-            excepted_data = excepted_data.reshape((10))
+            excepted_data = excepted_data.reshape((10, 1))
             self.assertTrue((result_data.numpy() == excepted_data).all(), True)
 
             #case 5 
@@ -299,14 +299,28 @@ class TestArgMinMaxOpError(unittest.TestCase):
                     name="test_argmax", shape=[10], dtype="float32")
                 output = paddle.argmax(x=data, dtype="float32")
 
-            self.assertRaises(ValueError, test_argmax_attr_type)
+            self.assertRaises(TypeError, test_argmax_attr_type)
 
             def test_argmin_attr_type():
                 data = paddle.static.data(
                     name="test_argmax", shape=[10], dtype="float32")
                 output = paddle.argmin(x=data, dtype="float32")
 
-            self.assertRaises(ValueError, test_argmin_attr_type)
+            self.assertRaises(TypeError, test_argmin_attr_type)
+
+            def test_argmax_axis_type():
+                data = paddle.static.data(
+                    name="test_argmax", shape=[10], dtype="float32")
+                output = paddle.argmax(x=data, axis=1.2)
+
+            self.assertRaises(TypeError, test_argmax_axis_type)
+
+            def test_argmin_axis_type():
+                data = paddle.static.data(
+                    name="test_argmin", shape=[10], dtype="float32")
+                output = paddle.argmin(x=data, axis=1.2)
+
+            self.assertRaises(TypeError, test_argmin_axis_type)
 
 
 if __name__ == '__main__':
