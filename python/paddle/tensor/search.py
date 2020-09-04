@@ -152,10 +152,10 @@ def argmax(x, axis=None, keepdim=False, dtype="int64", name=None):
             import paddle
 
             paddle.disable_static()
-            data = np.array([[5,8,9,5],
-                             [0,0,1,7],
-                             [6,9,2,4]])
-            x =  paddle.to_variable(data)
+            data = [[5,8,9,5],
+                    [0,0,1,7],
+                    [6,9,2,4]]
+            x =  paddle.to_tensor(data)
             out1 = paddle.argmax(x)
             print(out1.numpy()) # 2
             out2 = paddle.argmax(x, axis=1)
@@ -226,10 +226,10 @@ def argmin(x, axis=None, keepdim=False, dtype="int64", name=None):
             import paddle
 
             paddle.disable_static()
-            data = np.array([[5,8,9,5],
-                             [0,0,1,7],
-                             [6,9,2,4]])
-            x =  paddle.to_variable(data)
+            data = [[5,8,9,5],
+                     [0,0,1,7],
+                     [6,9,2,4]]
+            x =  paddle.to_tensor(data)
             out1 = paddle.argmin(x)
             print(out1.numpy()) # 4
             out2 = paddle.argmin(x, axis=1)
