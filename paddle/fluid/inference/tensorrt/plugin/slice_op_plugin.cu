@@ -56,6 +56,21 @@ __global__ void SliceKernel(int num, int dims, const T *input,
   }
 }
 
+SlicePluginDynamic::SlicePluginDynamic(std::vector<int> starts,
+                                       std::vector<int> ends,
+                                       std::vector<int> axes, bool ban_fp16)
+    : starts_(starts), ends_(ends), axes_(axes), ban_fp16_(ban_fp16) {
+  cudaEventCreate(&copy_event_);
+  cudaStreamCreate(&copy_stream_);
+}
+
+void SlicePluginDynamic::destroy() {
+  cudaStreamDestroy(copy_stream_);
+  cudaEventDestroy(copy_event_);
+  cudaFree(offset_temp_data_);
+  delete this;
+}
+
 int SlicePluginDynamic::initialize() { return 0; }
 
 size_t SlicePluginDynamic::getSerializationSize() const { return 0; }
@@ -136,9 +151,9 @@ int SlicePluginDynamic::enqueue(const nvinfer1::PluginTensorDesc *input_desc,
   std::vector<int> offsets;
   std::vector<int> extends;
 
-  offsets.reserve(num_dims);
-  extends.reserve(num_dims);
-  seg_offsets.reserve(num_dims);
+  offsets.resize(num_dims);
+  extends.resize(num_dims);
+  seg_offsets.resize(num_dims);
 
   seg_offsets[num_dims - 1] = 1;
   for (int i = num_dims - 2; i >= 0; i--) {
@@ -160,16 +175,16 @@ int SlicePluginDynamic::enqueue(const nvinfer1::PluginTensorDesc *input_desc,
     offset_info.push_back(seg_offsets[i]);
   }
 
-  framework::Tensor offset_temp_tensor;
+  if (offset_temp_data_ == nullptr) {
+    cudaMalloc(&offset_temp_data_, 3 * num_dims * sizeof(int));
+  }
 
-  int device_id;
-  cudaGetDevice(&device_id);
-  offset_temp_tensor.Resize({3 * num_dims});
-  auto *offset_temp_data =
-      offset_temp_tensor.mutable_data<int>(platform::CUDAPlace(device_id));
+  cudaMemcpyAsync(offset_temp_data_, offset_info.data(),
+                  sizeof(int) * 3 * num_dims, cudaMemcpyHostToDevice,
+                  copy_stream_);
 
-  cudaMemcpyAsync(offset_temp_data, offset_info.data(),
-                  sizeof(int) * 3 * num_dims, cudaMemcpyHostToDevice, stream);
+  cudaEventRecord(copy_event_, copy_stream_);
+  cudaStreamWaitEvent(stream, copy_event_, 0);
 
   int threads = 256;
   int blocks = (out_num + threads - 1) / threads;
@@ -178,13 +193,13 @@ int SlicePluginDynamic::enqueue(const nvinfer1::PluginTensorDesc *input_desc,
     const float *input1 = static_cast<const float *>(inputs[0]);
     float *output = static_cast<float *>(outputs[0]);
     SliceKernel<float><<<blocks, threads, 3 * num_dims * sizeof(int), stream>>>(
-        out_num, num_dims, input1, offset_temp_data, output);
+        out_num, num_dims, input1, offset_temp_data_, output);
   } else if (input_type == nvinfer1::DataType::kHALF) {
 #ifdef SUPPORTS_CUDA_FP16
     const half *input1 = static_cast<const half *>(inputs[0]);
     half *output = static_cast<half *>(outputs[0]);
     SliceKernel<half><<<blocks, threads, 3 * num_dims * sizeof(int), stream>>>(
-        out_num, num_dims, input1, offset_temp_data, output);
+        out_num, num_dims, input1, offset_temp_data_, output);
 #else
     PADDLE_THROW(platform::errors::Fatal(
         "The cuda archs you specific should greater than 600."));

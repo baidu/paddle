@@ -53,7 +53,7 @@ class SliceOpConverter : public OpConverter {
     }
 
     auto output_name = op_desc.Output("Out")[0];
-    RreplenishLayerAndOutput(layer, "skip_layernorm", {output_name}, test_mode);
+    RreplenishLayerAndOutput(layer, "slice", {output_name}, test_mode);
 #else
     PADDLE_THROW(platform::errors::Fatal(
         "You are running the TRT Dynamic Shape mode, need to confirm that "

@@ -30,9 +30,8 @@ namespace plugin {
 class SlicePluginDynamic : public DynamicPluginTensorRT {
  public:
   explicit SlicePluginDynamic(std::vector<int> starts, std::vector<int> ends,
-                              std::vector<int> axes, bool ban_fp16)
-      : starts_(starts), ends_(ends), axes_(axes), ban_fp16_(ban_fp16) {}
-  SlicePluginDynamic(void const* serialData, size_t serialLength) {}
+                              std::vector<int> axes, bool ban_fp16);
+
   nvinfer1::IPluginV2DynamicExt* clone() const override {
     return new SlicePluginDynamic(starts_, ends_, axes_, ban_fp16_);
   }
@@ -72,14 +71,16 @@ class SlicePluginDynamic : public DynamicPluginTensorRT {
                                        const nvinfer1::DataType* inputTypes,
                                        int nbInputs) const override;
 
-  void destroy() override { delete this; }
+  void destroy() override;
 
  private:
   std::vector<int> starts_;
   std::vector<int> ends_;
   std::vector<int> axes_;
-
   bool ban_fp16_{false};
+  int* offset_temp_data_{nullptr};
+  cudaEvent_t copy_event_;
+  cudaStream_t copy_stream_;
 };
 #endif
 
