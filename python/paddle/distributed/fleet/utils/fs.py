@@ -400,9 +400,6 @@ class HDFSClient(FS):
 
     # can't retry
     def download(self, fs_path, local_path):
-        if self.is_exist(local_path):
-            raise FSFileExistsError("{} exists".format(local_path))
-
         if not self.is_exist(fs_path):
             raise FSFileNotExistsError("{} not exits".format(fs_path))
 

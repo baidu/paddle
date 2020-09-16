@@ -18,6 +18,7 @@ import sys
 import subprocess
 import multiprocessing
 from datetime import datetime
+from functools import cmp_to_key
 
 import re
 import copy
@@ -419,7 +420,7 @@ class HDFSClient(object):
                 hdfs_path))
             lines = []
             regex = re.compile('\s+')
-            out_lines = output.strip().split("\n")
+            out_lines = output.strip().decode().split("\n")
             for line in out_lines:
                 re_line = regex.split(line)
                 if len(re_line) == 8:
@@ -429,7 +430,7 @@ class HDFSClient(object):
                         lines.append(
                             (re_line[7], re_line[5] + " " + re_line[6]))
             if sort:
-                sorted(lines, cmp=sort_by_time)
+                sorted(lines, key=cmp_to_key(sort_by_time))
             ret_lines = [ret[0] for ret in lines]
             return ret_lines
 
