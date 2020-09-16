@@ -1353,10 +1353,11 @@ class Executor(object):
                          print_period=100):
         is_heter = 0
         if not program._fleet_opt is None:
-            if program._fleet_opt.get("worker_class", "") == "HeterCpuWorker":
-                is_heter = 1
-            if program._fleet_opt("trainer", "") == "HeterXpuTrainer":
-                is_heter = 1
+            is_heter = 0
+            #if program._fleet_opt.get("worker_class", "") == "HeterCpuWorker":
+            #    is_heter = 1
+            #if program._fleet_opt("trainer", "") == "HeterXpuTrainer":
+            #    is_heter = 1
         if scope is None:
             scope = global_scope()
         if fetch_list is None:

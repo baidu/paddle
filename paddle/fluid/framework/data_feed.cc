@@ -859,7 +859,7 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
   } else {
     const char* str = reader.get();
     std::string line = std::string(str);
-    // VLOG(3) << line;
+    VLOG(1) << line;
     char* endptr = const_cast<char*>(str);
     int pos = 0;
     if (parse_ins_id_) {
@@ -907,9 +907,11 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
       instance->rank = rank;
       pos += len + 1;
     }
+    std::stringstream ss;
     for (size_t i = 0; i < use_slots_index_.size(); ++i) {
       int idx = use_slots_index_[i];
       int num = strtol(&str[pos], &endptr, 10);
+      ss << "(" << idx << ", " << num << "); ";
       PADDLE_ENFORCE_NE(
           num, 0,
           platform::errors::InvalidArgument(
@@ -936,7 +938,8 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
             uint64_t feasign = (uint64_t)strtoull(endptr, &endptr, 10);
             // if uint64 feasign is equal to zero, ignore it
             // except when slot is dense
-            if (feasign == 0 && !use_slots_is_dense_[i]) {
+            if (feasign == 0 && !use_slots_is_dense_[i] &&
+                all_slots_[i] != "12345") {
               continue;
             }
             FeatureKey f;
@@ -954,6 +957,7 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
         }
       }
     }
+    VLOG(1) << ss.str();
     instance->float_feasigns_.shrink_to_fit();
     instance->uint64_feasigns_.shrink_to_fit();
     fea_num_ += instance->uint64_feasigns_.size();

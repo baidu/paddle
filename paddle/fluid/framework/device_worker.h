@@ -171,6 +171,7 @@ class DeviceWorker {
     device_reader_->SetPlace(place);
   }
   virtual Scope* GetThreadScope() { return thread_scope_; }
+  virtual void GetXpuOpIndex() {}
 
  protected:
   virtual void DumpParam(const Scope& scope, const int batch_id);

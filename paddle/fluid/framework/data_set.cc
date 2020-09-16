@@ -13,15 +13,18 @@
  *     limitations under the License. */
 
 #include "paddle/fluid/framework/data_set.h"
+
 #include <algorithm>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
+
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/text_format.h"
 #include "paddle/fluid/framework/data_feed_factory.h"
 #include "paddle/fluid/framework/fleet/fleet_wrapper.h"
+#include "paddle/fluid/framework/fleet/tree_wrapper.h"
 #include "paddle/fluid/framework/io/fs.h"
 #include "paddle/fluid/platform/monitor.h"
 #include "paddle/fluid/platform/timer.h"
@@ -339,6 +342,83 @@ void DatasetImpl<T>::ReleaseMemory() {
           << STAT_GET(STAT_total_feasign_num_in_mem) - total_fea_num_
           << ")";  // For Debug
   STAT_SUB(STAT_total_feasign_num_in_mem, total_fea_num_);
+}
+
+template <typename T>
+void DatasetImpl<T>::InitTDMTree(
+    const std::vector<std::pair<std::string, std::string>> config) {
+  auto tree_ptr = TreeWrapper::GetInstance();
+  for (auto& iter : config) {
+    tree_ptr->insert(iter.first, iter.second);
+  }
+  return;
+}
+
+// do dump
+template <typename T>
+void DatasetImpl<T>::TDMDump(std::string name, const uint64_t table_id,
+                             int fea_value_dim, const std::string tree_path) {
+  auto tree_ptr = TreeWrapper::GetInstance();
+  tree_ptr->dump(name, table_id, fea_value_dim, tree_path);
+}
+
+// do sample
+template <typename T>
+void DatasetImpl<T>::TDMSample(const uint16_t sample_slot,
+                               const uint64_t type_slot,
+                               const uint64_t start_h) {
+  VLOG(0) << "DatasetImpl<T>::Sample() begin";
+  platform::Timer timeline;
+  timeline.Start();
+
+  std::vector<std::vector<T>> data;
+  std::vector<std::vector<T>> sample_results;
+  if (!input_channel_ || input_channel_->Size() == 0) {
+    for (size_t i = 0; i < multi_output_channel_.size(); ++i) {
+      std::vector<T> tmp_data;
+      data.push_back(tmp_data);
+      if (!multi_output_channel_[i] || multi_output_channel_[i]->Size() == 0) {
+        continue;
+      }
+      multi_output_channel_[i]->Close();
+      multi_output_channel_[i]->ReadAll(data[i]);
+    }
+  } else {
+    input_channel_->Close();
+    std::vector<T> tmp_data;
+    data.push_back(tmp_data);
+    input_channel_->ReadAll(data[data.size() - 1]);
+  }
+
+  VLOG(1) << "finish read src data, data.size = " << data.size()
+          << "; details: ";
+  auto tree_ptr = TreeWrapper::GetInstance();
+  auto fleet_ptr = FleetWrapper::GetInstance();
+  for (auto i = 0; i < data.size(); i++) {
+    VLOG(1) << "data[" << i << "]: size = " << data[i].size();
+    std::vector<T> tmp_results;
+    tree_ptr->sample(sample_slot, type_slot, &data[i], &tmp_results, start_h);
+    VLOG(1) << "sample_results(" << sample_slot << ", " << type_slot
+            << ") = " << tmp_results.size();
+    sample_results.push_back(tmp_results);
+  }
+
+  auto output_channel_num = multi_output_channel_.size();
+  for (auto i = 0; i < sample_results.size(); i++) {
+    auto output_idx = fleet_ptr->LocalRandomEngine()() % output_channel_num;
+    multi_output_channel_[output_idx]->Open();
+    multi_output_channel_[output_idx]->Write(std::move(sample_results[i]));
+  }
+
+  data.clear();
+  sample_results.clear();
+  data.shrink_to_fit();
+  sample_results.shrink_to_fit();
+
+  timeline.Pause();
+  VLOG(0) << "DatasetImpl<T>::Sample() end, cost time=" << timeline.ElapsedSec()
+          << " seconds";
+  return;
 }
 
 // do local shuffle

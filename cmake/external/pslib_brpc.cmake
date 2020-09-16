@@ -47,7 +47,7 @@ ExternalProject_Add(
     ${EXTERNAL_PROJECT_LOG_ARGS}
     PREFIX                ${PSLIB_BRPC_SOURCE_DIR}
     DOWNLOAD_DIR          ${PSLIB_BRPC_DOWNLOAD_DIR}
-    DOWNLOAD_COMMAND      wget --no-check-certificate ${PSLIB_BRPC_URL} -c -q -O ${PSLIB_BRPC_NAME}.tar.gz
+    DOWNLOAD_COMMAND      cp /home/malin10/Paddle/pslib_brpc.tar.gz ${PSLIB_BRPC_NAME}.tar.gz
                           && tar zxvf ${PSLIB_BRPC_NAME}.tar.gz
     DOWNLOAD_NO_PROGRESS  1
     UPDATE_COMMAND        ""

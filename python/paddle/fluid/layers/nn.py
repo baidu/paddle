@@ -489,11 +489,11 @@ def embedding(input,
     check_dtype(dtype, 'dtype', ['float16', 'float32', 'float64'],
                 'fluid.layers.embedding')
 
-    if is_distributed:
-        is_distributed = False
-        warnings.warn(
-            "is_distributed is go out of use, `fluid.contrib.layers.sparse_embedding` is your needed"
-        )
+    # if is_distributed:
+    #     is_distributed = False
+    #     warnings.warn(
+    #         "is_distributed is go out of use, `fluid.contrib.layers.sparse_embedding` is your needed"
+    #     )
 
     remote_prefetch = True if is_sparse else False
 
