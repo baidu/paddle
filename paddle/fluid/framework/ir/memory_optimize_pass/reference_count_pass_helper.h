@@ -43,7 +43,7 @@ const char kUseCuda[] = "use_cuda";
 
 class LastLiveOpOfVarInfo {
  public:
-  details::VarHandle *var() { return var_; }
+  details::VarHandle *var() const { return var_; }
 
   void set_var(details::VarHandle *var) { var_ = var; }
 
@@ -64,6 +64,9 @@ using LastLiveOpsOfVars = std::unordered_map<std::string, LastLiveOpOfVarInfo>;
 const char kLastLiveOpsOfVars[] = "last_live_ops_of_var";
 
 VarDesc *TryGetLatestVarDesc(const std::vector<details::VarHandle *> &vars);
+
+using SkipReuseVars = std::unordered_set<std::string>;
+const char kSkipReuseVars[] = "skip_reuse_var";
 
 }  // namespace ir
 }  // namespace framework

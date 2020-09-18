@@ -85,12 +85,19 @@ class MemoryReusePass : public Pass {
 
   bool IsOutVarReusable(const details::VarHandle &out_var) const;
 
-  std::unordered_set<Node *> FindNodesByName(
-      const std::string &name, const std::vector<Node *> &nodes) const;
+  bool IsLastVersionVar(const details::VarHandle &var) const;
+
+  static std::unordered_set<Node *> FindNodesByName(
+      const std::string &name, const std::vector<Node *> &nodes);
 
   size_t ScopeNum() const { return all_vars_->size(); }
 
   int64_t GetMemorySize(const details::VarHandle &var) const;
+
+  void AddReuseVar(details::ComputationOpHandle *op, details::VarHandle *in_var,
+                   details::VarHandle *out_var) const;
+
+  void MarkAsNotReusableInVar(const details::VarHandle &var) const;
 
  private:
   VarDesc *GetVarDesc(const details::VarHandle &var) const;
@@ -109,12 +116,12 @@ class MemoryReusePass : public Pass {
 
   void CollectReusedVars() const;
 
-  void AddReuseVar(details::ComputationOpHandle *op, details::VarHandle *in_var,
-                   details::VarHandle *out_var) const;
-
   void UpdateLastLiveOpOfVar(details::ComputationOpHandle *op,
                              details::VarHandle *in_var,
                              details::VarHandle *out_var) const;
+
+ private:
+  bool IsPinnedVar(const VarDesc &out_var_desc) const;
 
  private:
   mutable Graph *graph_;
@@ -135,8 +142,14 @@ class MemoryReusePass : public Pass {
   mutable std::vector<std::unordered_map<std::string, VarDesc *>> var_descs_;
   mutable details::PinnedVars *pinned_var_set_;
 
-  bool IsPinnedVar(const VarDesc &out_var_desc) const;
+  mutable std::vector<SkipReuseVars> *skip_reuse_vars_;
 };
+
+using InplaceInToOutMap = std::unordered_map<std::string, std::string>;
+
+bool IsIdentityOp(const std::string &type);
+
+const InplaceInToOutMap &InOutPairOfIdentityOp(const std::string &type);
 
 }  // namespace ir
 }  // namespace framework

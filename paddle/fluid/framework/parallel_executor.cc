@@ -13,12 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/framework/parallel_executor.h"
+
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/details/async_ssa_graph_executor.h"
 #include "paddle/fluid/framework/details/fast_threaded_ssa_graph_executor.h"
 #include "paddle/fluid/framework/details/multi_devices_helper.h"
@@ -320,17 +322,25 @@ ir::Graph *ParallelExecutorPrivate::ApplyMemoryOptimizePass(ir::Graph *graph) {
   graph = ref_cnt_pass->Apply(graph);
   VLOG(10) << "ReferenceCountPass Applied";
 
+  std::vector<ir::SkipReuseVars> skip_reuse_vars;
   if (build_strategy_.enable_inplace_) {
-    auto inplace_pass =
-        ir::PassRegistry::Instance().Get("buffer_shared_inplace_pass");
-    inplace_pass->SetNotOwned(ir::kMemOptVarInfoMapList, &mem_opt_var_infos_);
-    inplace_pass->SetNotOwned(ir::kLastLiveOpsOfVars, &last_live_ops_of_vars);
-    inplace_pass->SetNotOwned(ir::kUseCuda, &use_cuda_);
-    VLOG(10) << "Start to apply buffer_shared_inplace_pass";
-    graph = inplace_pass->Apply(graph);
-    VLOG(10) << "buffer_shared_inplace_pass Applied";
-    VLOG(1) << "Inplace strategy is enabled, when "
-               "build_strategy.enable_inplace = True";
+    std::vector<std::unique_ptr<ir::Pass>> inplace_passes;
+    inplace_passes.emplace_back(
+        ir::PassRegistry::Instance().Get("buffer_shared_inplace_pass"));
+    inplace_passes.emplace_back(ir::PassRegistry::Instance().Get(
+        "buffer_shared_identity_inplace_pass"));
+
+    for (auto &inplace_pass : inplace_passes) {
+      inplace_pass->SetNotOwned(ir::kMemOptVarInfoMapList, &mem_opt_var_infos_);
+      inplace_pass->SetNotOwned(ir::kLastLiveOpsOfVars, &last_live_ops_of_vars);
+      inplace_pass->SetNotOwned(ir::kUseCuda, &use_cuda_);
+      inplace_pass->SetNotOwned(ir::kSkipReuseVars, &skip_reuse_vars);
+      VLOG(10) << "Start to apply " << inplace_pass->Type();
+      graph = inplace_pass->Apply(graph);
+      VLOG(10) << "Finish to apply " << inplace_pass->Type();
+    }
+    LOG_FIRST_N(INFO, 1) << "Inplace strategy is enabled, when "
+                            "build_strategy.enable_inplace = True";
   }
 
   if (build_strategy_.memory_optimize_.get()) {
@@ -341,6 +351,8 @@ ir::Graph *ParallelExecutorPrivate::ApplyMemoryOptimizePass(ir::Graph *graph) {
     cross_op_memory_reuse_pass->SetNotOwned(ir::kLastLiveOpsOfVars,
                                             &last_live_ops_of_vars);
     cross_op_memory_reuse_pass->SetNotOwned(ir::kUseCuda, &use_cuda_);
+    cross_op_memory_reuse_pass->SetNotOwned(ir::kSkipReuseVars,
+                                            &skip_reuse_vars);
     VLOG(10) << "Start to apply buffer_shared_cross_op_memory_reuse_pass";
     graph = cross_op_memory_reuse_pass->Apply(graph);
     VLOG(10) << "buffer_shared_cross_op_memory_reuse_pass Applied";
@@ -1068,3 +1080,4 @@ USE_PASS(reference_count_pass);
 USE_PASS(eager_deletion_pass);
 USE_PASS(buffer_shared_inplace_pass);
 USE_PASS(buffer_shared_cross_op_memory_reuse_pass);
+USE_PASS(buffer_shared_identity_inplace_pass);

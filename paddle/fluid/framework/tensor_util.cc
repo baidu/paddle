@@ -13,11 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/framework/tensor_util.h"
+
 #include <algorithm>
 #include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/data_type.h"
 #include "paddle/fluid/platform/profiler.h"
 
@@ -49,6 +51,12 @@ void TensorCopy(const Tensor& src, const platform::Place& dst_place,
   }
 
   auto size = src.numel() * SizeOfType(src.type());
+
+  if (dst_ptr == src_ptr && src_place == dst_place) {
+    VLOG(3) << "Skip copy the same data async from " << src_place << " to "
+            << dst_place;
+    return;
+  }
 
   if (platform::is_cpu_place(src_place) && platform::is_cpu_place(dst_place)) {
     memory::Copy(BOOST_GET_CONST(platform::CPUPlace, dst_place), dst_ptr,
@@ -248,6 +256,13 @@ void TensorCopySync(const Tensor& src, const platform::Place& dst_place,
   }
 
   auto size = src.numel() * SizeOfType(src.type());
+
+  if (src_ptr == dst_ptr && src_place == dst_place) {
+    VLOG(3) << "Skip copy the same data from " << src_place << " to "
+            << dst_place;
+    return;
+  }
+
   if (platform::is_cpu_place(src_place) && platform::is_cpu_place(dst_place)) {
     memory::Copy(BOOST_GET_CONST(platform::CPUPlace, dst_place), dst_ptr,
                  BOOST_GET_CONST(platform::CPUPlace, src_place), src_ptr, size);

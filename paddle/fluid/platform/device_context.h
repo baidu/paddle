@@ -17,6 +17,7 @@ limitations under the License. */
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/memory/malloc.h"
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/cuda_helper.h"
@@ -35,6 +36,7 @@ limitations under the License. */
 #endif
 
 #include <map>
+
 #include "glog/logging.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/place.h"
@@ -362,6 +364,10 @@ class CUDADeviceContext : public DeviceContext {
                                          std::shared_ptr<CUDAContext>>
       thread_ctx_;
   static thread_local std::mutex ctx_mtx_;
+
+  std::unique_ptr<Eigen::GpuDevice> eigen_device_;
+  std::unique_ptr<EigenCudaStreamDevice> eigen_stream_;
+  cudaStream_t stream_;
 
   mutable std::mutex cudnn_handle_mtx_;
 

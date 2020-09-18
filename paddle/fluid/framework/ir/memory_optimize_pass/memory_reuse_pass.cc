@@ -41,6 +41,19 @@ void MemoryReusePass::ApplyImpl(Graph *graph) const {
     pinned_var_set_ = &graph->Get<details::PinnedVars>(details::kPinnedVars);
   }
 
+  // kSkipReuseVars would be empty at first, and be changed during each
+  // applied MemoryReusePass. Therefore, it is empty at first, and would
+  // have same size with `all_vars_` (place number, not var number) after
+  // each MemoryReusePass is applied.
+  skip_reuse_vars_ = &Get<std::vector<SkipReuseVars>>(kSkipReuseVars);
+  if (skip_reuse_vars_->empty()) {
+    skip_reuse_vars_->resize(all_vars_->size());
+  } else {
+    PADDLE_ENFORCE_EQ(
+        skip_reuse_vars_->size(), all_vars_->size(),
+        platform::errors::InvalidArgument("Size not match, this may be a bug"));
+  }
+
   // Collect the existing ShareTensorBufferOpHandles.
   // This is because (1) we want to reuse the existing
   // ShareTensorBufferOpHandles to avoid inserting too many ops;
@@ -73,6 +86,7 @@ bool MemoryReusePass::TryReuseVar(details::VarHandle *in_var,
           out_var->Name()));
   if (IsVarPairReusable(*in_var, *out_var)) {
     AddReuseVar(op, in_var, out_var);
+    UpdateLastLiveOpOfVar(op, in_var, out_var);
     return true;
   } else {
     return false;
@@ -80,7 +94,7 @@ bool MemoryReusePass::TryReuseVar(details::VarHandle *in_var,
 }
 
 std::unordered_set<Node *> MemoryReusePass::FindNodesByName(
-    const std::string &name, const std::vector<Node *> &nodes) const {
+    const std::string &name, const std::vector<Node *> &nodes) {
   std::unordered_set<ir::Node *> ret;
   for (auto *node : nodes) {
     if (node->Name() == name) {
@@ -217,6 +231,10 @@ bool MemoryReusePass::IsInVarReusable(const details::VarHandle &in_var) const {
     return false;
   }
 
+  if ((*skip_reuse_vars_)[in_var.scope_idx()].count(in_var.Name()) > 0) {
+    return false;
+  }
+
   return true;
 }
 
@@ -349,8 +367,6 @@ void MemoryReusePass::AddReuseVar(details::ComputationOpHandle *op,
       out_var->Name());
   reused_in_var_names_[op->GetScopeIdx()].insert(in_var->Name());
   reused_out_var_names_[op->GetScopeIdx()].insert(out_var->Name());
-
-  UpdateLastLiveOpOfVar(op, in_var, out_var);
 }
 
 // 1. Set last living op of in_var to be any last living op of out_var
@@ -386,6 +402,74 @@ void MemoryReusePass::UpdateLastLiveOpOfVar(details::ComputationOpHandle *op,
       platform::errors::NotFound("Cannot find variable %s.", in_var->Name()));
 
   in_var_info_iter->second->SetRefCnt(1);
+}
+
+void MemoryReusePass::MarkAsNotReusableInVar(
+    const details::VarHandle &var) const {
+  (*skip_reuse_vars_)[var.scope_idx()].insert(var.Name());
+}
+
+bool MemoryReusePass::IsLastVersionVar(const details::VarHandle &var) const {
+  auto iter = (*all_vars_)[var.scope_idx()].find(var.Name());
+  PADDLE_ENFORCE_EQ(
+      iter != (*all_vars_)[var.scope_idx()].end() && !iter->second.empty(),
+      true, platform::errors::NotFound("Cannot find variable %s", var.Name()));
+  return iter->second.back() == &var;
+}
+
+using InplaceOpMeta = std::unordered_map<std::string, InplaceInToOutMap>;
+
+static InplaceOpMeta *BuildIdentityInplaceOpMeta() {
+  auto *meta = new InplaceOpMeta();
+#define PADDLE_REGISTER_IDENTITY_OP(op_type, ...) \
+  do {                                            \
+    meta->insert({op_type, {__VA_ARGS__}});       \
+  } while (0)
+
+  PADDLE_REGISTER_IDENTITY_OP("reshape2", {"X", "Out"});
+  PADDLE_REGISTER_IDENTITY_OP("reshape2_grad", {framework::GradVarName("Out"),
+                                                framework::GradVarName("X")});
+  PADDLE_REGISTER_IDENTITY_OP("reshape2_grad_grad", {"DDX", "DDOut"});
+
+  PADDLE_REGISTER_IDENTITY_OP("flatten2", {"X", "Out"});
+  PADDLE_REGISTER_IDENTITY_OP("flatten2_grad", {framework::GradVarName("Out"),
+                                                framework::GradVarName("X")});
+
+  PADDLE_REGISTER_IDENTITY_OP("assign", {"X", "Out"});
+
+  PADDLE_REGISTER_IDENTITY_OP("squeeze2", {"X", "Out"});
+  PADDLE_REGISTER_IDENTITY_OP("squeeze2_grad", {framework::GradVarName("Out"),
+                                                framework::GradVarName("X")});
+
+  PADDLE_REGISTER_IDENTITY_OP("unsqueeze2", {"X", "Out"});
+  PADDLE_REGISTER_IDENTITY_OP("unsqueeze2_grad", {framework::GradVarName("Out"),
+                                                  framework::GradVarName("X")});
+
+  PADDLE_REGISTER_IDENTITY_OP("lod_reset", {"X", "Out"});
+  PADDLE_REGISTER_IDENTITY_OP("lod_reset_grad", {framework::GradVarName("Out"),
+                                                 framework::GradVarName("X")});
+
+  return meta;
+
+#undef PADDLE_REGISTER_IDENTITY_OP
+}
+
+static const InplaceOpMeta &GetIdentityInplaceOpMeta() {
+  static auto *meta = BuildIdentityInplaceOpMeta();
+  return *meta;
+}
+
+bool IsIdentityOp(const std::string &type) {
+  return GetIdentityInplaceOpMeta().count(type) > 0;
+}
+
+const InplaceInToOutMap &InOutPairOfIdentityOp(const std::string &type) {
+  const auto &ops = GetIdentityInplaceOpMeta();
+  auto iter = ops.find(type);
+  PADDLE_ENFORCE_EQ(
+      iter != ops.end(), true,
+      platform::errors::NotFound("%s does not support identity inplace", type));
+  return iter->second;
 }
 
 }  // namespace ir

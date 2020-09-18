@@ -447,4 +447,5 @@ REGISTER_PASS(buffer_shared_cross_op_memory_reuse_pass,
               paddle::framework::ir::BufferSharedCrossOpMemoryReusePass)
     .RequirePassAttr(paddle::framework::ir::kMemOptVarInfoMapList)
     .RequirePassAttr(paddle::framework::ir::kLastLiveOpsOfVars)
-    .RequirePassAttr(paddle::framework::ir::kUseCuda);
+    .RequirePassAttr(paddle::framework::ir::kUseCuda)
+    .RequirePassAttr(paddle::framework::ir::kSkipReuseVars);

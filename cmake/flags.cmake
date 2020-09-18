@@ -158,6 +158,7 @@ set(COMMON_FLAGS
     -Wno-unused-parameter
     -Wno-unused-function
     -Wno-error=literal-suffix
+    -Wno-error=sign-compare
     -Wno-error=unused-local-typedefs
     -Wno-error=parentheses-equality # Warnings in pybind11
     -Wno-error=ignored-attributes  # Warnings in Eigen, gcc 6.3
@@ -192,6 +193,7 @@ set(GPU_COMMON_FLAGS
     -Wdelete-non-virtual-dtor
     -Wno-unused-parameter
     -Wno-unused-function
+    -Wno-error=sign-compare
     -Wno-error=literal-suffix
     -Wno-error=unused-local-typedefs
     -Wno-error=unused-function  # Warnings in Numpy Header.
