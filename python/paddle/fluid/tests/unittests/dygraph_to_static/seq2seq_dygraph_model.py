@@ -182,6 +182,7 @@ class BaseModel(fluid.dygraph.Layer):
 
     @declarative
     def forward(self, inputs):
+        inputs = [fluid.dygraph.to_variable(np_inp) for np_inp in inputs]
         src, tar, label, src_sequence_length, tar_sequence_length = inputs
         if src.shape[0] < self.batch_size:
             self.batch_size = src.shape[0]
@@ -626,13 +627,14 @@ class AttentionModel(fluid.dygraph.Layer):
 
     @declarative
     def forward(self, inputs):
+        inputs = [fluid.dygraph.to_variable(np_inp) for np_inp in inputs]
         src, tar, label, src_sequence_length, tar_sequence_length = inputs
         if src.shape[0] < self.batch_size:
             self.batch_size = src.shape[0]
 
         src_emb = self.src_embeder(self._transpose_batch_time(src))
 
-        # NOTE: modify model code about `enc_hidden` and `enc_cell` to transforme dygraph code successfully.
+        # NOTE: modify model code about `enc_hidden` and `enc_cell` to transform dygraph code successfully.
         # Because nested list can't be transformed now.
         enc_hidden_0 = to_variable(
             np.zeros(

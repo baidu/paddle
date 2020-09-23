@@ -230,6 +230,11 @@ def ast_walk(transformed_node, static_node):
                     s_node, (gast.Load, gast.Param)):
                 continue
 
+            if isinstance(t_node,
+                          (gast.Name, gast.Attribute, gast.Call)) or isinstance(
+                              s_node, (gast.Name, gast.Attribute, gast.Call)):
+                continue
+
         assert type(t_node) == type(s_node), \
             "The node types should be the same, but received type(t_node) is {}, and type(s_node) is {}."\
                 .format(type(t_node), type(s_node))

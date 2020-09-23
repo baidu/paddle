@@ -24,6 +24,7 @@ from paddle.fluid.dygraph.dygraph_to_static.basic_api_transformer import BasicAp
 from paddle.fluid.dygraph.dygraph_to_static.break_continue_transformer import BreakContinueTransformer
 from paddle.fluid.dygraph.dygraph_to_static.call_transformer import CallTransformer
 from paddle.fluid.dygraph.dygraph_to_static.cast_transformer import CastTransformer
+from paddle.fluid.dygraph.dygraph_to_static.dynamic_list_transformer import DynamicListTransformer
 from paddle.fluid.dygraph.dygraph_to_static.ifelse_transformer import IfElseTransformer
 from paddle.fluid.dygraph.dygraph_to_static.list_transformer import ListTransformer
 from paddle.fluid.dygraph.dygraph_to_static.logical_transformer import LogicalTransformer
@@ -122,6 +123,9 @@ class DygraphToStaticAst(gast.NodeTransformer):
 
         translator_logger.log_transformed_code(logging_utils.LOG_AllTransformer,
                                                self.root, "All Transformers")
+
+        # Transform DynamicList to LoDTensorArray
+        DynamicListTransformer(node_wrapper).transform()
 
     def visit_FunctionDef(self, node):
         if self.decorate_func_name is None:
