@@ -14,7 +14,7 @@ ENV LD_LIBRARY_PATH /opt/rh/devtoolset-2/root/usr/lib64:/opt/rh/devtoolset-2/roo
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 RUN yum install -y sqlite-devel zlib-devel openssl-devel pcre-devel tk-devel tkinter libtool xz graphviz gettext-devel
-RUN yum install -y curl-devel
+RUN yum install -y curl-devel 
 
 COPY tools/manylinux1/build_scripts ./build_scripts
 
@@ -34,7 +34,8 @@ RUN wget -q https://paddle-docker-tar.bj.bcebos.com/home/users/tianshuo/bce-pyth
   make -j8 && make install
 
 ENV PATH=/usr/local/gcc-8.2/bin:$PATH
-RUN rm -rf /temp_gcc82 && rm -rf /gcc-8.2.0.tar.xz && rm -rf /gcc-8.2.0 
+ENV LD_LIBRARY_PATH=/usr/local/gcc-8.2/lib64:$LD_LIBRARY_PATH
+RUN rm -rf /temp_gcc82 && rm -rf /gcc-8.2.0.tar.xz && rm -rf /gcc-8.2.0
 
 # git 2.17.1
 RUN wget -q https://paddle-ci.gz.bcebos.com/git-2.17.1.tar.gz && \
