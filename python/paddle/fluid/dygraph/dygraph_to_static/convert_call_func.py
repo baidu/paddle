@@ -65,17 +65,20 @@ def is_unsupported(func):
     Checks whether the func is supported by dygraph to static graph.
     """
 
-    if any(func in m.__dict__.values() for m in BUILTIN_LIKELY_MODULES):
-        translator_logger.log(
-            2,
-            "Whitelist: {} is part of built-in module and does not have to be transformed.".
-            format(func))
-        return True
-
+    # TODO(Aruelius84): Found special class will trigger error from python `in` operation
+    # of numpy, such as `Sequential` in hapi. Found that `__getitem__` will be called but
+    # reason is unknown.
     if is_paddle_func(func):
         translator_logger.log(
             2,
             "Whitelist: {} is part of Paddle module and does not have to be transformed.".
+            format(func))
+        return True
+
+    if any(func in m.__dict__.values() for m in BUILTIN_LIKELY_MODULES):
+        translator_logger.log(
+            2,
+            "Whitelist: {} is part of built-in module and does not have to be transformed.".
             format(func))
         return True
 

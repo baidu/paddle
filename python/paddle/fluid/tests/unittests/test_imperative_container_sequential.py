@@ -56,5 +56,30 @@ class TestImperativeContainerSequential(unittest.TestCase):
             loss2.backward()
 
 
+class TestImperativeContainerSequentialCase1(unittest.TestCase):
+    def test_sequential(self):
+        data = np.random.uniform(-1, 1, [5, 10]).astype('float32')
+        with fluid.dygraph.guard():
+            data = fluid.dygraph.to_variable(data)
+            model1 = fluid.dygraph.Sequential(
+                fluid.Linear(10, 1),
+                fluid.Linear(1, 2), fluid.Linear(2, 2), fluid.Linear(2, 2))
+            actual_model = model1[:3]
+            res1 = actual_model(data)
+            res1 = model1[-1](res1)
+            self.assertListEqual(res1.shape, [5, 2])
+            loss1 = fluid.layers.reduce_mean(res1)
+            loss1.backward()
+
+
+class TestImperativeContainerSequentialCase2(unittest.TestCase):
+    def test_sequential(self):
+        with fluid.dygraph.guard():
+            model1 = fluid.dygraph.Sequential(
+                fluid.Linear(10, 1), fluid.Linear(1, 2))
+            with self.assertRaises(IndexError):
+                layer = model1[2]
+
+
 if __name__ == '__main__':
     unittest.main()

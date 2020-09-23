@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import operator
+from itertools import islice
 from collections import OrderedDict
 from ..framework import Parameter
 from .layers import Layer
@@ -63,12 +65,27 @@ class Sequential(Layer):
         if len(layers) > 0 and isinstance(layers[0], tuple):
             for name, layer in layers:
                 self.add_sublayer(name, layer)
+        elif len(layers) == 1 and isinstance(layers[0], OrderedDict):
+            for idx, layer in layers[0].items():
+                self.add_sublayer(str(idx), layer)
         else:
             for idx, layer in enumerate(layers):
                 self.add_sublayer(str(idx), layer)
 
+    def _get_item_by_name(self, items, name):
+        size = len(self)
+        name = operator.index(name)
+        if name >= size or name < -size:
+            raise IndexError('list index out of range')
+        name %= size
+        return next(islice(items, name, None))
+
     def __getitem__(self, name):
-        return self._sub_layers[str(name)]
+        if isinstance(name, slice):
+            return self.__class__(
+                OrderedDict(list(self._sub_layers.items())[name]))
+        else:
+            return self._get_item_by_name(self._sub_layers.values(), name)
 
     def __setitem__(self, name, layer):
         assert isinstance(layer, Layer)
