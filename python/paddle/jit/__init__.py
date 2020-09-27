@@ -21,6 +21,9 @@ from ..fluid.dygraph.jit import declarative as to_static  #DEFINE_ALIAS
 from ..fluid.dygraph import ProgramTranslator  #DEFINE_ALIAS
 from ..fluid.dygraph.io import TranslatedLayer  #DEFINE_ALIAS
 
+# NOTE: This function is not exposed to users, only used for paddle2onnx now
+from ..fluid.dygraph.jit import get_inference_program  #DEFINE_ALIAS
+
 __all__ = [
     'save', 'load', 'TracedLayer', 'to_static', 'ProgramTranslator',
     'TranslatedLayer', 'set_code_level', 'set_verbosity'

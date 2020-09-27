@@ -48,3 +48,6 @@ from ..fluid.io import save_inference_model  #DEFINE_ALIAS
 from ..fluid.io import load_inference_model  #DEFINE_ALIAS
 from ..fluid.io import load_program_state  #DEFINE_ALIAS
 from ..fluid.io import set_program_state  #DEFINE_ALIAS
+
+# NOTE: This function is not exposed to users, only used for paddle2onnx now
+from ..fluid.io import get_inference_program

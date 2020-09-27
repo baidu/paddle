@@ -755,5 +755,34 @@ class TestJitSaveLoadNoParamLayer(unittest.TestCase):
         self.assertTrue(np.array_equal(out, load_out))
 
 
+class TestJitGetInferenceProgram(unittest.TestCase):
+    def setUp(self):
+        # enable dygraph mode
+        paddle.disable_static()
+
+    def test_get_inference_program(self):
+        layer = LinearNet(784, 1)
+        train(layer)
+
+        model_path = "model.jit_get_inference_program"
+        paddle.jit.save(layer, model_path)
+
+        infer_program = paddle.jit.get_inference_program(layer)
+
+        # the program of jit.load is different with original inference program
+        model_file_path = os.path.join(model_path, "__model__")
+        load_program_desc = fluid.dygraph.io._load_program_desc(model_file_path)
+        load_program = fluid.dygraph.io._build_program_by_desc(
+            load_program_desc)
+
+        self.assertEqual(infer_program.num_blocks, load_program.num_blocks)
+        self.assertEqual(
+            len(infer_program.global_block().ops),
+            len(load_program.global_block().ops))
+        self.assertEqual(
+            len(infer_program.global_block().vars),
+            len(load_program.global_block().vars))
+
+
 if __name__ == '__main__':
     unittest.main()

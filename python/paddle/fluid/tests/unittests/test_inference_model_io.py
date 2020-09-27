@@ -23,6 +23,7 @@ import paddle.fluid.core as core
 import paddle.fluid as fluid
 import warnings
 
+import paddle
 import paddle.fluid.executor as executor
 import paddle.fluid.layers as layers
 import paddle.fluid.optimizer as optimizer
@@ -201,4 +202,5 @@ class TestLoadInferenceModelError(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    paddle.enable_static()
     unittest.main()

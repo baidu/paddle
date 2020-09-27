@@ -22,10 +22,11 @@ import logging
 import pickle
 import contextlib
 from functools import reduce
-
 import numpy as np
 
 import paddle
+
+# ddeprecated module import
 from paddle.fluid import layers
 from paddle.fluid.executor import Executor, global_scope
 from paddle.fluid.evaluator import Evaluator
@@ -217,6 +218,113 @@ def _get_valid_program(main_program):
         raise TypeError(
             "The type of input main_program is invalid, expected type is fluid.Program, but received %s"
             % type(main_program))
+    return main_program
+
+
+def _feed_fetch_check(feeded_var_names, target_vars,
+                      export_for_deployment=True):
+    if isinstance(feeded_var_names, six.string_types):
+        feeded_var_names = [feeded_var_names]
+    elif export_for_deployment:
+        if len(feeded_var_names) > 0:
+            # TODO(paddle-dev): polish these code blocks
+            if not (bool(feeded_var_names) and all(
+                    isinstance(name, six.string_types)
+                    for name in feeded_var_names)):
+                raise ValueError("'feed_var_names' should be a list of str.")
+
+    if isinstance(target_vars, Variable):
+        target_vars = [target_vars]
+    elif export_for_deployment:
+        if not (bool(target_vars) and
+                all(isinstance(var, Variable) for var in target_vars)):
+            raise ValueError("'target_vars' should be a list of Variable.")
+
+
+def _auc_states_check_and_remind(main_program):
+    all_ops = main_program.global_block().ops
+    for op in all_ops:
+        # clear device of Op
+        device_attr_name = core.op_proto_and_checker_maker.kOpDeviceAttrName()
+        op._set_attr(device_attr_name, "")
+        if op.type == 'auc':
+            warnings.warn(
+                "please ensure that you have set the auc states to zeros before saving inference model"
+            )
+            break
+
+
+def _update_target_vars(target_vars, main_program):
+    # fix the bug that the activation op's output as target will be pruned.
+    # will affect the inference performance.
+    # TODO(Superjomn) add an IR pass to remove 1-scale op.
+    with program_guard(main_program):
+        uniq_target_vars = []
+        for i, var in enumerate(target_vars):
+            if isinstance(var, Variable):
+                var = layers.scale(
+                    var, 1., name="save_infer_model/scale_{}".format(i))
+            uniq_target_vars.append(var)
+        target_vars = uniq_target_vars
+
+    return target_vars
+
+
+def _get_train_program(feeded_var_names, target_vars, main_program):
+    # 1. feed & fetch check
+    _feed_fetch_check(feeded_var_names, target_vars, False)
+
+    # 2. remind user to set auc_states to zeros if the program contains auc op
+    _auc_states_check_and_remind(main_program)
+
+    # 3. update input target_vars to fix bug
+    target_vars = _update_target_vars(target_vars, main_program)
+
+    return main_program
+
+
+def _serialization(main_program, model_basename):
+    with open(model_basename, "wb") as f:
+        f.write(main_program.desc.serialize_to_string())
+
+
+# NOTE: This function is not exposed to users, only used for paddle2onnx now
+@dygraph_not_support
+def get_inference_program(feeded_var_names, target_vars, main_program):
+    # 1. feed & fetch check
+    _feed_fetch_check(feeded_var_names, target_vars)
+
+    # 2. remind user to set auc_states to zeros if the program contains auc op
+    _auc_states_check_and_remind(main_program)
+
+    # 3. update input target_vars to fix bug
+    target_vars = _update_target_vars(target_vars, main_program)
+
+    # 4. build inference program
+    main_program = main_program.clone()
+    global_block = main_program.global_block()
+    need_to_remove_op_index = []
+    for i, op in enumerate(global_block.ops):
+        op.desc.set_is_target(False)
+        if op.type == "feed" or op.type == "fetch":
+            need_to_remove_op_index.append(i)
+
+    for index in need_to_remove_op_index[::-1]:
+        global_block._remove_op(index)
+
+    main_program.desc.flush()
+
+    main_program = main_program._prune_with_input(
+        feeded_var_names=feeded_var_names, targets=target_vars)
+    main_program = main_program._inference_optimize(prune_read_op=True)
+    fetch_var_names = [v.name for v in target_vars]
+
+    prepend_feed_ops(main_program, feeded_var_names)
+    append_fetch_ops(main_program, fetch_var_names)
+
+    main_program.desc._set_version()
+    paddle.fluid.core.save_op_compatible_info(main_program.desc)
+
     return main_program
 
 
@@ -1257,50 +1365,16 @@ def save_inference_model(dirname,
             # "./infer_model".
 
     """
-    if isinstance(feeded_var_names, six.string_types):
-        feeded_var_names = [feeded_var_names]
-    elif export_for_deployment:
-        if len(feeded_var_names) > 0:
-            # TODO(paddle-dev): polish these code blocks
-            if not (bool(feeded_var_names) and all(
-                    isinstance(name, six.string_types)
-                    for name in feeded_var_names)):
-                raise ValueError("'feed_var_names' should be a list of str.")
-
-    if isinstance(target_vars, Variable):
-        target_vars = [target_vars]
-    elif export_for_deployment:
-        if not (bool(target_vars) and
-                all(isinstance(var, Variable) for var in target_vars)):
-            raise ValueError("'target_vars' should be a list of Variable.")
-
+    # 1. get main program
     main_program = _get_valid_program(main_program)
 
-    # remind user to set auc_states to zeros if the program contains auc op
-    all_ops = main_program.global_block().ops
-    for op in all_ops:
-        # clear device of Op
-        device_attr_name = core.op_proto_and_checker_maker.kOpDeviceAttrName()
-        op._set_attr(device_attr_name, "")
-        if op.type == 'auc':
-            warnings.warn(
-                "please ensure that you have set the auc states to zeros before saving inference model"
-            )
-            break
+    # When export_for_deployment is true, we modify the program online so that
+    # it can only be loaded for inference directly. If it's false, the whole
+    # original program and related meta are saved so that future usage can be
+    # more flexible.
+    origin_program = main_program.clone()
 
-    # fix the bug that the activation op's output as target will be pruned.
-    # will affect the inference performance.
-    # TODO(Superjomn) add an IR pass to remove 1-scale op.
-    with program_guard(main_program):
-        uniq_target_vars = []
-        for i, var in enumerate(target_vars):
-            if isinstance(var, Variable):
-                var = layers.scale(
-                    var, 1., name="save_infer_model/scale_{}".format(i))
-            uniq_target_vars.append(var)
-        target_vars = uniq_target_vars
-    target_var_name_list = [var.name for var in target_vars]
-
+    # 2. dirname check & create
     # when a pserver and a trainer running on the same machine, mkdir may conflict
     save_dirname = dirname
     try:
@@ -1310,57 +1384,34 @@ def save_inference_model(dirname,
         if e.errno != errno.EEXIST:
             raise
 
+    # 3. model_filename check & create
     if model_filename is not None:
         model_basename = os.path.basename(model_filename)
     else:
         model_basename = "__model__"
     model_basename = os.path.join(save_dirname, model_basename)
 
-    # When export_for_deployment is true, we modify the program online so that
-    # it can only be loaded for inference directly. If it's false, the whole
-    # original program and related meta are saved so that future usage can be
-    # more flexible.
-
-    origin_program = main_program.clone()
-
+    # 4. get & serialize program
     if export_for_deployment:
-        main_program = main_program.clone()
-        global_block = main_program.global_block()
-        need_to_remove_op_index = []
-        for i, op in enumerate(global_block.ops):
-            op.desc.set_is_target(False)
-            if op.type == "feed" or op.type == "fetch":
-                need_to_remove_op_index.append(i)
-
-        for index in need_to_remove_op_index[::-1]:
-            global_block._remove_op(index)
-
-        main_program.desc.flush()
-
-        main_program = main_program._prune_with_input(
-            feeded_var_names=feeded_var_names, targets=target_vars)
-        main_program = main_program._inference_optimize(prune_read_op=True)
-        fetch_var_names = [v.name for v in target_vars]
-
-        prepend_feed_ops(main_program, feeded_var_names)
-        append_fetch_ops(main_program, fetch_var_names)
-
-        main_program.desc._set_version()
-        paddle.fluid.core.save_op_compatible_info(main_program.desc)
-        with open(model_basename, "wb") as f:
-            f.write(main_program.desc.serialize_to_string())
+        main_program = get_inference_program(feeded_var_names, target_vars,
+                                             main_program)
+        _serialization(main_program, model_basename)
     else:
         # TODO(panyx0718): Save more information so that it can also be used
         # for training and more flexible post-processing.
-        with open(model_basename + ".main_program", "wb") as f:
-            f.write(main_program.desc.serialize_to_string())
+        main_program = _get_train_program(feeded_var_names, target_vars,
+                                          main_program)
+        _serialization(main_program, model_basename + ".main_program")
 
+    # 5. get target var_name list & judge whether serialize program only
+    target_var_name_list = [var.name for var in target_vars]
     if program_only:
         warnings.warn(
             "save_inference_model specified the param `program_only` to True, It will not save params of Program."
         )
         return target_var_name_list
 
+    # 6. save persistables
     main_program._copy_dist_param_info_from(origin_program)
 
     if params_filename is not None:

@@ -19,9 +19,11 @@ import pickle
 import warnings
 import functools
 from collections import OrderedDict
-
 import six
+
 import paddle
+
+# deprecated module import
 from paddle.fluid import core
 from paddle.fluid.compiler import BuildStrategy, CompiledProgram, ExecutionStrategy
 from paddle.fluid.data_feeder import check_type
@@ -645,6 +647,18 @@ class SaveLoadConfig(object):
         self._keep_name_table = value
 
 
+# NOTE(chenweihang): change jit.save/load argument `configs` to `config`
+def deprecate_save_load_configs(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if 'configs' in kwargs:
+            kwargs['config'] = kwargs['configs']
+            kwargs.pop('configs')
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def _get_input_var_names(inputs, input_spec):
     name_none_error = "The %s's name is None. " \
         "When using jit.save, please set InputSepc's name in " \
@@ -697,9 +711,9 @@ def _get_output_vars(outputs, output_spec):
         if isinstance(var, Variable):
             output_vars_dict[var.name] = var
     if output_spec is None:
-        result_list = output_vars_dict.values()
+        result_list = list(output_vars_dict.values())
     elif output_spec is not None and len(output_spec) == len(output_vars_dict):
-        result_list = output_vars_dict.values()
+        result_list = list(output_vars_dict.values())
         for var in output_spec:
             if var.name not in output_vars_dict:
                 warnings.warn(name_no_exists_error % var.name)
@@ -712,16 +726,95 @@ def _get_output_vars(outputs, output_spec):
     return result_list
 
 
-# NOTE(chenweihang): change jit.save/load argument `configs` to `config`
-def deprecate_save_load_configs(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        if 'configs' in kwargs:
-            kwargs['config'] = kwargs['configs']
-            kwargs.pop('configs')
-        return func(*args, **kwargs)
+def _infer_input_check(layer, input_spec):
+    prog_translator = ProgramTranslator()
+    if not prog_translator.enable_to_static:
+        raise RuntimeError(
+            "The paddle.jit.save doesn't work when setting ProgramTranslator.enable to False."
+        )
+    if not isinstance(layer, Layer):
+        raise TypeError(
+            "The input layer of paddle.jit.save should be 'Layer', but received layer type is %s."
+            % type(layer))
 
-    return wrapper
+    # avoid change user given input_spec
+    inner_input_spec = None
+    if input_spec is not None:
+        if not isinstance(input_spec, list):
+            raise TypeError(
+                "The input input_spec should be 'list', but received input_spec's type is %s."
+                % type(input_spec))
+        inner_input_spec = []
+        for var in input_spec:
+            if isinstance(var, paddle.static.InputSpec):
+                inner_input_spec.append(var)
+            elif isinstance(var, (core.VarBase, Variable)):
+                inner_input_spec.append(
+                    paddle.static.InputSpec.from_tensor(var))
+            else:
+                raise TypeError(
+                    "The element in input_spec list should be 'Variable' or `paddle.static.InputSpec`, but received element's type is %s."
+                    % type(var))
+    return inner_input_spec
+
+
+def _get_concrete_program_from_layer(layer, inner_input_spec):
+    # TODO(chenweihang): add support for other method, not only forward
+    if isinstance(layer.forward, StaticFunction):
+        concrete_program = layer.forward.concrete_program
+    else:
+        # transform in jit.save, if input_spec is incomplete, declarative will throw error
+        static_forward = declarative(layer.forward, input_spec=inner_input_spec)
+        concrete_program = static_forward.concrete_program
+        # the input_spec has been used in declarative, which is equal to 
+        # @declarative with input_spec and jit.save without input_spec,
+        # avoid needless warning
+        inner_input_spec = None
+    return concrete_program
+
+
+def _build_input_and_output(concrete_program, inner_input_spec, config):
+    # NOTE(chenweihang): [ Get input variables name ]
+    # There are two cases, whether to prune the inputs or not
+    # - not prune inputs (recommend):
+    #   - the len(input_spec) == len((concrete_program.inputs) - 1
+    #   - here can use concrete_program.inputs directly
+    # - prune inputs:
+    #   - the input_spec length < len((concrete_program.inputs) - 1
+    #   - the input_spec's name should be in concrete_program.inputs
+    input_var_names = _get_input_var_names(concrete_program.inputs,
+                                           inner_input_spec)
+
+    # NOTE(chenweihang): [ Get output variables ]
+    # the rule is like [ Get input variables name ]. For output var, 
+    # we only support VarBase spec, and actually, we only need the 
+    # var name of output, and we don't recommended to use output_spec
+    output_vars = _get_output_vars(concrete_program.outputs, config.output_spec)
+
+    return input_var_names, output_vars
+
+
+# NOTE: This function is not exposed to users, only used for paddle2onnx now
+@switch_to_static_graph
+def get_inference_program(layer, input_spec=None, config=None):
+    # 1. input check
+    inner_input_spec = _infer_input_check(layer, input_spec)
+
+    if config is None:
+        config = SaveLoadConfig()
+
+    # 2. get program from Layer
+    concrete_program = _get_concrete_program_from_layer(layer, inner_input_spec)
+
+    # 3. build input & output of save_infernece_model
+    input_var_names, output_vars = _build_input_and_output(
+        concrete_program, inner_input_spec, config)
+
+    # 4. only get inference program
+    inference_program = paddle.fluid.io.get_inference_program(
+        input_var_names, output_vars, concrete_program.main_program.clone())
+
+    return inference_program
 
 
 @deprecate_save_load_configs
@@ -831,72 +924,18 @@ def save(layer, model_path, input_spec=None, config=None):
             model_path = "linear.example.model"
             paddle.jit.save(layer, model_path)
     """
-
     # 1. input check
-    prog_translator = ProgramTranslator()
-    if not prog_translator.enable_to_static:
-        raise RuntimeError(
-            "The paddle.jit.save doesn't work when setting ProgramTranslator.enable to False."
-        )
-    if not isinstance(layer, Layer):
-        raise TypeError(
-            "The input layer of paddle.jit.save should be 'Layer', but received layer type is %s."
-            % type(layer))
+    inner_input_spec = _infer_input_check(layer, input_spec)
 
-    configs = config
-    if configs is None:
-        configs = SaveLoadConfig()
-
-    # avoid change user given input_spec
-    inner_input_spec = None
-    if input_spec is not None:
-        if not isinstance(input_spec, list):
-            raise TypeError(
-                "The input input_spec should be 'list', but received input_spec's type is %s."
-                % type(input_spec))
-        inner_input_spec = []
-        for var in input_spec:
-            if isinstance(var, paddle.static.InputSpec):
-                inner_input_spec.append(var)
-            elif isinstance(var, (core.VarBase, Variable)):
-                inner_input_spec.append(
-                    paddle.static.InputSpec.from_tensor(var))
-            else:
-                raise TypeError(
-                    "The element in input_spec list should be 'Variable' or `paddle.static.InputSpec`, but received element's type is %s."
-                    % type(var))
+    if config is None:
+        config = SaveLoadConfig()
 
     # 2. get program from Layer
-    # TODO(chenweihang): add support for other method, not only forward
-    if isinstance(layer.forward, StaticFunction):
-        concrete_program = layer.forward.concrete_program
-    else:
-        # transform in jit.save, if input_spec is incomplete, declarative will throw error
-        static_forward = declarative(layer.forward, input_spec=inner_input_spec)
-        concrete_program = static_forward.concrete_program
-        # the input_spec has been used in declarative, which is equal to 
-        # @declarative with input_spec and jit.save without input_spec,
-        # avoid needless warning
-        inner_input_spec = None
+    concrete_program = _get_concrete_program_from_layer(layer, inner_input_spec)
 
     # 3. build input & output of save_infernece_model
-    # NOTE(chenweihang): [ Get input variables name ]
-    # There are two cases, whether to prune the inputs or not
-    # - not prune inputs (recommend):
-    #   - the len(input_spec) == len((concrete_program.inputs) - 1
-    #   - here can use concrete_program.inputs directly
-    # - prune inputs:
-    #   - the input_spec length < len((concrete_program.inputs) - 1
-    #   - the input_spec's name should be in concrete_program.inputs
-    input_var_names = _get_input_var_names(concrete_program.inputs,
-                                           inner_input_spec)
-
-    # NOTE(chenweihang): [ Get output variables ]
-    # the rule is like [ Get input variables name ]. For output var, 
-    # we only support VarBase spec, and actually, we only need the 
-    # var name of output, and we don't recommended to use output_spec
-    output_vars = _get_output_vars(concrete_program.outputs,
-                                   configs.output_spec)
+    input_var_names, output_vars = _build_input_and_output(
+        concrete_program, inner_input_spec, config)
 
     # NOTE(chenweihang): we maintain the mapping of variable name to
     # structured name, the buffer variable (non-persistable)
@@ -928,8 +967,8 @@ def save(layer, model_path, input_spec=None, config=None):
     from paddle.fluid.io import save_inference_model
 
     # VARIABLE_FILENAME keep nameing style consistent with '__model__'
-    if configs.params_filename is None:
-        configs.params_filename = VARIABLE_FILENAME
+    if config.params_filename is None:
+        config.params_filename = VARIABLE_FILENAME
 
     with scope_guard(scope):
         save_inference_model(
@@ -938,11 +977,11 @@ def save(layer, model_path, input_spec=None, config=None):
             target_vars=output_vars,
             executor=Executor(_current_expected_place()),
             main_program=concrete_program.main_program.clone(),
-            model_filename=configs.model_filename,
+            model_filename=config.model_filename,
             params_filename=None
-            if configs.separate_params else configs.params_filename,
-            export_for_deployment=configs._export_for_deployment,
-            program_only=configs._program_only)
+            if config.separate_params else config.params_filename,
+            export_for_deployment=config._export_for_deployment,
+            program_only=config._program_only)
 
         # NOTE(chenweihang): [ Save extra variable info ]
         # save_inference_model will lose some important variable information, including:
