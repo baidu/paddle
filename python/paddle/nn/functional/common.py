@@ -1420,7 +1420,7 @@ def linear(x, weight, bias=None, name=None):
     where N is batch size and `*` means any number of additional dimensions and output_dim is the last dim of ``weight``.
     If ``bias`` is not None, a bias will be added to the output.
 
-    Args:
+    Parameters:
         x(Tensor): Input tensor, its data type is float16, float32 or float64
         weight(Tensor): Weight tensor, its data type is float16, float32 or float64
         bias(Tensor|None, optional): Bias tensor, its data type is float16, float32 or float64. If it is set to None, no bias will be added to the output units.

@@ -127,7 +127,6 @@ from .layer.extension import RowConv  #DEFINE_ALIAS
 # from .layer.learning_rate import NoamDecay        #DEFINE_ALIAS
 # from .layer.learning_rate import PiecewiseDecay        #DEFINE_ALIAS
 # from .layer.learning_rate import PolynomialDecay        #DEFINE_ALIAS
-from .layer.common import Linear
 # from .layer.loss import NCELoss        #DEFINE_ALIAS
 from .layer.loss import BCEWithLogitsLoss  #DEFINE_ALIAS
 from .layer.loss import CrossEntropyLoss  #DEFINE_ALIAS

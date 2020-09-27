@@ -74,11 +74,14 @@ class Linear(layers.Layer):
             of this layer. If it is set to False, no bias will be added to the output units.
             If it is set to None, the bias is initialized zero. Default: None.
         name(str|None): For detailed information, please refer to :ref:`api_guide_Name`. Default: None.
+    
+    Shape:
+        Input: (N, '*', in_features) where '*' means any number of additional dimensions.
+        Output: (N, '∗', out_features) where all but the last dimension are the same shape as the input.
 
     Attributes:
         **weight** (Parameter): the learnable weights of this layer.
-
-        **bias** (Parameter or None): the learnable bias of this layer.
+        **bias** (Parameter|None): the learnable bias of this layer.
 
     Returns:
         None
