@@ -34,7 +34,7 @@ import warnings
 
 from .fluid.data_feeder import convert_dtype, check_variable_and_dtype, check_type, check_dtype
 
-__all__ = ['Distribution', 'Uniform', 'Normal']
+__all__ = ['Distribution','Uniform','Normal']
 
 
 class Distribution(object):
