@@ -24,20 +24,15 @@ from ..fluid.layers import core
 from ..fluid.layer_helper import LayerHelper
 from ..fluid.data_feeder import check_variable_and_dtype, check_type, check_dtype, convert_dtype
 from ..fluid.framework import convert_np_dtype_to_dtype_, in_dygraph_mode, _varbase_creator, device_guard, OpProtoHolder
-from ..fluid.layers import fill_constant
 from paddle.common_ops_import import *
 
 # TODO: define functions to get create a tensor  
-from ..fluid.layers import crop_tensor  #DEFINE_ALIAS
-from ..fluid.layers import fill_constant  #DEFINE_ALIAS
 from ..fluid.layers import linspace  #DEFINE_ALIAS
 import paddle
 
 __all__ = [
     'to_tensor',
-    'crop_tensor',
     'diag',
-    'fill_constant',
     #       'get_tensor_from_selected_rows',
     'linspace',
     'ones',
@@ -317,7 +312,7 @@ def ones(shape, dtype=None, name=None):
           #  [1 1]]
           
           # shape is a Tensor
-          shape = paddle.fill_constant(shape=[2], dtype='int32', value=2)
+          shape = paddle.fluid.layers.fill_constant(shape=[2], dtype='int32', value=2)
           data3 = paddle.ones(shape=shape, dtype='int32') 
           # [[1 1]
           #  [1 1]]
@@ -398,7 +393,7 @@ def zeros(shape, dtype=None, name=None):
           #  [0. 0.]]
           
           # shape is a Tensor
-          shape = paddle.fill_constant(shape=[2], dtype='int32', value=2)
+          shape = paddle.fluid.layers.fill_constant(shape=[2], dtype='int32', value=2)
           data3 = paddle.zeros(shape=shape, dtype='int32') 
           # [[0 0]
           #  [0 0]]
@@ -526,18 +521,18 @@ def full(shape, fill_value, dtype=None, name=None):
           # [0]]
 
           # attr shape is a list which contains Tensor.
-          positive_2 = paddle.fill_constant([1], "int32", 2)
+          positive_2 = paddle.fluid.layers.fill_constant([1], "int32", 2)
           data3 = paddle.full(shape=[1, positive_2], dtype='float32', fill_value=1.5)
           # [[1.5 1.5]]
 
           # attr shape is a Tensor.
-          shape = paddle.fill_constant([2], "int32", 2)
+          shape = paddle.fluid.layers.fill_constant([2], "int32", 2)
           data4 = paddle.full(shape=shape, dtype='bool', fill_value=True) 
           # [[True True] 
           #  [True True]]
           
           # attr fill_value is a Tensor.
-          val = paddle.fill_constant([1], "float32", 2.0)
+          val = paddle.fluid.layers.fill_constant([1], "float32", 2.0)
           data5 = paddle.full(shape=[2,1], fill_value=val, dtype='float32')
           # [[2.0] 
           #  [2.0]]
@@ -807,55 +802,30 @@ def meshgrid(*args, **kwargs):
     vector, and creates N-dimensional grids.
     
     Args:
-        *args(Variable|list of Variable) : tensors (tuple(list) of tensor): the shapes of input k tensors are (N1,), 
+        *args(Tensor|list of Tensor) : tensors (tuple(list) of tensor): the shapes of input k tensors are (N1,), 
             (N2,),..., (Nk,). Support data types: ``float64``, ``float32``, ``int32``, ``int64``.
         **kwargs (optional): Currently, we only accept name in **kwargs 
             The default value is None. Normally there is no need for
             user to set this property. For more information, please refer to :ref:`api_guide_Name`.
  
     Returns:
-         Variable: k tensors. The shape of each tensor is (N1, N2, ..., Nk)
+         Tensor: k tensors. The shape of each tensor is (N1, N2, ..., Nk)
 
     Examples:
       .. code-block:: python
 
           import paddle
-          import paddle.fluid as fluid
-          import numpy as np
 
-          x = fluid.data(name='x', shape=[100], dtype='int32')
-          y = fluid.data(name='y', shape=[200], dtype='int32')
+          x = paddle.randint(low=0, high=100, shape=[100])
+          y = paddle.randint(low=0, high=100, shape=[200])
 
-          input_1 = np.random.randint(0, 100, [100, ]).astype('int32')
-          input_2 = np.random.randint(0, 100, [200, ]).astype('int32')
+          grid_x, grid_y = paddle.meshgrid(x, y)
 
-          exe = fluid.Executor(place=fluid.CPUPlace())
-          grid_x, grid_y = paddle.tensor.meshgrid(x, y)
-          res_1, res_2 = exe.run(fluid.default_main_program(),
-                                 feed={'x': input_1,
-                                       'y': input_2},
-                                 fetch_list=[grid_x, grid_y])
-     
+          print(grid_x.shape)
+          print(grid_y.shape)
+
           #the shape of res_1 is (100, 200)
           #the shape of res_2 is (100, 200)
-
-      .. code-block:: python
-
-          #example 2: in dygraph mode
-
-          import paddle
-          import numpy as np
-          
-          paddle.disable_static()
-
-          input_3 = np.random.randint(0, 100, [100, ]).astype('int32')
-          input_4 = np.random.randint(0, 100, [200, ]).astype('int32')
-          tensor_3 = paddle.to_tensor(input_3)
-          tensor_4 = paddle.to_tensor(input_4)
-          grid_x, grid_y = paddle.tensor.meshgrid(tensor_3, tensor_4)
-
-          #the shape of grid_x is (100, 200)
-          #the shape of grid_y is (100, 200)
 
     """
 

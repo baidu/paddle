@@ -188,8 +188,8 @@ class ListTransformer(gast.NodeTransformer):
             pass
         elif isinstance(slice_node, gast.Index):
             value_code = ast_to_source_code(node.value)
-            i = "fluid.layers.cast(" \
-                "x=fluid.dygraph.dygraph_to_static.variable_trans_func.to_static_variable({})," \
+            i = "paddle.cast(" \
+                "x=paddle.jit.dy2static.to_static_variable({})," \
                 "dtype='int64')".format(ast_to_source_code(slice_node))
             assign_code = "{} = fluid.layers.array_write(x={}, i={}, array={})" \
                 .format(target_name, value_code, i, target_name)

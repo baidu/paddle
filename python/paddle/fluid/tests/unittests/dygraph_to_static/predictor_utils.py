@@ -28,11 +28,12 @@ class PredictorTools(object):
     Paddle-Inference predictor
     '''
 
-    def __init__(self, model_path, params_file, feeds_var):
+    def __init__(self, model_path, model_file, params_file, feeds_var):
         '''
         __init__
         '''
         self.model_path = model_path
+        self.model_file = model_file
         self.params_file = params_file
 
         self.feeds_var = feeds_var
@@ -43,7 +44,7 @@ class PredictorTools(object):
         '''
         if os.path.exists(os.path.join(self.model_path, self.params_file)):
             config = AnalysisConfig(
-                os.path.join(self.model_path, "__model__"),
+                os.path.join(self.model_path, self.model_file),
                 os.path.join(self.model_path, self.params_file))
         else:
             config = AnalysisConfig(os.path.join(self.model_path))

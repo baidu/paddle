@@ -23,64 +23,80 @@ class FCOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext* ctx) const override {
-    PADDLE_ENFORCE_EQ(ctx->HasInput("Input"), true,
-                      "X(Input) of Fully Connected should not be null.");
-    PADDLE_ENFORCE_EQ(ctx->HasOutput("Out"), true,
-                      "Out(Output) of Fully Connected should not be null.");
-    PADDLE_ENFORCE_EQ(ctx->HasInput("W"), true,
-                      "W(Input) of Fully Connected should not be null.");
+    OP_INOUT_CHECK(ctx->HasInput("Input"), "Input", "Input", "FC");
+    OP_INOUT_CHECK(ctx->HasInput("W"), "Input", "W", "FC");
+    OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "FC");
 
-    auto in_dims = ctx->GetInputDim("Input");
     auto w_dims = ctx->GetInputDim("W");
     bool padding_weights = ctx->Attrs().Get<bool>("padding_weights");
+    PADDLE_ENFORCE_EQ(
+        w_dims.size(), 2,
+        platform::errors::InvalidArgument(
+            "The input Weight of fc is expected to be a 2-D tensor. "
+            "But received the number of Weight's dimensions is %d, "
+            "Weight's shape is %s.",
+            w_dims.size(), w_dims));
 
     if (ctx->HasInput("Bias")) {
       auto bias_dims = ctx->GetInputDim("Bias");
       auto w_dims1 = padding_weights ? w_dims[1] - 4 : w_dims[1];
+
+      PADDLE_ENFORCE_LE(
+          bias_dims.size(), 2,
+          platform::errors::InvalidArgument(
+              "The input Bias of fc is expected to be a 1-D or 2-D tensor. But "
+              "received the number of Bias's dimensions is %d, "
+              "Bias's shape is %s.",
+              bias_dims.size(), bias_dims));
+
+      PADDLE_ENFORCE_EQ(
+          bias_dims[bias_dims.size() - 1], w_dims1,
+          platform::errors::InvalidArgument(
+              "The last dimension of input Bias is expected be equal "
+              "to the actual width of input Weight. But received the last "
+              "dimension of Bias is %d, Bias's shape is %s; "
+              "the actual width of Weight is %d, Weight's shape is %s.",
+              bias_dims[bias_dims.size() - 1], bias_dims, w_dims1, w_dims));
+
       if (bias_dims.size() == 2) {
-        PADDLE_ENFORCE_EQ(bias_dims[0], 1,
-                          platform::errors::InvalidArgument(
-                              "The shape of Bias is invalid."
-                              "The height of Bias should be 1."
-                              "But received height of Bias is %d.",
-                              bias_dims[0]));
         PADDLE_ENFORCE_EQ(
-            bias_dims[1], w_dims1,
+            bias_dims[0], 1,
             platform::errors::InvalidArgument(
-                "The shape of Bias is invalid."
-                "The width of Bias should be equal to width of Weight."
-                "But received width of Bias is %d and width of Weight is %d.",
-                bias_dims[1], w_dims1));
-      } else if (bias_dims.size() == 1) {
-        PADDLE_ENFORCE_EQ(
-            bias_dims[0], w_dims1,
-            platform::errors::InvalidArgument(
-                "The shape of Bias is invalid."
-                "The height of Bias should be equal to the width of weight."
-                "But received height of Bias is %d and width of Weight is %d.",
-                bias_dims[0], w_dims1));
+                "The first dimension of input Bias is expected to be 1, "
+                "but received %d, Bias's shape is %s.",
+                bias_dims[0], bias_dims));
       }
     }
+
+    auto in_dims = ctx->GetInputDim("Input");
+    int in_num_col_dims = ctx->Attrs().Get<int>("in_num_col_dims");
+    PADDLE_ENFORCE_LT(
+        in_num_col_dims, in_dims.size(),
+        platform::errors::InvalidArgument(
+            "The attribute in_num_col_dims used to flatten Input to "
+            "a 2-D tensor, is expected to be less than the number of "
+            "Input's dimensions. But recieved in_num_col_dims is %d, "
+            "the number of Input's dimensions is %d, Input's shape is %s.",
+            in_num_col_dims, in_dims.size(), in_dims));
 
     auto& activation_type = ctx->Attrs().Get<std::string>("activation_type");
     if (!activation_type.empty()) {
       PADDLE_ENFORCE_EQ(activation_type, "relu",
-                        "Activation %s is not supportetd in fc now.",
-                        activation_type.c_str());
+                        platform::errors::InvalidArgument(
+                            "The attribute activation_type of fc is expected "
+                            "to be \"relu\", but received %s.",
+                            activation_type.c_str()));
     }
+
     if (ctx->Attrs().Get<bool>("use_mkldnn")) {
       PADDLE_ENFORCE_EQ(
           in_dims.size() >= 2 && in_dims.size() <= 4, true,
           platform::errors::Unimplemented(
-              "Fully Connected input should be 2D, 3D or 4D tensor."));
+              "The Input of fc is expected to be a 2-D, 3-D or 4-D tensor when "
+              "use_mkldnn is set. But recieved the number of Input's "
+              "dimensions is %d, Input's shape is %s.",
+              in_dims.size(), in_dims));
     }
-    PADDLE_ENFORCE_EQ(w_dims.size(), 2,
-                      "Fully Connected weights should be 2-D tensor.");
-    int in_num_col_dims = ctx->Attrs().Get<int>("in_num_col_dims");
-    PADDLE_ENFORCE_GT(
-        in_dims.size(), in_num_col_dims,
-        "The input tensor Input's rank of FCOp should be larger than "
-        "in_num_col_dims.");
 
     std::vector<int64_t> output_dims;
     FCOutputSize(in_dims, w_dims, output_dims, in_num_col_dims,

@@ -74,8 +74,8 @@ class TestMaskedSelectAPI(unittest.TestCase):
 
     def test_static_mode(self):
         shape = [8, 9, 6]
-        x = paddle.data(shape=shape, dtype='float32', name='x')
-        mask = paddle.data(shape=shape, dtype='bool', name='mask')
+        x = paddle.fluid.data(shape=shape, dtype='float32', name='x')
+        mask = paddle.fluid.data(shape=shape, dtype='bool', name='mask')
         np_x = np.random.random(shape).astype('float32')
         np_mask = np.array(np.random.randint(2, size=shape, dtype=bool))
 
@@ -97,9 +97,9 @@ class TestMaskedSelectError(unittest.TestCase):
                                          paddle.static.Program()):
 
             shape = [8, 9, 6]
-            x = paddle.data(shape=shape, dtype='float32', name='x')
-            mask = paddle.data(shape=shape, dtype='bool', name='mask')
-            mask_float = paddle.data(
+            x = paddle.fluid.data(shape=shape, dtype='float32', name='x')
+            mask = paddle.fluid.data(shape=shape, dtype='bool', name='mask')
+            mask_float = paddle.fluid.data(
                 shape=shape, dtype='float32', name='mask_float')
             np_x = np.random.random(shape).astype('float32')
             np_mask = np.array(np.random.randint(2, size=shape, dtype=bool))

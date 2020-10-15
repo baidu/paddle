@@ -146,7 +146,7 @@ class ChunkEvalKernel : public framework::OpKernel<T> {
       tag_end = -1;
       tag_single = -1;
     } else {
-      PADDLE_THROW("Unknown chunk scheme.");
+      PADDLE_THROW(platform::errors::InvalidArgument("Unknown chunk scheme."));
     }
     other_chunk_type = num_chunk_types = context.Attr<int>("num_chunk_types");
     excluded_chunk_types.insert(

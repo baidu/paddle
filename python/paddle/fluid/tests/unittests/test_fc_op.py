@@ -149,9 +149,9 @@ class TestFcOp_NumFlattenDims_NegOne(unittest.TestCase):
                     append_batch_size=False,
                     dtype="float32")
 
-                out = fluid.layers.fc(input=x,
-                                      size=1,
-                                      num_flatten_dims=num_flatten_dims)
+                out = paddle.static.nn.fc(x=x,
+                                          size=1,
+                                          num_flatten_dims=num_flatten_dims)
 
             place = fluid.CPUPlace() if not core.is_compiled_with_cuda(
             ) else fluid.CUDAPlace(0)

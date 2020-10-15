@@ -39,8 +39,9 @@ template <typename DeviceContext, typename T>
 class LstmUnitKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    PADDLE_ENFORCE(platform::is_cpu_place(ctx.GetPlace()),
-                   "It must use CPUPlace.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_cpu_place(ctx.GetPlace()), true,
+        paddle::platform::errors::PreconditionNotMet("It must use CPUPlace."));
 
     auto* x_tensor = ctx.Input<framework::Tensor>("X");
     auto* c_prev_tensor = ctx.Input<framework::Tensor>("C_prev");
@@ -82,8 +83,9 @@ template <typename DeviceContext, typename T>
 class LstmUnitGradKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    PADDLE_ENFORCE(platform::is_cpu_place(ctx.GetPlace()),
-                   "It must use CPUPlace.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_cpu_place(ctx.GetPlace()), true,
+        paddle::platform::errors::PreconditionNotMet("It must use CPUPlace."));
 
     auto x_tensor = ctx.Input<Tensor>("X");
     auto c_prev_tensor = ctx.Input<Tensor>("C_prev");

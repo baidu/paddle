@@ -91,6 +91,16 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
     op->SetAttr("Scale_x", 1.0f);
     op->SetAttr("Scale_y", 1.0f);
     op->SetAttr("Scale_out", 1.0f);
+  } else if (type == "fusion_gru") {
+    op->SetInput("X", {inputs[0]});
+    op->SetInput("Bias", {inputs[1]});
+    op->SetInput("WeightX", {inputs[2]});
+    op->SetInput("WeightH", {inputs[3]});
+    op->SetOutput("Hidden", {outputs[0]});
+    op->SetAttr("mkldnn_data_type", mkldnn_data_type);
+    op->SetAttr("Scale_data", 1.0f);
+    op->SetAttr("Shift_data", 0.0f);
+    op->SetAttr("Weight_scale", std::vector<float>{1.0f});
   }
 }
 
@@ -387,6 +397,77 @@ TEST(CpuQuantizePass, transpose) {
   int added_nodes_count = 4 + 4 + 4 + 4;
   MainTestTranspose(BuildProgramDescTranspose(), conv_count, transpose_count,
                     quant_count, dequant_count, added_nodes_count, 2.0f * 127);
+}
+
+static const std::initializer_list<std::string> variable_names_fusion_gru = {
+    "x", "wx", "wh", "b", "h"};
+
+// x->Fusion_gru->h
+ProgramDesc BuildProgramDescFusionGru() {
+  ProgramDesc prog;
+  for (auto& v : variable_names_transpose) {
+    auto* var = prog.MutableBlock(0)->Var(v);
+    if (v.find("wx") == 0 || v.find("wh") || v.find("b")) {
+      var->SetPersistable(true);
+    }
+  }
+
+  SetOp(&prog, "fusion_gru", "Fusion_gru", {"x", "wx", "wh", "b"}, {"h"}, true,
+        "int8");
+
+  return prog;
+}
+
+void MainTestFusionGru(const ProgramDesc& prog, int gru_count, int quant_count,
+                       int dequant_count, int added_nodes_count, float scale,
+                       float shift) {
+  std::unique_ptr<ir::Graph> graph(new ir::Graph(prog));
+  int original_nodes_num, current_nodes_num;
+  PreparePass(&graph, prog, variable_names_fusion_gru, &original_nodes_num,
+              &current_nodes_num);
+
+  int quantize_nodes_count = 0;
+  int dequantize_nodes_count = 0;
+  int gru_nodes_count = 0;
+  for (auto* node : graph->Nodes()) {
+    if (node->IsOp()) {
+      auto* op = node->Op();
+      if (op->Type() == "fusion_gru") {
+        gru_nodes_count++;
+
+        auto op_name = BOOST_GET_CONST(std::string, op->GetAttr("name"));
+        EXPECT_EQ(BOOST_GET_CONST(float, op->GetAttr("Scale_data")), scale)
+            << "Scale_data for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(float, op->GetAttr("Shift_data")), shift)
+            << "Shift_data for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(std::vector<float>,
+                                  op->GetAttr("Scale_weights"))[0],
+                  scale)
+            << "Scale_weights for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(bool, op->GetAttr("force_fp32_output")), true)
+            << "force_fp32_output for node '" + op_name + "'.";
+      } else if (op->Type() == "quantize") {
+        quantize_nodes_count++;
+      } else if (op->Type() == "dequantize") {
+        dequantize_nodes_count++;
+      }
+    }
+  }
+  EXPECT_EQ(gru_nodes_count, gru_count);
+  EXPECT_EQ(quantize_nodes_count, quant_count);
+  EXPECT_EQ(dequantize_nodes_count, dequant_count);
+  EXPECT_EQ(original_nodes_num + added_nodes_count, current_nodes_num);
+}
+
+TEST(CpuQuantizePass, fusion_gru) {
+  // x->Fusion_gru->h
+  int gru_count = 1;
+  int quant_count = 1;
+  int dequant_count = 0;
+  // 1 Quant + 1 IN + 0 DeQuant + 0 OUT
+  int added_nodes_count = 1 + 1 + 0 + 0;
+  MainTestFusionGru(BuildProgramDescFusionGru(), gru_count, quant_count,
+                    dequant_count, added_nodes_count, 2. * 127, 128.);
 }
 
 static const std::initializer_list<std::string> variable_names_reshape = {

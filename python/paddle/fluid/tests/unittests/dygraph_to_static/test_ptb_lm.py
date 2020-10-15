@@ -279,7 +279,7 @@ def train(place):
                                speed))
                         avg_batch_time = time.time()
 
-            return out_loss, last_hidden.numpy(), last_cell.numpy()
+        return out_loss, last_hidden.numpy(), last_cell.numpy()
 
 
 def train_dygraph(place):

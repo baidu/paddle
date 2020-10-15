@@ -31,6 +31,9 @@ class MaxOutKernel : public framework::OpKernel<T> {
     Tensor* out = context.Output<Tensor>("Out");
     int groups = context.template Attr<int>("groups");
     int axis = context.template Attr<int>("axis");
+    if (axis < 0) {
+      axis += in_x->dims().size();
+    }
 
     math::MaxOutFunctor<DeviceContext, T> maxout_forward;
     maxout_forward(context.template device_context<DeviceContext>(), *in_x, out,
@@ -49,6 +52,10 @@ class MaxOutGradKernel : public framework::OpKernel<T> {
     Tensor* in_x_grad = context.Output<Tensor>(framework::GradVarName("X"));
     int groups = context.template Attr<int>("groups");
     int axis = context.template Attr<int>("axis");
+    if (axis < 0) {
+      axis += in_x->dims().size();
+    }
+
     auto& device_ctx = context.template device_context<DeviceContext>();
     math::SetConstant<DeviceContext, T> zero;
     if (in_x_grad) {

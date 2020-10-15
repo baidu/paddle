@@ -96,7 +96,8 @@ class TopkOpCUDAKernel : public framework::OpKernel<T> {
               output_data, k, indices_data, input_data, input_width,
               input_width, static_cast<int>(k), gridx, input_height));
       default:
-        PADDLE_THROW("Error");
+        PADDLE_THROW(platform::errors::Unavailable(
+            "Calculation error occurred in TopK Operator's CUDA Kernel."));
     }
   }
 };

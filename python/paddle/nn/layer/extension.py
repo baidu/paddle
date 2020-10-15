@@ -102,5 +102,5 @@ class RowConv(layers.Layer):
             filter_shape, attr=param_attr, dtype=dtype)
 
     def forward(self, input):
-        out = F.row_conv(input, self.weight, act=self._act)
+        out = F.extension.row_conv(input, self.weight, act=self._act)
         return out

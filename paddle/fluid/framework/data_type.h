@@ -63,6 +63,11 @@ struct DataTypeTrait<void> {
   _ForEachDataTypeHelper_(callback, int, INT32);   \
   _ForEachDataTypeHelper_(callback, int64_t, INT64);
 
+// For the use of thrust, as index-type elements can be only integers.
+#define _ForEachDataTypeTiny_(callback)          \
+  _ForEachDataTypeHelper_(callback, int, INT32); \
+  _ForEachDataTypeHelper_(callback, int64_t, INT64);
+
 #define DefineDataTypeTrait(cpp_type, proto_type)                           \
   template <>                                                               \
   struct DataTypeTrait<cpp_type> {                                          \
@@ -105,6 +110,20 @@ inline void VisitDataTypeSmall(proto::VarType::Type type, Visitor visitor) {
 
   _ForEachDataTypeSmall_(VisitDataTypeCallbackSmall);
 #undef VisitDataTypeCallbackSmall
+}
+
+template <typename Visitor>
+inline void VisitDataTypeTiny(proto::VarType::Type type, Visitor visitor) {
+#define VisitDataTypeCallbackTiny(cpp_type, proto_type) \
+  do {                                                  \
+    if (type == proto_type) {                           \
+      visitor.template apply<cpp_type>();               \
+      return;                                           \
+    }                                                   \
+  } while (0)
+
+  _ForEachDataTypeTiny_(VisitDataTypeCallbackTiny);
+#undef VisitDataTypeCallbackTiny
 }
 
 extern std::string DataTypeToString(const proto::VarType::Type type);

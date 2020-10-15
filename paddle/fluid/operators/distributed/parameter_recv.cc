@@ -52,22 +52,25 @@ void RecvSparseLodTensor(const CommContext &rpc_ctx,
   std::unique_ptr<framework::Scope> local_scope = scope.NewTmpScope();
   std::vector<const float *> tensors;
   std::vector<distributed::VarHandlePtr> rets;
+  std::vector<std::string> recv_varnames;
   for (size_t i = 0; i < rpc_ctx.splited_varnames.size(); i++) {
     auto &recv_var_name = rpc_ctx.splited_varnames[i];
-    auto *local_var = local_scope->Var(recv_var_name);
     VLOG(4) << "recv " << recv_var_name << " from " << rpc_ctx.epmap[i];
+    local_scope->Var(recv_var_name);
     // sparse param in recv_scope is LoDTensor
     rets.push_back(rpc_client->AsyncGetVarNoBarrier(
         rpc_ctx.epmap[i], cpu_ctx, *local_scope.get(), recv_var_name,
         recv_var_name));
-
-    const auto *value = local_var->Get<framework::LoDTensor>().data<float>();
-    tensors.push_back(value);
+    recv_varnames.push_back(recv_var_name);
   }
 
   for (size_t i = 0; i < rets.size(); i++) {
     PADDLE_ENFORCE_NE(rets[i]->Wait(), 0U, platform::errors::ExecutionTimeout(
                                                "internal error in RPCClient"));
+    auto &recv_var_name = recv_varnames[i];
+    auto *local_var = local_scope->FindVar(recv_var_name);
+    const auto *value = local_var->Get<framework::LoDTensor>().data<float>();
+    tensors.push_back(value);
   }
 
   auto *merged_var = scope.FindVar(rpc_ctx.var_name);
@@ -83,8 +86,10 @@ void RecvSparseLodTensor(const CommContext &rpc_ctx,
     height += splited_var->Get<framework::LoDTensor>().dims()[0];
   }
 
-  PADDLE_ENFORCE_EQ(merged_var->Get<framework::LoDTensor>().dims()[0], height,
-                    "recved var must has same dims with local var");
+  PADDLE_ENFORCE_EQ(
+      merged_var->Get<framework::LoDTensor>().dims()[0], height,
+      platform::errors::InvalidArgument(
+          "Received variable must has same dimension with local variable."));
 
   auto *merged_t = merged_var->GetMutable<framework::LoDTensor>();
   auto *merged_d = merged_t->mutable_data<float>(cpu_place);

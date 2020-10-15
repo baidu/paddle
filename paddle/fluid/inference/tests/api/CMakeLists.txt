@@ -21,6 +21,12 @@ function(download_int8_data install_dir data_file)
     endif()
 endfunction()
 
+function(download_bfloat16_data install_dir data_file)
+    if (NOT EXISTS ${install_dir}/${data_file})
+        inference_download_and_uncompress(${install_dir} ${INFERENCE_URL}/bfloat16 ${data_file})
+    endif()
+endfunction()
+
 function(download_GRU_data install_dir data_file)
     if (NOT EXISTS ${install_dir}/${data_file})
         inference_download_and_uncompress(${install_dir} ${INFERENCE_URL}/gru ${data_file})
@@ -60,6 +66,7 @@ function(inference_analysis_api_int8_test_run TARGET_NAME test_binary model_dir 
              --infer_data=${data_path}
              --warmup_batch_size=${WARMUP_BATCH_SIZE}
              --batch_size=50
+             --enable_int8=true
              --cpu_num_threads=${CPU_NUM_THREADS_ON_CI}
 	     --iterations=2)
 endfunction()
@@ -69,6 +76,17 @@ function(inference_analysis_api_int8_test_run_custom_warmup_batch_size TARGET_NA
     inference_analysis_api_int8_test_run(${TARGET_NAME} ${test_binary} ${model_dir} ${data_path})
 endfunction()
 
+function(inference_analysis_api_bfloat16_test_run TARGET_NAME test_binary model_dir data_path)
+	inference_analysis_test_run(${TARGET_NAME}
+	COMMAND ${test_binary}
+        ARGS --infer_model=${model_dir}/model
+             --infer_data=${data_path}
+             --batch_size=50
+             --enable_bf16=true
+             --paddle_num_threads=${CPU_NUM_THREADS_ON_CI}
+	     --iterations=2)
+endfunction()
+
 function(inference_analysis_api_object_dection_int8_test_run TARGET_NAME test_binary model_dir data_path)
 	inference_analysis_test_run(${TARGET_NAME}
 	COMMAND ${test_binary}
@@ -76,6 +94,7 @@ function(inference_analysis_api_object_dection_int8_test_run TARGET_NAME test_bi
              --infer_data=${data_path}
              --warmup_batch_size=10
              --batch_size=300
+             --enable_int8=true
              --cpu_num_threads=${CPU_NUM_THREADS_ON_CI}
 	     --iterations=1)
 endfunction()
@@ -99,6 +118,7 @@ function(inference_analysis_api_quant_test_run TARGET_NAME test_binary fp32_mode
              --int8_model=${int8_model_dir}
              --infer_data=${data_path}
              --batch_size=50
+             --enable_int8=true
              --cpu_num_threads=${CPU_NUM_THREADS_ON_CI}
              --with_accuracy_layer=false
              --iterations=2)
@@ -345,6 +365,16 @@ if(WITH_MKLDNN)
   set(INT8_GOOGLENET_MODEL_DIR "${INT8_DATA_DIR}/googlenet")
   download_int8_data(${INT8_GOOGLENET_MODEL_DIR} "GoogleNet_int8_model.tar.gz" )
   inference_analysis_api_int8_test_run_custom_warmup_batch_size(test_analyzer_int8_googlenet ${INT8_IMG_CLASS_TEST_APP} ${INT8_GOOGLENET_MODEL_DIR} ${IMAGENET_DATA_PATH} 10)
+
+  ### BFLOAT16 tests
+
+  # build test binary to be used in subsequent tests
+  set(BF16_IMG_CLASS_TEST_APP "test_analyzer_bfloat16_image_classification")
+  set(BF16_IMG_CLASS_TEST_APP_SRC "analyzer_bfloat16_image_classification_tester.cc")
+  inference_analysis_api_test_build(${BF16_IMG_CLASS_TEST_APP} ${BF16_IMG_CLASS_TEST_APP_SRC})
+
+  # resnet50 bfloat16
+  inference_analysis_api_bfloat16_test_run(test_analyzer_bfloat16_resnet50 ${BF16_IMG_CLASS_TEST_APP} ${INT8_RESNET50_MODEL_DIR} ${IMAGENET_DATA_PATH})
 
   ### Object detection models
   set(PASCALVOC_DATA_PATH "${INT8_DATA_DIR}/pascalvoc_val_head_300.bin")

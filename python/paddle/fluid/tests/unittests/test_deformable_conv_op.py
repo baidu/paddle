@@ -17,6 +17,7 @@ from __future__ import print_function
 import unittest
 import numpy as np
 
+import paddle
 import paddle.fluid.core as core
 import paddle.fluid as fluid
 from op_test import OpTest
@@ -260,6 +261,7 @@ class TestWithGroup(TestModulatedDeformableConvOp):
 class TestModulatedDeformableConvInvalidInput(unittest.TestCase):
     def test_error(self):
         def test_invalid_input():
+            paddle.enable_static()
             input = [1, 3, 32, 32]
             offset = fluid.data(
                 name='offset', shape=[None, 3, 32, 32], dtype='float32')
@@ -271,6 +273,7 @@ class TestModulatedDeformableConvInvalidInput(unittest.TestCase):
         self.assertRaises(TypeError, test_invalid_input)
 
         def test_invalid_offset():
+            paddle.enable_static()
             input = fluid.data(
                 name='input', shape=[None, 3, 32, 32], dtype='int32')
             offset = fluid.data(
@@ -281,6 +284,37 @@ class TestModulatedDeformableConvInvalidInput(unittest.TestCase):
                 input, offset, mask, num_filters=4, filter_size=1)
 
         self.assertRaises(TypeError, test_invalid_offset)
+
+
+class TestDeformConv2dAPI(unittest.TestCase):
+    def test_api(self):
+        def test_deform_conv2d_v1():
+            paddle.enable_static()
+            input = paddle.static.data(
+                name='input_v1', shape=[None, 3, 32, 32], dtype='float32')
+            offset = paddle.static.data(
+                name='offset_v1', shape=[None, 4, 32, 32], dtype='float32')
+            out = paddle.static.nn.deform_conv2d(
+                input, offset, None, num_filters=4, filter_size=1)
+
+            assert (out.shape == (-1, 4, 32, 32))
+
+        test_deform_conv2d_v1()
+
+        def test_deform_conv2d_v2():
+            paddle.enable_static()
+            input = paddle.static.data(
+                name='input_v2', shape=[None, 3, 32, 32], dtype='float32')
+            offset = paddle.static.data(
+                name='offset_v2', shape=[None, 4, 32, 32], dtype='float32')
+            mask = paddle.static.data(
+                name='mask_v2', shape=[None, 2, 32, 32], dtype='float32')
+            out = paddle.static.nn.deform_conv2d(
+                input, offset, mask, num_filters=4, filter_size=1)
+
+            assert (out.shape == (-1, 4, 32, 32))
+
+        test_deform_conv2d_v2()
 
 
 if __name__ == '__main__':

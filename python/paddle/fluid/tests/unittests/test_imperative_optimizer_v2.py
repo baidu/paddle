@@ -23,7 +23,7 @@ import itertools
 import paddle
 import paddle.fluid as fluid
 from paddle.fluid import core
-from paddle.fluid.optimizer import SGDOptimizer, Adam, MomentumOptimizer, LarsMomentumOptimizer, AdagradOptimizer, AdamaxOptimizer, DpsgdOptimizer, DecayedAdagradOptimizer, AdadeltaOptimizer, RMSPropOptimizer, FtrlOptimizer, LambOptimizer
+from paddle.fluid.optimizer import MomentumOptimizer, LarsMomentumOptimizer, AdagradOptimizer, AdamaxOptimizer, DpsgdOptimizer, DecayedAdagradOptimizer, AdadeltaOptimizer, RMSPropOptimizer, FtrlOptimizer, LambOptimizer
 from paddle.fluid.optimizer import ModelAverage, DGCMomentumOptimizer, ExponentialMovingAverage, PipelineOptimizer, LookaheadOptimizer, RecomputeOptimizer
 from paddle.fluid.dygraph import Linear
 from paddle.fluid.dygraph.base import to_variable
@@ -72,15 +72,17 @@ class TestImperativeOptimizerBase(unittest.TestCase):
             place = fluid.CUDAPlace(0) if core.is_compiled_with_cuda(
             ) else fluid.CPUPlace()
 
-        with fluid.dygraph.guard(place):
-            try:
-                paddle.manual_seed(seed)
-                paddle.framework.random._manual_program_seed(seed)
-                mlp = MLP()
-                optimizer = self.get_optimizer_dygraph(
-                    parameter_list=mlp.parameters())
-            except Exception as e:
-                assert str(e) == exception_message
+        try:
+            paddle.disable_static()
+            paddle.manual_seed(seed)
+            paddle.framework.random._manual_program_seed(seed)
+            mlp = MLP()
+            optimizer = self.get_optimizer_dygraph(
+                parameter_list=mlp.parameters())
+        except Exception as e:
+            assert str(e) == exception_message
+        finally:
+            paddle.enable_static()
 
     def _check_mlp(self, place=None):
         seed = 90
@@ -90,47 +92,55 @@ class TestImperativeOptimizerBase(unittest.TestCase):
             place = fluid.CPUPlace() if not core.is_compiled_with_cuda(
             ) else fluid.CUDAPlace(0)
 
-        with fluid.dygraph.guard(place):
-            paddle.manual_seed(seed)
-            paddle.framework.random._manual_program_seed(seed)
+        paddle.disable_static(place)
+        paddle.manual_seed(seed)
+        paddle.framework.random._manual_program_seed(seed)
 
-            mlp = MLP()
-            optimizer = self.get_optimizer_dygraph(
-                parameter_list=mlp.parameters())
+        mlp = MLP()
+        optimizer = self.get_optimizer_dygraph(parameter_list=mlp.parameters())
 
-            batch_py_reader = fluid.io.PyReader(capacity=1)
-            batch_py_reader.decorate_sample_list_generator(
-                paddle.batch(
-                    self.reader_decorator(paddle.dataset.mnist.train()),
-                    batch_size=batch_size,
-                    drop_last=True),
-                places=fluid.CPUPlace())
+        batch_py_reader = fluid.io.PyReader(capacity=1)
+        batch_py_reader.decorate_sample_list_generator(
+            paddle.batch(
+                self.reader_decorator(paddle.dataset.mnist.train()),
+                batch_size=batch_size,
+                drop_last=True),
+            places=fluid.CPUPlace())
 
-            dy_param_init_value = {}
-            for batch_id, data in enumerate(batch_py_reader()):
-                if batch_id >= self.batch_num:
-                    break
+        dy_param_init_value = {}
+        for batch_id, data in enumerate(batch_py_reader()):
+            if batch_id >= self.batch_num:
+                break
 
-                img = data[0]
-                label = data[1]
-                label.stop_gradient = True
+            img = data[0]
+            label = data[1]
 
-                img = fluid.layers.reshape(img, shape=[batch_size, -1])
-                cost = mlp(img)
-                avg_loss = fluid.layers.reduce_mean(cost)
-                dy_out = avg_loss.numpy()
+            label.stop_gradient = True
 
-                if batch_id == 0:
-                    for param in mlp.parameters():
-                        dy_param_init_value[param.name] = param.numpy()
+            img = fluid.layers.reshape(img, shape=[batch_size, -1])
+            cost = mlp(img)
+            avg_loss = fluid.layers.reduce_mean(cost)
+            dy_out = avg_loss.numpy()
 
-                avg_loss.backward()
-                optimizer.minimize(avg_loss)
-                mlp.clear_gradients()
-                dy_param_value = {}
+            if batch_id == 0:
                 for param in mlp.parameters():
-                    dy_param_value[param.name] = param.numpy()
+                    dy_param_init_value[param.name] = param.numpy()
 
+            avg_loss.backward()
+            optimizer.minimize(avg_loss)
+            if isinstance(optimizer._learning_rate,
+                          paddle.optimizer.lr.LRScheduler):
+                if isinstance(optimizer._learning_rate,
+                              paddle.optimizer.lr.ReduceOnPlateau):
+                    optimizer._learning_rate.step(avg_loss)
+                else:
+                    optimizer._learning_rate.step()
+            mlp.clear_gradients()
+            dy_param_value = {}
+            for param in mlp.parameters():
+                dy_param_value[param.name] = param.numpy()
+
+        paddle.enable_static()
         with new_program_scope():
             paddle.manual_seed(seed)
             paddle.framework.random._manual_program_seed(seed)
@@ -181,6 +191,13 @@ class TestImperativeOptimizerBase(unittest.TestCase):
                               feed={"pixel": static_x_data,
                                     "label": y_data},
                               fetch_list=fetch_list)
+                if isinstance(optimizer._learning_rate,
+                              paddle.optimizer.lr.LRScheduler):
+                    if isinstance(optimizer._learning_rate,
+                                  paddle.optimizer.lr.ReduceOnPlateau):
+                        optimizer._learning_rate.step(out[0])
+                    else:
+                        optimizer._learning_rate.step()
 
                 static_param_value = {}
                 static_out = out[0]
@@ -199,17 +216,19 @@ class TestImperativeOptimizerBase(unittest.TestCase):
 class TestImperativeOptimizerPiecewiseDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
         bd = [3, 6, 9]
-        optimizer = SGDOptimizer(
-            learning_rate=paddle.optimizer.PiecewiseLR(
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.PiecewiseDecay(
                 boundaries=bd,
                 values=[0.1 * (0.1**i) for i in range(len(bd) + 1)]),
-            parameter_list=parameter_list)
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
         bd = [3, 6, 9]
-        optimizer = SGDOptimizer(learning_rate=paddle.optimizer.PiecewiseLR(
-            boundaries=bd, values=[0.1 * (0.1**i) for i in range(len(bd) + 1)]))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.PiecewiseDecay(
+                boundaries=bd,
+                values=[0.1 * (0.1**i) for i in range(len(bd) + 1)]))
         return optimizer
 
     def test_sgd(self):
@@ -218,21 +237,16 @@ class TestImperativeOptimizerPiecewiseDecay(TestImperativeOptimizerBase):
 
 class TestImperativeOptimizerNaturalExpDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = SGDOptimizer(
-            learning_rate=fluid.layers.natural_exp_decay(
-                learning_rate=0.1,
-                decay_steps=10000,
-                decay_rate=0.5,
-                staircase=True),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.NaturalExpDecay(
+                learning_rate=0.5, gamma=0.9),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = SGDOptimizer(learning_rate=fluid.layers.natural_exp_decay(
-            learning_rate=0.1,
-            decay_steps=10000,
-            decay_rate=0.5,
-            staircase=True))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.NaturalExpDecay(
+                learning_rate=0.5, gamma=0.9))
         return optimizer
 
     def test_sgd(self):
@@ -241,21 +255,16 @@ class TestImperativeOptimizerNaturalExpDecay(TestImperativeOptimizerBase):
 
 class TestImperativeOptimizerExponentialDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = SGDOptimizer(
-            learning_rate=fluid.layers.exponential_decay(
-                learning_rate=0.1,
-                decay_steps=10000,
-                decay_rate=0.5,
-                staircase=True),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.ExponentialDecay(
+                learning_rate=0.5, gamma=0.9),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = SGDOptimizer(learning_rate=fluid.layers.exponential_decay(
-            learning_rate=0.1,
-            decay_steps=10000,
-            decay_rate=0.5,
-            staircase=True))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.ExponentialDecay(
+                learning_rate=0.5, gamma=0.9))
         return optimizer
 
     def test_sgd(self):
@@ -264,21 +273,16 @@ class TestImperativeOptimizerExponentialDecay(TestImperativeOptimizerBase):
 
 class TestImperativeOptimizerInverseTimeDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = Adam(
-            learning_rate=fluid.layers.inverse_time_decay(
-                learning_rate=0.1,
-                decay_steps=10000,
-                decay_rate=0.5,
-                staircase=True),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.Adam(
+            learning_rate=paddle.optimizer.lr.InverseTimeDecay(
+                learning_rate=0.5, gamma=0.9),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = Adam(learning_rate=fluid.layers.inverse_time_decay(
-            learning_rate=0.1,
-            decay_steps=10000,
-            decay_rate=0.5,
-            staircase=True))
+        optimizer = paddle.optimizer.Adam(
+            learning_rate=paddle.optimizer.lr.InverseTimeDecay(
+                learning_rate=0.5, gamma=0.9))
         return optimizer
 
     def test_adam(self):
@@ -287,15 +291,16 @@ class TestImperativeOptimizerInverseTimeDecay(TestImperativeOptimizerBase):
 
 class TestImperativeOptimizerPolynomialDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = SGDOptimizer(
-            learning_rate=fluid.layers.polynomial_decay(
-                learning_rate=0.1, decay_steps=5, cycle=self.cycle),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.PolynomialDecay(
+                learning_rate=0.5, decay_steps=5, cycle=self.cycle),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = SGDOptimizer(learning_rate=fluid.layers.polynomial_decay(
-            learning_rate=0.1, decay_steps=5, cycle=self.cycle))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.PolynomialDecay(
+                learning_rate=0.5, decay_steps=5, cycle=self.cycle))
         return optimizer
 
     def test_sgd_cycle(self):
@@ -307,17 +312,18 @@ class TestImperativeOptimizerPolynomialDecay(TestImperativeOptimizerBase):
         self._check_mlp()
 
 
-class TestImperativeOptimizerCosineDecay(TestImperativeOptimizerBase):
+class TestImperativeOptimizerCosineAnnealingDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = SGDOptimizer(
-            learning_rate=fluid.layers.cosine_decay(
-                learning_rate=0.1, step_each_epoch=10000, epochs=120),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.CosineAnnealingDecay(
+                learning_rate=0.5, T_max=5),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = SGDOptimizer(learning_rate=fluid.layers.cosine_decay(
-            learning_rate=0.1, step_each_epoch=10000, epochs=120))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.CosineAnnealingDecay(
+                learning_rate=0.5, T_max=5))
         return optimizer
 
     def test_sgd(self):
@@ -326,15 +332,110 @@ class TestImperativeOptimizerCosineDecay(TestImperativeOptimizerBase):
 
 class TestImperativeOptimizerNoamDecay(TestImperativeOptimizerBase):
     def get_optimizer_dygraph(self, parameter_list):
-        optimizer = SGDOptimizer(
-            learning_rate=fluid.layers.noam_decay(
-                d_model=512, warmup_steps=8000),
-            parameter_list=parameter_list)
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.NoamDecay(
+                d_model=0.01, warmup_steps=100, verbose=True),
+            parameters=parameter_list)
         return optimizer
 
     def get_optimizer(self):
-        optimizer = SGDOptimizer(learning_rate=fluid.layers.noam_decay(
-            d_model=512, warmup_steps=8000))
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.NoamDecay(
+                d_model=0.01, warmup_steps=100))
+        return optimizer
+
+    def test_sgd(self):
+        self._check_mlp()
+
+
+class TestImperativeOptimizerLambdaDecay(TestImperativeOptimizerBase):
+    def get_optimizer_dygraph(self, parameter_list):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.LambdaDecay(
+                learning_rate=0.5, lr_lambda=lambda epoch: 0.9**epoch),
+            parameters=parameter_list)
+        return optimizer
+
+    def get_optimizer(self):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.LambdaDecay(
+                learning_rate=0.5, lr_lambda=lambda epoch: 0.9**epoch))
+        return optimizer
+
+    def test_sgd(self):
+        self._check_mlp()
+
+
+class TestImperativeOptimizerLinearWarmup(TestImperativeOptimizerBase):
+    def get_optimizer_dygraph(self, parameter_list):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.LinearWarmup(
+                learning_rate=0.5, warmup_steps=20, start_lr=0, end_lr=0.5),
+            parameters=parameter_list)
+        return optimizer
+
+    def get_optimizer(self):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.LinearWarmup(
+                learning_rate=0.5,
+                warmup_steps=20,
+                start_lr=0,
+                end_lr=0.5,
+                verbose=True))
+        return optimizer
+
+    def test_sgd(self):
+        self._check_mlp()
+
+
+class TestImperativeOptimizerMultiStepDecay(TestImperativeOptimizerBase):
+    def get_optimizer_dygraph(self, parameter_list):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.MultiStepDecay(
+                learning_rate=0.5, milestones=[2, 4, 6], gamma=0.8),
+            parameters=parameter_list)
+        return optimizer
+
+    def get_optimizer(self):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.MultiStepDecay(
+                learning_rate=0.5, milestones=[2, 4, 6], gamma=0.8))
+        return optimizer
+
+    def test_sgd(self):
+        self._check_mlp()
+
+
+class TestImperativeOptimizerStepLR(TestImperativeOptimizerBase):
+    def get_optimizer_dygraph(self, parameter_list):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.StepDecay(
+                learning_rate=0.5, step_size=5, gamma=0.8),
+            parameters=parameter_list)
+        return optimizer
+
+    def get_optimizer(self):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.StepDecay(
+                learning_rate=0.5, step_size=5, gamma=0.8))
+        return optimizer
+
+    def test_sgd(self):
+        self._check_mlp()
+
+
+class TestImperativeOptimizerReduceOnPlateau(TestImperativeOptimizerBase):
+    def get_optimizer_dygraph(self, parameter_list):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.ReduceOnPlateau(
+                learning_rate=0.5),
+            parameters=parameter_list)
+        return optimizer
+
+    def get_optimizer(self):
+        optimizer = paddle.optimizer.SGD(
+            learning_rate=paddle.optimizer.lr.ReduceOnPlateau(
+                learning_rate=0.5))
         return optimizer
 
     def test_sgd(self):
@@ -381,7 +482,7 @@ class TestOptimizerLearningRate(unittest.TestCase):
             bd = [2, 4, 6, 8]
             value = [0.2, 0.4, 0.6, 0.8, 1.0]
 
-            scheduler = paddle.optimizer.PiecewiseLR(bd, value)
+            scheduler = paddle.optimizer.lr.PiecewiseDecay(bd, value)
             adam = paddle.optimizer.Adam(
                 scheduler, parameters=linear.parameters())
 
@@ -396,7 +497,7 @@ class TestOptimizerLearningRate(unittest.TestCase):
                 self.assertTrue(np.allclose(lr, ret[i], rtol=1e-06, atol=0.0))
                 scheduler.step()
 
-    def test_lr_decay_natural_exp(self):
+    def test_lr_scheduler_natural_exp(self):
         with fluid.dygraph.guard():
             a = np.random.uniform(-0.1, 0.1, [10, 10]).astype("float32")
 
@@ -407,8 +508,7 @@ class TestOptimizerLearningRate(unittest.TestCase):
             loss = fluid.layers.reduce_mean(b)
             base_lr = 1.0
 
-            scheduler = paddle.optimizer.NaturalExpLR(1.0, gamma=0.5)
-            print("scheduler.last_lr", scheduler.last_lr)
+            scheduler = paddle.optimizer.lr.NaturalExpDecay(1.0, gamma=0.5)
             adam = paddle.optimizer.Adam(
                 scheduler, parameters=linear.parameters())
 
@@ -453,7 +553,7 @@ class TestOptimizerLearningRate(unittest.TestCase):
 
             with self.assertRaises(RuntimeError):
                 adam = paddle.optimizer.Adam(
-                    paddle.optimizer.NaturalExpLR(
+                    paddle.optimizer.lr.NaturalExpDecay(
                         learning_rate=0.1, gamma=0.5),
                     parameters=linear.parameters())
                 adam.set_lr(0.01)
@@ -695,10 +795,10 @@ class TestImperativeOptimizerList(unittest.TestCase):
             linear_1 = Linear(10, 10)
             linear_2 = Linear(10, 10)
 
-            sgd = SGDOptimizer(
-                1.0,
-                parameter_list=itertools.chain(linear_1.parameters(),
-                                               linear_2.parameters()))
+            sgd = paddle.optimizer.SGD(1.0,
+                                       parameters=itertools.chain(
+                                           linear_1.parameters(),
+                                           linear_2.parameters()))
 
             in_np = np.random.uniform(-0.1, 0.1, [10, 10]).astype("float32")
             in_data = fluid.dygraph.to_variable(in_np)

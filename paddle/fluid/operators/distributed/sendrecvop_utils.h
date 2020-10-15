@@ -95,7 +95,8 @@ inline framework::proto::VarType::Type ToVarType(
     case sendrecv::VariableMessage::BOOL:
       return framework::proto::VarType::BOOL;  // NOLINT
     default:
-      PADDLE_THROW("Not support type %d", type);
+      PADDLE_THROW(
+          platform::errors::InvalidArgument("Not support type id: %d.", type));
   }
 }
 

@@ -37,13 +37,15 @@ class PositiveNegativePairOp : public framework::OperatorWithKernel {
     if (ctx->HasInput("AccumulatePositivePair") ||
         ctx->HasInput("AccumulateNegativePair") ||
         ctx->HasInput("AccumulateNeutralPair")) {
-      PADDLE_ENFORCE(ctx->HasInput("AccumulatePositivePair") &&
-                         ctx->HasInput("AccumulateNegativePair") &&
-                         ctx->HasInput("AccumulateNeutralPair"),
-                     "All optional inputs(AccumulatePositivePair, "
-                     "AccumulateNegativePair, AccumulateNeutralPair) of "
-                     "PositiveNegativePairOp are required if one of them is "
-                     "specified.");
+      PADDLE_ENFORCE_EQ(
+          ctx->HasInput("AccumulatePositivePair") &&
+              ctx->HasInput("AccumulateNegativePair") &&
+              ctx->HasInput("AccumulateNeutralPair"),
+          true, platform::errors::InvalidArgument(
+                    "All optional inputs(AccumulatePositivePair, "
+                    "AccumulateNegativePair, AccumulateNeutralPair) of "
+                    "PositiveNegativePairOp are required if one of them "
+                    "is specified."));
       PADDLE_ENFORCE_EQ(
           ctx->GetInputDim("AccumulatePositivePair"), scalar_dim,
           platform::errors::InvalidArgument(

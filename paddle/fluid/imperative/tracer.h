@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "ThreadPool.h"
 #include "paddle/fluid/imperative/basic_engine.h"
 #include "paddle/fluid/imperative/jit/program_desc_tracer.h"
@@ -32,7 +33,7 @@ namespace imperative {
 class UniqueNameGenerator {
  public:
   explicit UniqueNameGenerator(std::string prefix = "") : prefix_(prefix) {}
-  std::string Generate(std::string key = "eager_tmp") {
+  std::string Generate(std::string key = "dygraph_tmp") {
     return prefix_ + key + "_" + std::to_string(id_++);
   }
 
@@ -83,7 +84,7 @@ class Tracer {
   // name like `tmp_0` in some cases when transform dygraph into static layers.
   // So we modify the default prefix key into `eager_tmp` to distinguish with
   // static graph.
-  std::string GenerateUniqueName(std::string key = "eager_tmp") {
+  std::string GenerateUniqueName(std::string key = "dygraph_tmp") {
     return generator_->Generate(key);
   }
 

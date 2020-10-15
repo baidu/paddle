@@ -71,7 +71,8 @@ class AdadeltaOp : public framework::OperatorWithKernel {
     auto param_dim = ctx->GetInputDim("Param");
     PADDLE_ENFORCE_EQ(
         param_dim, ctx->GetInputDim("Grad"),
-        "param and grad input of AdadeltaOp should have same dimension");
+        platform::errors::InvalidArgument(
+            "Param and grad input of AdadeltaOp should have same dimension."));
     PADDLE_ENFORCE_NE(
         framework::product(ctx->GetInputDim("AvgSquaredGrad")), 0,
         platform::errors::InvalidArgument(

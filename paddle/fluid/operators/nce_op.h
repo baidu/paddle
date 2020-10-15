@@ -104,25 +104,29 @@ class NCEKernel : public framework::OpKernel<T> {
 
         PADDLE_ENFORCE_EQ(
             dist_probs->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistProbs) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistProbs).numel() = %d, Attr(num_total_classes) "
-            "= %d.",
-            dist_probs->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in Input(CustomDistProbs) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistProbs).numel() = %d, Attr(num_total_classes) "
+                "= %d.",
+                dist_probs->numel(), num_total_classes));
         PADDLE_ENFORCE_EQ(
             dist_alias->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistAlias) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistAlias).numel() = %d, Attr(num_total_classes) "
-            "= %d.",
-            dist_alias->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in Input(CustomDistAlias) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistAlias).numel() = %d, Attr(num_total_classes) "
+                "= %d.",
+                dist_alias->numel(), num_total_classes));
         PADDLE_ENFORCE_EQ(
             dist_alias_probs->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistAliasProbs) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistAliasProbs).numel() = %d, "
-            "Attr(num_total_classes) = %d.",
-            dist_alias_probs->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in "
+                "Input(CustomDistAliasProbs) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistAliasProbs).numel() = %d, "
+                "Attr(num_total_classes) = %d.",
+                dist_alias_probs->numel(), num_total_classes));
 
         const float *probs_data = dist_probs->data<float>();
         const int *alias_data = dist_alias->data<int>();
@@ -131,7 +135,12 @@ class NCEKernel : public framework::OpKernel<T> {
                                           alias_data, alias_probs_data, seed);
         break;
       }
-      default: { PADDLE_THROW("Unsupported SamplerType."); }
+      default: {
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unsupported SamplerType. SamplerType should be 0: Uniform, "
+            "1: LogUniform or 2: CostumDist. Received SamplerType: %d",
+            sampler_type));
+      }
     }
 
     PrepareSamples<DeviceContext, T>(context, sampler);
@@ -140,10 +149,11 @@ class NCEKernel : public framework::OpKernel<T> {
 
     for (int x = 0; x < sample_labels->numel(); x++) {
       PADDLE_ENFORCE_GE(sample_labels_data[x], 0,
-                        "ValueError: Every sample label should be "
-                        "non-negative. But received: "
-                        "Input(SampleLabels)[%d] = %d",
-                        x, sample_labels_data[x]);
+                        platform::errors::InvalidArgument(
+                            "ValueError: Every sample label should be "
+                            "non-negative. But received: "
+                            "Input(SampleLabels)[%d] = %d",
+                            x, sample_labels_data[x]));
     }
 
     auto sample_out = context.Output<Tensor>("SampleLogits");
@@ -220,9 +230,9 @@ class NCEKernel : public framework::OpKernel<T> {
                                        weight, false, table_names, epmap,
                                        context, local_scope);
 #else
-      PADDLE_THROW(
+      PADDLE_THROW(platform::errors::PreconditionNotMet(
           "paddle is not compiled with distribute support, can not do "
-          "parameter prefetch!");
+          "parameter prefetch!"));
 #endif
 
       auto weight_mat = EigenMatrix<T>::From(
@@ -311,25 +321,29 @@ class NCEGradKernel : public framework::OpKernel<T> {
 
         PADDLE_ENFORCE_EQ(
             dist_probs->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistProbs) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistProbs).numel() = %d, Attr(num_total_classes) "
-            "= %d.",
-            dist_probs->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in Input(CustomDistProbs) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistProbs).numel() = %d, Attr(num_total_classes) "
+                "= %d.",
+                dist_probs->numel(), num_total_classes));
         PADDLE_ENFORCE_EQ(
             dist_alias->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistAlias) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistAlias).numel() = %d, Attr(num_total_classes) "
-            "= %d.",
-            dist_alias->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in Input(CustomDistAlias) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistAlias).numel() = %d, Attr(num_total_classes) "
+                "= %d.",
+                dist_alias->numel(), num_total_classes));
         PADDLE_ENFORCE_EQ(
             dist_alias_probs->numel(), num_total_classes,
-            "ShapeError: The number of elements in Input(CustomDistAliasProbs) "
-            "should be equal to the number of total classes. But Received: "
-            "Input(CustomDistAliasProbs).numel() = %d, "
-            "Attr(num_total_classes) = %d.",
-            dist_alias_probs->numel(), num_total_classes);
+            platform::errors::InvalidArgument(
+                "ShapeError: The number of elements in "
+                "Input(CustomDistAliasProbs) "
+                "should be equal to the number of total classes. But Received: "
+                "Input(CustomDistAliasProbs).numel() = %d, "
+                "Attr(num_total_classes) = %d.",
+                dist_alias_probs->numel(), num_total_classes));
 
         const float *probs_data = dist_probs->data<float>();
         const int *alias_data = dist_alias->data<int>();
@@ -338,7 +352,12 @@ class NCEGradKernel : public framework::OpKernel<T> {
                                           alias_data, alias_probs_data, seed);
         break;
       }
-      default: { PADDLE_THROW("Unsupported SamplerType."); }
+      default: {
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unsupported SamplerType. SamplerType should be 0: Uniform, "
+            "1: LogUniform or 2: CostumDist. Received SamplerType: %d",
+            sampler_type));
+      }
     }
 
     //    T b = 1. / num_total_classes * num_neg_samples;
@@ -400,9 +419,9 @@ class NCEGradKernel : public framework::OpKernel<T> {
         auto *table_t = context.Input<SelectedRows>("Weight");
         table_dim = table_t->value().dims();
       } else {
-        PADDLE_THROW(
+        PADDLE_THROW(platform::errors::InvalidArgument(
             "The parameter Weight of a NCE_OP "
-            "must be either LoDTensor or SelectedRows");
+            "must be either LoDTensor or SelectedRows"));
       }
 
       auto d_w = context.Output<SelectedRows>(framework::GradVarName("Weight"));

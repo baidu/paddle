@@ -702,11 +702,11 @@ class ProgramTranslator(object):
     Examples:
         .. code-block:: python
 
-        import paddle.fluid as fluid
+            import paddle
 
-        # Two methods get same object because ProgramTranslator is a singleton
-        fluid.dygraph.ProgramTranslator()
-        fluid.dygraph.ProgramTranslator.get_instance()
+            # Two methods get same object because ProgramTranslator is a singleton
+            paddle.jit.ProgramTranslator()
+            paddle.jit.ProgramTranslator.get_instance()
 
     """
 
@@ -743,11 +743,11 @@ class ProgramTranslator(object):
 
     def enable(self, enable_to_static):
         """
-        Enable or disable the converting from imperative to declarative by
+        Enable or disable the converting from imperative to static graph by
         ProgramTranslator globally.
 
         Args:
-            enable_to_static (bool): True or False to enable or disable declarative.
+            enable_to_static (bool): True or False to enable or disable converting to static.
 
         Returns:
             None.
@@ -755,25 +755,24 @@ class ProgramTranslator(object):
         Examples:
             .. code-block:: python
 
-            import paddle.fluid as fluid
-            import numpy as np
+                import paddle
 
-            @fluid.dygraph.jit.declarative
-            def func(x):
-                x = fluid.dygraph.to_variable(x)
-                if fluid.layers.mean(x) > 0:
-                    x_v = x - 1
-                else:
-                    x_v = x + 1
-                return x_v
 
-            prog_trans = fluid.dygraph.ProgramTranslator()
-            prog_trans.enable(False)
+                @paddle.jit.to_static
+                def func(x):
+                    if paddle.mean(x) > 0:
+                        x_v = x - 1
+                    else:
+                        x_v = x + 1
+                    return x_v
 
-            x = np.ones([1, 2])
-            # The declarative is disabled so the func is run in dygraph
-            with fluid.dygraph.guard():
-                print(func(x).numpy()) # [[2. 2.]]
+
+                prog_trans = paddle.jit.ProgramTranslator()
+                prog_trans.enable(False)
+
+                x = paddle.ones([1, 2])
+                # ProgramTranslator is disabled so the func is run in dygraph
+                print(func(x).numpy())  # [[0. 0.]]
 
         """
         check_type(enable_to_static, "enable_to_static", bool,
@@ -782,38 +781,37 @@ class ProgramTranslator(object):
 
     def get_output(self, dygraph_func, *args, **kwargs):
         """
-        Returns the output dygraph VarBase for dygraph function. The dygraph
+        Returns the output dygraph Tensor for dygraph function. The dygraph
         function will be translated into static graph function so the under
-        beneath numerical result will be calculated by declarative mode.
+        beneath numerical result will be calculated by static graph mode.
 
         Args:
             dygraph_func (callable): the dygraph function.
-            *args, **kwargs : the input argument of dygraph_func.
+            *args (tuple): the input argument of dygraph_func.
+            **kwargs (dict): the input argument of dygraph_func.
 
         Returns:
-            VarBase or tuple of VarBase: the dygraph VarBase containing digital
-                result.
+            Tensor or tuple of Tensors: the dygraph Tensor containing digital result.
 
         Examples:
             .. code-block:: python
 
-                import paddle.fluid as fluid
-                import numpy as np
+                import paddle
+
 
                 def func(x):
-                    x = fluid.dygraph.to_variable(x)
-                    if fluid.layers.mean(x) > 0:
+                    if paddle.mean(x) > 0:
                         x_v = x - 1
                     else:
                         x_v = x + 1
                     return x_v
 
-                prog_trans = fluid.dygraph.ProgramTranslator()
 
-                with fluid.dygraph.guard():
-                    x = np.ones([1, 2])
-                    x_v = prog_trans.get_output(func, x)
-                    print(x_v.numpy()) # [[0. 0.]]
+                prog_trans = paddle.jit.ProgramTranslator()
+
+                x = paddle.ones([1, 2])
+                x_v = prog_trans.get_output(func, x)
+                print(x_v.numpy())  # [[0. 0.]]
 
         """
         assert callable(
@@ -875,19 +873,18 @@ class ProgramTranslator(object):
         Examples:
             .. code-block:: python
 
-                import paddle.fluid as fluid
-                import numpy as np
+                import paddle
+
 
                 def func(x):
-                    x = fluid.dygraph.to_variable(x)
-                    if fluid.layers.mean(x) > 0:
+                    if paddle.mean(x) > 0:
                         x_v = x - 1
                     else:
                         x_v = x + 1
                     return x_v
 
-                prog_trans = fluid.dygraph.ProgramTranslator()
 
+                prog_trans = paddle.jit.ProgramTranslator()
                 static_func = prog_trans.get_func(func)
                 print(callable(static_func)) # True
 
@@ -908,43 +905,43 @@ class ProgramTranslator(object):
 
     def get_program(self, dygraph_func, *args, **kwargs):
         """
-        Returns the translated static program and input/output variables from
+        Returns the translated static program and input/output Tensors from
         dygraph function. The users can use the program to run by executor.
 
         Args:
             dygraph_func (callable): the dygraph function.
-            *args, **kwargs : the input argument of dygraph_func.
+            *args (tuple): the input argument of dygraph_func.
+            **kwargs (dict): the input argument of dygraph_func.
 
         Returns:
             tuple of (main_program, startup_program, inputs, outputs) whose
-            types are (Program, Program, list of Variable, list of Variable).
+            types are (Program, Program, list of Tensors, list of Tensors).
             main_program: the converted main program.
             startup_program: the converted startup program.
-            inputs: list of input Variables which need to be fed.
-            outputs: list of output Variables which users can fetch.
+            inputs: list of input Tensors which need to be fed.
+            outputs: list of output Tensors which users can fetch.
 
         Examples:
             .. code-block:: python
 
-                import paddle.fluid as fluid
-                import numpy as np
+                import paddle
+
 
                 def func(x):
-                    x = fluid.dygraph.to_variable(x)
-                    if fluid.layers.mean(x) > 0:
+                    if paddle.mean(x) > 0:
                         x_v = x - 1
                     else:
                         x_v = x + 1
                     return x_v
 
-                prog_trans = fluid.dygraph.ProgramTranslator()
 
-                x = np.ones([1, 2])
+                prog_trans = paddle.jit.ProgramTranslator()
+                x = paddle.ones([1, 2])
                 main_prog, start_prog, inputs, outputs = prog_trans.get_program(func, x)
                 print([i.name for i in inputs])
-                # ['feed_0'] the feed input variable name representing x
+                # [u'generated_tensor_0'] the feed input Tensor name representing x
                 print([o.name for o in outputs])
-                # ['_generated_var_4'] the fetch output variable name representing x_v        
+                # [u'_generated_var_4'] the fetch output Tensor name representing x_v        
 
         """
         assert callable(
@@ -993,21 +990,21 @@ class ProgramTranslator(object):
         Examples:
             .. code-block:: python
 
-            import paddle.fluid as fluid
-            import numpy as np
+                import paddle
 
-            def func(x):
-                x = fluid.dygraph.to_variable(x)
-                if fluid.layers.mean(x) > 0:
-                    x_v = x - 1
-                else:
-                    x_v = x + 1
-                return x_v
 
-            prog_trans = fluid.dygraph.ProgramTranslator()
+                def func(x):
+                    if paddle.mean(x) > 0:
+                        x_v = x - 1
+                    else:
+                        x_v = x + 1
+                    return x_v
 
-            code = prog_trans.get_code(func)
-            print(type(code)) # <class 'str'>
+
+                prog_trans = paddle.jit.ProgramTranslator()
+
+                code = prog_trans.get_code(func)
+                print(type(code)) # <class 'str'>
 
         """
         assert callable(
@@ -1040,9 +1037,9 @@ class ProgramTranslator(object):
         Examples:
             .. code-block:: python
 
-                import paddle.fluid as fluid
+                import paddle
 
-                prog_trans = fluid.dygraph.ProgramTranslator()
+                prog_trans = paddle.jit.ProgramTranslator()
                 prog_cache = prog_trans.get_program_cache()
 
         """

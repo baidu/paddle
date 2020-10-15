@@ -24,9 +24,9 @@
 ::     2. Git 2.28.0
 ::     3. Python 3.7.8
 ::     4. Visual Studio 2015 with update 3
-::     5. CUDA 10 [miss cudnn]
-::     6. java jre [not complete]
-::     7. xly agent [not complete]
+::     5. CUDA 10
+::     6. java jre
+::     7. xly agent
 
 :: Echo command is not required.
 @echo off
@@ -138,8 +138,8 @@ goto :cuda10
 
 :install_visual_studio
 echo There is not Visual Studio in this PC, will install VS2015.
-echo Download package from "https://download.my.visualstudio.com/pr/en_visual_studio_professional_2015_with_update_3_x86_x64_web_installer_8922978.exe"
-wget -O vs_installer.exe "https://download.my.visualstudio.com/pr/en_visual_studio_professional_2015_with_update_3_x86_x64_web_installer_8922978.exe?t=9ee7a96d-ca80-4b84-af2c-7dd86996a0aa&e=1600103404&h=3cdea1e81c04aa4e846f5314972c46eb&su=1"
+echo Download package from "https://paddle-ci.gz.bcebos.com/window_requirement/en_visual_studio_enterprise_2015_with_update_3_x86_x64_web_installer_8922986.exe"
+wget -O vs_installer.exe "https://paddle-ci.gz.bcebos.com/window_requirement/en_visual_studio_enterprise_2015_with_update_3_x86_x64_web_installer_8922986.exe"
 echo Install Visual Studio 2015 ...
 :: /passive [silent install]
 :: /norestart [no restart]
@@ -157,34 +157,60 @@ goto :eof
 
 :: ===== start step 5: CUDA 10 =====
 :cuda10
-echo ">>>>>>>> step [5/7]: CUDA 10.0"
-nvcc --version > nul 2> nul || call :install_cuda
+echo ">>>>>>>> step [5/7]: CUDA 10.2"
+nvcc --version | findstr /C:"10.2" > nul 2> nul || call :install_cuda
 goto java-jre
 
 :install_cuda
-echo There is not CUDA in this PC, will install CUDA-10.0.
-echo Download package from "https://developer.download.nvidia.cn/compute/cuda/10.0/secure/Prod/network_installers/cuda_10.0.130_win10_network.exe"
-wget -O cuda_installer.exe "https://developer.download.nvidia.cn/compute/cuda/10.0/secure/Prod/network_installers/cuda_10.0.130_win10_network.exe?hG7oBtA2CnxZG7d39onmBdtzrIa2cOukrmW8I0qk3h36vb2Sj0yYGjMElJlxlNhjx8Xu5RlbmdBhCWvP2QcEqMjCoKCXe5lOgr5uIIso_7LqrotgQHbZRZSVBYRT4bIAHPVSPrr4_4KczKvI9Nf3mbO9RJ2Vj6ECD5QphRMJBus0KKNVxO1gsplVL5qaCnE"
-echo Install CUDA-10.0 ...
+echo There is not CUDA in this PC, will install CUDA-10.2.
+echo Download package from "https://paddle-ci.gz.bcebos.com/window_requirement/cuda_10.2.89_441.22_win10.exe"
+wget -O cuda_installer.exe "https://paddle-ci.gz.bcebos.com/window_requirement/cuda_10.2.89_441.22_win10.exe"
+echo Install CUDA-10.2 ...
 :: -s [silent install]
 start /wait cuda_installer.exe -s
 if %errorlevel% == 0 (
-  echo Install CUDA-10.0 success!
+  echo Install CUDA-10.2 success!
 ) else (
-  echo Error***** Install CUDA-10.0 failed, please re-install it manually.
+  echo Error***** Install CUDA-10.2 failed, please re-install it manually.
+  goto :eof
 )
 del cuda_installer.exe
+echo Download cudnn from "https://paddle-ci.gz.bcebos.com/window_requirement/cudnn-10.2-windows10-x64-v7.6.5.32.zip"
+wget -O cudnn-10.2-windows10-x64-v7.6.5.32.zip "https://paddle-ci.gz.bcebos.com/window_requirement/cudnn-10.2-windows10-x64-v7.6.5.32.zip"
+tar xf cudnn-10.2-windows10-x64-v7.6.5.32.zip
+xcopy "cuda\bin\*" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.2\bin"
+xcopy "cuda\include\*" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.2\include"
+xcopy "cuda\lib\*" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.2\lib"
+rd /s /q cuda
+del cudnn-10.2-windows10-x64-v7.6.5.32.zip
 goto :eof
 :: ===== end step 5: CUDA 10 =====
 
 :: ===== start step 6: java jre =====
 :java-jre
 echo ">>>>>>>> step [6/7]: java jre"
+java > nul 2> nul || call :install_java
 goto xly-agent
+
+:install_java
+echo There is not java-jre in this PC, will install java-jre.
+echo Download package from "https://paddle-ci.gz.bcebos.com/window_requirement/jre-8u261-windows-i586.exe"
+wget -O jre-8u261-windows-x64.exe "https://paddle-ci.gz.bcebos.com/window_requirement/jre-8u261-windows-i586.exe"
+echo Install java-jre ...
+:: -s [silent install]
+start /wait jre-8u261-windows-x64.exe /s
+if %errorlevel% == 0 (
+  echo Install java success!
+) else (
+  echo Error***** Install java failed, please re-install it manually.
+)
+del jre-8u261-windows-x64.exe
+goto :eof
 :: ===== end step 6: java jre =====
 
 :: ===== start step 7: xly agent =====
 :xly-agent
 echo ">>>>>>>> step [7/7]: xly agent"
+wget -O agent.jar "https://paddle-ci.gz.bcebos.com/window_requirement/agent.jar"
 goto :eof
 :: ===== end step 8: xly agent =====

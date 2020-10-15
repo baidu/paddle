@@ -34,7 +34,7 @@ class LogicalTransformer(gast.NodeTransformer):
         self.generic_visit(node)
         if isinstance(node.op, gast.Not):
             arg = ast_to_source_code(node.operand)
-            new_node_str = "fluid.dygraph.dygraph_to_static.convert_operators.convert_logical_not({})".format(
+            new_node_str = "paddle.jit.dy2static.convert_logical_not({})".format(
                 arg)
             # NOTE: gast.parse returns Module(body=[expr(value=...)])
             new_node = gast.parse(new_node_str).body[0].value
@@ -67,7 +67,7 @@ class LogicalTransformer(gast.NodeTransformer):
             nodes = [pre_logic_node] + [post_logic_node]
 
         args = [ast_to_source_code(child) for child in nodes]
-        new_node_str = "fluid.dygraph.dygraph_to_static.convert_operators.convert_logical_{}(x={}, y={})".format(
+        new_node_str = "paddle.jit.dy2static.convert_logical_{}(x={}, y={})".format(
             api_type, args[0], args[1])
         # NOTE: gast.parse return Module(body=[expr(...)])
         new_node = gast.parse(new_node_str).body[0].value

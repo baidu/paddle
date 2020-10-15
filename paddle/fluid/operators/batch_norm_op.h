@@ -19,6 +19,7 @@ limitations under the License. */
 #include <vector>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/layout_utils.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/operators/norm_utils.h"
 
@@ -40,127 +41,6 @@ using EigenVectorArrayMap = Eigen::Map<Eigen::Array<T, Eigen::Dynamic, 1>>;
 template <typename T>
 using ConstEigenVectorArrayMap =
     Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>>;
-
-template <typename DeviceContext, typename T>
-inline void ResizeToChannelFirst(const framework::ExecutionContext& context,
-                                 const Tensor* input,
-                                 Tensor* transformed_input) {
-  int dim = input->dims().size() - 2;
-  if (dim == 3) {
-    // input
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[4];
-    in_dims_vec[2] = input->dims()[1];
-    in_dims_vec[3] = input->dims()[2];
-    in_dims_vec[4] = input->dims()[3];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-
-  } else if (dim == 2) {
-    // input
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[3];
-    in_dims_vec[2] = input->dims()[1];
-    in_dims_vec[3] = input->dims()[2];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-  } else if (dim == 1) {
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[2];
-    in_dims_vec[2] = input->dims()[1];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-  }
-}
-
-template <typename DeviceContext, typename T>
-inline void TransToChannelFirst(const framework::ExecutionContext& context,
-                                const Tensor* input,
-                                Tensor* transformed_input) {
-  int dim = input->dims().size() - 2;
-  if (dim == 3) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 4, 1, 2, 3};
-    math::Transpose<DeviceContext, T, 5> trans5;
-    trans5(dev_ctx, *input, transformed_input, axis);
-
-  } else if (dim == 2) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 3, 1, 2};
-    math::Transpose<DeviceContext, T, 4> trans4;
-    trans4(dev_ctx, *input, transformed_input, axis);
-  } else if (dim == 1) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 1};
-    math::Transpose<DeviceContext, T, 3> trans3;
-    trans3(dev_ctx, *input, transformed_input, axis);
-  }
-}
-
-template <typename DeviceContext, typename T>
-inline void ResizeToChannelLast(const framework::ExecutionContext& context,
-                                const Tensor* input,
-                                Tensor* transformed_input) {
-  int dim = input->dims().size() - 2;
-  if (dim == 3) {
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[2];
-    in_dims_vec[2] = input->dims()[3];
-    in_dims_vec[3] = input->dims()[4];
-    in_dims_vec[4] = input->dims()[1];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-
-  } else if (dim == 2) {
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[2];
-    in_dims_vec[2] = input->dims()[3];
-    in_dims_vec[3] = input->dims()[1];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-  } else if (dim == 1) {
-    transformed_input->Resize(input->dims());
-
-    auto in_dims_vec = framework::vectorize(input->dims());
-    in_dims_vec[1] = input->dims()[2];
-    in_dims_vec[2] = input->dims()[1];
-    transformed_input->Resize(framework::make_ddim(in_dims_vec));
-    transformed_input->mutable_data<T>(context.GetPlace());
-  }
-}
-
-template <typename DeviceContext, typename T>
-inline void TransToChannelLast(const framework::ExecutionContext& context,
-                               const Tensor* input, Tensor* transformed_input) {
-  int dim = input->dims().size() - 2;
-  if (dim == 3) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 3, 4, 1};
-    math::Transpose<DeviceContext, T, 5> trans5;
-    trans5(dev_ctx, *input, transformed_input, axis);
-
-  } else if (dim == 2) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 3, 1};
-    math::Transpose<DeviceContext, T, 4> trans4;
-    trans4(dev_ctx, *input, transformed_input, axis);
-  } else if (dim == 1) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 1};
-    math::Transpose<DeviceContext, T, 3> trans3;
-    trans3(dev_ctx, *input, transformed_input, axis);
-  }
-}
 
 class BatchNormOp : public framework::OperatorWithKernel {
  public:

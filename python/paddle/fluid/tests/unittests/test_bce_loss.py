@@ -27,10 +27,10 @@ def test_static_layer(place,
     prog = paddle.static.Program()
     startup_prog = paddle.static.Program()
     with paddle.static.program_guard(prog, startup_prog):
-        input = paddle.data(name='input', shape=input_np.shape, dtype='float64')
-        label = paddle.data(name='label', shape=label_np.shape, dtype='float64')
+        input = paddle.fluid.data(name='input', shape=input_np.shape, dtype='float64')
+        label = paddle.fluid.data(name='label', shape=label_np.shape, dtype='float64')
         if weight_np is not None:
-            weight = paddle.data(
+            weight = paddle.fluid.data(
                 name='weight', shape=weight_np.shape, dtype='float64')
             bce_loss = paddle.nn.loss.BCELoss(
                 weight=weight, reduction=reduction)
@@ -58,10 +58,10 @@ def test_static_functional(place,
     prog = paddle.static.Program()
     startup_prog = paddle.static.Program()
     with paddle.static.program_guard(prog, startup_prog):
-        input = paddle.data(name='input', shape=input_np.shape, dtype='float64')
-        label = paddle.data(name='label', shape=label_np.shape, dtype='float64')
+        input = paddle.fluid.data(name='input', shape=input_np.shape, dtype='float64')
+        label = paddle.fluid.data(name='label', shape=label_np.shape, dtype='float64')
         if weight_np is not None:
-            weight = paddle.data(
+            weight = paddle.fluid.data(
                 name='weight', shape=weight_np.shape, dtype='float64')
             res = paddle.nn.functional.binary_cross_entropy(
                 input, label, weight=weight, reduction=reduction)

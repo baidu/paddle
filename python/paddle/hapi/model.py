@@ -200,6 +200,18 @@ def prepare_distributed_context(place=None):
     return strategy
 
 
+def _update_input_shapes(inputs):
+    "Get input shape list by given inputs in Model initialization."
+    shapes = None
+    if isinstance(inputs, Input):
+        shapes = [list(inputs.shape)]
+    elif isinstance(inputs, list):
+        shapes = [list(input.shape) for input in inputs]
+    elif isinstance(inputs, dict):
+        shapes = [list(inputs[name].shape) for name in inputs]
+    return shapes
+
+
 class StaticGraphAdapter(object):
     """
     Model traning/inference with a static graph.
@@ -598,6 +610,7 @@ class DynamicGraphAdapter(object):
             'test_batch': 0
         }
 
+        self._input_shapes = None
         if self._nranks > 1:
             stradegy = fluid.dygraph.parallel.ParallelStrategy()
             stradegy.nranks = ParallelEnv().nranks
@@ -622,24 +635,20 @@ class DynamicGraphAdapter(object):
         self.model.network.train()
         self.mode = 'train'
         inputs = to_list(inputs)
+        self._input_shapes = _update_input_shapes(inputs)
         labels = labels or []
         labels = [to_variable(l) for l in to_list(labels)]
 
         if self._nranks > 1:
             outputs = self.ddp_model.forward(* [to_variable(x) for x in inputs])
-            losses = self.model._loss(*(to_list(outputs) + labels))
-            losses = to_list(losses)
-            final_loss = fluid.layers.sum(losses)
-            final_loss = self.ddp_model.scale_loss(final_loss)
-            final_loss.backward()
-            self.ddp_model.apply_collective_grads()
         else:
             outputs = self.model.network.forward(
                 * [to_variable(x) for x in inputs])
-            losses = self.model._loss(*(to_list(outputs) + labels))
-            losses = to_list(losses)
-            final_loss = fluid.layers.sum(losses)
-            final_loss.backward()
+
+        losses = self.model._loss(*(to_list(outputs) + labels))
+        losses = to_list(losses)
+        final_loss = fluid.layers.sum(losses)
+        final_loss.backward()
 
         self.model._optimizer.minimize(final_loss)
         self.model.network.clear_gradients()
@@ -656,6 +665,7 @@ class DynamicGraphAdapter(object):
         self.model.network.eval()
         self.mode = 'eval'
         inputs = to_list(inputs)
+        self._input_shapes = _update_input_shapes(inputs)
         labels = labels or []
         labels = [to_variable(l) for l in to_list(labels)]
 
@@ -704,6 +714,7 @@ class DynamicGraphAdapter(object):
         self.model.network.eval()
         self.mode = 'test'
         inputs = [to_variable(x) for x in to_list(inputs)]
+        self._input_shapes = _update_input_shapes(inputs)
         outputs = self.model.network.forward(*inputs)
         if self._nranks > 1 and isinstance(self.model._place, fluid.CUDAPlace):
             outputs = [_all_gather(o, self._nranks) for o in to_list(outputs)]
@@ -778,7 +789,7 @@ class DynamicGraphAdapter(object):
 
         if not hasattr(self.model._optimizer, 'set_state_dict'):
             warnings.warn(
-                "paddle.fluid.optimizer is deprecated in API 2.0, please use paddle.optimizer instead"
+                "paddle.fluid.optimizer is deprecated in API 2.0, please use paddle.optimizer instead."
             )
             self.model._optimizer.set_dict(converted_state)
         else:
@@ -792,14 +803,15 @@ class Model(object):
     switched by `paddle.disable_static()`. The usage is as follows.
     But note, the switching between dynamic and static should be before
     instantiating a Model. The input description, i.e, paddle.static.InputSpec,
-    must be required.
+    must be required for static graph.
 
     Args:
         network (paddle.nn.Layer): The network is an instance of
             paddle.nn.Layer.
         inputs (InputSpec|list|dict|None): `inputs`, entry points of network,
             could be a InputSpec instance, or lits of InputSpec instances,
-            or dict ({name: InputSpec}), and it couldn't be None.
+            or dict ({name: InputSpec}), and it couldn't be None in static
+            graph.
         labels (InputSpec|list|None): `labels`, entry points of network,
             could be a InputSpec instnace or lits of InputSpec instances,
             or None. For static graph, if labels is required in loss,
@@ -844,14 +856,18 @@ class Model(object):
         self._loss = None
         self._loss_weights = None
         self._optimizer = None
-        self._optimizer = None
+        self._input_shapes = None
+        self._is_shape_inferred = False
         self._test_dataloader = None
 
-        if not isinstance(inputs, (list, dict, Input)):
-            raise TypeError(
-                "'inputs' must be list or dict in static graph mode")
+        if not in_dygraph_mode():
+            if not isinstance(inputs, (list, dict, Input)):
+                raise TypeError(
+                    "'inputs' must be list or dict, and couldn't be None.")
+        elif inputs:
+            self._input_shapes = _update_input_shapes(inputs)
 
-        self._inputs = self._verify_spec(inputs, True)
+        self._inputs = self._verify_spec(inputs, is_input=True)
         self._labels = self._verify_spec(labels)
 
         # init backend
@@ -902,7 +918,10 @@ class Model(object):
               loss = model.train_batch([data], [label])
               print(loss)
         """
-        return self._adapter.train_batch(inputs, labels)
+        loss = self._adapter.train_batch(inputs, labels)
+        if fluid.in_dygraph_mode() and self._input_shapes is None:
+            self._update_inputs()
+        return loss
 
     def eval_batch(self, inputs, labels=None):
         """
@@ -947,7 +966,10 @@ class Model(object):
               loss = model.eval_batch([data], [label])
               print(loss)
         """
-        return self._adapter.eval_batch(inputs, labels)
+        loss = self._adapter.eval_batch(inputs, labels)
+        if fluid.in_dygraph_mode() and self._input_shapes is None:
+            self._update_inputs()
+        return loss
 
     def test_batch(self, inputs):
         """
@@ -987,7 +1009,10 @@ class Model(object):
               out = model.test_batch([data])
               print(out)
         """
-        return self._adapter.test_batch(inputs)
+        loss = self._adapter.test_batch(inputs)
+        if fluid.in_dygraph_mode() and self._input_shapes is None:
+            self._update_inputs()
+        return loss
 
     def save(self, path, training=True):
         """  
@@ -1436,6 +1461,11 @@ class Model(object):
 
                 cbks.on_end('eval', eval_logs)
 
+            # step learning rate scheduler on each epcoh end
+            if isinstance(self._optimizer._learning_rate,
+                          paddle.optimizer.lr.LRScheduler):
+                self._optimizer._learning_rate.step()
+
         cbks.on_end('train', logs)
         self._test_dataloader = None
 
@@ -1677,6 +1707,14 @@ class Model(object):
         if fluid.in_dygraph_mode():
             with fluid.framework._dygraph_guard(None):
                 layer = self.network
+                if self._input_shapes is None:  # No provided or inferred
+                    raise RuntimeError(
+                        "Saving inference model needs 'inputs' or running before saving. Please specify 'inputs' in Model initialization or input training data and perform a training for shape derivation."
+                    )
+                if self._is_shape_inferred:
+                    warnings.warn(
+                        "'inputs' was not specified when Model initialization, so the input shape to be saved will be the shape derived from the user's actual inputs. The input shape to be saved is %s. For saving correct input shapes, please provide 'inputs' for Model initialization."
+                        % self._input_shapes)
                 layer.forward = paddle.jit.to_static(
                     layer.forward, input_spec=self._inputs)
 
@@ -1775,6 +1813,7 @@ class Model(object):
             data = flatten(data)
             # LoDTensor.shape is callable, where LoDTensor comes from
             # DataLoader in static graph
+
             batch_size = data[0].shape()[0] if callable(data[
                 0].shape) else data[0].shape[0]
 
@@ -1864,10 +1903,26 @@ class Model(object):
             _input_size = self._inputs
         return summary(self.network, _input_size, dtype)
 
-    def _verify_spec(self, specs, is_input=False):
+    def _verify_spec(self, specs, shapes=None, is_input=False):
         out_specs = []
 
-        if isinstance(specs, dict):
+        if specs is None:
+            # Note(Aurelius84): If not specific specs of `Input`, using argument names of `forward` function
+            # to generate `Input`. But how can we know the actual shape of each input tensor?
+
+            if is_input:
+                arg_names = extract_args(self.network.forward)[1:]
+                if shapes is not None and fluid.in_dygraph_mode():
+                    out_specs = [
+                        Input(
+                            name=n, shape=shapes[i])
+                        for i, n in enumerate(arg_names)
+                    ]
+                else:
+                    out_specs = [Input(name=n, shape=[None]) for n in arg_names]
+            else:
+                out_specs = to_list(specs)
+        elif isinstance(specs, dict):
             assert is_input == False
             out_specs = [specs[n] \
                 for n in extract_args(self.network.forward) if n != 'self']
@@ -1900,3 +1955,9 @@ class Model(object):
         except Exception:
             steps = None
         return steps
+
+    def _update_inputs(self):
+        "Update self._inputs according to given inputs."
+        self._input_shapes = self._adapter._input_shapes
+        self._is_shape_inferred = True
+        self._inputs = self._verify_spec(None, self._input_shapes, True)

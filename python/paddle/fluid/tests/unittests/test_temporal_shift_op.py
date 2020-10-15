@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 from op_test import OpTest
 
+import paddle
 from paddle.fluid import core
 
 
@@ -75,6 +76,13 @@ class TestTemporalShift3(TestTemporalShift):
         self.x_shape = (3, 10, 5, 5)
         self.seg_num = 1
         self.shift_ratio = 0.3
+
+
+class TestTemporalShiftAPI(unittest.TestCase):
+    def test_api(self):
+        input = paddle.randn([6, 4, 2, 2])
+        out = paddle.fluid.layers.temporal_shift(
+            x=input, seg_num=2, shift_ratio=0.2)
 
 
 if __name__ == "__main__":

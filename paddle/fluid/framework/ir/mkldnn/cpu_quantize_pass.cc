@@ -63,8 +63,9 @@ enum { U8_MAX = 255, S8_MAX = 127 };
 
 void CPUQuantizePass::QuantizeInput(Graph* g, Node* op, Node* input,
                                     std::string input_name, double scale_to_one,
-                                    bool is_unsigned,
-                                    std::string scale_attr_name) const {
+                                    bool is_input_unsigned,
+                                    std::string scale_attr_name, float shift,
+                                    std::string shift_attr_name) const {
   auto inputs = op->Op()->InputNames();
   bool name_found =
       std::find(inputs.begin(), inputs.end(), input_name) != inputs.end();
@@ -72,7 +73,7 @@ void CPUQuantizePass::QuantizeInput(Graph* g, Node* op, Node* input,
                     platform::errors::InvalidArgument(
                         "Var(%s) isn't the input of the %s operator.",
                         input_name, op->Op()->Type()));
-  unsigned max = is_unsigned ? U8_MAX : S8_MAX;
+  unsigned max = is_input_unsigned ? U8_MAX : S8_MAX;
   float scale = scale_to_one * max;
 
   // Create quantize output variable
@@ -86,7 +87,8 @@ void CPUQuantizePass::QuantizeInput(Graph* g, Node* op, Node* input,
   q_desc.SetOutput("Output",
                    std::vector<std::string>({quantize_out_node->Name()}));
   q_desc.SetAttr("Scale", scale);
-  q_desc.SetAttr("is_negative_input", !is_unsigned);
+  q_desc.SetAttr("Shift", shift);
+  q_desc.SetAttr("is_negative_input", !is_input_unsigned);
 
   q_desc.SetAttr("output_format",
                  Has("data_layout") ? Get<std::string>("data_layout") : "NHWC");
@@ -103,11 +105,13 @@ void CPUQuantizePass::QuantizeInput(Graph* g, Node* op, Node* input,
   IR_NODE_LINK_TO(quantize_out_node, op);
 
   if (!scale_attr_name.empty()) op->Op()->SetAttr(scale_attr_name, scale);
+  if (!shift_attr_name.empty()) op->Op()->SetAttr(shift_attr_name, shift);
 }
 
 void CPUQuantizePass::QuantizeInputs(Graph* g, Node* op, std::string input_name,
-                                     bool are_unsigned,
-                                     std::string scale_attr_name) const {
+                                     bool are_inputs_unsigned,
+                                     std::string scale_attr_name, float shift,
+                                     std::string shift_attr_name) const {
   auto inputs = op->inputs;
   auto output = op->outputs[0];
   PADDLE_ENFORCE_GE(inputs.size(), 1,
@@ -127,7 +131,7 @@ void CPUQuantizePass::QuantizeInputs(Graph* g, Node* op, std::string input_name,
   std::vector<std::string> quantize_out_node_names(inputs.size());
 
   double scale_out = GetScaleValueForNode(output);
-  unsigned max = are_unsigned ? U8_MAX : S8_MAX;
+  unsigned max = are_inputs_unsigned ? U8_MAX : S8_MAX;
   float scale = scale_out * max;
 
   for (size_t i = 0; i < inputs.size(); i++) {
@@ -137,10 +141,11 @@ void CPUQuantizePass::QuantizeInputs(Graph* g, Node* op, std::string input_name,
     quantize_out_node_names[i] = quantize_out_nodes[i]->Name();
 
     q_desc.SetAttr("Scale", scale);
+    q_desc.SetAttr("Shift", shift);
     q_desc.SetInput("Input", std::vector<std::string>({inputs[i]->Name()}));
     q_desc.SetOutput("Output",
                      std::vector<std::string>({quantize_out_node_names[i]}));
-    q_desc.SetAttr("is_negative_input", !are_unsigned);
+    q_desc.SetAttr("is_negative_input", !are_inputs_unsigned);
     auto quantize_op = g->CreateOpNode(&q_desc);  // OpDesc will be copied.
 
     // link quantize op
@@ -154,6 +159,7 @@ void CPUQuantizePass::QuantizeInputs(Graph* g, Node* op, std::string input_name,
   op->Op()->SetInput(input_name, quantize_out_node_names);
 
   if (!scale_attr_name.empty()) op->Op()->SetAttr(scale_attr_name, scale);
+  if (!shift_attr_name.empty()) op->Op()->SetAttr(shift_attr_name, shift);
 }
 
 void CPUQuantizePass::DequantizeOutput(Graph* g, Node* op, Node* output,
@@ -782,6 +788,62 @@ void CPUQuantizePass::QuantizeElementwiseAdd(Graph* graph) const {
                   quantize_elementwise_add_count);
 }
 
+void CPUQuantizePass::QuantizeFusionGru(Graph* graph) const {
+  GraphPatternDetector gpd;
+  patterns::FusionGru pattern{gpd.mutable_pattern(), name_scope_};
+  pattern();
+
+  int quantize_count = 0;
+  auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
+                     Graph* g) {
+    VLOG(4) << "Quantize fusion_gru op";
+    GET_IR_NODE_FROM_SUBGRAPH(op, op, pattern);
+
+    // skip if should not be quantized
+    if (!platform::HasOpINT8DataType(op->Op())) {
+      LogQuantizationDisabled(op);
+      return;
+    }
+
+    GET_IR_NODE_FROM_SUBGRAPH(x, x, pattern);
+    GET_IR_NODE_FROM_SUBGRAPH(weight_h, weight_h, pattern);
+    GET_IR_NODE_FROM_SUBGRAPH(weight_x, weight_x, pattern);
+    GET_IR_NODE_FROM_SUBGRAPH(out, out, pattern);
+
+    if (!AreScalesPresentForNodes(op, {x, weight_h, weight_x})) {
+      LogCannotQuantizeOp(op);
+      return;
+    }
+
+    bool is_x_unsigned{false};
+    auto input_x_scale = GetScaleValueForNode(x, &is_x_unsigned);
+
+    double input_x_shift{128.};
+    if (is_x_unsigned) input_x_shift = 0.;
+
+    QuantizeInput(g, op, x, "X", input_x_scale, is_x_unsigned, "Scale_data",
+                  input_x_shift, "Shift_data");
+
+    auto weight_scale_tensor = GetScaleTensorForNode(weight_x);
+    EigenVectorArrayMap eigen_tensor{weight_scale_tensor.data<double>(),
+                                     weight_scale_tensor.numel(), 1};
+    eigen_tensor *= static_cast<double>(S8_MAX);
+    std::vector<float> scale_weights{
+        weight_scale_tensor.data<double>(),
+        weight_scale_tensor.data<double>() + weight_scale_tensor.numel()};
+
+    op->Op()->SetAttr("Scale_weights", scale_weights);
+    // return fp32 data
+    op->Op()->SetAttr("force_fp32_output", true);
+
+    ++quantize_count;
+  };
+  gpd(graph, handler);
+  AddStatis(quantize_count);
+
+  PrettyLogDetail("---    quantized %d fusion_gru ops", quantize_count);
+}
+
 void CPUQuantizePass::ApplyImpl(ir::Graph* graph) const {
   VLOG(3) << "Quantizing the graph.";
   PADDLE_ENFORCE_NOT_NULL(
@@ -801,6 +863,7 @@ void CPUQuantizePass::ApplyImpl(ir::Graph* graph) const {
   QuantizeReshape(graph);
   QuantizeMatmul(graph);
   QuantizeElementwiseAdd(graph);
+  QuantizeFusionGru(graph);
 }
 
 }  // namespace ir

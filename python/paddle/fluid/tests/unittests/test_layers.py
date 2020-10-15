@@ -327,7 +327,7 @@ class TestLayer(LayerTest):
 
         with self.dynamic_graph():
             t = np.ones([3, 3, 5, 5], dtype='float32')
-            my_pad2d = paddle.nn.Pad2D(paddings=1)
+            my_pad2d = paddle.nn.layer.Pad2D(paddings=1)
             dy_ret = my_pad2d(base.to_variable(t))
             dy_ret_value = dy_ret.numpy()
 
@@ -1369,7 +1369,7 @@ class TestLayer(LayerTest):
             dy_rlt_value = dy_ret.numpy()
 
         with self.dynamic_graph():
-            instanceNorm = paddle.nn.InstanceNorm(num_channels=shape[1])
+            instanceNorm = nn.InstanceNorm(num_channels=shape[1])
             dy_ret = instanceNorm(base.to_variable(input))
             dy_rlt_value2 = dy_ret.numpy()
 
@@ -1380,7 +1380,7 @@ class TestLayer(LayerTest):
         with self.static_graph():
             # the input of InstanceNorm must be Variable.
             def test_Variable():
-                instanceNorm = paddle.nn.InstanceNorm(num_channels=shape[1])
+                instanceNorm = nn.InstanceNorm(num_channels=shape[1])
                 ret1 = instanceNorm(input)
 
             self.assertRaises(TypeError, test_Variable)
@@ -1388,7 +1388,7 @@ class TestLayer(LayerTest):
             # the input dtype of InstanceNorm must be float32 or float64
             def test_type():
                 input = np.random.random(shape).astype('int32')
-                instanceNorm = paddle.nn.InstanceNorm(num_channels=shape[1])
+                instanceNorm = nn.InstanceNorm(num_channels=shape[1])
                 ret2 = instanceNorm(input)
 
             self.assertRaises(TypeError, test_type)
@@ -1656,21 +1656,6 @@ class TestLayer(LayerTest):
             layers.eye(num_rows=3, batch_shape=2)
         with self.assertRaises(TypeError):
             layers.eye(num_rows=3, batch_shape=[-1])
-
-    def test_hard_swish(self):
-        with self.static_graph():
-            t = layers.data(name='t', shape=[3, 3], dtype='float32')
-            ret = layers.hard_swish(t)
-            static_ret = self.get_static_graph_result(
-                feed={'t': np.ones(
-                    [3, 3], dtype='float32')}, fetch_list=[ret])[0]
-
-        with self.dynamic_graph():
-            t = np.ones([3, 3], dtype='float32')
-            dy_ret = layers.hard_swish(base.to_variable(t))
-            dy_ret_rlt = dy_ret.numpy()
-
-        self.assertTrue(np.allclose(static_ret, dy_ret_rlt))
 
     def test_while_loop(self):
         with self.static_graph():
@@ -2563,13 +2548,6 @@ class TestBook(LayerTest):
             output = layers.l2_normalize(x, axis=1)
             return output
 
-    def make_maxout(self):
-        with program_guard(fluid.default_main_program(),
-                           fluid.default_startup_program()):
-            data = self._get_data(name='x', shape=[8, 6, 6], dtype="float32")
-            output = layers.maxout(x=data, groups=2)
-            return (output)
-
     def make_crop(self):
         with program_guard(fluid.default_main_program(),
                            fluid.default_startup_program()):
@@ -2654,13 +2632,6 @@ class TestBook(LayerTest):
                 mode,
                 param_attr=ParamAttr(initializer=Constant(1.0)),
                 name='prelu')
-            return (out)
-
-    def make_brelu(self):
-        with program_guard(fluid.default_main_program(),
-                           fluid.default_startup_program()):
-            input = self._get_data(name="input", shape=[16], dtype="float32")
-            out = layers.brelu(input, t_min=1.0, t_max=20.0, name='brelu')
             return (out)
 
     def make_soft_relu(self):

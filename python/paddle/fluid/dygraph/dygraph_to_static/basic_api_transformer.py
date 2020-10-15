@@ -116,14 +116,14 @@ def is_to_variable(node):
 
 
 def to_assign_node(node):
-    # Transform dygraph api `fluid.dygraph.to_variable` alias `paddle.to_tensor` to static api `fluid.layers.assign`.
+    # Transform dygraph api `fluid.dygraph.to_variable` alias `paddle.to_tensor` to static api `paddle.nn.functional.assign`.
     # NOTE:
     #   1. Api `to_variable` supports data type {float16, float32, float64, int16, int32, int64, uint8, uint16},
     #   but api `assign` only supports {float32, float64, int32, int64, bool};
     #   2. If the input of api `assign` is numpy.ndarray, its size cannot be greater than 1024 * 1024.
 
     assert isinstance(node, gast.Call)
-    assign_api = gast.parse('fluid.layers.assign').body[0].value
+    assign_api = gast.parse('paddle.nn.functional.assign').body[0].value
     node.func = assign_api
 
     if node.args:

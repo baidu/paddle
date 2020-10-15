@@ -17,10 +17,12 @@
 //
 
 #include <paddle/fluid/framework/op_registry.h>
+
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
+
 #include "gtest/gtest.h"
 #include "paddle/fluid/imperative/basic_engine.h"
 #include "paddle/fluid/imperative/tracer.h"
@@ -286,9 +288,9 @@ TEST(test_tracer, test_unique_name_generator) {
   ASSERT_STREQ("fc_1", fc_2.c_str());
   // use `eager_tmp` as key if not specify it.
   auto tmp_var_2 = tracer.GenerateUniqueName();
-  ASSERT_STREQ("eager_tmp_2", tmp_var_2.c_str());
-  auto tmp_var_3 = tracer.GenerateUniqueName("eager_tmp");
-  ASSERT_STREQ("eager_tmp_3", tmp_var_3.c_str());
+  ASSERT_STREQ("dygraph_tmp_2", tmp_var_2.c_str());
+  auto tmp_var_3 = tracer.GenerateUniqueName("dygraph_tmp");
+  ASSERT_STREQ("dygraph_tmp_3", tmp_var_3.c_str());
 }
 
 TEST(test_tracer, test_current_tracer) {

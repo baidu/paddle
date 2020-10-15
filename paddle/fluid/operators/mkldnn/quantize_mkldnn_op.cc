@@ -36,7 +36,21 @@ class QuantOpKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto* input = ctx.Input<Tensor>("Input");
     auto scale_data = ctx.Attr<float>("Scale");
+    auto scale_shift = ctx.Attr<float>("Shift");
+    bool with_shift = scale_shift != 0.0f;
     auto* output = ctx.Output<Tensor>("Output");
+
+    PADDLE_ENFORCE_NE(
+        scale_data, 0.0f,
+        platform::errors::InvalidArgument("Quantization scale cannot be 0.0"));
+    PADDLE_ENFORCE_GE(scale_shift, 0,
+                      platform::errors::Unimplemented(
+                          "Quantization shift must be nonnegative."));
+    PADDLE_ENFORCE_LE(
+        scale_shift, 255,
+        platform::errors::Unimplemented(
+            "Quantization shift must be less than or equal to 255."));
+
     auto& dev_ctx =
         ctx.template device_context<platform::MKLDNNDeviceContext>();
     const auto& engine = dev_ctx.GetEngine();
@@ -47,11 +61,12 @@ class QuantOpKernel : public framework::OpKernel<T> {
 
     const T* input_data = input->data<T>();
 
-    bool is_negative = ctx.Attr<bool>("is_negative_input");
+    bool is_negative_input = ctx.Attr<bool>("is_negative_input");
     bool bfloat16 = ctx.Attr<bool>("bfloat16");
-    std::string key =
-        platform::CreateKey(platform::ThreadIDasStr(), src_tz, scale_data,
-                            is_negative, ctx.OutputName("Output"));
+
+    std::string key = platform::CreateKey(
+        platform::ThreadIDasStr(), src_tz, scale_data, scale_shift,
+        is_negative_input, ctx.OutputName("Output"));
     const std::string key_prim = key + "@r";
     const std::string key_src_mem = key + "@s";
     const std::string key_dst_mem = key + "@d";
@@ -69,6 +84,15 @@ class QuantOpKernel : public framework::OpKernel<T> {
       int mask = 0;
       attri.set_output_scales(mask, {scale_data});
 
+      if (with_shift) {
+        mkldnn::post_ops post_operations;
+        post_operations.append_sum();
+        attri.set_post_ops(post_operations);
+        uint8_t* output_data = output->mutable_data<uint8_t>(ctx.GetPlace());
+        // memset casts scale_shift to unsigned char (uint8_t) internally
+        std::memset(output_data, scale_shift, output->numel());
+      }
+
       auto src_md = platform::MKLDNNMemDesc({src_tz}, memory::data_type::f32,
                                             input->format());
       src_memory = std::make_shared<mkldnn::memory>(
@@ -78,7 +102,7 @@ class QuantOpKernel : public framework::OpKernel<T> {
       if (bfloat16) {
         platform::SetDstMemoryQuantized<paddle::platform::bfloat16>(
             ctx, output, dst_tz, engine, dst_md, dst_memory, out_format);
-      } else if (is_negative) {
+      } else if (is_negative_input && !with_shift) {
         platform::SetDstMemoryQuantized<int8_t>(ctx, output, dst_tz, engine,
                                                 dst_md, dst_memory, out_format);
       } else {
@@ -104,10 +128,13 @@ class QuantOpKernel : public framework::OpKernel<T> {
       if (bfloat16) {
         dst_memory->set_data_handle(
             output->mutable_data<paddle::platform::bfloat16>(place));
-      } else if (is_negative) {
-        dst_memory->set_data_handle(output->mutable_data<int8_t>(place));
+      } else if (with_shift || !is_negative_input) {
+        uint8_t* output_data = output->mutable_data<uint8_t>(ctx.GetPlace());
+        if (with_shift) std::memset(output_data, scale_shift, output->numel());
+        dst_memory->set_data_handle(output_data);
       } else {
-        dst_memory->set_data_handle(output->mutable_data<uint8_t>(place));
+        dst_memory->set_data_handle(
+            output->mutable_data<int8_t>(ctx.GetPlace()));
       }
     }
 

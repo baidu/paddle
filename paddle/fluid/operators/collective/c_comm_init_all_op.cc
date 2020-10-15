@@ -50,7 +50,8 @@ class CCommInitAllOp : public framework::OperatorBase {
   void RunImpl(const framework::Scope& scope,
                const platform::Place& place) const override {
     PADDLE_ENFORCE_EQ(is_gpu_place(place), true,
-                      "CCommInitAllOp can run on gpu place only.");
+                      platform::errors::PreconditionNotMet(
+                          "CCommInitAllOp can run on gpu place only"));
 
 #if defined(PADDLE_WITH_NCCL)
     std::vector<int> devices = Attr<std::vector<int>>("devices");
@@ -62,7 +63,8 @@ class CCommInitAllOp : public framework::OperatorBase {
 
     platform::NCCLCommContext::Instance().CreateAllNCCLComms(devices, rid);
 #else
-    PADDLE_THROW("PaddlePaddle should compile with GPU.");
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "PaddlePaddle should compile with GPU."));
 #endif
   }
 };

@@ -19,6 +19,7 @@ limitations under the License. */
 #include <map>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <set>
 #include <string>
 #include <thread>         // NOLINT
 #include <unordered_map>  // NOLINT
@@ -313,6 +314,10 @@ class DownpourWorker : public HogwildWorker {
   std::map<uint64_t, std::vector<std::string>> dense_value_names_;
   std::map<uint64_t, uint64_t> table_dependency_;
   std::vector<std::pair<uint64_t, uint64_t>> copy_dense_tables_;
+  // multitask
+  std::map<int32_t, uint64_t> cond2table_map_;
+  std::set<uint64_t> condvalue_set_;
+  bool flag_partial_push_;
 
  private:
   // std::vector<std::string> dump_param_;

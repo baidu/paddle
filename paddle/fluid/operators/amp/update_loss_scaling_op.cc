@@ -103,7 +103,7 @@ class UpdateLossScalingOpMaker : public framework::OpProtoAndCheckerMaker {
         .AddCustomChecker([](float decr_ratio) {
           PADDLE_ENFORCE_EQ(decr_ratio > 0.0f && decr_ratio < 1.0f, true,
                             platform::errors::InvalidArgument(
-                                "'incr_ratio' should be between 0 and 1, but "
+                                "'decr_ratio' should be between 0 and 1, but "
                                 "the received is %f",
                                 decr_ratio));
         });

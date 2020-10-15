@@ -65,9 +65,9 @@ bool RequestSendHandler::Handle(const std::string &varname,
     if (distributed_mode_ != DistributedMode::kSync) {
       VLOG(3) << "async process var: " << varname;
       if (varname == BATCH_BARRIER_MESSAGE) {
-        PADDLE_THROW(
+        PADDLE_THROW(platform::errors::InvalidArgument(
             "async mode should not recv BATCH_BARRIER_MESSAGE or "
-            "COMPLETE_MESSAGE");
+            "COMPLETE_MESSAGE"));
       }
       HeartBeatMonitor::GetInstance()->Update(trainer_id, varname, RUNNING);
 
@@ -78,7 +78,10 @@ bool RequestSendHandler::Handle(const std::string &varname,
 
       if (string::Contains(var_name_piece, part_piece)) {
         auto varname_splits = paddle::string::Split(varname, '@');
-        PADDLE_ENFORCE_EQ(varname_splits.size(), 3);
+        PADDLE_ENFORCE_EQ(
+            varname_splits.size(), 3,
+            platform::errors::InvalidArgument(
+                "varname: %s should be separated into 3 parts by @", varname));
         run_varname = varname_splits[0];
         scope->Rename(varname, run_varname);
       }
@@ -192,7 +195,11 @@ bool RequestGetHandler::Handle(const std::string &varname,
             out_dims, origin_tensor.place());
         auto width = dims[1];
         for (size_t i = 0; i < updated_rows.size(); ++i) {
-          PADDLE_ENFORCE_LT(updated_rows[i], dims[0]);
+          PADDLE_ENFORCE_LT(
+              updated_rows[i], dims[0],
+              platform::errors::OutOfRange(
+                  "The value of updated_rows: %s out of Tensor %s dims[0]: %s",
+                  updated_rows[i], varname, dims[0]));
           memcpy(data + i * width, origin_tensor_data + updated_rows[i] * width,
                  sizeof(float) * width);
         }
@@ -225,7 +232,8 @@ bool RequestGetNoBarrierHandler::Handle(const std::string &varname,
     *outvar = scope_->FindVar(var_name_piece.ToString());
     return true;
   } else {
-    PADDLE_THROW("GetNoBarrier must contain %s", WITHOUT_BARRIER_MESSAGE);
+    PADDLE_THROW(platform::errors::InvalidArgument(
+        "GetNoBarrier must contain %s", WITHOUT_BARRIER_MESSAGE));
   }
   return true;
 }
@@ -266,13 +274,13 @@ bool RequestCheckpointHandler::Handle(const std::string &varname,
                                       const int trainer_id,
                                       const std::string &out_var_name,
                                       const std::string &table_name) {
-  VLOG(4) << "receive save var " << varname << " with path " << out_var_name;
+  VLOG(4) << "receive save var " << varname << " with path " << out_var_name
+          << " mode " << table_name;
+
+  int mode = std::stoi(table_name);
 
   auto *ins = distributed::LargeScaleKV::GetInstance();
-  ins->Get(varname)->Save(out_var_name);
-  //  auto checkpoint_op = BuildCheckpointOp(varname, out_var_name);
-  //  paddle::platform::CPUPlace cpu_place;
-  //  checkpoint_op->Run(*scope_, cpu_place);
+  ins->Get(varname)->Save(out_var_name, mode);
   return true;
 }
 

@@ -28,11 +28,15 @@ class LookupTableV2Op : public framework::OperatorWithKernel {
 
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE_EQ(ctx->HasInput("W"), true,
-                      "Input(W) of LookupTableV2Op should not be null.");
+                      platform::errors::InvalidArgument(
+                          "Input(W) of LookupTableV2Op should not be null."));
     PADDLE_ENFORCE_EQ(ctx->HasInput("Ids"), true,
-                      "Input(Ids) of LookupTableV2Op should not be null.");
-    PADDLE_ENFORCE_EQ(ctx->HasOutput("Out"), true,
-                      "Output(Out) of LookupTableV2Op should not be null.");
+                      platform::errors::InvalidArgument(
+                          "Input(Ids) of LookupTableV2Op should not be null."));
+    PADDLE_ENFORCE_EQ(
+        ctx->HasOutput("Out"), true,
+        platform::errors::InvalidArgument(
+            "Output(Out) of LookupTableV2Op should not be null."));
 
     auto table_dims = ctx->GetInputDim("W");
     auto ids_dims = ctx->GetInputDim("Ids");
@@ -40,10 +44,11 @@ class LookupTableV2Op : public framework::OperatorWithKernel {
     VLOG(5) << "ids rank is " << ids_rank << std::endl;
     PADDLE_ENFORCE_EQ(
         table_dims.size(), 2,
-        "ShapeError: The dimensions of the 'lookup table' must be 2. "
-        "But received lookup table's dimensions = %d, "
-        "lookup table's shape = [%s].",
-        table_dims.size(), table_dims);
+        platform::errors::InvalidArgument(
+            "ShapeError: The dimensions of the 'lookup table' must be 2. "
+            "But received lookup table's dimensions = %d, "
+            "lookup table's shape = [%s].",
+            table_dims.size(), table_dims));
 
     auto output_dims = framework::vectorize(ids_dims);
     output_dims.push_back(table_dims[1]);

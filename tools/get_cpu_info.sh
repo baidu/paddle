@@ -36,7 +36,7 @@ if [ $numa_nodes -lt $sockets ]; then
 fi
 
 echo "********** Software Information **********"
-echo "OS Version             : `cat /proc/version`"
+echo "OS Version             : `uname -o`"
 echo "Kernel Release Version : `uname -r`"
 echo "Kernel Patch Version   : `uname -v`"
 echo "GCC Version            :`gcc --version | head -n 1|awk -F '\\\(GCC\\\)' '{print $2}'`"

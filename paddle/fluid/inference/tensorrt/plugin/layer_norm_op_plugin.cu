@@ -50,10 +50,18 @@ int LayerNormPlugin::enqueue(int batch_size, const void *const *inputs,
   float *output = reinterpret_cast<float **>(outputs)[0];
   int begin_norm_axis = begin_norm_axis_;
   float eps = eps_;
-  int c = input_dims.d[begin_norm_axis - 1];
 
-  scale_t.Resize(framework::make_ddim({c}));
-  bias_t.Resize(framework::make_ddim({c}));
+  std::vector<int> input_shape;
+  input_shape.push_back(batch_size);
+  for (int i = 0; i < input_dims.nbDims; i++) {
+    input_shape.push_back(input_dims.d[i]);
+  }
+  const auto input_ddim = framework::make_ddim(input_shape);
+  auto matrix_dim = framework::flatten_to_2d(input_ddim, begin_norm_axis - 1);
+  int feature_size = static_cast<int>(matrix_dim[1]);
+
+  scale_t.Resize(framework::make_ddim({feature_size}));
+  bias_t.Resize(framework::make_ddim({feature_size}));
   mean_t.Resize(framework::make_ddim(mean_shape_));
   variance_t.Resize(framework::make_ddim(variance_shape_));
   int device_id;
@@ -63,15 +71,11 @@ int LayerNormPlugin::enqueue(int batch_size, const void *const *inputs,
   float *mean_d = mean_t.mutable_data<float>(platform::CUDAPlace(device_id));
   float *variance_d =
       variance_t.mutable_data<float>(platform::CUDAPlace(device_id));
-  cudaMemcpyAsync(scale_d, scale_.data(), sizeof(float) * c,
+  cudaMemcpyAsync(scale_d, scale_.data(), sizeof(float) * feature_size,
                   cudaMemcpyHostToDevice, stream);
-  cudaMemcpyAsync(bias_d, bias_.data(), sizeof(float) * c,
+  cudaMemcpyAsync(bias_d, bias_.data(), sizeof(float) * feature_size,
                   cudaMemcpyHostToDevice, stream);
-  std::vector<int> input_shape;
-  input_shape.push_back(batch_size);
-  for (int i = 0; i < input_dims.nbDims; i++) {
-    input_shape.push_back(input_dims.d[i]);
-  }
+
   paddle::operators::LayerNormDirectCUDAFunctor<float> layer_norm;
   layer_norm(stream, input, input_shape, bias_d, scale_d, output, mean_d,
              variance_d, begin_norm_axis, eps);

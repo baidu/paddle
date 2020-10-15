@@ -19,6 +19,7 @@
 
 #include "paddle/fluid/framework/ir/graph_viz_pass.h"
 #include "paddle/fluid/framework/ir/quant_conv2d_dequant_fuse_pass.h"
+#include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
 namespace framework {
@@ -284,3 +285,15 @@ void QuantDequantFusePass::ApplyImpl(ir::Graph* graph) const {
 
 REGISTER_PASS(quant_conv2d_dequant_fuse_pass,
               paddle::framework::ir::QuantDequantFusePass);
+
+REGISTER_PASS_CAPABILITY(tensorrt_subgraph_pass)
+    .AddCombination(
+        paddle::framework::compatible::OpVersionComparatorCombination()
+            .EQ("conv2d", 0)
+            .EQ("fc", 0)
+            .LE("conv2d_transpose", 1)
+            .EQ("fake_quantize_abs_max", 0)
+            .EQ("fake_quantize_range_abs_max", 0)
+            .EQ("fake_quantize_moving_average_abs_max", 0)
+            .EQ("fake_channel_wise_quantize_abs_max", 0)
+            .EQ("fake_dequantize_max_abs", 0));

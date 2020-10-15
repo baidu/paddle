@@ -335,13 +335,6 @@ class AnalysisPredictor : public PaddlePredictor {
   /// AnalysisPredictor::ZeroCopyRun() now.
   ///
   void MkldnnPostReset();
-  ///
-  /// \brief Compute compatibility based on model version information and
-  /// operator version information
-  ///
-  /// \return Compatible information
-  ///
-  bool CheckOperatorCompatible();
 
 #if PADDLE_WITH_TENSORRT
   ///

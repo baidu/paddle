@@ -61,6 +61,37 @@ create_test_mkldnn_class(TestCase4)
 create_test_mkldnn_class(TestCase5)
 
 
+class TestAvgPoolAdaptive(TestPool2D_Op):
+    def init_adaptive(self):
+        self.adaptive = True
+
+    def init_pool_type(self):
+        self.pool_type = "avg"
+        self.pool2D_forward_naive = avg_pool2D_forward_naive
+
+    def init_kernel_type(self):
+        self.use_mkldnn = True
+
+    def init_test_case(self):
+        self.ksize = [1, 1]
+        self.strides = [1, 1]
+
+    def init_data_type(self):
+        self.dtype = np.float32
+
+    def init_global_pool(self):
+        self.global_pool = False
+
+
+class TestAvgPoolAdaptive2(TestAvgPoolAdaptive):
+    def init_test_case(self):
+        self.ksize = [2, 3]
+        self.strides = [1, 1]
+
+    def init_shape(self):
+        self.shape = [2, 3, 6, 6]
+
+
 class TestAsymPad(TestPool2D_Op):
     def init_test_case(self):
         self.ksize = [3, 3]
@@ -160,4 +191,6 @@ class TestAsymPadValidNHWC(TestAsymPadValid):
 
 
 if __name__ == '__main__':
+    from paddle import enable_static
+    enable_static()
     unittest.main()

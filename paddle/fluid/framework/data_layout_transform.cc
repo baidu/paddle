@@ -203,7 +203,7 @@ void innerTransDataLayoutFromMKLDNN(DataLayout in_layout, DataLayout out_layout,
   // As MKL-DNN description was in NCHW and paddle is expecting NHWC
   platform::MatchShapeToLayout(out, in_layout, out_layout);
 
-  out->set_layout(out_layout);
+  out->set_layout(DataLayout::kNCHW);
   // reset format since the out tensor will be feed to non-MKLDNN OPkernel
   out->set_format(MKLDNNMemoryFormat::undef);
 }

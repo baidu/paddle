@@ -346,6 +346,12 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
     def next(self):
         return self.__next__()
 
+    def __del__(self):
+        # _blocking_queue in keep order mode holds sub-threads
+        # need to release thread resources on unexpected exit
+        if self._blocking_queue:
+            self._blocking_queue.close()
+
 
 # NOTE(chenweihang): _worker_loop must be top level method to be pickled
 def _worker_loop(dataset, dataset_kind, indices_queue, out_queue, done_event,

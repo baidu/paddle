@@ -98,6 +98,7 @@ message AsyncConfig {
   optional int32 send_wait_times = 7 [ default = 1 ];
   optional bool runtime_split_send_recv = 8 [ default = false ];
   optional bool launch_barrier = 9 [ default = true ];
+  optional string heter_worker_device_guard = 10 [ default = 'cpu' ];
 }
 
 message PipelineConfig { optional int32 micro_batch = 1 [ default = 1 ]; }

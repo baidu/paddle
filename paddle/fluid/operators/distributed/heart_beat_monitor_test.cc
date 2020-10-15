@@ -23,32 +23,30 @@ namespace distributed {
 void run(HeartBeatMonitor* monitor) { monitor->LostWorkerMonitor(); }
 
 TEST(HeartBeatMonitor, All) {
-  // (tangwei12) fix it soon.
-  return;
-  //  int trainers = 10;
-  //  int pserver_id = 0;
-  //  std::string var = "nce_w@GRAD.block0";
-  //  std::string var2 = "nce_w@GRAD.block2";
-  //
-  //  HeartBeatMonitor::Init(trainers, pserver_id == 0, var);
-  //
-  //  auto* monitor = HeartBeatMonitor::GetInstance();
-  //
-  //  std::vector<int> ids{1, 3, 5, 7};
-  //
-  //  for (auto& id : ids) {
-  //    monitor->Update(id, var, RUNNING);
-  //  }
-  //
-  //  monitor->Update(9, var2, RUNNING);
-  //  monitor->Update(2, var, COMPLETED);
-  //
-  //  std::thread t(run, monitor);
-  //  t.detach();
-  //
-  //  std::this_thread::sleep_for(std::chrono::milliseconds(45 * 1000));
-  //
-  //  monitor->Stop();
+  int trainers = 10;
+  int pserver_id = 0;
+  std::string var = "nce_w@GRAD.block0";
+  std::string var2 = "nce_w@GRAD.block2";
+
+  HeartBeatMonitor::Init(trainers, pserver_id == 0, var);
+
+  auto* monitor = HeartBeatMonitor::GetInstance();
+
+  std::vector<int> ids{1, 3, 5, 7};
+
+  for (auto& id : ids) {
+    monitor->Update(id, var, RUNNING);
+  }
+
+  monitor->Update(9, var2, RUNNING);
+  monitor->Update(2, var, COMPLETED);
+
+  std::thread t(run, monitor);
+  t.detach();
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(15 * 1000));
+
+  monitor->Stop();
 }
 
 }  // namespace distributed

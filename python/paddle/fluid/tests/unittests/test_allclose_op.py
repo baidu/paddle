@@ -95,8 +95,8 @@ class TestAllcloseError(unittest.TestCase):
         def test_x_dtype():
             with paddle.static.program_guard(paddle.static.Program(),
                                              paddle.static.Program()):
-                x = paddle.data(name='x', shape=[10, 10], dtype='float16')
-                y = paddle.data(name='y', shape=[10, 10], dtype='float64')
+                x = paddle.fluid.data(name='x', shape=[10, 10], dtype='float16')
+                y = paddle.fluid.data(name='y', shape=[10, 10], dtype='float64')
                 result = paddle.allclose(x, y)
 
         self.assertRaises(TypeError, test_x_dtype)
@@ -104,15 +104,15 @@ class TestAllcloseError(unittest.TestCase):
         def test_y_dtype():
             with paddle.static.program_guard(paddle.static.Program(),
                                              paddle.static.Program()):
-                x = paddle.data(name='x', shape=[10, 10], dtype='float64')
-                y = paddle.data(name='y', shape=[10, 10], dtype='int32')
+                x = paddle.fluid.data(name='x', shape=[10, 10], dtype='float64')
+                y = paddle.fluid.data(name='y', shape=[10, 10], dtype='int32')
                 result = paddle.allclose(x, y)
 
         self.assertRaises(TypeError, test_y_dtype)
 
     def test_attr(self):
-        x = paddle.data(name='x', shape=[10, 10], dtype='float64')
-        y = paddle.data(name='y', shape=[10, 10], dtype='float64')
+        x = paddle.fluid.data(name='x', shape=[10, 10], dtype='float64')
+        y = paddle.fluid.data(name='y', shape=[10, 10], dtype='float64')
 
         def test_rtol():
             result = paddle.allclose(x, y, rtol=True)

@@ -58,14 +58,19 @@ template <typename T>
 class BlockingQueue {
  public:
   explicit BlockingQueue(size_t capacity) : capacity_(capacity) {
-    PADDLE_ENFORCE_GT(capacity_, 0, "The capacity must be greater than 0.");
+    PADDLE_ENFORCE_GT(capacity_, 0,
+                      platform::errors::InvalidArgument(
+                          "The capacity must be greater than 0."));
   }
 
   bool Push(const T &elem) {
     {
       std::unique_lock<std::mutex> lock(mutex_);
       cv_.wait(lock, [&] { return queue_.size() < capacity_; });
-      PADDLE_ENFORCE_LT(queue_.size(), capacity_);
+      PADDLE_ENFORCE_LT(
+          queue_.size(), capacity_,
+          platform::errors::OutOfRange("The queue size: %s out of capacity:%s",
+                                       queue_.size(), capacity_));
       queue_.push_back(elem);
     }
     cv_.notify_one();
@@ -76,7 +81,10 @@ class BlockingQueue {
     {
       std::unique_lock<std::mutex> lock(mutex_);
       cv_.wait(lock, [&] { return queue_.size() < capacity_; });
-      PADDLE_ENFORCE_LT(queue_.size(), capacity_);
+      PADDLE_ENFORCE_LT(
+          queue_.size(), capacity_,
+          platform::errors::OutOfRange("The queue size: %s out of capacity:%s",
+                                       queue_.size(), capacity_));
       queue_.emplace_back(std::move(elem));
     }
     cv_.notify_one();
@@ -118,7 +126,8 @@ template <typename T>
 inline void MergeVars(const std::string &var_name,
                       const std::vector<std::shared_ptr<Variable>> &vars,
                       Scope *scope, bool merge_add = true) {
-  PADDLE_ENFORCE(!vars.empty(), "should have value to merge!");
+  PADDLE_ENFORCE_NE(vars.empty(), true, platform::errors::InvalidArgument(
+                                            "vector vars are empty."));
   auto cpu_place = platform::CPUPlace();
   auto &var0 = vars[0];
   auto *out_var = scope->Var(var_name);
@@ -132,7 +141,9 @@ inline void MergeVars(const std::string &var_name,
     // check the input dims
     for (auto &var : vars) {
       auto &var_t = var->Get<framework::LoDTensor>();
-      PADDLE_ENFORCE_EQ(var_t.dims(), dims, "should have the same dims");
+      PADDLE_ENFORCE_EQ(
+          var_t.dims(), dims,
+          platform::errors::InvalidArgument("vars should have the same dims"));
     }
 
     // set output tensor to 0.
@@ -173,7 +184,8 @@ inline void MergeVars(const std::string &var_name,
     VLOG(3) << "merge " << var_name << " SelectedRows height: " << slr0.height()
             << " dims: " << slr0.value().dims() << "; merge add: " << merge_add;
   } else {
-    PADDLE_THROW("unsupported var type!");
+    PADDLE_THROW(platform::errors::InvalidArgument("unsupported var type: %s!",
+                                                   var0->Type()));
   }
 }
 
@@ -284,7 +296,7 @@ class AsyncCommunicator : public Communicator {
 
   void InitParams();
 
-  void MainThread();
+  virtual void MainThread();
 
   void Send(const std::vector<std::string> &var_names,
             const std::vector<std::string> &var_tables,
@@ -408,7 +420,7 @@ class GeoCommunicator : public AsyncCommunicator {
   void InitImpl(const RpcCtxMap &send_varname_to_ctx,
                 const RpcCtxMap &recv_varname_to_ctx,
                 Scope *recv_scope) override;
-
+  void MainThread() override;
   void InitEnvs() {
     min_send_grad_num_before_recv_ = 0;
 
@@ -426,9 +438,12 @@ class GeoCommunicator : public AsyncCommunicator {
             const std::vector<std::string> &var_tables,
             const framework::Scope &scope) override;
 
-  void SendByCommunicator(int batches) override;
+  void SendByCommunicator(int batches) { return; }
 
-  void SendSparse(const std::string &varname, int batches);
+  std::vector<int64_t> MergeSparseIds(const std::string &send_varname);
+
+  void SendSparse(const std::string &varname, int ep_idx,
+                  const std::vector<int64_t> &sparse_ids);
 
   void SendDense(const std::string &varname);
 
@@ -436,7 +451,7 @@ class GeoCommunicator : public AsyncCommunicator {
 
   void RecvByCommunicator() override;
 
-  void RecvSparse(const std::string &varname);
+  void RecvSparse(const std::string &varname, int ep_idx);
 
   void RecvDense(const std::string &varname);
 
@@ -459,11 +474,13 @@ class GeoCommunicator : public AsyncCommunicator {
   // parameter on pserver
   std::shared_ptr<Scope> pserver_scope_;
 
-  std::unordered_map<std::string,
-                     std::shared_ptr<BlockingQueue<std::vector<int64_t>>>>
-      send_ids_to_queue_;
-
+  int send_var_nums_ = 0;
   std::unordered_map<std::string, std::shared_ptr<SparseValue>> old_sparses_;
+
+  std::unordered_map<
+      std::string,
+      std::shared_ptr<BlockingQueue<std::shared_ptr<std::vector<int64_t>>>>>
+      sparse_id_queues_;
 };
 
 }  // namespace distributed

@@ -228,6 +228,19 @@ class UnsqueezeGradOpMaker : public framework::SingleGradOpMaker<T> {
   }
 };
 
+template <typename T>
+class UnsqueezeDoubleGradOpMaker : public framework::SingleGradOpMaker<T> {
+ public:
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
+
+  void Apply(GradOpPtr<T> grad_op) const override {
+    grad_op->SetType("unsqueeze");
+    grad_op->SetInput("X", this->OutputGrad(framework::GradVarName("X")));
+    grad_op->SetOutput("Out", this->InputGrad(framework::GradVarName("Out")));
+    grad_op->SetAttrMap(this->Attrs());
+  }
+};
+
 // FIXME(zcd): unsqueeze2 adds an intermediate output(XShape) based on
 // unsqueeze, the XShape is used to carry the shape and lod of X which
 // will be used in unsqueeze_grad, in this way, the framework can reuse
@@ -304,6 +317,20 @@ class Unsqueeze2GradOp : public framework::OperatorWithKernel {
   }
 };
 
+template <typename T>
+class Unsqueeze2DoubleGradOpMaker : public framework::SingleGradOpMaker<T> {
+ public:
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
+
+  void Apply(GradOpPtr<T> grad_op) const override {
+    grad_op->SetType("unsqueeze2");
+    grad_op->SetInput("X", this->OutputGrad(framework::GradVarName("X")));
+    grad_op->SetOutput("Out", this->InputGrad(framework::GradVarName("Out")));
+    grad_op->SetOutput("XShape", this->Input("XShape"));
+    grad_op->SetAttrMap(this->Attrs());
+  }
+};
+
 DECLARE_INPLACE_OP_INFERER(UnsqueezeInplaceInferer, {"X", "Out"});
 DECLARE_INPLACE_OP_INFERER(UnsqueezeGradInplaceInferer,
                            {framework::GradVarName("Out"),
@@ -317,6 +344,8 @@ REGISTER_OPERATOR(unsqueeze, ops::UnsqueezeOp, ops::UnsqueezeOpMaker,
                   ops::UnsqueezeGradOpMaker<paddle::framework::OpDesc>,
                   ops::UnsqueezeGradOpMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(unsqueeze_grad, ops::UnsqueezeGradOp,
+                  ops::UnsqueezeDoubleGradOpMaker<paddle::framework::OpDesc>,
+                  ops::UnsqueezeDoubleGradOpMaker<paddle::imperative::OpBase>,
                   ops::UnsqueezeGradOpNoNeedBufferVarInferer);
 
 REGISTER_OPERATOR(unsqueeze2, ops::Unsqueeze2Op, ops::Unsqueeze2OpMaker,
@@ -324,6 +353,8 @@ REGISTER_OPERATOR(unsqueeze2, ops::Unsqueeze2Op, ops::Unsqueeze2OpMaker,
                   ops::Unsqueeze2GradOpMaker<paddle::imperative::OpBase>,
                   ops::UnsqueezeInplaceInferer);
 REGISTER_OPERATOR(unsqueeze2_grad, ops::Unsqueeze2GradOp,
+                  ops::Unsqueeze2DoubleGradOpMaker<paddle::framework::OpDesc>,
+                  ops::Unsqueeze2DoubleGradOpMaker<paddle::imperative::OpBase>,
                   ops::UnsqueezeGradInplaceInferer);
 
 REGISTER_OP_CPU_KERNEL(

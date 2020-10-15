@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 import sys
 import math
+import paddle
 import paddle.fluid as fluid
 from op_test import OpTest
 from test_multiclass_nms_op import nms
@@ -370,4 +371,5 @@ class TestGenerateProposalsOpNoBoxLeft(TestGenerateProposalsOp):
 
 
 if __name__ == '__main__':
+    paddle.enable_static()
     unittest.main()

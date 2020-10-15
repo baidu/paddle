@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #pragma once
+#include <memory>
 #include <vector>
 #include "paddle/fluid/framework/data_type.h"
 #include "paddle/fluid/operators/math/math_function.h"
@@ -27,8 +28,18 @@ template <typename DeviceContext, typename T>
 void SetConstant<DeviceContext, T>::operator()(const DeviceContext& context,
                                                framework::Tensor* tensor,
                                                T num) {
-  auto t = framework::EigenVector<T>::Flatten(*tensor);
-  t.device(*context.eigen_device()) = t.constant(static_cast<T>(num));
+  bool xpu_place = false;
+#ifdef PADDLE_WITH_XPU
+  if (context.GetPlace() == platform::XPUPlace()) {
+    xpu_place = true;
+    framework::VisitDataType(tensor->type(),
+                             TensorSetConstantXPU<T>(tensor, num));
+  }
+#endif
+  if (!xpu_place) {
+    auto t = framework::EigenVector<T>::Flatten(*tensor);
+    t.device(*context.eigen_device()) = t.constant(static_cast<T>(num));
+  }
 }
 
 template <typename DeviceContext, typename T, int Rank>

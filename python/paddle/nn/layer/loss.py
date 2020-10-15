@@ -23,6 +23,7 @@ from paddle.fluid.framework import core, in_dygraph_mode, _varbase_creator
 __all__ = [
     'BCEWithLogitsLoss',
     'CrossEntropyLoss',
+    'HSigmoidLoss',
     'MSELoss',
     'L1Loss',
     'NLLLoss',
@@ -249,6 +250,128 @@ class CrossEntropyLoss(fluid.dygraph.Layer):
             weight=self.weight,
             ignore_index=self.ignore_index,
             reduction=self.reduction)
+
+
+class HSigmoidLoss(fluid.dygraph.Layer):
+    """
+    Hierarchical Sigmoid Layer.
+    
+    The hierarchical sigmoid organizes the classes into a complete binary tree to reduce the computational complexity
+    and speed up the model training, especially the training of language model.
+    Each leaf node of the complete binary tree represents a class(word) and each non-leaf node acts as a binary classifier.
+    For each class(word), there's a unique path from root to itself, hsigmoid calculate the cost for each non-leaf node on
+    the path, and sum them to get a total cost.
+    Comparing to softmax, the OP can reduce the computational complexity from :math:`O(N)` to :math:`O(logN)`, where :math:`N`
+    represents the number of classes or the size of word dict.
+
+    The OP supports default tree and custom tree. For the default tree, you can refer to `Hierarchical Probabilistic Neural
+    Network Language Model <http://www.iro.umontreal.ca/~lisa/pointeurs/hierarchical-nnlm-aistats05.pdf>_`. For the custom
+    tree, you need to set :attr:`is_custom` to True, and do the following steps (take the language model as an example):
+
+    1. Using a custom word dict to build a binary tree, each leaf node should be an word in the word dict.
+    2. Creating a dict map word_id -> path that from the word to the root node, we call it path_table.
+    3. Creating a dict map word_id -> code of path that from the word to the root node, we call it path_code.
+       Code means the label of each binary classifier, 1 indicate true, 0 indicate false.
+    4. Now, each word should has its path and code along the path, you can pass a batch of path and code related
+       to the same batch of inputs.
+
+    Parameters:
+        feature_size (int): The number of features.
+        num_classes (int): The number of classes or the size of word dict, must be greater than 2.
+            If the default tree is used (:attr:`is_custom` is set to False), :attr:`num_classes`
+            should not be None. If the custom tree is used (:attr:`is_custom` is set to True),
+            :attr:`num_classes` should be the number of non-leaf nodes, which indicates the num of
+            classes using by the binary classifier.
+        weight_attr (ParamAttr, optional): The parameter attribute for the learnable weights
+            of hsigmoid. If it is set to None or one attribute of ParamAttr, hsigmoid will create a
+            ParamAttr as param_attr. If the Initializer of the param_attr is not set, the parameter is
+            initialized with Xavier. Default is None.
+        bias_attr (ParamAttr|bool, optional): The parameter attribute for the bias of hsigmoid. If it
+            is set to False, no bias will be added. If it is set to None or one attribute of ParamAttr,
+            hsigmoid will create a ParamAttr as bias_attr. If the Initializer of the bias_attr is not
+            set, the bias is initialized zero. Default is None.
+        is_custom (bool, optional): Whether use custom binary tree. If it's True, `path_table` and 
+            `path_code` should be passed to its forward method, otherwise `path_table` and `path_code`
+            should not be passed to its forward method. Default is False.
+        is_sparse (bool, optional): Whether use sparse updating instead of dense updating, if it's True,
+            the gradient of weight and input will be sparse. Default is False.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Shape:
+        input (Tensor): The input tensor. The shapes is [N, D], where N is batch size and D is feature size. It's data type should be float32, float64.
+        label (Tensor): It's shapes is [N, 1]. It's data type should be int64.
+        output (Tensor): The HSigmoid Loss of ``input`` and ``label``. Shape is [N, 1]
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            paddle.set_device('cpu')
+
+            input = paddle.uniform([2, 3])
+            # [[-0.2820413   0.9528898  -0.81638825] # random
+            #  [-0.6733154  -0.33866507  0.25770962]] # random
+            label = paddle.to_tensor([0, 1, 4, 5])
+            m = paddle.nn.HSigmoidLoss(3, 5)
+            out = m(input, label)
+            # [[2.4543471]
+            #  [1.9359267]]
+    """
+
+    def __init__(self,
+                 feature_size,
+                 num_classes,
+                 weight_attr=None,
+                 bias_attr=None,
+                 is_custom=False,
+                 is_sparse=False,
+                 name=None):
+        super(HSigmoidLoss, self).__init__()
+        if (num_classes < 2) and (not is_custom):
+            raise ValueError(
+                "num_classes must not be less than 2 with default tree")
+
+        if (not is_custom) and (is_sparse):
+            print("Sparse mode should not be used without custom tree")
+            is_sparse = False
+
+        self._feature_size = feature_size
+        self._num_classes = num_classes
+        self._is_custom = is_custom
+        self._is_sparse = is_sparse
+
+        self._weight_attr = weight_attr
+        self._bias_attr = bias_attr
+
+        self._name = name
+        self._dtype = paddle.get_default_dtype()
+
+        remote_prefetch = is_sparse
+        print("With sparse mode, if your models has only"
+              " small parameter prefetch may cause speed down")
+
+        C = self._num_classes if is_custom else self._num_classes - 1
+        self.weight = self.create_parameter(
+            [C, self._feature_size],
+            attr=self._weight_attr,
+            is_bias=False,
+            dtype=self._dtype)
+        self.bias = self.create_parameter(
+            [C, 1], attr=self._bias_attr, is_bias=True, dtype=self._dtype)
+
+    def forward(self, input, label, path_table=None, path_code=None):
+        out = F.hsigmoid_loss(
+            input,
+            label,
+            self._num_classes,
+            self.weight,
+            self.bias,
+            path_table=path_table,
+            path_code=path_code,
+            is_sparse=self._is_sparse,
+            name=self._name)
+        return out
 
 
 class MSELoss(fluid.dygraph.layers.Layer):

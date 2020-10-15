@@ -21,13 +21,13 @@ import tarfile
 import random
 
 import paddle
-import paddle.fluid.incubate.data_generator as data_generator
+import paddle.distributed.fleet as fleet
 
 logging.basicConfig()
 logger = logging.getLogger("paddle")
 logger.setLevel(logging.INFO)
 
 
-class DatasetSimnetReader(data_generator.MultiSlotDataGenerator):
+class DatasetSimnetReader(fleet.MultiSlotDataGenerator):
     def generate_sample(self, line):
         pass

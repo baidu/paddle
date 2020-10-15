@@ -135,7 +135,7 @@ class TestBatchNormDoubleGradCheckCase5(TestBatchNormDoubleGradCheck):
     def func(self, place):
         prog = fluid.Program()
         with fluid.program_guard(prog):
-            np.random.seed()
+            np.random.seed(37)
             dtype = "float32"
             eps = 0.005
             atol = 2e-4

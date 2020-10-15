@@ -1,5 +1,7 @@
 include(operators)
-register_operators(DEPS naive_executor)
+register_operators(EXCLUDES conditional_block_op DEPS naive_executor)
+
+cc_library(conditional_block_op SRCS conditional_block_op.cc DEPS executor)
 cc_library(op_variant SRCS op_variant.cc DEPS operator proto_desc)
 cc_library(conditional_block_op_helper SRCS conditional_block_op_helper.cc DEPS operator op_variant conditional_block_op)
 cc_library(recurrent_op_helper SRCS recurrent_op_helper.cc DEPS operator op_variant recurrent_op)

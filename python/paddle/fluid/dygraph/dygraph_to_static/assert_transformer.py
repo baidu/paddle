@@ -37,8 +37,7 @@ class AssertTransformer(gast.NodeTransformer):
 
     def visit_Assert(self, node):
         convert_assert_node = gast.parse(
-            'fluid.dygraph.dygraph_to_static.convert_operators.convert_assert({test}, {msg})'.
-            format(
+            'paddle.jit.dy2static.convert_assert({test}, {msg})'.format(
                 test=ast_to_source_code(node.test),
                 msg=ast_to_source_code(node.msg)
                 if node.msg else "")).body[0].value

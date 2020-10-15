@@ -41,14 +41,14 @@ class TestLoadOp(unittest.TestCase):
         exe = fluid.Executor(fluid.CPUPlace())
         exe.run(start_prog)
         fluid.io.save_persistables(
-            exe, dirname="/tmp/model", main_program=main_prog)
+            exe, dirname="./model", main_program=main_prog)
 
     def test_load(self):
         main_prog = fluid.Program()
         start_prog = fluid.Program()
         with fluid.program_guard(main_prog, start_prog):
             var = layers.create_tensor(dtype='float32')
-            layers.load(var, file_path='/tmp/model/w')
+            layers.load(var, file_path='./model/w')
 
         exe = fluid.Executor(fluid.CPUPlace())
         exe.run(start_prog)

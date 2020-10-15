@@ -32,8 +32,9 @@ namespace distributed {
 void GRPCClient::InitImpl() {
   // start the client process thread
   // TODO(wuyi): can make this in a threadpool
-  PADDLE_ENFORCE(client_thread_ == nullptr,
-                 "please not re init proceed thread");
+  PADDLE_ENFORCE_EQ(client_thread_ == nullptr, true,
+                    platform::errors::PreconditionNotMet(
+                        "please not re init proceed thread"));
   client_thread_.reset(new std::thread(std::bind(&GRPCClient::Proceed, this)));
 }
 
@@ -44,7 +45,8 @@ void GRPCClient::SendComplete() {
       VLOG(3) << "send complete message to " << it.first;
       this->AsyncSendComplete(it.first);
     }
-    PADDLE_ENFORCE(this->Wait(), "internal grpc error");
+    PADDLE_ENFORCE_EQ(this->Wait(), true, platform::errors::PreconditionNotMet(
+                                              "internal grpc service error."));
     completed_ = true;
   }
 }
@@ -420,6 +422,7 @@ VarHandlePtr GRPCClient::AsyncSendComplete(const std::string& ep,
 VarHandlePtr GRPCClient::AsyncCheckpointNotify(const std::string& ep,
                                                const std::string& dirname,
                                                const std::string& varname,
+                                               const int mode,
                                                int64_t time_out) {
   const auto ch = GetChannel(ep);
 
@@ -433,6 +436,7 @@ VarHandlePtr GRPCClient::AsyncCheckpointNotify(const std::string& ep,
 
   sendrecv::VariableMessage req;
   req.set_varname(varname);
+  req.set_table_name(std::to_string(mode));
   req.set_out_varname(dirname);
 
   platform::RecordRPCEvent record_event(method);
@@ -590,7 +594,8 @@ void GRPCClient::Proceed() {
   while (!stopped_ && cq_.Next(&tag, &ok)) {
     BaseProcessor* c = static_cast<BaseProcessor*>(tag);
     GPR_ASSERT(ok);
-    PADDLE_ENFORCE(c);
+    PADDLE_ENFORCE_NOT_NULL(
+        c, platform::errors::PreconditionNotMet("Make BaseProcessor failed."));
 
     if (c->status_.ok()) {
       VLOG(3) << c->GetVarHandlePtr()->String() << " process";

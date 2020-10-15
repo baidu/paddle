@@ -225,7 +225,7 @@ def create_test_sum_fp16_class(parent):
     globals()[cls_name] = TestSumFp16Case
 
 
-class API_Test_Elementwise_Sum(unittest.TestCase):
+class API_Test_Add_n(unittest.TestCase):
     def test_api(self):
         with fluid.program_guard(fluid.Program(), fluid.Program()):
             input0 = fluid.layers.fill_constant(
@@ -234,11 +234,19 @@ class API_Test_Elementwise_Sum(unittest.TestCase):
                 shape=[2, 3], dtype='int64', value=3)
             expected_result = np.empty((2, 3))
             expected_result.fill(8)
-            sum_value = paddle.elementwise_sum([input0, input1])
+            sum_value = paddle.add_n([input0, input1])
             exe = fluid.Executor(fluid.CPUPlace())
             result = exe.run(fetch_list=[sum_value])
 
-        self.assertEqual((result == expected_result).all(), True)
+            self.assertEqual((result == expected_result).all(), True)
+
+        with fluid.dygraph.guard():
+            input0 = paddle.ones(shape=[2, 3], dtype='float32')
+            expected_result = np.empty((2, 3))
+            expected_result.fill(2)
+            sum_value = paddle.add_n([input0, input0])
+
+            self.assertEqual((sum_value.numpy() == expected_result).all(), True)
 
 
 class TestRaiseSumError(unittest.TestCase):

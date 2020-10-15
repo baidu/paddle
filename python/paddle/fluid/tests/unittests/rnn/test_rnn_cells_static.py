@@ -14,6 +14,7 @@
 
 import paddle
 paddle.framework.set_default_dtype("float64")
+paddle.enable_static()
 
 import numpy as np
 import unittest
@@ -69,10 +70,10 @@ class TestSimpleRNNCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                init_h = paddle.data(
+                init_h = paddle.fluid.data(
                     "init_h", [-1, 32],
                     dtype=paddle.framework.get_default_dtype())
                 y, h = rnn2(x_data, init_h)
@@ -97,7 +98,7 @@ class TestSimpleRNNCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
                 y, h = rnn2(x_data)
@@ -165,10 +166,10 @@ class TestGRUCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                init_h = paddle.data(
+                init_h = paddle.fluid.data(
                     "init_h", [-1, 32],
                     dtype=paddle.framework.get_default_dtype())
                 y, h = rnn2(x_data, init_h)
@@ -193,7 +194,7 @@ class TestGRUCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
                 y, h = rnn2(x_data)
@@ -262,13 +263,13 @@ class TestLSTMCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                init_h = paddle.data(
+                init_h = paddle.fluid.data(
                     "init_h", [-1, 32],
                     dtype=paddle.framework.get_default_dtype())
-                init_c = paddle.data(
+                init_c = paddle.fluid.data(
                     "init_c", [-1, 32],
                     dtype=paddle.framework.get_default_dtype())
                 y, (h, c) = rnn2(x_data, (init_h, init_c))
@@ -294,7 +295,7 @@ class TestLSTMCell(unittest.TestCase):
 
         with paddle.fluid.unique_name.guard():
             with paddle.static.program_guard(mp, sp):
-                x_data = paddle.data(
+                x_data = paddle.fluid.data(
                     "input", [-1, 16],
                     dtype=paddle.framework.get_default_dtype())
                 y, (h, c) = rnn2(x_data)

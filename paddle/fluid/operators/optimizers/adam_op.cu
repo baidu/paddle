@@ -38,7 +38,8 @@ __global__ void AdamKernelREG(T beta1, T beta2, T epsilon, T beta1_pow_,
     T mom2 = moment2[id];
     mom1 = beta1 * mom1 + (static_cast<T>(1.0) - beta1) * g;
     mom2 = beta2 * mom2 + (static_cast<T>(1.0) - beta2) * g * g;
-    p -= lr * (mom1 / (sqrt(mom2) + epsilon));
+    p -= lr * (mom1 /
+               (sqrt(mom2) + epsilon * sqrt(static_cast<T>(1.0) - beta2_pow)));
 
     moment1_out[id] = mom1;
     moment2_out[id] = mom2;
@@ -68,7 +69,8 @@ __global__ void AdamKernelMEM(T beta1, T beta2, T epsilon, const T* beta1_pow_,
     T mom2 = moment2[id];
     mom1 = beta1 * mom1 + (static_cast<T>(1.0) - beta1) * g;
     mom2 = beta2 * mom2 + (static_cast<T>(1.0) - beta2) * g * g;
-    p -= lr * (mom1 / (sqrt(mom2) + epsilon));
+    p -= lr * (mom1 /
+               (sqrt(mom2) + epsilon * sqrt(static_cast<T>(1.0) - beta2_pow)));
 
     moment1_out[id] = mom1;
     moment2_out[id] = mom2;
@@ -105,7 +107,8 @@ __global__ void SparseAdamCUDAKernelREG(
       T g = row_idx >= 0 ? grad_[row_idx * row_numel + id % row_numel] : 0;
       mom1 = beta1 * mom1 + (1 - beta1) * g;
       mom2 = beta2 * mom2 + (1 - beta2) * g * g;
-      p -= lr * (mom1 / (sqrt(mom2) + epsilon));
+      p -= lr * (mom1 / (sqrt(mom2) +
+                         epsilon * sqrt(static_cast<T>(1.0) - beta2_pow)));
 
       // Write back to global memory
       mom1_out_[id] = mom1;

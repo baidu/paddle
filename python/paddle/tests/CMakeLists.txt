@@ -39,6 +39,7 @@ foreach(src ${DIST_TEST_OPS})
     message(STATUS ${src})
     py_dist_test(${src} SRCS ${src}.py)
 endforeach()
+
 set_tests_properties(test_dataset_cifar PROPERTIES TIMEOUT 120)
 set_tests_properties(test_pretrained_model PROPERTIES TIMEOUT 120)
 set_tests_properties(test_model PROPERTIES TIMEOUT 120)
@@ -51,4 +52,3 @@ set_tests_properties(test_dataset_uci_housing PROPERTIES TIMEOUT 120)
 set_tests_properties(test_dataset_imdb PROPERTIES TIMEOUT 120)
 set_tests_properties(test_callbacks PROPERTIES TIMEOUT 120)
 set_tests_properties(test_pretrained_model PROPERTIES TIMEOUT 600) 
-

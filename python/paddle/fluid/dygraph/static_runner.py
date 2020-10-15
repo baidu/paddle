@@ -14,7 +14,7 @@
 
 from __future__ import print_function
 
-from paddle.fluid.dygraph.jit import SaveLoadConfig
+from paddle.fluid.dygraph.jit import _SaveLoadConfig
 from paddle.fluid.dygraph.io import TranslatedLayer
 
 
@@ -31,7 +31,7 @@ class StaticModelRunner(object):
     """
 
     def __new__(cls, model_dir, model_filename=None, params_filename=None):
-        configs = SaveLoadConfig()
+        configs = _SaveLoadConfig()
         if model_filename is not None:
             configs.model_filename = model_filename
         if params_filename is not None:

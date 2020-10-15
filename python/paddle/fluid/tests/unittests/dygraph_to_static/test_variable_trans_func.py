@@ -51,24 +51,24 @@ class TestDataLayerNotCheck(unittest.TestCase):
 class TestVariableTransFunc(unittest.TestCase):
     def test_create_fill_constant_node(self):
         node = create_fill_constant_node("a", 1.0)
-        source = "a = fluid.layers.fill_constant(shape=[1], dtype='float64', value=1.0)"
+        source = "a = paddle.fluid.layers.fill_constant(shape=[1], dtype='float64', value=1.0)"
         self.assertEqual(ast_to_source_code(node).strip(), source)
 
         node = create_fill_constant_node("b", True)
-        source = "b = fluid.layers.fill_constant(shape=[1], dtype='bool', value=True)"
+        source = "b = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=True)"
         self.assertEqual(ast_to_source_code(node).strip(), source)
 
         if six.PY2:
             node = create_fill_constant_node("c", 214)
-            source = "c = fluid.layers.fill_constant(shape=[1], dtype='int32', value=214)"
+            source = "c = paddle.fluid.layers.fill_constant(shape=[1], dtype='int32', value=214)"
             self.assertEqual(ast_to_source_code(node).strip(), source)
 
             node = create_fill_constant_node("d", long(10086))
-            source = "d = fluid.layers.fill_constant(shape=[1], dtype='int64', value=10086)"
+            source = "d = paddle.fluid.layers.fill_constant(shape=[1], dtype='int64', value=10086)"
             self.assertEqual(ast_to_source_code(node).strip(), source)
         else:
             node = create_fill_constant_node("c", 4293)
-            source = "c = fluid.layers.fill_constant(shape=[1], dtype='int64', value=4293)"
+            source = "c = paddle.fluid.layers.fill_constant(shape=[1], dtype='int64', value=4293)"
             self.assertEqual(ast_to_source_code(node).strip(), source)
 
         self.assertIsNone(create_fill_constant_node("e", None))

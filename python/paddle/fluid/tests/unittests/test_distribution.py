@@ -65,41 +65,6 @@ class UniformNumpy(DistributionNumpy):
         return np.log(self.high - self.low)
 
 
-class NormalNumpy(DistributionNumpy):
-    def __init__(self, loc, scale):
-        self.loc = np.array(loc)
-        self.scale = np.array(scale)
-        if str(self.loc.dtype) not in ['float32', 'float64']:
-            self.loc = self.loc.astype('float32')
-            self.scale = self.scale.astype('float32')
-
-    def sample(self, shape):
-        shape = tuple(shape) + (self.loc + self.scale).shape
-        return self.loc + (np.random.randn(*shape) * self.scale)
-
-    def log_prob(self, value):
-        var = self.scale * self.scale
-        log_scale = np.log(self.scale)
-        return -((value - self.loc) * (value - self.loc)) / (
-            2. * var) - log_scale - math.log(math.sqrt(2. * math.pi))
-
-    def probs(self, value):
-        var = self.scale * self.scale
-        return np.exp(-1. * ((value - self.loc) * (value - self.loc)) /
-                      (2. * var)) / (math.sqrt(2 * math.pi) * self.scale)
-
-    def entropy(self):
-        return 0.5 + 0.5 * np.log(
-            np.array(2. * math.pi).astype(self.loc.dtype)) + np.log(self.scale)
-
-    def kl_divergence(self, other):
-        var_ratio = (self.scale / other.scale)
-        var_ratio = var_ratio * var_ratio
-        t1 = ((self.loc - other.loc) / other.scale)
-        t1 = (t1 * t1)
-        return 0.5 * (var_ratio + t1 - 1 - np.log(var_ratio))
-
-
 class UniformTest(unittest.TestCase):
     def setUp(self, use_gpu=False, batch_size=5, dims=6):
         self.use_gpu = use_gpu
@@ -123,7 +88,7 @@ class UniformTest(unittest.TestCase):
     def init_numpy_data(self, batch_size, dims):
         # low ans high are 'float'
         self.low_np = np.random.uniform(-2, 1)
-        self.high_np = np.random.uniform(1, 3)
+        self.high_np = np.random.uniform(2, 4)
         self.values_np = np.array([1.0]).astype('float32')
 
     def init_dynamic_data(self, batch_size, dims):
@@ -193,7 +158,7 @@ class UniformTest2(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low ans high are 'int'
         self.low_np = int(np.random.uniform(-2, 1))
-        self.high_np = int(np.random.uniform(1, 3))
+        self.high_np = int(np.random.uniform(2, 4))
         self.values_np = np.array([1.0]).astype('float32')
 
 
@@ -201,7 +166,7 @@ class UniformTest3(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # test broadcast: low is float, high is numpy.ndarray with dtype 'float32'.
         self.low_np = np.random.uniform(-2, 1)
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float32')
         self.values_np = np.random.randn(batch_size, dims).astype('float32')
 
@@ -217,7 +182,7 @@ class UniformTest4(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low and high are numpy.ndarray with dtype 'float32'.
         self.low_np = np.random.randn(batch_size, dims).astype('float32')
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float32')
         self.values_np = np.random.randn(batch_size, dims).astype('float32')
 
@@ -233,7 +198,7 @@ class UniformTest5(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low and high are numpy.ndarray with dtype 'float64'.
         self.low_np = np.random.randn(batch_size, dims).astype('float64')
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float64')
         self.values_np = np.random.randn(batch_size, dims).astype('float64')
 
@@ -254,7 +219,7 @@ class UniformTest6(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low and high are Tensor with dtype 'VarType.FP32'.
         self.low_np = np.random.randn(batch_size, dims).astype('float32')
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float32')
         self.values_np = np.random.randn(batch_size, dims).astype('float32')
 
@@ -277,7 +242,7 @@ class UniformTest7(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low and high are Tensor with dtype 'VarType.FP64'.
         self.low_np = np.random.randn(batch_size, dims).astype('float64')
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float64')
         self.values_np = np.random.randn(batch_size, dims).astype('float64')
 
@@ -300,7 +265,7 @@ class UniformTest8(UniformTest):
     def init_numpy_data(self, batch_size, dims):
         # low and high are Tensor with dtype 'VarType.FP64'. value's dtype is 'VarType.FP32'.
         self.low_np = np.random.randn(batch_size, dims).astype('float64')
-        self.high_np = np.random.uniform(-5.0, 5.0,
+        self.high_np = np.random.uniform(5.0, 15.0,
                                          (batch_size, dims)).astype('float64')
         self.values_np = np.random.randn(batch_size, dims).astype('float32')
 
@@ -317,6 +282,58 @@ class UniformTest8(UniformTest):
                 name='high', shape=[dims], dtype='float64')
             self.static_values = layers.data(
                 name='values', shape=[dims], dtype='float32')
+
+
+class UniformTest9(UniformTest):
+    def init_numpy_data(self, batch_size, dims):
+        # low and high are numpy.ndarray with dtype 'float32'.
+        # high < low.
+        self.low_np = np.random.randn(batch_size, dims).astype('float32')
+        self.high_np = np.random.uniform(-10.0, -5.0,
+                                         (batch_size, dims)).astype('float32')
+        self.values_np = np.random.randn(batch_size, dims).astype('float32')
+
+    def init_static_data(self, batch_size, dims):
+        self.static_low = self.low_np
+        self.static_high = self.high_np
+        with fluid.program_guard(self.test_program):
+            self.static_values = layers.data(
+                name='values', shape=[dims], dtype='float32')
+
+
+class NormalNumpy(DistributionNumpy):
+    def __init__(self, loc, scale):
+        self.loc = np.array(loc)
+        self.scale = np.array(scale)
+        if str(self.loc.dtype) not in ['float32', 'float64']:
+            self.loc = self.loc.astype('float32')
+            self.scale = self.scale.astype('float32')
+
+    def sample(self, shape):
+        shape = tuple(shape) + (self.loc + self.scale).shape
+        return self.loc + (np.random.randn(*shape) * self.scale)
+
+    def log_prob(self, value):
+        var = self.scale * self.scale
+        log_scale = np.log(self.scale)
+        return -((value - self.loc) * (value - self.loc)) / (
+            2. * var) - log_scale - math.log(math.sqrt(2. * math.pi))
+
+    def probs(self, value):
+        var = self.scale * self.scale
+        return np.exp(-1. * ((value - self.loc) * (value - self.loc)) /
+                      (2. * var)) / (math.sqrt(2 * math.pi) * self.scale)
+
+    def entropy(self):
+        return 0.5 + 0.5 * np.log(
+            np.array(2. * math.pi).astype(self.loc.dtype)) + np.log(self.scale)
+
+    def kl_divergence(self, other):
+        var_ratio = (self.scale / other.scale)
+        var_ratio = var_ratio * var_ratio
+        t1 = ((self.loc - other.loc) / other.scale)
+        t1 = (t1 * t1)
+        return 0.5 * (var_ratio + t1 - 1 - np.log(var_ratio))
 
 
 class NormalTest(unittest.TestCase):
@@ -379,13 +396,22 @@ class NormalTest(unittest.TestCase):
         np_other_normal = NormalNumpy(self.other_loc_np, self.other_scale_np)
         np_kl = np_normal.kl_divergence(np_other_normal)
 
+        # Because assign op does not support the input of numpy.ndarray whose dtype is FP64.
+        # When loc and scale are FP64 numpy.ndarray, we need to use assign op to convert it
+        #  to FP32 Tensor. And then use cast op to convert it to a FP64 Tensor.
+        # There is a loss of accuracy in this conversion.
+        # So set the tolerance from 1e-6 to 1e-4.
+        log_tolerance = 1e-4
+
         np.testing.assert_equal(sample.shape, np_sample.shape)
         np.testing.assert_allclose(
             entropy, np_entropy, rtol=tolerance, atol=tolerance)
         np.testing.assert_allclose(
-            log_prob, np_lp, rtol=tolerance, atol=tolerance)
-        np.testing.assert_allclose(probs, np_p, rtol=tolerance, atol=tolerance)
-        np.testing.assert_allclose(kl, np_kl, rtol=tolerance, atol=tolerance)
+            log_prob, np_lp, rtol=log_tolerance, atol=log_tolerance)
+        np.testing.assert_allclose(
+            probs, np_p, rtol=log_tolerance, atol=log_tolerance)
+        np.testing.assert_allclose(
+            kl, np_kl, rtol=log_tolerance, atol=log_tolerance)
 
     def test_normal_distribution_dygraph(self, sample_shape=7, tolerance=1e-6):
         paddle.disable_static(self.place)
@@ -533,26 +559,6 @@ class NormalTest5(NormalTest):
 
 
 class NormalTest6(NormalTest):
-    def init_data(self, batch_size=2, dims=3):
-        # loc and scale are Tensor with dtype 'VarType.FP32'.
-        self.loc_np = np.random.randn(batch_size, dims).astype('float32')
-        self.scale_np = np.random.randn(batch_size, dims).astype('float32')
-        while not np.all(self.scale_np > 0):
-            self.scale_np = np.random.randn(batch_size, dims).astype('float32')
-        self.values_np = np.random.randn(batch_size, dims).astype('float32')
-        self.loc = paddle.to_tensor(self.loc_np)
-        self.scale = paddle.to_tensor(self.scale_np)
-        self.values = paddle.to_tensor(self.values_np)
-        # used to construct another Normal object to calculate kl_divergence
-        self.other_loc_np = np.random.randn(batch_size, dims).astype('float32')
-        self.other_scale_np = np.random.randn(batch_size,
-                                              dims).astype('float32')
-        while not np.all(self.scale_np > 0):
-            self.other_scale_np = np.random.randn(batch_size,
-                                                  dims).astype('float32')
-        self.other_loc = paddle.to_tensor(self.other_loc_np)
-        self.other_scale = paddle.to_tensor(self.other_scale_np)
-
     def init_numpy_data(self, batch_size, dims):
         # loc and scale are Tensor with dtype 'VarType.FP32'.
         self.loc_np = np.random.randn(batch_size, dims).astype('float32')
@@ -667,6 +673,294 @@ class NormalTest8(NormalTest):
                 name='other_scale', shape=[dims], dtype='float64')
 
 
+class CategoricalNumpy(DistributionNumpy):
+    def __init__(self, logits):
+        self.logits = np.array(logits).astype('float32')
+
+    def entropy(self):
+        logits = self.logits - np.max(self.logits, axis=-1, keepdims=True)
+        e_logits = np.exp(logits)
+        z = np.sum(e_logits, axis=-1, keepdims=True)
+        prob = e_logits / z
+        return -1. * np.sum(prob * (logits - np.log(z)), axis=-1, keepdims=True)
+
+    def kl_divergence(self, other):
+        logits = self.logits - np.max(self.logits, axis=-1, keepdims=True)
+        other_logits = other.logits - np.max(
+            other.logits, axis=-1, keepdims=True)
+        e_logits = np.exp(logits)
+        other_e_logits = np.exp(other_logits)
+        z = np.sum(e_logits, axis=-1, keepdims=True)
+        other_z = np.sum(other_e_logits, axis=-1, keepdims=True)
+        prob = e_logits / z
+        return np.sum(prob * (logits - np.log(z) - other_logits \
+            + np.log(other_z)), axis=-1, keepdims=True)
+
+
+class CategoricalTest(unittest.TestCase):
+    def setUp(self, use_gpu=False, batch_size=3, dims=5):
+        self.use_gpu = use_gpu
+        if not use_gpu:
+            self.place = fluid.CPUPlace()
+            self.gpu_id = -1
+        else:
+            self.place = fluid.CUDAPlace(0)
+            self.gpu_id = 0
+
+        self.batch_size = batch_size
+        self.dims = dims
+        self.init_numpy_data(batch_size, dims)
+
+        paddle.disable_static(self.place)
+        self.init_dynamic_data(batch_size, dims)
+
+        paddle.enable_static()
+        self.test_program = fluid.Program()
+        self.executor = fluid.Executor(self.place)
+        self.init_static_data(batch_size, dims)
+
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 2-D Tensor
+        # value used in probs and log_prob method is 1-D Tensor
+        self.logits_np = np.random.rand(batch_size, dims).astype('float32')
+        self.other_logits_np = np.random.rand(batch_size,
+                                              dims).astype('float32')
+        self.value_np = np.array([2, 1, 3]).astype('int64')
+
+        self.logits_shape = [batch_size, dims]
+        # dist_shape = logits_shape[:-1], it represents the number of 
+        #  different distributions.
+        self.dist_shape = [batch_size]
+        # sample shape represents the number of samples
+        self.sample_shape = [2, 4]
+        # value used in probs and log_prob method
+        # If value is 1-D and logits is 2-D or higher dimension, value will be
+        #  broadcasted to have the same number of distributions with logits.
+        # If value is 2-D or higher dimentsion, it should have the same number 
+        #  of distributions with logtis. ``value[:-1] = logits[:-1]
+        self.value_shape = [3]
+
+    def init_dynamic_data(self, batch_size, dims):
+        self.logits = paddle.to_tensor(self.logits_np)
+        self.other_logits = paddle.to_tensor(self.other_logits_np)
+        self.value = paddle.to_tensor(self.value_np)
+
+    def init_static_data(self, batch_size, dims):
+        with fluid.program_guard(self.test_program):
+            self.logits_static = fluid.data(
+                name='logits', shape=self.logits_shape, dtype='float32')
+            self.other_logits_static = fluid.data(
+                name='other_logits', shape=self.logits_shape, dtype='float32')
+            self.value_static = fluid.data(
+                name='value', shape=self.value_shape, dtype='int64')
+
+    def get_numpy_selected_probs(self, probability):
+        np_probs = np.zeros(self.dist_shape + self.value_shape)
+        for i in range(self.batch_size):
+            for j in range(3):
+                np_probs[i][j] = probability[i][self.value_np[j]]
+        return np_probs
+
+    def compare_with_numpy(self, fetch_list, tolerance=1e-6):
+        sample, entropy, kl, probs, log_prob = fetch_list
+        log_tolerance = 1e-4
+
+        np.testing.assert_equal(sample.shape,
+                                self.sample_shape + self.dist_shape)
+
+        np_categorical = CategoricalNumpy(self.logits_np)
+        np_other_categorical = CategoricalNumpy(self.other_logits_np)
+        np_entropy = np_categorical.entropy()
+        np_kl = np_categorical.kl_divergence(np_other_categorical)
+
+        np.testing.assert_allclose(
+            entropy, np_entropy, rtol=log_tolerance, atol=log_tolerance)
+        np.testing.assert_allclose(
+            kl, np_kl, rtol=log_tolerance, atol=log_tolerance)
+
+        sum_dist = np.sum(self.logits_np, axis=-1, keepdims=True)
+        probability = self.logits_np / sum_dist
+        np_probs = self.get_numpy_selected_probs(probability)
+        np_log_prob = np.log(np_probs)
+
+        np.testing.assert_allclose(
+            probs, np_probs, rtol=tolerance, atol=tolerance)
+        np.testing.assert_allclose(
+            log_prob, np_log_prob, rtol=tolerance, atol=tolerance)
+
+    def test_categorical_distribution_dygraph(self, tolerance=1e-6):
+        paddle.disable_static(self.place)
+        categorical = Categorical(self.logits)
+        other_categorical = Categorical(self.other_logits)
+
+        sample = categorical.sample(self.sample_shape).numpy()
+        entropy = categorical.entropy().numpy()
+        kl = categorical.kl_divergence(other_categorical).numpy()
+        probs = categorical.probs(self.value).numpy()
+        log_prob = categorical.log_prob(self.value).numpy()
+
+        fetch_list = [sample, entropy, kl, probs, log_prob]
+        self.compare_with_numpy(fetch_list)
+
+    def test_categorical_distribution_static(self, tolerance=1e-6):
+        paddle.enable_static()
+        with fluid.program_guard(self.test_program):
+            categorical = Categorical(self.logits_static)
+            other_categorical = Categorical(self.other_logits_static)
+
+            sample = categorical.sample(self.sample_shape)
+            entropy = categorical.entropy()
+            kl = categorical.kl_divergence(other_categorical)
+            probs = categorical.probs(self.value_static)
+            log_prob = categorical.log_prob(self.value_static)
+
+            fetch_list = [sample, entropy, kl, probs, log_prob]
+
+        feed_vars = {
+            'logits': self.logits_np,
+            'other_logits': self.other_logits_np,
+            'value': self.value_np
+        }
+
+        self.executor.run(fluid.default_startup_program())
+        fetch_list = self.executor.run(program=self.test_program,
+                                       feed=feed_vars,
+                                       fetch_list=fetch_list)
+
+        self.compare_with_numpy(fetch_list)
+
+
+class CategoricalTest2(CategoricalTest):
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 2-D Tensor with dtype Float64
+        # value used in probs and log_prob method is 1-D Tensor
+        self.logits_np = np.random.rand(batch_size, dims).astype('float64')
+        self.other_logits_np = np.random.rand(batch_size,
+                                              dims).astype('float64')
+        self.value_np = np.array([2, 1, 3]).astype('int64')
+
+        self.logits_shape = [batch_size, dims]
+        self.dist_shape = [batch_size]
+        self.sample_shape = [2, 4]
+        self.value_shape = [3]
+
+    def init_static_data(self, batch_size, dims):
+        with fluid.program_guard(self.test_program):
+            self.logits_static = fluid.data(
+                name='logits', shape=self.logits_shape, dtype='float64')
+            self.other_logits_static = fluid.data(
+                name='other_logits', shape=self.logits_shape, dtype='float64')
+            self.value_static = fluid.data(
+                name='value', shape=self.value_shape, dtype='int64')
+
+
+class CategoricalTest3(CategoricalTest):
+    def init_dynamic_data(self, batch_size, dims):
+        # input logtis is 2-D numpy.ndarray with dtype Float32
+        # value used in probs and log_prob method is 1-D Tensor
+        self.logits = self.logits_np
+        self.other_logits = self.other_logits_np
+        self.value = paddle.to_tensor(self.value_np)
+
+    def init_static_data(self, batch_size, dims):
+        with fluid.program_guard(self.test_program):
+            self.logits_static = self.logits_np
+            self.other_logits_static = self.other_logits_np
+            self.value_static = fluid.data(
+                name='value', shape=self.value_shape, dtype='int64')
+
+
+class CategoricalTest4(CategoricalTest):
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 2-D numpy.ndarray with dtype Float64
+        # value used in probs and log_prob method is 1-D Tensor
+        self.logits_np = np.random.rand(batch_size, dims).astype('float64')
+        self.other_logits_np = np.random.rand(batch_size,
+                                              dims).astype('float64')
+        self.value_np = np.array([2, 1, 3]).astype('int64')
+
+        self.logits_shape = [batch_size, dims]
+        self.dist_shape = [batch_size]
+        self.sample_shape = [2, 4]
+        self.value_shape = [3]
+
+    def init_dynamic_data(self, batch_size, dims):
+        self.logits = self.logits_np
+        self.other_logits = self.other_logits_np
+        self.value = paddle.to_tensor(self.value_np)
+
+    def init_static_data(self, batch_size, dims):
+        with fluid.program_guard(self.test_program):
+            self.logits_static = self.logits_np
+            self.other_logits_static = self.other_logits_np
+            self.value_static = fluid.data(
+                name='value', shape=self.value_shape, dtype='int64')
+
+
+# test shape of logits and value used in probs and log_prob method
+class CategoricalTest5(CategoricalTest):
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 1-D Tensor
+        # value used in probs and log_prob method is 1-D Tensor
+        self.logits_np = np.random.rand(dims).astype('float32')
+        self.other_logits_np = np.random.rand(dims).astype('float32')
+        self.value_np = np.array([2, 1, 3]).astype('int64')
+
+        self.logits_shape = [dims]
+        self.dist_shape = []
+        self.sample_shape = [2, 4]
+        self.value_shape = [3]
+
+    def get_numpy_selected_probs(self, probability):
+        np_probs = np.zeros(self.value_shape)
+        for i in range(3):
+            np_probs[i] = probability[self.value_np[i]]
+        return np_probs
+
+
+class CategoricalTest6(CategoricalTest):
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 2-D Tensor
+        # value used in probs and log_prob method has the same number of batches with input
+        self.logits_np = np.random.rand(3, 5).astype('float32')
+        self.other_logits_np = np.random.rand(3, 5).astype('float32')
+        self.value_np = np.array([[2, 1], [0, 3], [2, 3]]).astype('int64')
+
+        self.logits_shape = [3, 5]
+        self.dist_shape = [3]
+        self.sample_shape = [2, 4]
+        self.value_shape = [3, 2]
+
+    def get_numpy_selected_probs(self, probability):
+        np_probs = np.zeros(self.value_shape)
+        for i in range(3):
+            for j in range(2):
+                np_probs[i][j] = probability[i][self.value_np[i][j]]
+        return np_probs
+
+
+class CategoricalTest7(CategoricalTest):
+    def init_numpy_data(self, batch_size, dims):
+        # input logtis is 3-D Tensor
+        # value used in probs and log_prob method has the same number of distribuions with input
+        self.logits_np = np.random.rand(3, 2, 5).astype('float32')
+        self.other_logits_np = np.random.rand(3, 2, 5).astype('float32')
+        self.value_np = np.array([2, 1, 3]).astype('int64')
+
+        self.logits_shape = [3, 2, 5]
+        self.dist_shape = [3, 2]
+        self.sample_shape = [2, 4]
+        self.value_shape = [3]
+
+    def get_numpy_selected_probs(self, probability):
+        np_probs = np.zeros(self.dist_shape + self.value_shape)
+        for i in range(3):
+            for j in range(2):
+                for k in range(3):
+                    np_probs[i][j][k] = probability[i][j][self.value_np[k]]
+        return np_probs
+
+
 class DistributionTestError(unittest.TestCase):
     def test_distribution_error(self):
         distribution = Distribution()
@@ -685,6 +979,7 @@ class DistributionTestError(unittest.TestCase):
         self.assertRaises(NotImplementedError, distribution.probs, value_tensor)
 
     def test_normal_error(self):
+        paddle.enable_static()
         normal = Normal(0.0, 1.0)
 
         value = [1.0, 2.0]
@@ -708,6 +1003,7 @@ class DistributionTestError(unittest.TestCase):
         self.assertRaises(TypeError, normal.kl_divergence, normal_other)
 
     def test_uniform_error(self):
+        paddle.enable_static()
         uniform = Uniform(0.0, 1.0)
 
         value = [1.0, 2.0]
@@ -725,6 +1021,39 @@ class DistributionTestError(unittest.TestCase):
         seed = 1.0
         # type of seed must be int
         self.assertRaises(TypeError, uniform.sample, [2, 3], seed)
+
+    def test_categorical_error(self):
+        paddle.enable_static()
+
+        categorical = Categorical([0.4, 0.6])
+
+        value = [1, 0]
+        # type of value must be variable
+        self.assertRaises(AttributeError, categorical.log_prob, value)
+
+        value = [1, 0]
+        # type of value must be variable
+        self.assertRaises(AttributeError, categorical.probs, value)
+
+        shape = 1.0
+        # type of shape must be list
+        self.assertRaises(TypeError, categorical.sample, shape)
+
+        categorical_other = Uniform(1.0, 2.0)
+        # type of other must be an instance of Categorical
+        self.assertRaises(TypeError, categorical.kl_divergence,
+                          categorical_other)
+
+        def test_shape_not_match_error():
+            # shape of value must match shape of logits
+            # value_shape[:-1] == logits_shape[:-1]
+            paddle.disable_static()
+            logits = paddle.rand([3, 5])
+            cat = Categorical(logits)
+            value = paddle.to_tensor([[2, 1, 3], [3, 2, 1]], dtype='int64')
+            cat.log_prob(value)
+
+        self.assertRaises(ValueError, test_shape_not_match_error)
 
 
 class DistributionTestName(unittest.TestCase):
@@ -785,6 +1114,35 @@ class DistributionTestName(unittest.TestCase):
 
         p = uniform1.probs(value_tensor)
         self.assertEqual(self.get_prefix(p.name), name + '_probs')
+
+    def test_categorical_name(self):
+        name = 'test_categorical'
+        categorical1 = Categorical([0.4, 0.6], name=name)
+        self.assertEqual(categorical1.name, name)
+
+        categorical2 = Categorical([0.5, 0.5])
+        self.assertEqual(categorical2.name, 'Categorical')
+
+        paddle.enable_static()
+
+        sample = categorical1.sample([2])
+        self.assertEqual(self.get_prefix(sample.name), name + '_sample')
+
+        entropy = categorical1.entropy()
+        self.assertEqual(self.get_prefix(entropy.name), name + '_entropy')
+
+        kl = categorical1.kl_divergence(categorical2)
+        self.assertEqual(self.get_prefix(kl.name), name + '_kl_divergence')
+
+        value_npdata = np.array([0], dtype="int64")
+        value_tensor = layers.create_tensor(dtype="int64")
+        layers.assign(value_npdata, value_tensor)
+
+        p = categorical1.probs(value_tensor)
+        self.assertEqual(self.get_prefix(p.name), name + '_probs')
+
+        lp = categorical1.log_prob(value_tensor)
+        self.assertEqual(self.get_prefix(lp.name), name + '_log_prob')
 
 
 if __name__ == '__main__':

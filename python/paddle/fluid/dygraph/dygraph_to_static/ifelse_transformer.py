@@ -310,8 +310,8 @@ def parse_cond_return(parent_vars_dict, if_vars_dict, else_vars_dict,
         After transformed, q and z are created in parent scope. For example,
 
         x, y = 5, 10
-        q = fluid.dygraph.dygraph_to_static.variable_trans_func.data_layer_not_check(name='q', shape=[-1], dtype='float32')
-        z = fluid.dygraph.dygraph_to_static.variable_trans_func.data_layer_not_check(name='z', shape=[-1], dtype='float32')
+        q = paddle.jit.dy2static.data_layer_not_check(name='q', shape=[-1], dtype='float32')
+        z = paddle.jit.dy2static.data_layer_not_check(name='z', shape=[-1], dtype='float32')
 
         def true_func(x, y, q):
             x = x+1
@@ -460,7 +460,7 @@ def create_convert_ifelse_node(return_name_ids,
                                false_func,
                                is_if_expr=False):
     """
-    Create `fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
+    Create `paddle.jit.dy2static.convert_ifelse(
             pred, true_fn, false_fn, true_args, false_args, return_vars)`
     to replace original `python if/else` statement.
     """
@@ -491,7 +491,7 @@ def create_convert_ifelse_node(return_name_ids,
     return_vars = create_name_nodes(return_name_ids)
 
     convert_ifelse_layer = gast.parse(
-        'fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse('
+        'paddle.jit.dy2static.convert_ifelse('
         '{pred}, {true_fn}, {false_fn}, {true_args}, {false_args}, {return_vars})'.
         format(
             pred=ast_to_source_code(pred),

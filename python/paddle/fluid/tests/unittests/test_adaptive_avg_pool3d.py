@@ -125,7 +125,7 @@ class TestAdaptiveAvgPool3dAPI(unittest.TestCase):
                          if core.is_compiled_with_cuda() else [False]):
             place = paddle.CUDAPlace(0) if use_cuda else paddle.CPUPlace()
             paddle.enable_static()
-            x = paddle.data(name="x", shape=[2, 3, 5, 7, 7], dtype="float32")
+            x = paddle.fluid.data(name="x", shape=[2, 3, 5, 7, 7], dtype="float32")
 
             out_1 = paddle.nn.functional.adaptive_avg_pool3d(
                 x=x, output_size=[3, 3, 3])
@@ -220,7 +220,7 @@ class TestAdaptiveAvgPool3dClassAPI(unittest.TestCase):
                          if core.is_compiled_with_cuda() else [False]):
             place = paddle.CUDAPlace(0) if use_cuda else paddle.CPUPlace()
             paddle.enable_static()
-            x = paddle.data(name="x", shape=[2, 3, 5, 7, 7], dtype="float32")
+            x = paddle.fluid.data(name="x", shape=[2, 3, 5, 7, 7], dtype="float32")
 
             adaptive_avg_pool = paddle.nn.AdaptiveAvgPool3d(
                 output_size=[3, 3, 3])

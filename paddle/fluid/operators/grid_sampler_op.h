@@ -450,45 +450,47 @@ static void gatherBilinearGrad(const platform::CPUDeviceContext& ctx,
 
   auto output_grad_t = EigenTensor<T, 4>::From(output_grad);
 
-  Tensor grid_grad_x, grid_grad_y;
-  grid_grad_x.mutable_data<T>({n, out_h, out_w}, ctx.GetPlace());
-  grid_grad_y.mutable_data<T>({n, out_h, out_w}, ctx.GetPlace());
-  auto grid_grad_x_t =
-      EigenTensor<T, 3>::From(grid_grad_x).setConstant(static_cast<T>(0.0));
-  auto grid_grad_y_t =
-      EigenTensor<T, 3>::From(grid_grad_y).setConstant(static_cast<T>(0.0));
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < c; j++) {
-      for (int k = 0; k < out_h; k++) {
-        for (int l = 0; l < out_w; l++) {
-          grid_grad_x_t(i, k, l) +=
-              ((v_en_t(i, j, k, l) - v_wn_t(i, j, k, l)) * d_s_t(i, k, l) +
-               (v_es_t(i, j, k, l) - v_ws_t(i, j, k, l)) * d_n_t(i, k, l)) *
-              output_grad_t(i, j, k, l);
-          grid_grad_y_t(i, k, l) +=
-              ((v_ws_t(i, j, k, l) - v_wn_t(i, j, k, l)) * d_e_t(i, k, l) +
-               (v_es_t(i, j, k, l) - v_en_t(i, j, k, l)) * d_w_t(i, k, l)) *
-              output_grad_t(i, j, k, l);
+  if (grid_grad != nullptr) {
+    Tensor grid_grad_x, grid_grad_y;
+    grid_grad_x.mutable_data<T>({n, out_h, out_w}, ctx.GetPlace());
+    grid_grad_y.mutable_data<T>({n, out_h, out_w}, ctx.GetPlace());
+    auto grid_grad_x_t =
+        EigenTensor<T, 3>::From(grid_grad_x).setConstant(static_cast<T>(0.0));
+    auto grid_grad_y_t =
+        EigenTensor<T, 3>::From(grid_grad_y).setConstant(static_cast<T>(0.0));
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < c; j++) {
+        for (int k = 0; k < out_h; k++) {
+          for (int l = 0; l < out_w; l++) {
+            grid_grad_x_t(i, k, l) +=
+                ((v_en_t(i, j, k, l) - v_wn_t(i, j, k, l)) * d_s_t(i, k, l) +
+                 (v_es_t(i, j, k, l) - v_ws_t(i, j, k, l)) * d_n_t(i, k, l)) *
+                output_grad_t(i, j, k, l);
+            grid_grad_y_t(i, k, l) +=
+                ((v_ws_t(i, j, k, l) - v_wn_t(i, j, k, l)) * d_e_t(i, k, l) +
+                 (v_es_t(i, j, k, l) - v_en_t(i, j, k, l)) * d_w_t(i, k, l)) *
+                output_grad_t(i, j, k, l);
+          }
         }
       }
     }
-  }
 
-  //  const T x_max = static_cast<T>(in_w - 1);
-  //  const T y_max = static_cast<T>(in_h - 1);
+    //  const T x_max = static_cast<T>(in_w - 1);
+    //  const T y_max = static_cast<T>(in_h - 1);
 
-  auto grid_x_scale_t = EigenTensor<T, 3>::From(*grid_x_scale);
-  auto grid_y_scale_t = EigenTensor<T, 3>::From(*grid_y_scale);
-  grid_grad_x_t = grid_grad_x_t * grid_x_scale_t;
-  grid_grad_y_t = grid_grad_y_t * grid_y_scale_t;
+    auto grid_x_scale_t = EigenTensor<T, 3>::From(*grid_x_scale);
+    auto grid_y_scale_t = EigenTensor<T, 3>::From(*grid_y_scale);
+    grid_grad_x_t = grid_grad_x_t * grid_x_scale_t;
+    grid_grad_y_t = grid_grad_y_t * grid_y_scale_t;
 
-  // gather grid_grad [x, y] in 3rd Dim
-  T* grid_grad_data = grid_grad->data<T>();
-  T* grid_grad_x_data = grid_grad_x.data<T>();
-  T* grid_grad_y_data = grid_grad_y.data<T>();
-  for (int i = 0; i < n * out_h * out_w; i++) {
-    grid_grad_data[2 * i] = grid_grad_x_data[i];
-    grid_grad_data[2 * i + 1] = grid_grad_y_data[i];
+    // gather grid_grad [x, y] in 3rd Dim
+    T* grid_grad_data = grid_grad->data<T>();
+    T* grid_grad_x_data = grid_grad_x.data<T>();
+    T* grid_grad_y_data = grid_grad_y.data<T>();
+    for (int i = 0; i < n * out_h * out_w; i++) {
+      grid_grad_data[2 * i] = grid_grad_x_data[i];
+      grid_grad_data[2 * i + 1] = grid_grad_y_data[i];
+    }
   }
 }
 
@@ -558,11 +560,16 @@ class GridSampleGradOpKernel : public framework::OpKernel<T> {
     math::SetConstant<DeviceContext, T>()(
         ctx.template device_context<DeviceContext>(), input_grad,
         static_cast<T>(0));
-    auto* grid_grad = ctx.Output<Tensor>(framework::GradVarName("Grid"));
-    grid_grad->mutable_data<T>({n, out_h, out_w, 2}, ctx.GetPlace());
-    math::SetConstant<DeviceContext, T>()(
-        ctx.template device_context<DeviceContext>(), grid_grad,
-        static_cast<T>(0));
+
+    Tensor* grid_grad = nullptr;
+    if (ctx.HasOutput(framework::GradVarName("Grid"))) {
+      grid_grad = ctx.Output<Tensor>(framework::GradVarName("Grid"));
+      grid_grad->mutable_data<T>({n, out_h, out_w, 2}, ctx.GetPlace());
+      math::SetConstant<DeviceContext, T>()(
+          ctx.template device_context<DeviceContext>(), grid_grad,
+          static_cast<T>(0));
+    }
+
     Tensor grid_x, grid_y;
     Tensor grid_x_scale, grid_y_scale;
     calcGridLocationsWithGrad<T>(

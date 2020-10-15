@@ -33,7 +33,7 @@ class TestPretrainedModel(unittest.TestCase):
             if not dygraph:
                 paddle.enable_static()
 
-            net = models.__dict__[arch]()
+            net = models.__dict__[arch](pretrained=True)
             inputs = [InputSpec([None, 3, 224, 224], 'float32', 'image')]
             model = paddle.Model(network=net, inputs=inputs)
             model.prepare()
@@ -52,7 +52,7 @@ class TestPretrainedModel(unittest.TestCase):
         np.testing.assert_allclose(res['dygraph'], res['static'])
 
     def test_models(self):
-        arches = ['mobilenet_v1', 'mobilenet_v2', 'resnet18']
+        arches = ['mobilenet_v1', 'mobilenet_v2', 'resnet18', 'vgg16']
         for arch in arches:
             self.infer(arch)
 

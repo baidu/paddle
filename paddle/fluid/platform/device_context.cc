@@ -144,7 +144,8 @@ CPUDeviceContext::CPUDeviceContext(CPUPlace place) : place_(place) {
 void CPUDeviceContext::InitPoolDevice() {
   using EigenEnv = Eigen::StlThreadEnvironment;
   using EigenThreadPool = Eigen::ThreadPoolTempl<EigenEnv>;
-  int num_threads = std::thread::hardware_concurrency();
+  // int num_threads = std::thread::hardware_concurrency();
+  int num_threads = 1;
   eigen_threadpool_.reset(new EigenThreadPool(num_threads));
   eigen_pool_device_.reset(
       new Eigen::ThreadPoolDevice(eigen_threadpool_.get(), num_threads));

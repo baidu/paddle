@@ -288,7 +288,7 @@ class TestFleetHeterBase(unittest.TestCase):
         print("tr end communicate")
 
         tr0_ret = tr0.returncode
-        tr1_ret = tr0.returncode
+        tr1_ret = tr1.returncode
 
         # close trainer file
         tr0_pipe.close()

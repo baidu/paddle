@@ -19,8 +19,8 @@ namespace paddle {
 namespace operators {
 
 template <typename T>
-__global__ void MVGradCUDAKernel(const int m, const int n, const T *dout,
-                                 const T *vec, T *dx) {
+__global__ void MVGradDxCUDAKernel(const int m, const int n, const T *dout,
+                                   const T *vec, T *dx) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   for (; idx < m * n; idx += blockDim.x * gridDim.x) {
     int i = idx / n;
@@ -52,32 +52,31 @@ class MVGradKernel<platform::CUDADeviceContext, T>
     int m = dim_x[0];
     int n = dim_x[1];
 
-    dx->Resize(framework::make_ddim({m * n}));
-
     // get data ptr
     const T *x_data = x->data<T>();
     const T *vec_data = vec->data<T>();
     const T *dout_data = dout->data<T>();
 
-    T *dx_data = dx->mutable_data<T>(context.GetPlace());
-    T *dvec_data = dvec->mutable_data<T>(context.GetPlace());
-
     auto &dev_ctx =
         context.template device_context<platform::CUDADeviceContext>();
     auto blas = math::GetBlas<platform::CUDADeviceContext, T>(dev_ctx);
-
-    // calculate dx
     auto stream = context.cuda_device_context().stream();
     auto config = GetGpuLaunchConfig1D(dev_ctx, m * n);
-    MVGradCUDAKernel<
-        T><<<config.block_per_grid.x, config.thread_per_block.x, 0, stream>>>(
-        m, n, dout_data, vec_data, dx_data);
 
-    dx->Resize(framework::make_ddim({m, n}));
+    if (dx) {
+      T *dx_data = dx->mutable_data<T>(context.GetPlace());
 
-    // calculate dvec
-    blas.GEMV(true, dim_x[0], dim_x[1], static_cast<T>(1), x_data, dout_data,
-              static_cast<T>(0), dvec_data);
+      MVGradDxCUDAKernel<
+          T><<<config.block_per_grid.x, config.thread_per_block.x, 0, stream>>>(
+          m, n, dout_data, vec_data, dx_data);
+    }
+
+    if (dvec) {
+      T *dvec_data = dvec->mutable_data<T>(context.GetPlace());
+
+      blas.GEMV(true, dim_x[0], dim_x[1], static_cast<T>(1), x_data, dout_data,
+                static_cast<T>(0), dvec_data);
+    }
   }
 };
 

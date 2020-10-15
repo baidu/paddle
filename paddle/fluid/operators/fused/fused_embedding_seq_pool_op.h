@@ -204,9 +204,9 @@ class FusedEmbeddingSeqPoolGradKernel : public framework::OpKernel<T> {
       auto *table_t = context.Input<SelectedRows>("W");
       table_dim = table_t->value().dims();
     } else {
-      PADDLE_THROW(
+      PADDLE_THROW(platform::errors::PermissionDenied(
           "The parameter W of a LookupTable "
-          "must be either LoDTensor or SelectedRows");
+          "must be either LoDTensor or SelectedRows."));
     }
 
     bool is_sparse = context.Attr<bool>("is_sparse");

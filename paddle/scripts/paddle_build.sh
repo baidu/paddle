@@ -246,6 +246,7 @@ function cmake_base() {
         -DWITH_GRPC=${grpc_flag}
 	    -DWITH_GLOO=${gloo_flag}
         -DWITH_LITE=${WITH_LITE:-OFF}
+        -DWITH_XPU=${WITH_XPU:-OFF}
         -DLITE_GIT_TAG=develop
     ========================================
 EOF
@@ -277,6 +278,7 @@ EOF
         -DWITH_GRPC=${grpc_flag} \
 	    -DWITH_GLOO=${gloo_flag} \
         -DLITE_GIT_TAG=develop \
+        -DWITH_XPU=${WITH_XPU:-OFF} \
         -DWITH_LITE=${WITH_LITE:-OFF};build_error=$?
     if [ "$build_error" != 0 ];then
         exit 7;
@@ -553,12 +555,12 @@ EOF
         fi
         tmpfile_rand=`date +%s%N`
         tmpfile=$tmp_dir/$tmpfile_rand
-        set +e
+        set +ex
         ut_startTime_s=`date +%s`
-        ctest --output-on-failure -j $2 | tee $tmpfile
+        get_quickly_disable_ut||disable_ut_quickly='' # indicate whether the case was in quickly disable list 
+        ctest -E "($disable_ut_quickly)" --output-on-failure -j $2 | tee $tmpfile
         failed_test_lists=''
         collect_failed_tests
-        set +x
         mactest_error=0
         retry_unittests_record=''
         retry_time=3
@@ -890,12 +892,29 @@ function collect_failed_tests() {
     done
 }
 
+# getting qucik disable ut list 
+function get_quickly_disable_ut() {
+    python -m pip install requests
+    if disable_ut_quickly=$(python ${PADDLE_ROOT}/tools/get_quick_disable_lt.py); then
+        echo "========================================="
+        echo "The following unittests have been disabled:"
+        echo ${disable_ut_quickly}
+        echo "========================================="
+    else
+        disable_ut_quickly=''
+    fi
+}
+
 function card_test() {
     set -m
     case_count $1 $2
     ut_startTime_s=`date +%s` 
-    # get the CUDA device count
-    CUDA_DEVICE_COUNT=$(nvidia-smi -L | wc -l)
+    # get the CUDA device count, XPU device count is one
+    if [ "${WITH_XPU}" == "ON" ];then
+        CUDA_DEVICE_COUNT=1
+    else
+        CUDA_DEVICE_COUNT=$(nvidia-smi -L | wc -l)
+    fi
 
     testcases=$1
     if (( $# > 1 )); then
@@ -928,15 +947,15 @@ function card_test() {
         tmpfile=$tmp_dir/$tmpfile_rand"_"$i
         if [ ${TESTING_DEBUG_MODE:-OFF} == "ON" ] ; then
             if [[ $cardnumber == $CUDA_DEVICE_COUNT ]]; then
-                (ctest -I $i,,$NUM_PROC -R "($testcases)" -V | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
+                (ctest -I $i,,$NUM_PROC -R "($testcases)" -E "($disable_ut_quickly)" -V | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
             else  
-                (env CUDA_VISIBLE_DEVICES=$cuda_list ctest -I $i,,$NUM_PROC -R "($testcases)" -V | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
+                (env CUDA_VISIBLE_DEVICES=$cuda_list ctest -I $i,,$NUM_PROC -R "($testcases)" -E "($disable_ut_quickly)" -V | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
             fi
         else
             if [[ $cardnumber == $CUDA_DEVICE_COUNT ]]; then
-                (ctest -I $i,,$NUM_PROC -R "($testcases)" --output-on-failure | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
+                (ctest -I $i,,$NUM_PROC -R "($testcases)" -E "($disable_ut_quickly)" --output-on-failure | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
             else
-                (env CUDA_VISIBLE_DEVICES=$cuda_list ctest -I $i,,$NUM_PROC -R "($testcases)" --output-on-failure | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
+                (env CUDA_VISIBLE_DEVICES=$cuda_list ctest -I $i,,$NUM_PROC -R "($testcases)" -E "($disable_ut_quickly)" --output-on-failure | tee $tmpfile; test ${PIPESTATUS[0]} -eq 0) &
             fi
         fi
     done
@@ -971,6 +990,7 @@ set +x
         is_exclusive=''           # indicate whether the case is exclusive type
         is_multicard=''           # indicate whether the case is multiple GPUs type
         is_nightly=''             # indicate whether the case will only run at night
+        get_quickly_disable_ut||disable_ut_quickly=''    # indicate whether the case was in quickly disable list 
         while read -r line; do
             if [[ "$line" == "" ]]; then
                 continue
@@ -1163,6 +1183,41 @@ EOF
     fi
 }
 
+function parallel_test_base_xpu() {
+    mkdir -p ${PADDLE_ROOT}/build
+    cd ${PADDLE_ROOT}/build
+    if [ ${WITH_TESTING:-ON} == "ON" ] ; then
+    cat <<EOF
+    ========================================
+    Running unit cpu tests ...
+    ========================================
+EOF
+
+set +x
+        ut_startTime_s=`date +%s`
+        test_cases=$(ctest -N -V | grep "_xpu" )        # cases list which would be run exclusively
+        while read -r line; do
+            if [[ "$line" == "" ]]; then
+                continue
+            fi
+            read testcase <<< $(echo "$line"|grep -oEi "\w+$")
+            if [[ "$single_card_tests" == "" ]]; then
+                single_card_tests="^$testcase$"
+            else
+                single_card_tests="$single_card_tests|^$testcase$"
+            fi
+        done <<< "$test_cases";
+        card_test "$single_card_tests" 1
+        collect_failed_tests
+set -x
+        ut_endTime_s=`date +%s`
+        echo "XPU testCase Time: $[ $ut_endTime_s - $ut_startTime_s ]s"
+        if [[ "$EXIT_CODE" != "0" ]]; then
+            exit 8;
+        fi
+    fi   
+}
+
 function parallel_test() {
     ut_total_startTime_s=`date +%s`
     mkdir -p ${PADDLE_ROOT}/build
@@ -1171,7 +1226,11 @@ function parallel_test() {
     if [ "$WITH_GPU" == "ON" ];then
         parallel_test_base_gpu
     else
-        parallel_test_base_cpu ${PROC_RUN:-1}
+        if [ "$WITH_XPU" == "ON" ];then
+            parallel_test_base_xpu
+        else
+            parallel_test_base_cpu ${PROC_RUN:-1}
+        fi
     fi
     ut_total_endTime_s=`date +%s`
     echo "TestCases Total Time: $[ $ut_total_endTime_s - $ut_total_startTime_s ]s"
@@ -1500,6 +1559,7 @@ EOF
     fi
 }
 
+
 function build_document_preview() {
     sh /paddle/tools/document_preview.sh ${PORT}
 }
@@ -1663,6 +1723,10 @@ function main() {
         build_mac
         ;;
       cicheck_py35)
+        cmake_gen_and_build ${PYTHON_ABI:-""} ${parallel_number}
+        parallel_test
+        ;;
+      check_xpu)
         cmake_gen_and_build ${PYTHON_ABI:-""} ${parallel_number}
         parallel_test
         ;;

@@ -89,14 +89,16 @@ def _parse_args():
         description='''start paddle training using multi-process mode.
 see: http://www.paddlepaddle.org/documentation/docs/zh/1.6/user_guides/howto/training/cluster_howto.html#permalink-8--nccl2-
 ''')
+    base_group = parser.add_argument_group("Base Parameters")
 
-    # Optional arguments for the launch helper
-    parser.add_argument(
-        "--ips",
+    base_group.add_argument(
+        "--log_dir",
         type=str,
-        default="127.0.0.1",
-        help="Paddle cluster nodes ips, such as 192.168.0.16,192.168.0.17..")
-    parser.add_argument(
+        default="log",
+        help="The path for each process's log.If it's not set, the log will printed to default pipe."
+    )
+
+    base_group.add_argument(
         "--gpus",
         type=str,
         default=None,
@@ -104,22 +106,7 @@ see: http://www.paddlepaddle.org/documentation/docs/zh/1.6/user_guides/howto/tra
         "each process is bound to a single GPU. And if it's not set, this module will use all the gpu cards for training."
     )
 
-    parser.add_argument(
-        "--servers", type=str, default="", help="User defined servers ip:port")
-    parser.add_argument(
-        "--workers", type=str, default="", help="User defined workers ip:port")
-    parser.add_argument("--worker_num", type=int, help="number of workers")
-
-    parser.add_argument("--server_num", type=int, help="number of servers")
-
-    parser.add_argument(
-        "--log_dir",
-        type=str,
-        default="log",
-        help="The path for each process's log.If it's not set, the log will printed to default pipe."
-    )
-    # positional
-    parser.add_argument(
+    base_group.add_argument(
         "training_script",
         type=str,
         help="The full path to the single GPU training "
@@ -127,8 +114,35 @@ see: http://www.paddlepaddle.org/documentation/docs/zh/1.6/user_guides/howto/tra
         "followed by all the arguments for the "
         "training script")
 
-    # rest from the training program
-    parser.add_argument('training_script_args', nargs=REMAINDER)
+    base_group.add_argument('training_script_args', nargs=REMAINDER)
+
+    # Optional arguments for the launch helper
+    # for collective
+    collective_group = parser.add_argument_group("Collective Parameters")
+    collective_group.add_argument(
+        "--ips",
+        type=str,
+        default="127.0.0.1",
+        help="Paddle cluster nodes ips, such as 192.168.0.16,192.168.0.17..")
+
+    ps_group = parser.add_argument_group("Parameter-Server Parameters")
+    # for parameter server
+    ps_group.add_argument(
+        "--servers", type=str, default="", help="User defined servers ip:port")
+    ps_group.add_argument(
+        "--workers", type=str, default="", help="User defined workers ip:port")
+    ps_group.add_argument(
+        "--heter_workers",
+        type=str,
+        default="",
+        help="User defined heter workers ip:port")
+
+    ps_group.add_argument("--worker_num", type=int, help="number of workers")
+    ps_group.add_argument("--server_num", type=int, help="number of servers")
+    ps_group.add_argument(
+        "--heter_worker_num", type=int, help="number of heter_workers")
+    ps_group.add_argument("--http_port", type=int, help="Gloo http Port")
+
     return parser.parse_args()
 
 
@@ -166,35 +180,6 @@ def get_cluster_from_args(args, gpus):
     return get_cluster(node_ips, node_ip, trainer_endpoints, gpus)
 
 
-def get_gpus(gpus):
-    if gpus is None:
-        gpus_num = fluid.core.get_cuda_device_count()
-        res_gpus = [str(x) for x in range(0, gpus_num)]
-    else:
-        cuda_visible_devices = os.getenv("CUDA_VISIBLE_DEVICES")
-        if cuda_visible_devices is None or cuda_visible_devices == "":
-            res_gpus = [x.strip() for x in gpus.split(',')]
-        else:
-            # change gpus into relative values
-            # e.g. CUDA_VISIBLE_DEVICES=4,5,6,7; args.gpus=4,5,6,7;
-            # therefore gpus=0,1,2,3
-            cuda_visible_devices_list = cuda_visible_devices.split(',')
-            for x in gpus.split(','):
-                assert x in cuda_visible_devices_list, "Can't find "\
-                    "your gpus %s in CUDA_VISIBLE_DEVICES[%s]."\
-                    % (x, cuda_visible_devices)
-            res_gpus = [
-                cuda_visible_devices_list.index(x.strip())
-                for x in gpus.split(',')
-            ]
-            logger.info("Change selected_gpus into reletive values. --ips:{} "
-                        "will change into relative_ips:{} according to your "
-                        "CUDA_VISIBLE_DEVICES:{}".format(
-                            gpus, res_gpus, cuda_visible_devices_list))
-
-    return res_gpus
-
-
 def launch_collective(args):
     # parse arguments, used for cloud-single-machine and local
     gpus = get_gpus(args.gpus)
@@ -220,7 +205,7 @@ def launch_collective(args):
     gloo_rendezvous_dir = tempfile.mkdtemp()
     # add gloo env
     global_envs["PADDLE_WITH_GLOO"] = "1"
-    global_envs["PADDLE_GLOO_RENDEZVOUS"] = "2"
+    global_envs["PADDLE_GLOO_RENDEZVOUS"] = "3"
     global_envs["PADDLE_GLOO_FS_PATH"] = gloo_rendezvous_dir
 
     procs = start_local_trainers(
@@ -245,209 +230,33 @@ def launch_collective(args):
         shutil.rmtree(gloo_rendezvous_dir)
 
 
-def launch_ps(args):
-    ports = None
-    start_port = 6170
-    if args.server_num:
-        server_num = args.server_num
-        ports = get_ports(server_num, 0)
-        server_endpoints = ",".join(["127.0.0.1:" + str(x) for x in ports])
-    else:
-        assert args.servers != "", "The setting of CPU mode must be either server_num or servers."
-        server_endpoints = args.servers
-    server_endpoints_ips = [
-        x.strip().split(":")[0] for x in server_endpoints.split(",")
+def launch_ps(args, distribute_mode):
+    cloud_flag = cloud_utils.use_paddlecloud()
+
+    # for ps-cpu on paddlecloud
+    if cloud_flag and distribute_mode == DistributeMode.PS:
+        direct_start(args)
+        return
+    elif cloud_flag and distribute_mode == DistributeMode.PS_HETER:
+        cloud_ps_heter_env_set(args)
+        args.workers = os.getenv("PADDLE_TRAINER_ENDPOINTS")
+        args.servers = os.getenv("PADDLE_PSERVERS_IP_PORT_LIST")
+        args.heter_workers = os.getenv("PADDLE_HETER_TRAINER_IP_PORT_LIST")
+
+    ps_launcher = ParameterServerLauncher(args, distribute_mode)
+    ps_launcher.start_ps()
+    return
+
+
+def which_distributed_mode(args):
+    ps_args = [
+        '--worker_num', '--server_num', '--heter_worker_num', '--servers',
+        '--workers', '--heter_workers', '--http_port'
     ]
-    server_endpoints_port = [
-        x.strip().split(":")[1] for x in server_endpoints.split(",")
-    ]
-    server_num = len(server_endpoints_ips)
+    collective_args = ['--ips']
 
-    if args.worker_num:
-        worker_num = args.worker_num
-        ports = get_ports(worker_num, server_num)
-        worker_endpoints = ",".join(["127.0.0.1:" + str(x) for x in ports])
-    else:
-        assert args.workers != "", "The setting of CPU mode must be either worker_num or workers."
-        worker_endpoints = args.workers
-    worker_endpoints_ips = [
-        x.strip().split(":")[0] for x in worker_endpoints.split(",")
-    ]
-    worker_num = len(worker_endpoints_ips)
-    node_ips = list(set(server_endpoints_ips + worker_endpoints_ips))
-    worker_endpoints_len = [
-        len(x.strip().split(":")) for x in worker_endpoints.split(",")
-    ]
-    if 1 in worker_endpoints_len:
-        # if no port value in worker_endpoints, will set default port values.
-        worker_endpoints_port = range(start_port + server_num,
-                                      start_port + server_num + worker_num, 1)
-    else:
-        worker_endpoints_port = [
-            x.strip().split(":")[1] for x in worker_endpoints.split(",")
-        ]
+    ps_heter_args = ["--heter_worker_num", "--heter_workers"]
 
-    # local train
-    if len(set(node_ips)) == 1:
-        current_node_ip = node_ips[0]
-    else:
-        _, current_node_ip = get_host_name_ip()
-
-    assert current_node_ip in node_ips, "Can't find your local ip {%s} in args.servers and args.workers ips: {%s}" \
-        % (current_node_ip, node_ips)
-    node_rank = node_ips.index(current_node_ip)
-    logger.debug(
-        "parsed from args: node_ips:{} current_node_ip:{} node_rank:{}, server_ports:{}".
-        format(node_ips, current_node_ip, node_rank, server_endpoints_port))
-
-    cluster = Cluster(hdfs=None)
-    server_rank = 0
-    worker_rank = 0
-    for node_rank, ip in enumerate(node_ips):
-        pod = Pod()
-        pod.rank = node_rank
-        pod.addr = ip
-        for i in range(len(server_endpoints_ips)):
-            if ip == server_endpoints_ips[i]:
-                server = Trainer()
-                server.endpoint = "%s:%s" % (ip, server_endpoints_port[i])
-                server.rank = server_rank
-                server_rank += 1
-                pod.servers.append(server)
-        for j in range(len(worker_endpoints_ips)):
-            if ip == worker_endpoints_ips[j]:
-                worker = Trainer()
-                worker.endpoint = "%s:%s" % (ip, worker_endpoints_port[i])
-                worker.rank = worker_rank
-                worker_rank += 1
-                pod.workers.append(worker)
-
-        cluster.pods.append(pod)
-
-    pod_rank = node_ips.index(current_node_ip)
-    pod = cluster.pods[pod_rank]
-
-    default_env = os.environ.copy()
-    current_env = copy.copy(default_env)
-
-    gloo_rendezvous_dir = tempfile.mkdtemp()
-    # add gloo env
-    current_env["PADDLE_WITH_GLOO"] = "1"
-    current_env["PADDLE_GLOO_RENDEZVOUS"] = "2"
-    current_env["PADDLE_GLOO_FS_PATH"] = gloo_rendezvous_dir
-
-    current_env.pop("http_proxy", None)
-    current_env.pop("https_proxy", None)
-    procs = []
-    cmds = []
-    log_fns = []
-    for idx, cur_server in enumerate(pod.servers):
-        proc_env = {
-            "PADDLE_PSERVERS_IP_PORT_LIST": server_endpoints,
-            "PADDLE_TRAINER_ENDPOINTS": worker_endpoints,
-            "PADDLE_PORT": cur_server.endpoint.split(":")[1],
-            "TRAINING_ROLE": "PSERVER",
-            "PADDLE_TRAINERS_NUM": str(worker_num),
-            "POD_IP": cur_server.endpoint.split(":")[0]
-        }
-        current_env.update(proc_env)
-
-        cmd = [sys.executable, "-u", args.training_script
-               ] + args.training_script_args
-        cmds.append(cmd)
-
-        if idx == 0:
-            logger.info(
-                "Local server start {} processes. First process distributed "
-                "environment info (Only For Debug): {}".format(
-                    len(pod.servers),
-                    pretty_print_envs(proc_env, ("Distributed Envs", "Value"))))
-
-        if args.log_dir is not None:
-            os.system("mkdir -p {}".format(args.log_dir))
-            fn = open("%s/serverlog.%d" % (args.log_dir, idx), "w")
-            log_fns.append(fn)
-            proc = subprocess.Popen(cmd, env=current_env, stdout=fn, stderr=fn)
-        else:
-            proc = subprocess.Popen(cmd, env=current_env)
-
-        tp = TrainerProc()
-        tp.proc = proc
-        tp.rank = cur_server.rank
-        tp.local_rank = idx
-        tp.log_fn = fn
-        tp.log_offset = fn.tell() if fn else None
-        tp.cmd = cmd
-
-        procs.append(tp)
-
-    for idx, cur_worker in enumerate(pod.workers):
-        proc_env = {
-            "PADDLE_PSERVERS_IP_PORT_LIST": server_endpoints,
-            "PADDLE_TRAINER_ENDPOINTS": worker_endpoints,
-            "PADDLE_TRAINERS_NUM": str(worker_num),
-            "TRAINING_ROLE": "TRAINER",
-            "PADDLE_TRAINER_ID": str(cur_worker.rank)
-        }
-        current_env.update(proc_env)
-
-        cmd = [sys.executable, "-u", args.training_script
-               ] + args.training_script_args
-        cmds.append(cmd)
-
-        if idx == 0:
-            logger.info(
-                "Local worker start {} processes. First process distributed "
-                "environment info (Only For Debug): {}".format(
-                    len(pod.workers),
-                    pretty_print_envs(proc_env, ("Distributed Envs", "Value"))))
-
-        if args.log_dir is not None:
-            os.system("mkdir -p {}".format(args.log_dir))
-            fn = open("%s/workerlog.%d" % (args.log_dir, idx), "w")
-            log_fns.append(fn)
-            proc = subprocess.Popen(cmd, env=current_env, stdout=fn, stderr=fn)
-        else:
-            proc = subprocess.Popen(cmd, env=current_env)
-
-        tp = TrainerProc()
-        tp.proc = proc
-        tp.rank = cur_worker.rank
-        tp.local_rank = idx
-        tp.log_fn = fn
-        tp.log_offset = fn.tell() if fn else None
-        tp.cmd = cmd
-
-        procs.append(tp)
-
-    logger.info(
-        "Please check servers and workers logs in {}/workerlog.* and {}/serverlog.*".
-        format(args.log_dir, args.log_dir))
-    # only wait worker to finish here
-    for i, proc in enumerate(procs):
-        if i < len(pod.servers):
-            continue
-        procs[i].proc.wait()
-        if len(log_fns) > 0:
-            log_fns[i].close()
-
-    print("all workers exit, going to finish parameter server", file=sys.stderr)
-    for i in range(len(pod.servers)):
-        if len(log_fns) > 0:
-            log_fns[i].close()
-        procs[i].proc.terminate()
-    print("all parameter server are killed", file=sys.stderr)
-
-    if os.path.exists(gloo_rendezvous_dir):
-        shutil.rmtree(gloo_rendezvous_dir)
-
-
-def launch():
-    args = _parse_args()
-    logger = get_logger()
-    _print_arguments(args)
-    ps_args = ['--worker_num', '--server_num', '--servers', '--workers']
-    collective_args = ['--ips', '--gpus']
     has_ps_args = [
         ps_arg for ps_arg in ps_args if ps_arg in " ".join(sys.argv[1:-1])
     ]
@@ -455,23 +264,53 @@ def launch():
         co_arg for co_arg in collective_args
         if co_arg in " ".join(sys.argv[1:-1])
     ]
+
+    if len(has_ps_args) > 1 and len(has_collective_args) > 1:
+        raise ValueError(
+            "Only one mode(Collective or Parameter-Server) can be selected at the same time, but more than one configuration was received."
+        )
+
     if fluid.core.is_compiled_with_cuda():
         cuda_device_num = fluid.core.get_cuda_device_count()
     else:
         cuda_device_num = 0
 
-    if len(has_ps_args) > 0 or cuda_device_num == 0:
-        logger.info("Run parameter-sever cpu mode. pserver arguments:{}".format(
-            has_ps_args))
-        launch_ps(args)
+    if len(has_ps_args) > 0:
+        logger.info(
+            "Run parameter-sever mode. pserver arguments:{}, cuda count:{}".
+            format(has_ps_args, cuda_device_num))
+        has_ps_heter_args = list(set(has_ps_args) & set(ps_heter_args))
+        if len(has_ps_heter_args) > 0:
+            return DistributeMode.PS_HETER
+        else:
+            return DistributeMode.PS
     elif len(has_collective_args) > 0:
         logger.info("Run collective gpu mode. gpu arguments:{}, cuda count:{}".
                     format(has_collective_args, cuda_device_num))
+        return DistributeMode.COLLECTIVE
+    else:
+        if not fluid.core.is_compiled_with_cuda():
+            logger.warning(
+                "Not found distinct arguments and not compiled with cuda. Default use ps mode"
+            )
+            return DistributeMode.PS
+        else:
+            logger.warning(
+                "Not found distinct arguments and compiled with cuda. Default use collective mode"
+            )
+            return DistributeMode.COLLECTIVE
+
+
+def launch():
+    args = _parse_args()
+    logger = get_logger()
+    _print_arguments(args)
+
+    distribute_mode = which_distributed_mode(args)
+    if distribute_mode == DistributeMode.COLLECTIVE:
         launch_collective(args)
     else:
-        logger.warning(
-            "Not found distinct arguments. Default use gpu collective mode")
-        launch_collective(args)
+        launch_ps(args, distribute_mode)
 
 
 if __name__ == "__main__":

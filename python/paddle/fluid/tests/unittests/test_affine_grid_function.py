@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
 import numpy as np
 from paddle import fluid, nn
 import paddle.fluid.dygraph as dg
@@ -42,7 +43,7 @@ class AffineGridTestCase(unittest.TestCase):
         self.theta = np.random.randn(*(self.theta_shape)).astype(self.dtype)
 
     def fluid_layer(self, place):
-        # align_corners = True
+        paddle.enable_static()
         main = fluid.Program()
         start = fluid.Program()
         with fluid.unique_name.guard():
@@ -57,6 +58,7 @@ class AffineGridTestCase(unittest.TestCase):
         return y_np
 
     def functional(self, place):
+        paddle.enable_static()
         main = fluid.Program()
         start = fluid.Program()
         with fluid.unique_name.guard():
@@ -74,6 +76,7 @@ class AffineGridTestCase(unittest.TestCase):
         return y_np
 
     def paddle_dygraph_layer(self):
+        paddle.disable_static()
         theta_var = dg.to_variable(
             self.theta) if not self.invalid_theta else "invalid"
         output_shape = dg.to_variable(
@@ -88,8 +91,7 @@ class AffineGridTestCase(unittest.TestCase):
         place = fluid.CPUPlace()
         result1 = self.fluid_layer(place)
         result2 = self.functional(place)
-        with dg.guard(place):
-            result3 = self.paddle_dygraph_layer()
+        result3 = self.paddle_dygraph_layer()
         if self.align_corners:
             np.testing.assert_array_almost_equal(result1, result2)
         np.testing.assert_array_almost_equal(result2, result3)

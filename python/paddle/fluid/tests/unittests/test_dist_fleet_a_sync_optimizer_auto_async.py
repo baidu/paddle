@@ -72,8 +72,8 @@ class TestFleetGradientMergeMetaOptimizer(unittest.TestCase):
         optimizer = fleet.distributed_optimizer(optimizer, strategy=strategy)
         optimizer.minimize(avg_cost)
 
-        self.assertTrue(optimizer.user_defined_strategy.a_sync)
-        a_sync_configs = optimizer.user_defined_strategy.a_sync_configs
+        self.assertTrue(fleet._final_strategy().a_sync)
+        a_sync_configs = fleet._final_strategy().a_sync_configs
         self.assertTrue(a_sync_configs['k_steps'] == 0)
 
 

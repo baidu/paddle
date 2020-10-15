@@ -172,11 +172,11 @@ class TestDiagV2API(unittest.TestCase):
         self.assertTrue(np.allclose(y.numpy(), self.expected11))
 
     def run_static(self, use_gpu=False):
-        x = paddle.data(name='input', shape=[10, 10], dtype='float32')
-        x2 = paddle.data(name='input2', shape=[100], dtype='float64')
-        x3 = paddle.data(name='input3', shape=[100], dtype='int64')
-        x4 = paddle.data(name='input4', shape=[2000, 2000], dtype='float32')
-        x5 = paddle.data(name='input5', shape=[2000], dtype='float32')
+        x = paddle.fluid.data(name='input', shape=[10, 10], dtype='float32')
+        x2 = paddle.fluid.data(name='input2', shape=[100], dtype='float64')
+        x3 = paddle.fluid.data(name='input3', shape=[100], dtype='int64')
+        x4 = paddle.fluid.data(name='input4', shape=[2000, 2000], dtype='float32')
+        x5 = paddle.fluid.data(name='input5', shape=[2000], dtype='float32')
         result0 = paddle.diag(x)
         result1 = paddle.diag(x, offset=1)
         result2 = paddle.diag(x, offset=-1)

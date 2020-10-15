@@ -1346,7 +1346,7 @@ def save_inference_model(dirname,
         append_fetch_ops(main_program, fetch_var_names)
 
         main_program.desc._set_version()
-        paddle.fluid.core.save_op_compatible_info(main_program.desc)
+        paddle.fluid.core.save_op_version_info(main_program.desc)
         with open(model_basename, "wb") as f:
             f.write(main_program.desc.serialize_to_string())
     else:
@@ -1720,7 +1720,7 @@ def save(program, model_path):
     main_program = program.clone()
     program.desc.flush()
     main_program.desc._set_version()
-    paddle.fluid.core.save_op_compatible_info(program.desc)
+    paddle.fluid.core.save_op_version_info(program.desc)
 
     with open(model_path + ".pdmodel", "wb") as f:
         f.write(program.desc.serialize_to_string())

@@ -357,7 +357,8 @@ static void HardLabelSoftmaxWithCrossEntropy(
     CALL_HARD_LABEL_SOFTMAX_WITH_CROSS_ENTROPY_FUSED_KERNEL(4);
     CALL_HARD_LABEL_SOFTMAX_WITH_CROSS_ENTROPY_FUSED_KERNEL(2);
     default:
-      PADDLE_THROW("BlockDim must be 2^n in softmax_with_cross_entropy_op");
+      PADDLE_THROW(platform::errors::Unavailable(
+          "Block Dimension must be 2^n in softmax_with_cross_entropy_op."));
       break;
   }
 #undef CALL_HARD_LABEL_SOFTMAX_WITH_CROSS_ENTROPY_FUSED_KERNEL
@@ -397,7 +398,8 @@ static void SoftmaxWithCrossEntropyFusedKernel(const T* logits_data,
     CALL_SOFTMAX_WITH_CROSS_ENTROPY_FUSED_KERNEL(4);
     CALL_SOFTMAX_WITH_CROSS_ENTROPY_FUSED_KERNEL(2);
     default:
-      PADDLE_THROW("BlockDim must be 2^n in softmax_with_cross_entropy_op");
+      PADDLE_THROW(platform::errors::Unavailable(
+          "Block Dimension must be 2^n in softmax_with_cross_entropy_op."));
       break;
   }
 
@@ -408,8 +410,10 @@ template <typename T>
 class SoftmaxWithCrossEntropyCUDAKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
-    PADDLE_ENFORCE(platform::is_gpu_place(context.GetPlace()),
-                   "This kernel only runs on GPU device.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_gpu_place(context.GetPlace()), true,
+        platform::errors::Unavailable("softmax_with_cross_entropy operator's "
+                                      "CUDA kernel only runs on GPU device."));
     const Tensor* logits = context.Input<Tensor>("Logits");
     const Tensor* labels = context.Input<Tensor>("Label");
     Tensor* softmax = context.Output<Tensor>("Softmax");
@@ -469,8 +473,10 @@ template <typename T>
 class SoftmaxWithCrossEntropyGradCUDAKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
-    PADDLE_ENFORCE(platform::is_gpu_place(context.GetPlace()),
-                   "This kernel only runs on GPU device.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_gpu_place(context.GetPlace()), true,
+        platform::errors::Unavailable("softmax_with_cross_entropy operator's "
+                                      "CUDA kernel only runs on GPU device."));
     const Tensor* labels = context.Input<Tensor>("Label");
     const T* loss_grad_data =
         context.Input<Tensor>(framework::GradVarName("Loss"))->data<T>();

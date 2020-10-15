@@ -48,18 +48,18 @@ def test_static(place,
     prog = paddle.static.Program()
     startup_prog = paddle.static.Program()
     with paddle.static.program_guard(prog, startup_prog):
-        logit = paddle.data(name='logit', shape=logit_np.shape, dtype='float64')
-        label = paddle.data(name='label', shape=label_np.shape, dtype='float64')
+        logit = paddle.fluid.data(name='logit', shape=logit_np.shape, dtype='float64')
+        label = paddle.fluid.data(name='label', shape=label_np.shape, dtype='float64')
         feed_dict = {"logit": logit_np, "label": label_np}
 
         pos_weight = None
         weight = None
         if pos_weight_np is not None:
-            pos_weight = paddle.data(
+            pos_weight = paddle.fluid.data(
                 name='pos_weight', shape=pos_weight_np.shape, dtype='float64')
             feed_dict["pos_weight"] = pos_weight_np
         if weight_np is not None:
-            weight = paddle.data(
+            weight = paddle.fluid.data(
                 name='weight', shape=weight_np.shape, dtype='float64')
             feed_dict["weight"] = weight_np
         if functional:

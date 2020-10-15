@@ -165,7 +165,7 @@ class TestPadAPI(unittest.TestCase):
             mode = "constant"
             value = 100
             input_data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             result = F.pad(x=x,
                            pad=pad,
                            value=value,
@@ -186,7 +186,7 @@ class TestPadAPI(unittest.TestCase):
             pad = [1, 2, 1, 1, 1, 2]
             mode = "reflect"
             input_data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             result1 = F.pad(x=x, pad=pad, mode=mode, data_format="NCDHW")
             result2 = F.pad(x=x, pad=pad, mode=mode, data_format="NDHWC")
             exe = Executor(place)
@@ -208,7 +208,7 @@ class TestPadAPI(unittest.TestCase):
             pad = [1, 2, 1, 1, 3, 4]
             mode = "replicate"
             input_data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             result1 = F.pad(x=x, pad=pad, mode=mode, data_format="NCDHW")
             result2 = F.pad(x=x, pad=pad, mode=mode, data_format="NDHWC")
             exe = Executor(place)
@@ -230,7 +230,7 @@ class TestPadAPI(unittest.TestCase):
             pad = [1, 2, 1, 1, 3, 4]
             mode = "circular"
             input_data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             result1 = F.pad(x=x, pad=pad, mode=mode, data_format="NCDHW")
             result2 = F.pad(x=x, pad=pad, mode=mode, data_format="NDHWC")
             exe = Executor(place)
@@ -637,7 +637,7 @@ class TestPad3dOpError(unittest.TestCase):
         def test_reflect_1():
             input_shape = (1, 2, 3, 4, 5)
             data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             y = F.pad(x, pad=[5, 6, 1, 1, 1, 1], value=1, mode='reflect')
             place = paddle.CPUPlace()
             exe = Executor(place)
@@ -646,7 +646,7 @@ class TestPad3dOpError(unittest.TestCase):
         def test_reflect_2():
             input_shape = (1, 2, 3, 4, 5)
             data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             y = F.pad(x, pad=[1, 1, 4, 3, 1, 1], value=1, mode='reflect')
             place = paddle.CPUPlace()
             exe = Executor(place)
@@ -655,7 +655,7 @@ class TestPad3dOpError(unittest.TestCase):
         def test_reflect_3():
             input_shape = (1, 2, 3, 4, 5)
             data = np.random.rand(*input_shape).astype(np.float32)
-            x = paddle.data(name="x", shape=input_shape)
+            x = paddle.fluid.data(name="x", shape=input_shape)
             y = F.pad(x, pad=[1, 1, 1, 1, 2, 3], value=1, mode='reflect')
             place = paddle.CPUPlace()
             exe = Executor(place)

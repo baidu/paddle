@@ -176,8 +176,6 @@ class GridSampleOpGrad : public framework::OperatorWithKernel {
   void InferShape(framework::InferShapeContext* ctx) const override {
     OP_INOUT_CHECK(ctx->HasOutput(framework::GradVarName("X")), "Output",
                    framework::GradVarName("X"), "grid_sampler");
-    OP_INOUT_CHECK(ctx->HasOutput(framework::GradVarName("Grid")), "Output",
-                   framework::GradVarName("Grid"), "grid_sampler");
     auto input_dims = ctx->GetInputDim("X");
     auto grid_dims = ctx->GetInputDim("Grid");
     if (ctx->HasOutput(framework::GradVarName("X"))) {

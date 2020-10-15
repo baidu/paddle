@@ -46,7 +46,7 @@ def create_while_node(condition_name, body_name, loop_var_names):
     # For example: loop_var_names = [a, b, foo.x], the type of `a` or `b` is gast.Name,
     # but the type of `foo.x` gast.Attribute.
 
-    while_func_name = "fluid.dygraph.dygraph_to_static.convert_operators.convert_while_loop"
+    while_func_name = "paddle.jit.dy2static.convert_while_loop"
     while_node_str = "[{}] = {}({}, {}, [{}])".format(
         ",".join(loop_var_names), while_func_name, condition_name, body_name,
         ",".join(loop_var_names))

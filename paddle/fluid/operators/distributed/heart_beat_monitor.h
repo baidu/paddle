@@ -56,7 +56,8 @@ class HeartBeatMonitor {
         is_chief_(is_chief),
         be_monitored_var_(be_monitored_var),
         running_(true) {
-    PADDLE_ENFORCE_GT(workers, 0, "trainers must have one or more");
+    PADDLE_ENFORCE_GT(workers, 0, platform::errors::InvalidArgument(
+                                      "workers must greater than 0."));
 
     for (auto worker_id = 0; worker_id < workers; worker_id++) {
       UnderMonitoredWorker worker(worker_id);

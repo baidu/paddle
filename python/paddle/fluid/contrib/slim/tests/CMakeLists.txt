@@ -98,18 +98,16 @@ function(download_quant_model install_dir data_file)
     endif()
 endfunction()
 
-function(save_quant_ic_model_test target quant_model_dir fp32_model_save_path int8_model_save_path)
+function(save_quant_ic_model_test target quant_model_dir int8_model_save_path)
     py_test(${target} SRCS ${CMAKE_CURRENT_SOURCE_DIR}/save_quant_model.py
             ARGS --quant_model_path ${quant_model_dir}
-	         --fp32_model_save_path ${fp32_model_save_path}
 	         --int8_model_save_path ${int8_model_save_path}
 		 --debug)
 endfunction()
 
-function(save_quant_nlp_model_test target quant_model_dir fp32_model_save_path int8_model_save_path ops_to_quantize)
+function(save_quant_nlp_model_test target quant_model_dir int8_model_save_path ops_to_quantize)
     py_test(${target} SRCS ${CMAKE_CURRENT_SOURCE_DIR}/save_quant_model.py
             ARGS --quant_model_path ${quant_model_dir}
-	         --fp32_model_save_path ${fp32_model_save_path}
 	         --int8_model_save_path ${int8_model_save_path}
 		 --ops_to_quantize ${ops_to_quantize})
 endfunction()
@@ -227,8 +225,6 @@ if(LINUX AND WITH_MKLDNN)
 	set(NLP_LABLES_PATH "${NLP_DATA_DIR}/Ernie_dataset/label.xnli.dev")
 	download_quant_data(${NLP_DATA_DIR} ${NLP_DATA_ARCHIVE})
 
-	set(QUANT2_NLP_OPS_TO_QUANTIZE "fc,reshape2,transpose2,matmul,elementwise_add")
-
 	# Quant2 Ernie
 	set(QUANT2_ERNIE_MODEL_ARCHIVE "ernie_qat.tar.gz")
 	set(QUANT2_ERNIE_MODEL_DIR "${QUANT_INSTALL_DIR}/Ernie_quant2")
@@ -236,17 +232,25 @@ if(LINUX AND WITH_MKLDNN)
 	set(FP32_ERNIE_MODEL_ARCHIVE "ernie_fp32_model.tar.gz")
 	set(FP32_ERNIE_MODEL_DIR "${QUANT_INSTALL_DIR}/Ernie_float")
 	download_quant_fp32_model(${FP32_ERNIE_MODEL_DIR} ${FP32_ERNIE_MODEL_ARCHIVE})
-	inference_quant2_int8_nlp_test(test_quant2_int8_ernie_mkldnn ${QUANT2_ERNIE_MODEL_DIR}/Ernie_qat/float ${FP32_ERNIE_MODEL_DIR}/ernie_fp32_model ${NLP_DATA_PATH} ${NLP_LABLES_PATH} ${QUANT2_NLP_OPS_TO_QUANTIZE})
+	set(QUANT2_ERNIE_OPS_TO_QUANTIZE "fc,reshape2,transpose2,matmul,elementwise_add")
+	inference_quant2_int8_nlp_test(test_quant2_int8_ernie_mkldnn ${QUANT2_ERNIE_MODEL_DIR}/Ernie_qat/float ${FP32_ERNIE_MODEL_DIR}/ernie_fp32_model ${NLP_DATA_PATH} ${NLP_LABLES_PATH} ${QUANT2_ERNIE_OPS_TO_QUANTIZE})
+
+	# Quant2 GRU
+	set(QUANT2_GRU_MODEL_ARCHIVE "GRU_quant_acc.tar.gz")
+	set(QUANT2_GRU_MODEL_DIR "${QUANT_INSTALL_DIR}/GRU_quant2")
+	download_quant_model(${QUANT2_GRU_MODEL_DIR} ${QUANT2_GRU_MODEL_ARCHIVE})
+	set(QUANT2_GRU_OPS_TO_QUANTIZE "fusion_gru")
 
 	### Save FP32 model or INT8 model from Quant model
         
 	set(QUANT2_INT8_RESNET50_SAVE_PATH "${QUANT_INSTALL_DIR}/ResNet50_quant2_int8")
-	set(QUANT2_FP32_RESNET50_SAVE_PATH "${QUANT_INSTALL_DIR}/ResNet50_quant2_fp32")
-	save_quant_ic_model_test(save_quant2_model_resnet50 ${QUANT2_RESNET50_MODEL_DIR}/ResNet50_qat_perf/float ${QUANT2_FP32_RESNET50_SAVE_PATH} ${QUANT2_INT8_RESNET50_SAVE_PATH})
+	save_quant_ic_model_test(save_quant2_model_resnet50 ${QUANT2_RESNET50_MODEL_DIR}/ResNet50_qat_perf/float ${QUANT2_INT8_RESNET50_SAVE_PATH})
 
 	set(QUANT2_INT8_ERNIE_SAVE_PATH "${QUANT_INSTALL_DIR}/Ernie_quant2_int8")
-	set(QUANT2_FP32_ERNIE_SAVE_PATH "${QUANT_INSTALL_DIR}/Ernie_quant2_fp32")
-	save_quant_nlp_model_test(save_quant2_model_ernie ${QUANT2_ERNIE_MODEL_DIR}/Ernie_qat/float ${QUANT2_FP32_ERNIE_SAVE_PATH} ${QUANT2_INT8_ERNIE_SAVE_PATH} ${QUANT2_NLP_OPS_TO_QUANTIZE})
+	save_quant_nlp_model_test(save_quant2_model_ernie ${QUANT2_ERNIE_MODEL_DIR}/Ernie_qat/float ${QUANT2_INT8_ERNIE_SAVE_PATH} ${QUANT2_ERNIE_OPS_TO_QUANTIZE})
+
+	set(QUANT2_INT8_GRU_SAVE_PATH "${QUANT_INSTALL_DIR}/GRU_quant2_int8")
+	save_quant_nlp_model_test(save_quant2_model_gru ${QUANT2_GRU_MODEL_DIR}/GRU_quant_acc ${QUANT2_INT8_GRU_SAVE_PATH} ${QUANT2_GRU_OPS_TO_QUANTIZE})
 
 	# Convert Quant2 model to dot and pdf files 
 	set(QUANT2_INT8_ERNIE_DOT_SAVE_PATH "${QUANT_INSTALL_DIR}/Ernie_quant2_int8_dot_file")

@@ -13,9 +13,9 @@
 # limitations under the License.
 
 # TODO: define the common classes to build a neural network
+import paddle
 from ...fluid.dygraph import BilinearTensorProduct  #DEFINE_ALIAS
 from ...fluid.dygraph import Pool2D  #DEFINE_ALIAS
-from ...fluid.dygraph import Linear  #DEFINE_ALIAS
 from ...fluid.dygraph import Flatten  #DEFINE_ALIAS
 from ...fluid.dygraph import layers
 from .. import functional as F
@@ -50,56 +50,74 @@ __all__ = [
 
 class Linear(layers.Layer):
     """
-    
-    Fully-connected linear transformation layer:
+
+    Fully-connected linear transformation layer. For each input :math:`X` ,
+    the equation is:
 
     .. math::
 
-        Out = {XW + b}
+        Out = XW + b
 
-    where :math:`X` is the input Tensor, :math:`W` and :math:`b` are weight and bias respectively.
+    where :math:`W` is the weight and :math:`b` is the bias.
 
-    Linear layer takes only one ``Tensor`` input.
-    The Linear layer multiplies input tensor with weight matrix and
-    produces an output Tensor of shape [N, *, `output_dim`],
-    where N is batch size and `*` means any number of additional dimensions.
-    If ``bias_attr`` is not None, a bias variable will be created and added to the output.
+    Linear layer takes only one multi-dimensional tensor as input with the
+    shape :math:`[batch\_size, *, in\_features]` , where :math:`*` means any
+    number of additional dimensions. It multiplies input tensor with the weight
+    (a 2-D tensor of shape :math:`[in\_features, out\_features]` ) and produces
+    an output tensor of shape :math:`[batch\_size, *, out\_features]` .
+    If :math:`bias\_attr` is not False, the bias (a 1-D tensor of
+    shape :math:`[out\_features]` ) will be created and added to the output.
 
     Parameters:
-        in_features(int): The number of input units in this layer.
-        out_features(int): The number of output units in this layer.
-        weight_attr(ParamAttr or list of ParamAttr, optional): The parameter attribute for learnable
-            weights(Parameter) of this layer. Default: None.
-        bias_attr(ParamAttr or list of ParamAttr, optional): The attribute for the bias
-            of this layer. If it is set to False, no bias will be added to the output units.
-            If it is set to None, the bias is initialized zero. Default: None.
-        name(str|None): For detailed information, please refer to :ref:`api_guide_Name`. Default: None.
+        in_features (int): The number of input units.
+        out_features (int): The number of output units.
+        weight_attr (ParamAttr, optional): The attribute for the learnable
+            weight of this layer. The default value is None and the weight will be
+            initialized to zero. For detailed information, please refer to
+            paddle.ParamAttr.
+        bias_attr (ParamAttr|bool, optional): The attribute for the learnable bias
+            of this layer. If it is set to False, no bias will be added to the output.
+            If it is set to None or one kind of ParamAttr, a bias parameter will
+            be created according to ParamAttr. For detailed information, please refer
+            to paddle.ParamAttr. The default value is None and the bias will be
+            initialized to zero.
+        name (str, optional): Normally there is no need for user to set this parameter.
+            For detailed information, please refer to :ref:`api_guide_Name` .
 
-    Attributes:
-        **weight** (Parameter): the learnable weights of this layer.
+    Attribute:
+        **weight** (Parameter): the learnable weight of this layer.
 
-        **bias** (Parameter or None): the learnable bias of this layer.
+        **bias** (Parameter): the learnable bias of this layer.
 
-    Returns:
-        None
+    Shape:
+        - input: Multi-dimentional tensor with shape :math:`[batch\_size, *, in\_features]` .
+        - output: Multi-dimentional tensor with shape :math:`[batch\_size, *, out\_features]` .
 
     Examples:
         .. code-block:: python
 
           import paddle
-          from paddle import nn
-          import numpy as np
 
-          data = np.ones((3,1,2), np.float32)
-          place = paddle.CPUPlace()
-          paddle.disable_static(place)
-          data = paddle.to_tensor(data)
-          weight_attr=paddle.framework.ParamAttr(name="linear_weight", learning_rate=1.0,
-          trainable=False, regularizer=None, initializer=paddle.fluid.initializer.ConstantInitializer(value=1.0))
-          bias_attr=paddle.framework.ParamAttr(name="linear_bias", learning_rate=1.0,
-          trainable=False, regularizer=None, initializer=paddle.fluid.initializer.ConstantInitializer(value=1.0))
-          linear = nn.Linear(2,2,weight_attr=weight_attr, bias_attr=bias_attr)
-          res = linear(data)  # [3 3 3 3 3 3]
+          # Define the linear layer.
+          weight_attr = paddle.ParamAttr(
+              name="weight",
+              initializer=paddle.nn.initializer.Constant(value=0.5))
+          bias_attr = paddle.ParamAttr(
+              name="bias",
+              initializer=paddle.nn.initializer.Constant(value=1.0))
+          linear = paddle.nn.Linear(2, 4, weight_attr=weight_attr, bias_attr=bias_attr)
+          # linear.weight: [[0.5 0.5 0.5 0.5]
+          #                 [0.5 0.5 0.5 0.5]]
+          # linear.bias: [1. 1. 1. 1.]
+
+          x = paddle.randn((3, 2), dtype="float32")
+          # x: [[-0.32342386 -1.200079  ]
+          #     [ 0.7979031  -0.90978354]
+          #     [ 0.40597573  1.8095392 ]]
+          y = linear(x)
+          # y: [[0.23824859 0.23824859 0.23824859 0.23824859]
+          #     [0.9440598  0.9440598  0.9440598  0.9440598 ]
+          #     [2.1077576  2.1077576  2.1077576  2.1077576 ]]
     """
 
     def __init__(self,
@@ -543,8 +561,6 @@ class UpsamplingBilinear2d(layers.Layer):
 
 class Pad2D(layers.Layer):
     """
-        :alias_main: paddle.nn.Pad2D
-        :alias: paddle.nn.Pad2D,paddle.nn.layer.Pad2D,paddle.nn.layer.common.Pad2D
     This interface is used to construct a callable object of the ``Pad2D``  class.
     The Pad2D layer pads the input tensor boundaries according to 'paddings' and 'mode'.
     If mode is 'reflect', paddings[0] and paddings[1] must be no greater
@@ -594,7 +610,7 @@ class Pad2D(layers.Layer):
             import paddle.nn as nn
             import numpy as np
             data = np.ones((2, 2, 2, 2)).astype('float32')
-            my_pad = nn.Pad2D(paddings=[1, 1, 1, 1])
+            my_pad = nn.layer.Pad2D(paddings=[1, 1, 1, 1])
             with fluid.dygraph.guard():
                 data = fluid.dygraph.to_variable(data)
                 result = my_pad(data)
@@ -613,7 +629,7 @@ class Pad2D(layers.Layer):
                                                       int) else paddings
 
     def forward(self, input):
-        return F.pad2d(
+        return paddle.fluid.layers.pad2d(
             input,
             paddings=self._paddings,
             mode=self._mode,

@@ -61,8 +61,8 @@ class SimpleRNNCell(LayerMixin):
             self.bias_ih = None
             self.bias_hh = None
 
-    def init_state(self, inputs):
-        batch_size = inputs.shape[0]
+    def init_state(self, inputs, batch_dim_index=0):
+        batch_size = inputs.shape[batch_dim_index]
         return np.zeros((batch_size, self.hidden_size), dtype=inputs.dtype)
 
     def forward(self, inputs, hx=None):
@@ -103,8 +103,8 @@ class GRUCell(LayerMixin):
             self.bias_ih = None
             self.bias_hh = None
 
-    def init_state(self, inputs):
-        batch_size = inputs.shape[0]
+    def init_state(self, inputs, batch_dim_index=0):
+        batch_size = inputs.shape[batch_dim_index]
         return np.zeros((batch_size, self.hidden_size), dtype=inputs.dtype)
 
     def forward(self, inputs, hx=None):
@@ -117,7 +117,6 @@ class GRUCell(LayerMixin):
         h_gates = np.matmul(pre_hidden, self.weight_hh.T)
         if self.bias_hh is not None:
             h_gates = h_gates + self.bias_hh
-
         x_r, x_z, x_c = np.split(x_gates, 3, 1)
         h_r, h_z, h_c = np.split(h_gates, 3, 1)
 
@@ -152,8 +151,8 @@ class LSTMCell(LayerMixin):
             self.bias_ih = None
             self.bias_hh = None
 
-    def init_state(self, inputs):
-        batch_size = inputs.shape[0]
+    def init_state(self, inputs, batch_dim_index=0):
+        batch_size = inputs.shape[batch_dim_index]
         init_h = np.zeros((batch_size, self.hidden_size), dtype=inputs.dtype)
         init_c = np.zeros((batch_size, self.hidden_size), dtype=inputs.dtype)
         return init_h, init_c
@@ -205,6 +204,9 @@ def rnn(cell,
         inputs = np.transpose(inputs, [1, 0, 2])
     if is_reverse:
         inputs = np.flip(inputs, 0)
+
+    if initial_states is None:
+        initial_states = cell.init_state(inputs, 1)
 
     if sequence_length is None:
         mask = None

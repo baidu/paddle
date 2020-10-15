@@ -13,20 +13,12 @@
 # limitations under the License.
 
 # TODO: define pooling functions
-from ...fluid.layers import pool2d  #DEFINE_ALIAS
-from ...fluid.layers import pool3d  #DEFINE_ALIAS
-from ...fluid.layers import adaptive_pool2d  #DEFINE_ALIAS
-from ...fluid.layers import adaptive_pool3d  #DEFINE_ALIAS
 from ...fluid import core
 from ...fluid.framework import in_dygraph_mode
 from ...fluid.layers import utils, LayerHelper, unsqueeze, squeeze
 from ...fluid.data_feeder import check_type, check_variable_and_dtype
 
 __all__ = [
-    'pool2d',
-    'pool3d',
-    'adaptive_pool2d',
-    'adaptive_pool3d',
     'avg_pool1d',
     'avg_pool2d',
     'avg_pool3d',

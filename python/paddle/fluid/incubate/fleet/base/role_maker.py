@@ -955,26 +955,33 @@ class GeneralRoleMaker(RoleMakerBase):
         """
         get default physical interface
         """
-        import netifaces
-        gateways = netifaces.gateways()
-        if gateways.get(netifaces.AF_INET) != None:
-            gateway = gateways[netifaces.AF_INET]
-            if len(gateway) > 0 and len(gateway[0]) > 1:
-                return gateway[0][1]
+        res = os.popen("route -A inet").read().strip().split("\n")
+
+        gateway_idx = None
+        iface_idx = None
+        for item in res:
+            item = item.split()
+            if "Gateway" in item and "Iface" in item:
+                gateway_idx = item.index("Gateway")
+                iface_idx = item.index("Iface")
+            elif gateway_idx != None and iface_idx != None:
+                gateway = None
+                if len(item) > gateway_idx:
+                    gateway = item[gateway_idx]
+                if gateway and gateway != '*' and gateway != "0.0.0.0" and len(
+                        item) > iface_idx:
+                    return item[iface_idx]
         return "lo"
 
     def __get_default_iface_from_interfaces(self):
         """
         get default physical interface
         """
-        import netifaces
-        for intf_name in netifaces.interfaces():
-            addresses = netifaces.ifaddresses(intf_name)
-            if netifaces.AF_INET in addresses:
-                ipv4_addresses = addresses[netifaces.AF_INET]
-                for ipv4_address in ipv4_addresses:
-                    if 'broadcast' in ipv4_address:
-                        return intf_name
+        res = os.popen("ip -f inet addr | awk NR%3==1").read().strip().split(
+            "\n")
+        for item in res:
+            if "BROADCAST" in item:
+                return item.split(":")[1].strip()
         return "lo"
 
     def __start_kv_server(self, http_server_d, size_d):
@@ -982,8 +989,7 @@ class GeneralRoleMaker(RoleMakerBase):
         http_server = KVServer(int(self._http_ip_port[1]), size_d)
         http_server.start()
         wait_seconds = 5
-        while http_server_d.get("running",
-                                False) and not http_server.shoud_stop():
+        while http_server_d.get("running", False):
             time.sleep(wait_seconds)
         http_server.stop()
 

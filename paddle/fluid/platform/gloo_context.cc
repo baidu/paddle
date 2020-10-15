@@ -21,10 +21,10 @@ void GlooParallelContext::Init() {
   auto gloo_ptr = paddle::framework::GlooWrapper::GetInstance();
   gloo_ptr->SetRank(strategy_.rank);
   gloo_ptr->SetSize(strategy_.rank_num);
-  gloo_ptr->SetPrefix(strategy_.prefix);
   gloo_ptr->SetIface(strategy_.iface);
   gloo_ptr->SetTimeoutSeconds(strategy_.init_seconds, strategy_.run_seconds);
-  gloo_ptr->SetHdfsStore(strategy_.path, strategy_.fs_name, strategy_.fs_ugi);
+  gloo_ptr->SetHttpStore(strategy_.ip_address, strategy_.ip_port,
+                         strategy_.scope);
   gloo_ptr->Init();
 }
 #endif

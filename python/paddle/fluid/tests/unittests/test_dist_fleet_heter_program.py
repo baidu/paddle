@@ -50,6 +50,10 @@ class TestDistFleetHeterProgram(unittest.TestCase):
     def build_strategy(self):
         self.strategy = paddle.distributed.fleet.DistributedStrategy()
         self.strategy.a_sync = True
+        self.strategy.a_sync_configs = {
+            "launch_barrier": False,
+            "heter_worker_device_guard": "gpu"
+        }
         return self.strategy
 
     def build_input(self):

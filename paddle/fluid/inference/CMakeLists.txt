@@ -88,7 +88,7 @@ if(NOT APPLE AND NOT WIN32)
   set_target_properties(paddle_fluid_shared PROPERTIES LINK_FLAGS "${LINK_FLAGS}")
   # check symbol hidden
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/check_symbol.cmake
-    "execute_process(COMMAND bash -c \"${CMAKE_CURRENT_SOURCE_DIR}/check_symbol.sh"
+    "execute_process(COMMAND sh -c \"${CMAKE_CURRENT_SOURCE_DIR}/check_symbol.sh"
     " ${CMAKE_CURRENT_BINARY_DIR}/libpaddle_fluid.so\" RESULT_VARIABLE symbol_res)\n"
     "if(NOT \"\${symbol_res}\" STREQUAL \"0\")\n"
     "  message(FATAL_ERROR \"Check symbol failed.\")\n"

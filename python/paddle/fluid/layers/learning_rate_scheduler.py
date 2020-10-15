@@ -52,9 +52,6 @@ def _decay_step_counter(begin=0):
 
 def noam_decay(d_model, warmup_steps, learning_rate=1.0):
     """
-	:alias_main: paddle.nn.functional.noam_decay
-	:alias: paddle.nn.functional.noam_decay,paddle.nn.functional.learning_rate.noam_decay
-	:old_api: paddle.fluid.layers.noam_decay
 
     Noam decay method. The numpy implementation of noam decay as follows.
 
@@ -115,9 +112,6 @@ def noam_decay(d_model, warmup_steps, learning_rate=1.0):
 
 def exponential_decay(learning_rate, decay_steps, decay_rate, staircase=False):
     """
-	:alias_main: paddle.nn.functional.exponential_decay
-	:alias: paddle.nn.functional.exponential_decay,paddle.nn.functional.learning_rate.exponential_decay
-	:old_api: paddle.fluid.layers.exponential_decay
 
     Applies exponential decay to the learning rate.
 
@@ -149,6 +143,9 @@ def exponential_decay(learning_rate, decay_steps, decay_rate, staircase=False):
         .. code-block:: python
 
           import paddle.fluid as fluid
+          import paddle
+
+          paddle.enable_static()
           base_lr = 0.1
           sgd_optimizer = fluid.optimizer.SGD(
 	      learning_rate=fluid.layers.exponential_decay(
@@ -176,9 +173,6 @@ def exponential_decay(learning_rate, decay_steps, decay_rate, staircase=False):
 
 def natural_exp_decay(learning_rate, decay_steps, decay_rate, staircase=False):
     """
-	:alias_main: paddle.nn.functional.natural_exp_decay
-	:alias: paddle.nn.functional.natural_exp_decay,paddle.nn.functional.learning_rate.natural_exp_decay
-	:old_api: paddle.fluid.layers.natural_exp_decay
 
 Applies natural exponential decay to the initial learning rate.
 
@@ -210,6 +204,9 @@ Applies natural exponential decay to the initial learning rate.
         .. code-block:: python
 
           import paddle.fluid as fluid
+          import paddle
+
+          paddle.enable_static()
           base_lr = 0.1
           sgd_optimizer = fluid.optimizer.SGD(
 	      learning_rate=fluid.layers.natural_exp_decay(
@@ -237,9 +234,6 @@ Applies natural exponential decay to the initial learning rate.
 
 def inverse_time_decay(learning_rate, decay_steps, decay_rate, staircase=False):
     """
-	:alias_main: paddle.nn.functional.inverse_time_decay
-	:alias: paddle.nn.functional.inverse_time_decay,paddle.nn.functional.learning_rate.inverse_time_decay
-	:old_api: paddle.fluid.layers.inverse_time_decay
 
     Applies inverse time decay to the initial learning rate.
 
@@ -271,6 +265,8 @@ def inverse_time_decay(learning_rate, decay_steps, decay_rate, staircase=False):
         .. code-block:: python
 
           import paddle.fluid as fluid
+          import paddle
+          paddle.enable_static()
           base_lr = 0.1
           sgd_optimizer = fluid.optimizer.SGD(
 	      learning_rate=fluid.layers.inverse_time_decay(
@@ -302,10 +298,6 @@ def polynomial_decay(learning_rate,
                      power=1.0,
                      cycle=False):
     """
-	:alias_main: paddle.nn.functional.polynomial_decay
-	:alias: paddle.nn.functional.polynomial_decay,paddle.nn.functional.learning_rate.polynomial_decay
-	:old_api: paddle.fluid.layers.polynomial_decay
-2
     Applies polynomial decay to the initial learning rate.
 
     .. code-block:: text
@@ -371,9 +363,6 @@ def polynomial_decay(learning_rate,
 
 def piecewise_decay(boundaries, values):
     """
-	:alias_main: paddle.nn.functional.piecewise_decay
-	:alias: paddle.nn.functional.piecewise_decay,paddle.nn.functional.learning_rate.piecewise_decay
-	:old_api: paddle.fluid.layers.piecewise_decay
 
 Applies piecewise decay to the initial learning rate.
 
@@ -401,6 +390,8 @@ Applies piecewise decay to the initial learning rate.
         .. code-block:: python
 
           import paddle.fluid as fluid
+          import paddle
+          paddle.enable_static()
           boundaries = [10000, 20000]
           values = [1.0, 0.5, 0.1]
           optimizer = fluid.optimizer.Momentum(
@@ -450,9 +441,6 @@ Applies piecewise decay to the initial learning rate.
 
 def cosine_decay(learning_rate, step_each_epoch, epochs):
     """
-	:alias_main: paddle.nn.functional.cosine_decay
-	:alias: paddle.nn.functional.cosine_decay,paddle.nn.functional.learning_rate.cosine_decay
-	:old_api: paddle.fluid.layers.cosine_decay
 
     Applies cosine decay to the learning rate.
 
@@ -499,9 +487,6 @@ def cosine_decay(learning_rate, step_each_epoch, epochs):
 
 def linear_lr_warmup(learning_rate, warmup_steps, start_lr, end_lr):
     """
-	:alias_main: paddle.nn.functional.linear_lr_warmup
-	:alias: paddle.nn.functional.linear_lr_warmup,paddle.nn.functional.learning_rate.linear_lr_warmup
-	:old_api: paddle.fluid.layers.linear_lr_warmup
 
     This operator use the linear learning rate warm up strategy to adjust the learning rate preliminarily before the normal learning rate scheduling.
     For more information, please refer to `Bag of Tricks for Image Classification with Convolutional Neural Networks <https://arxiv.org/abs/1812.01187>`_

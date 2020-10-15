@@ -55,7 +55,7 @@ class TestProdOp(unittest.TestCase):
         self.assertTrue(np.allclose(dy_result.numpy(), expected_result))
 
     def run_static(self, use_gpu=False):
-        input = paddle.data(name='input', shape=[10, 10, 5], dtype='float32')
+        input = paddle.fluid.data(name='input', shape=[10, 10, 5], dtype='float32')
         result0 = paddle.prod(input)
         result1 = paddle.prod(input, axis=1)
         result2 = paddle.prod(input, axis=-1)
@@ -113,8 +113,8 @@ class TestProdOpError(unittest.TestCase):
     def test_error(self):
         with paddle.static.program_guard(paddle.static.Program(),
                                          paddle.static.Program()):
-            x = paddle.data(name='x', shape=[2, 2, 4], dtype='float32')
-            bool_x = paddle.data(name='bool_x', shape=[2, 2, 4], dtype='bool')
+            x = paddle.fluid.data(name='x', shape=[2, 2, 4], dtype='float32')
+            bool_x = paddle.fluid.data(name='bool_x', shape=[2, 2, 4], dtype='bool')
             # The argument x shoule be a Tensor
             self.assertRaises(TypeError, paddle.prod, [1])
 

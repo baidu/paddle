@@ -13,12 +13,15 @@
 # limitations under the License.
 
 import inspect
+import numpy as np
+
+import paddle
 from .. import framework
 from .. import core
 from ..framework import Variable, Parameter, ParamBase
 from .base import switch_to_static_graph
-import numpy as np
 from .math_op_patch import monkey_patch_math_varbase
+from .parallel import scale_loss
 
 
 def monkey_patch_varbase():
@@ -159,13 +162,18 @@ def monkey_patch_varbase():
                     # there is no one need gradient on it.
                     tmp.stop_gradient=False
                     inputs.append(tmp)
-                ret = paddle.sums(inputs)
-                loss = paddle.reduce_sum(ret)
+                ret = paddle.add_n(inputs)
+                loss = paddle.sum(ret)
                 loss.backward()
 
         """
         if framework.in_dygraph_mode():
-            self._run_backward(framework._dygraph_tracer(), retain_graph)
+            if paddle.distributed.get_world_size() > 1:
+                scaled_loss = scale_loss(self)
+                scaled_loss._run_backward(framework._dygraph_tracer(),
+                                          retain_graph)
+            else:
+                self._run_backward(framework._dygraph_tracer(), retain_graph)
         else:
             raise ValueError(
                 "Variable.backward() is only available in DyGraph mode")
@@ -228,22 +236,15 @@ def monkey_patch_varbase():
             .. code-block:: python
 
                 import paddle
-                paddle.disable_static()
-                x = paddle.rand([1, 5])
+                x = paddle.rand([2, 5])
                 print(x)
-                # Variable: eager_tmp_0
-                #   - place: CUDAPlace(0)
-                #   - shape: [1, 5]
-                #   - layout: NCHW
-                #   - dtype: float
-                #   - data: [0.645307 0.597973 0.732793 0.646921 0.540328]
-                paddle.enable_static()
+                
+                # Tensor(shape=[2, 5], dtype=float32, place=CPUPlace,
+                #        [[0.30574632, 0.55739117, 0.30902600, 0.39413780, 0.44830436],
+                #         [0.79010487, 0.53972793, 0.09495186, 0.44267157, 0.72112119]])
         """
-        tensor = self.value().get_tensor()
-        if tensor._is_initialized():
-            return 'Tensor: %s\n%s' % (self.name, str(tensor))
-        else:
-            return 'Tensor: %s, not initialized' % (self.name)
+        from paddle.tensor.to_string import to_string
+        return to_string(self)
 
     @property
     def block(self):

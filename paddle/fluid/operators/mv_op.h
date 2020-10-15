@@ -74,30 +74,30 @@ class MVGradKernel : public framework::OpKernel<T> {
     int m = dim_x[0];
     int n = dim_x[1];
 
-    dx->Resize(framework::make_ddim({m * n}));
-
     // get data ptr
     const T *x_data = x->data<T>();
     const T *vec_data = vec->data<T>();
     const T *dout_data = dout->data<T>();
 
-    T *dx_data = dx->mutable_data<T>(context.GetPlace());
-    T *dvec_data = dvec->mutable_data<T>(context.GetPlace());
+    if (dx) {
+      T *dx_data = dx->mutable_data<T>(context.GetPlace());
 
-    auto &dev_ctx = context.template device_context<DeviceContext>();
-    auto blas = math::GetBlas<DeviceContext, T>(dev_ctx);
-
-    // calculate dx
-    for (int i = 0; i < m; ++i) {
-      for (int j = 0; j < n; ++j)
-        dx_data[i * n + j] = dout_data[i] * vec_data[j];
+      for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+          dx_data[i * n + j] = dout_data[i] * vec_data[j];
+        }
+      }
     }
 
-    dx->Resize(framework::make_ddim({m, n}));
+    if (dvec) {
+      T *dvec_data = dvec->mutable_data<T>(context.GetPlace());
 
-    // calculate dvec
-    blas.GEMV(true, dim_x[0], dim_x[1], static_cast<T>(1), x_data, dout_data,
-              static_cast<T>(0), dvec_data);
+      auto &dev_ctx = context.template device_context<DeviceContext>();
+      auto blas = math::GetBlas<DeviceContext, T>(dev_ctx);
+
+      blas.GEMV(true, dim_x[0], dim_x[1], static_cast<T>(1), x_data, dout_data,
+                static_cast<T>(0), dvec_data);
+    }
   }
 };
 

@@ -47,6 +47,10 @@ limitations under the License. */
 #include <type_traits>
 #include <utility>
 
+#if !defined(_WIN32) && !defined(PADDLE_WITH_MUSL)
+#include <execinfo.h>
+#endif
+
 #define GLOG_NO_ABBREVIATED_SEVERITIES  // msvc conflict logging with windows.h
 #include "glog/logging.h"
 #include "paddle/fluid/platform/errors.h"
@@ -236,13 +240,14 @@ inline std::string SimplifyDemangleStr(std::string str) {
 }
 
 inline std::string GetCurrentTraceBackString() {
-  static constexpr int TRACE_STACK_LIMIT = 100;
   std::ostringstream sout;
 
   sout << "\n\n--------------------------------------\n";
   sout << "C++ Traceback (most recent call last):";
   sout << "\n--------------------------------------\n";
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(PADDLE_WITH_MUSL)
+  static constexpr int TRACE_STACK_LIMIT = 100;
+
   void* call_stack[TRACE_STACK_LIMIT];
   auto size = backtrace(call_stack, TRACE_STACK_LIMIT);
   auto symbols = backtrace_symbols(call_stack, size);
@@ -261,7 +266,7 @@ inline std::string GetCurrentTraceBackString() {
   }
   free(symbols);
 #else
-  sout << "Windows not support stack backtrace yet.\n";
+  sout << "Not support stack backtrace yet.\n";
 #endif
   return sout.str();
 }

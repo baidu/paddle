@@ -404,6 +404,10 @@ class FakeChannelWiseQuantizeAbsMaxOpMaker
                                 "the received is %d",
                                 bit_length));
         });
+    AddAttr<bool>("is_test",
+                  "(bool, default false) Set to true for inference only, false "
+                  "for training. Some layers may run faster when this is true.")
+        .SetDefault(false);
     AddComment(R"DOC(
 The scale of FakeChannelWiseQuantize operator is a vector.
 In detail, each channel of the input X has a scale value.

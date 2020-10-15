@@ -86,7 +86,7 @@ class GRUMKLDNNHandler : public platform::MKLDNNHandlerT<T, dnnl::gru_forward> {
 
       // Weights for int8 kernel are of a type s8
       const auto weights_dt =
-          is_INT8 ? dnnl::memory::data_type::s8 : dnnl::memory::data_type::f32;
+          is_INT8 ? dnnl::memory::data_type::s8 : MKLDNNGetDataType<T>();
 
       // oneDNN RNN dimensions
       const int64_t D = 1;  // Directions
@@ -95,7 +95,7 @@ class GRUMKLDNNHandler : public platform::MKLDNNHandlerT<T, dnnl::gru_forward> {
 
       // Create memory descriptors
       auto input_md = MKLDNNMemDesc({Ti, N, IC}, MKLDNNGetDataType<T>(),
-                                    MKLDNNMemoryFormat::any);
+                                    MKLDNNMemoryFormat::ntc);
       auto weight_x_md =
           MKLDNNMemDesc({L, D, IC, G, OC}, weights_dt, MKLDNNMemoryFormat::any);
       auto weight_h_md =
@@ -103,7 +103,7 @@ class GRUMKLDNNHandler : public platform::MKLDNNHandlerT<T, dnnl::gru_forward> {
       auto bias_md = MKLDNNMemDesc({L, D, G, OC}, MKLDNNGetDataType<float>(),
                                    MKLDNNMemoryFormat::ldgo);
       auto hidden_md = MKLDNNMemDesc({Ti, N, OC}, MKLDNNGetDataType<T_out>(),
-                                     MKLDNNMemoryFormat::any);
+                                     MKLDNNMemoryFormat::ntc);
       auto h0_md = MKLDNNMemDesc({L, D, N, OC}, MKLDNNGetDataType<T>(),
                                  MKLDNNMemoryFormat::ldnc);
 
@@ -226,6 +226,8 @@ class GRUMKLDNNHandler : public platform::MKLDNNHandlerT<T, dnnl::gru_forward> {
   }
 
   // TODO(grygielski) H0 is for now persistable
+  // TODO(jczaja) H0 should be updated each iter and of T type (Fusion pass does
+  // not support in yet)
   std::shared_ptr<dnnl::memory> AcquireH0Memory(const Tensor* h0) {
     const std::string h0_key = memory_key_ + "@h0";
     auto memory_p =
@@ -397,14 +399,14 @@ template <typename T>
 class FusionGRUMKLDNNKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    const bool is_INT8 = std::is_same<T, uint8_t>::value;
+    const bool is_bf16 = std::is_same<T, paddle::platform::bfloat16>::value;
     const bool force_fp32_output = ctx.Attr<bool>("force_fp32_output");
 
-    // TODO(grygielski) Add option for bfloat
-    if (!is_INT8 || force_fp32_output) {
+    // BF16 does not support force output
+    if (!is_bf16 && force_fp32_output) {
       RunKernel<float>(ctx);
     } else {
-      RunKernel<uint8_t>(ctx);
+      RunKernel<T>(ctx);
     }
   }
 
@@ -495,4 +497,5 @@ class FusionGRUMKLDNNKernel : public framework::OpKernel<T> {
 namespace ops = paddle::operators;
 REGISTER_OP_KERNEL(fusion_gru, MKLDNN, paddle::platform::CPUPlace,
                    ops::FusionGRUMKLDNNKernel<float>,
+                   ops::FusionGRUMKLDNNKernel<paddle::platform::bfloat16>,
                    ops::FusionGRUMKLDNNKernel<uint8_t>);

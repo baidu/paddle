@@ -130,7 +130,11 @@ class AsyncSparseParamUpdateRecorder {
                    std::vector<int64_t>* result) {
     VLOG(3) << "GetAndClear param: " << param_name
             << " for trainer: " << trainer_id;
-    PADDLE_ENFORCE_LT(trainer_id, trainer_num_);
+    PADDLE_ENFORCE_LT(
+        trainer_id, trainer_num_,
+        platform::errors::InvalidArgument(
+            "The value of trainer_id: %s should less than trainer_num: %s.",
+            trainer_id, trainer_num_));
     param_to_updated_rows_.at(param_name)[trainer_id]
         ->GetAndClear(result)
         .wait();

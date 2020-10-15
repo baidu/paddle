@@ -58,7 +58,7 @@ class ProgramDesc {
 
   proto::ProgramDesc *Proto();
 
-  proto::OpCompatibleMap *OpCompatibleMap();
+  proto::OpVersionMap *OpVersionMap();
 
   int64_t Version() const;
 

@@ -44,7 +44,7 @@ class TestStdAPI(unittest.TestCase):
 
     def static(self):
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data('X', self.shape, self.dtype)
+            x = paddle.fluid.data('X', self.shape, self.dtype)
             out = paddle.std(x, self.axis, self.unbiased, self.keepdim)
             exe = paddle.static.Executor(self.place)
             res = exe.run(feed={'X': self.x}, fetch_list=[out])
@@ -111,7 +111,7 @@ class TestStdAPI_alias(unittest.TestCase):
 class TestStdError(unittest.TestCase):
     def test_error(self):
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data('X', [2, 3, 4], 'int32')
+            x = paddle.fluid.data('X', [2, 3, 4], 'int32')
             self.assertRaises(TypeError, paddle.std, x)
 
 

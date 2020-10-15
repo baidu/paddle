@@ -16,6 +16,9 @@ from op_test import OpTest
 import numpy as np
 import unittest
 import paddle.fluid as fluid
+import paddle
+
+paddle.enable_static()
 
 
 def strided_slice_native_forward(input, axes, starts, ends, strides):
@@ -497,6 +500,16 @@ class TestStridedSliceAPI(unittest.TestCase):
         assert np.array_equal(res_5, input[-3:3, 0:100:2, -1:2:-1, :])
         assert np.array_equal(res_6, input[-3:3, 0:100:2, :, -1:2:-1])
         assert np.array_equal(res_7, input[-1, 0:100:2, :, -1:2:-1])
+
+    def test_dygraph_op(self):
+        x = paddle.zeros(shape=[3, 4, 5, 6], dtype="float32")
+        axes = [1, 2, 3]
+        starts = [-3, 0, 2]
+        ends = [3, 2, 4]
+        strides_1 = [1, 1, 1]
+        sliced_1 = paddle.strided_slice(
+            x, axes=axes, starts=starts, ends=ends, strides=strides_1)
+        assert sliced_1.shape == (3, 2, 2, 2)
 
 
 if __name__ == "__main__":

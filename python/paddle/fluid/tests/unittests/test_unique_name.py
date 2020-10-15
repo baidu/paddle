@@ -50,10 +50,10 @@ class TestImperativeUniqueName(unittest.TestCase):
         with fluid.dygraph.guard():
             tracer = fluid.framework._dygraph_tracer()
             tmp_var_0 = tracer._generate_unique_name()
-            self.assertEqual(tmp_var_0, "eager_tmp_0")
+            self.assertEqual(tmp_var_0, "dygraph_tmp_0")
 
-            tmp_var_1 = tracer._generate_unique_name("eager_tmp")
-            self.assertEqual(tmp_var_1, "eager_tmp_1")
+            tmp_var_1 = tracer._generate_unique_name("dygraph_tmp")
+            self.assertEqual(tmp_var_1, "dygraph_tmp_1")
 
 
 if __name__ == '__main__':

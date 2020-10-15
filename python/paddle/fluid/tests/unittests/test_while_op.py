@@ -24,6 +24,8 @@ from paddle.fluid.backward import append_backward
 import numpy
 from paddle.fluid import compiler, Program, program_guard
 
+paddle.enable_static()
+
 
 class TestWhileOp(unittest.TestCase):
     def simple_net(self):

@@ -66,7 +66,8 @@ struct LoDTensorToArrayFunctor : public boost::static_visitor<void> {
 #ifdef PADDLE_WITH_CUDA
       Apply(static_cast<platform::CUDADeviceContext *>(dev_ctx));
 #else
-      PADDLE_THROW("Not compiled with cuda");
+      PADDLE_THROW(
+          platform::errors::Unavailable("Paddle is not compiled with CUDA."));
 #endif
     }
   }
@@ -114,8 +115,10 @@ class LoDTensorToArrayOp : public framework::OperatorBase {
 
     PADDLE_ENFORCE_LT(
         rank_level, x.lod().size(),
-        "Input should be a LoDTensor, and its lod_level should be at least %d",
-        rank_level + 1);
+        platform::errors::InvalidArgument(
+            "Input should be a LoDTensor, and its lod_level should be at "
+            "least %d, but given is %d.",
+            rank_level + 1, x.lod().size()));
     out.resize(max_seq_len);
     std::vector<std::vector<CopyRange>> copy_ranges(max_seq_len);
 
@@ -195,14 +198,19 @@ NOTE: this operator is an internal component of DynamicRNN, and cannot be called
 class LoDTensorToArrayInferShape : public framework::InferShapeBase {
  public:
   void operator()(framework::InferShapeContext *context) const override {
-    PADDLE_ENFORCE(context->HasInput("X"),
-                   "Input(X) of LoDTensorToArrayOp should not be null.");
-    PADDLE_ENFORCE(
-        context->HasInput("RankTable"),
-        "Input(RankTable) of LoDTensorToArrayOp should not be null.");
+    PADDLE_ENFORCE_EQ(
+        context->HasInput("X"), true,
+        platform::errors::NotFound(
+            "Input(X) of LoDTensorToArrayOp should not be null."));
+    PADDLE_ENFORCE_EQ(
+        context->HasInput("RankTable"), true,
+        platform::errors::NotFound(
+            "Input(RankTable) of LoDTensorToArrayOp should not be null."));
 
-    PADDLE_ENFORCE(context->HasOutput("Out"),
-                   "Output(Out) of LoDTensorToArrayOp should not be null.");
+    PADDLE_ENFORCE_EQ(
+        context->HasOutput("Out"), true,
+        platform::errors::NotFound(
+            "Output(Out) of LoDTensorToArrayOp should not be null."));
 
     auto x_dim = context->GetInputDim("X");
     // For compile-time, the first dim of input X and output Out should be -1.

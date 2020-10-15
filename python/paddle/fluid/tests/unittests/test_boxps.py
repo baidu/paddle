@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
 import numpy as np
@@ -85,6 +86,20 @@ class TestRunCmd(unittest.TestCase):
         ret2 = int(core.run_cmd("ls; echo $?", -1, -1).strip().split('\n')[-1])
         self.assertTrue(ret1 == 0)
         self.assertTrue(ret2 == 0)
+
+
+class TestPullBoxSparseOP(unittest.TestCase):
+    """ TestCases for _pull_box_sparse op"""
+
+    def test_pull_box_sparse_op(self):
+        paddle.enable_static()
+        program = fluid.Program()
+        with fluid.program_guard(program):
+            x = fluid.layers.data(
+                name='x', shape=[1], dtype='int64', lod_level=0)
+            y = fluid.layers.data(
+                name='y', shape=[1], dtype='int64', lod_level=0)
+            emb_x, emb_y = _pull_box_sparse([x, y], size=1)
 
 
 if __name__ == '__main__':

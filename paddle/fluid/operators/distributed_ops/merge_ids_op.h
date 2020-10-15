@@ -16,6 +16,7 @@ limitations under the License. */
 
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/tensor_util.h"
@@ -30,7 +31,8 @@ class MergeIdsOpKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto place = ctx.GetPlace();
     if (!platform::is_cpu_place(place)) {
-      PADDLE_THROW("MergeIds do not support GPU kernel");
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "MergeIds do not support GPU kernel"));
     }
 
     const auto ids = ctx.MultiInput<framework::LoDTensor>("Ids");

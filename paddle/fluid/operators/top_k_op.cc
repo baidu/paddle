@@ -36,7 +36,9 @@ class TopkOp : public framework::OperatorWithKernel {
     auto input_dims = ctx->GetInputDim("X");
     const int k = static_cast<int>(ctx->Attrs().Get<int>("k"));
 
-    PADDLE_ENFORCE_GE(k, 1, "k must >= 1");
+    PADDLE_ENFORCE_GE(k, 1,
+                      platform::errors::InvalidArgument(
+                          "Attribute k must be >= 1, but got k is %d.", k));
     PADDLE_ENFORCE_GE(input_dims.size(), 1, platform::errors::InvalidArgument(
                                                 "input must have >= 1d shape"));
 

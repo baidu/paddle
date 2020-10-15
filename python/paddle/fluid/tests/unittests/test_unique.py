@@ -254,7 +254,7 @@ class TestUniqueAPI(unittest.TestCase):
     def test_static_graph(self):
         with paddle.static.program_guard(paddle.static.Program(),
                                          paddle.static.Program()):
-            x = paddle.data(name='x', shape=[3, 2], dtype='float64')
+            x = paddle.fluid.data(name='x', shape=[3, 2], dtype='float64')
             unique, inverse, counts = paddle.unique(
                 x, return_inverse=True, return_counts=True, axis=0)
             place = paddle.CPUPlace()
@@ -274,13 +274,13 @@ class TestUniqueError(unittest.TestCase):
         def test_x_dtype():
             with paddle.static.program_guard(paddle.static.Program(),
                                              paddle.static.Program()):
-                x = paddle.data(name='x', shape=[10, 10], dtype='float16')
+                x = paddle.fluid.data(name='x', shape=[10, 10], dtype='float16')
                 result = paddle.unique(x)
 
             self.assertRaises(TypeError, test_x_dtype)
 
     def test_attr(self):
-        x = paddle.data(name='x', shape=[10, 10], dtype='float64')
+        x = paddle.fluid.data(name='x', shape=[10, 10], dtype='float64')
 
         def test_return_index():
             result = paddle.unique(x, return_index=0)

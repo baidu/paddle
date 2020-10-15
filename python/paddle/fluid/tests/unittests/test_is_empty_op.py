@@ -17,7 +17,7 @@ from __future__ import print_function
 import unittest
 import numpy as np
 from op_test import OpTest
-import paddle.fluid as fluid
+import paddle
 
 
 class TestEmpty(OpTest):
@@ -39,39 +39,39 @@ class TestNotEmpty(TestEmpty):
 
 class TestIsEmptyOpError(unittest.TestCase):
     def test_errors(self):
-        with fluid.program_guard(fluid.Program(), fluid.Program()):
+        paddle.enable_static()
+        with paddle.static.program_guard(paddle.static.Program(),
+                                         paddle.static.Program()):
             input_data = np.random.random((3, 2)).astype("float64")
 
             def test_Variable():
                 # the input type must be Variable
-                fluid.layers.is_empty(x=input_data)
+                paddle.is_empty(x=input_data)
 
             self.assertRaises(TypeError, test_Variable)
 
-            def test_cond_Variable():
-                # cond type must be Variable or None
-                x2 = fluid.layers.data(name="x2", shape=[3, 2], dtype="float32")
-                cond_data = np.random.random((3, 2)).astype("float32")
-                fluid.layers.is_empty(x=x2, cond=cond_data)
-
-            self.assertRaises(TypeError, test_cond_Variable)
-
             def test_type():
                 # dtype must be float32, float64, int32, int64
-                x3 = fluid.layers.data(
+                x3 = paddle.static.data(
                     name="x3", shape=[4, 32, 32], dtype="bool")
-                res = fluid.layers.is_empty(x=x3)
+                res = paddle.is_empty(x=x3)
 
             self.assertRaises(TypeError, test_type)
 
-            def test_cond_type():
-                # cond dtype must be bool.
-                x4 = fluid.layers.data(name="x4", shape=[3, 2], dtype="float32")
-                cond = fluid.layers.data(
-                    name="cond", shape=[1], dtype="float32")
-                fluid.layers.is_empty(x=x4, cond=cond)
+            def test_name_type():
+                # name type must be string.
+                x4 = paddle.static.data(
+                    name="x4", shape=[3, 2], dtype="float32")
+                res = paddle.is_empty(x=x4, name=1)
 
-            self.assertRaises(TypeError, test_cond_type)
+            self.assertRaises(TypeError, test_name_type)
+
+
+class TestIsEmptyOpDygraph(unittest.TestCase):
+    def test_dygraph(self):
+        paddle.disable_static()
+        input = paddle.rand(shape=[4, 32, 32], dtype='float32')
+        res = paddle.is_empty(x=input)
 
 
 if __name__ == "__main__":

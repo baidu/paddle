@@ -40,9 +40,9 @@ class SquaredMatSubFusePassTest(InferencePassTest):
             matmul_ab_square = paddle.square(matmul_ab)
             matmul_square_ab = paddle.matmul(data_a_square, data_b_square)
 
-            scale = paddle.fill_constant(shape=[1], value=0.5, dtype='float32')
+            scale = paddle.fluid.layers.fill_constant(shape=[1], value=0.5, dtype='float32')
 
-            sub_val = paddle.elementwise_sub(matmul_ab_square, matmul_square_ab)
+            sub_val = paddle.fluid.layers.elementwise_sub(matmul_ab_square, matmul_square_ab)
             squared_mat_sub_out = fluid.layers.elementwise_mul(sub_val, scale)
 
         self.feeds = {

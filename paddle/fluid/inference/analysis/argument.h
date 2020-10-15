@@ -178,6 +178,10 @@ struct Argument {
 
   // Scales for variables to be quantized
   DECL_ARGUMENT_FIELD(quant_var_scales, QuantVarScales, VarQuantScale);
+
+  // A set of op types to enable their bfloat16 kernels
+  DECL_ARGUMENT_FIELD(bfloat16_enabled_op_types, Bfloat16EnabledOpTypes,
+                      std::unordered_set<std::string>);
 #endif
 
   // Passed from config.

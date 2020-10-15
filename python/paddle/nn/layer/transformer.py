@@ -24,7 +24,9 @@ __all__ = [
 
 import copy
 import collections
+import numpy as np
 
+import paddle
 from .common import Linear, Dropout
 from .norm import LayerNorm
 from .. import functional as F
@@ -642,7 +644,7 @@ class TransformerDecoderLayer(Layer):
             `weight_attr` to create parameters. Default: None, which means the
             default weight parameter property is used. See usage for details
             in :ref:`api_fluid_ParamAttr` . 
-        bias_attr (ParamAttr|tuple, optional): To specify the bias parameter property.
+        bias_attr (ParamAttr|tuple|bool, optional): To specify the bias parameter property.
             If it is a tuple, `bias_attr[0]` would be used as `bias_attr` for
             self attention, `bias_attr[1]` would be used as `bias_attr` for
             cross attention, and `bias_attr[2]` would be used as `bias_attr`
@@ -980,12 +982,12 @@ class Transformer(Layer):
     applies another layer normalization on the output of last encoder/decoder layer.
 
     Parameters:
-        d_model (int): The expected feature size in the encoder/decoder input
-            and output.
-        nhead (int): The number of heads in multi-head attention(MHA).
-        num_encoder_layers (int): The number of layers in encoder.
-        num_encoder_layers (int): The number of layers in decoder.
-        dim_feedforward (int): The hidden layer size in the feedforward network(FFN).
+        d_model (int, optional): The expected feature size in the encoder/decoder input
+            and output. Default 512
+        nhead (int, optional): The number of heads in multi-head attention(MHA). Default 8
+        num_encoder_layers (int, optional): The number of layers in encoder. Default 6
+        num_decoder_layers (int, optional): The number of layers in decoder. Default 6
+        dim_feedforward (int, optional): The hidden layer size in the feedforward network(FFN). Default 2048
         dropout (float, optional): The dropout probability used in pre-process
             and post-precess of MHA and FFN sub-layer. Default 0.1
         activation (str, optional): The activation function in the feedforward
@@ -1013,7 +1015,7 @@ class Transformer(Layer):
             Default: None, which means the default weight parameter property is used. 
             See usage for details
             in :code:`ParamAttr` . 
-        bias_attr (ParamAttr|tuple, optional): To specify the bias parameter property.
+        bias_attr (ParamAttr|tuple|bool, optional): To specify the bias parameter property.
             If it is a tuple, the length of `bias_attr` could be 1, 2 or 3. If it is 3, 
             `bias_attr[0]` would be used as `bias_attr` for self attention, `bias_attr[1]` 
             would be used as `bias_attr` for cross attention of `TransformerDecoder`, 
@@ -1026,9 +1028,9 @@ class Transformer(Layer):
             The `False` value means the corresponding layer would not have trainable 
             bias parameter. See usage for details in :code:`ParamAttr` . 
             Default: None,which means the default bias parameter property is used.
-        custom_encoder (Layer): If custom encoder is provided, use it as the encoder.
+        custom_encoder (Layer, optional): If custom encoder is provided, use it as the encoder.
             Default None
-        custom_decoder (Layer): If custom decoder is provided, use it as the decoder.
+        custom_decoder (Layer, optional): If custom decoder is provided, use it as the decoder.
             Default None
 
     Examples:
@@ -1174,3 +1176,39 @@ class Transformer(Layer):
         output = self.decoder(
             tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
         return output
+
+    def generate_square_subsequent_mask(self, length):
+        """
+        Generate a square mask for the sequence. The mask ensures that the
+        predictions for position i can depend only on the known outputs at
+        positions less than i.
+
+        Parameters:
+            length (int|Tensor): The length of sequence.
+
+        Returns:
+            Tensor: Generated square mask according to the given length.
+
+        Examples:
+            .. code-block:: python
+
+                import paddle
+                from paddle.nn.layer.transformer import Transformer
+                length = 5
+                d_model, n_head, dim_feedforward = 8, 4, 64
+                transformer_paddle = Transformer(
+                    d_model, n_head, dim_feedforward=dim_feedforward)
+                mask = transformer_paddle.generate_square_subsequent_mask(length)
+                print(mask.numpy())
+
+                # [[  0. -inf -inf -inf -inf]
+                # [  0.   0. -inf -inf -inf]
+                # [  0.   0.   0. -inf -inf]
+                # [  0.   0.   0.   0. -inf]
+                # [  0.   0.   0.   0.   0.]]
+
+        """
+        return paddle.tensor.triu(
+            (paddle.ones(
+                (length, length), dtype=paddle.get_default_dtype()) * -np.inf),
+            1)

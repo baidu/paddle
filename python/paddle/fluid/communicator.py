@@ -162,3 +162,6 @@ class LargeScaleKV(object):
 
     def load(self, varname, dirname):
         self.scale_kv.load(varname, dirname)
+
+    def size(self, varname):
+        return self.scale_kv.size(varname)

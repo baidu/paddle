@@ -76,6 +76,14 @@ class TestNonZeroAPI(unittest.TestCase):
         expect_out = np.array([[0], [1]])
         self.assertTrue(np.allclose(expect_out, np.array(res)))
 
+    def test_dygraph_api(self):
+        data_x = np.array([[True, False], [False, True]])
+        with fluid.dygraph.guard():
+            x = fluid.dygraph.to_variable(data_x)
+            z = paddle.nonzero(x)
+            np_z = z.numpy()
+        expect_out = np.array([[0, 0], [1, 1]])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ limitations under the License. */
 #include <memory>
 #include <string>
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
 namespace operators {
@@ -25,7 +26,6 @@ class CudnnLSTMOp : public framework::OperatorWithKernel {
 
   void InferShape(framework::InferShapeContext* ctx) const override {
     OP_INOUT_CHECK(ctx->HasInput("Input"), "Input", "Input", "CudnnLSTM");
-    OP_INOUT_CHECK(ctx->HasInput("W"), "Input", "W", "CudnnLSTM");
     OP_INOUT_CHECK(ctx->HasInput("InitH"), "Input", "InitH", "CudnnLSTM");
     OP_INOUT_CHECK(ctx->HasInput("InitC"), "Input", "InitC", "CudnnLSTM");
 
@@ -122,7 +122,13 @@ class CudnnLSTMOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput("W",
              "(Tensor) the learnable hidden-hidden weights."
              " The shape is (N), where N is total weight size of the LSTM. "
-             " cudnn concatenate all the weight to one Tensor");
+             " cudnn concatenate all the weight to one Tensor")
+        .AsDispensable();
+    AddInput("WeightList",
+             "(vector<Tensor>), stores weight and bias data when the weight "
+             "use the list format. ")
+        .AsDispensable()
+        .AsDuplicable();
     AddInput("SequenceLength",
              "(Tensor) When the input data is padding, "
              "set this parameter. This parameter represents "
@@ -216,7 +222,6 @@ class CudnnLSTMGradOp : public framework::OperatorWithKernel {
 
   void InferShape(framework::InferShapeContext* ctx) const override {
     OP_INOUT_CHECK(ctx->HasInput("Input"), "Input", "Input", "CudnnLSTMGrad");
-    OP_INOUT_CHECK(ctx->HasInput("W"), "Input", "W", "CudnnLSTMGrad");
     OP_INOUT_CHECK(ctx->HasInput("InitH"), "Input", "InitH", "CudnnLSTMGrad");
     OP_INOUT_CHECK(ctx->HasInput("InitC"), "Input", "InitC", "CudnnLSTMGrad");
 
@@ -228,7 +233,10 @@ class CudnnLSTMGradOp : public framework::OperatorWithKernel {
     };
 
     SetOutGradDim("Input");
-    SetOutGradDim("W");
+    if (ctx->HasInputs("WeightList")) {
+      ctx->SetOutputsDim(framework::GradVarName("WeightList"),
+                         ctx->GetInputsDim("WeightList"));
+    }
     SetOutGradDim("InitH");
     SetOutGradDim("InitC");
   }
@@ -251,7 +259,9 @@ class CudnnLSTMGradOpMaker : public framework::SingleGradOpMaker<T> {
     op->SetInput("Input", this->Input("Input"));
     op->SetInput("InitH", this->Input("InitH"));
     op->SetInput("InitC", this->Input("InitC"));
-    op->SetInput("W", this->Input("W"));
+    if (this->HasInput("WeightList")) {
+      op->SetInput("WeightList", this->Input("WeightList"));
+    }
     if (this->HasInput("SequenceLength")) {
       op->SetInput("SequenceLength", this->Input("SequenceLength"));
     }
@@ -262,8 +272,12 @@ class CudnnLSTMGradOpMaker : public framework::SingleGradOpMaker<T> {
     op->SetInput(framework::GradVarName("LastC"), this->OutputGrad("LastC"));
     op->SetInput(framework::GradVarName("LastH"), this->OutputGrad("LastH"));
 
+    if (this->HasInput("WeightList")) {
+      op->SetOutput(framework::GradVarName("WeightList"),
+                    this->InputGrad("WeightList", false));
+    }
+
     op->SetOutput(framework::GradVarName("Input"), this->InputGrad("Input"));
-    op->SetOutput(framework::GradVarName("W"), this->InputGrad("W"));
     op->SetOutput(framework::GradVarName("InitH"), this->InputGrad("InitH"));
     op->SetOutput(framework::GradVarName("InitC"), this->InputGrad("InitC"));
     op->SetAttrMap(this->Attrs());
@@ -274,8 +288,8 @@ template <typename T>
 class NotImpleKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    PADDLE_THROW(
-        "CPU is not support for this kernel now. Will be add in the future");
+    PADDLE_THROW(platform::errors::Unimplemented(
+        "CPU is not support for this kernel now. Will be add in the future"));
   }
 };
 
@@ -290,3 +304,20 @@ REGISTER_OPERATOR(cudnn_lstm_grad, ops::CudnnLSTMGradOp);
 
 REGISTER_OP_CPU_KERNEL(cudnn_lstm, ops::NotImpleKernel<float>);
 REGISTER_OP_CPU_KERNEL(cudnn_lstm_grad, ops::NotImpleKernel<float>);
+
+// TODO(Shixiaowei02) Add ModifyInput support
+REGISTER_OP_VERSION(cudnn_lstm)
+    .AddCheckpoint(
+        R"ROC(
+              Upgrade cudnn_lstm add a new input [WeightList] and modify input [W] to dispensable.)ROC",
+        paddle::framework::compatible::OpVersionDesc()
+            .NewInput(
+                "WeightList",
+                "The WeightList stores weight and bias data. WeightList is "
+                "dispensable.")
+            .NewInput("SequenceLength",
+                      "When the input data is padding, set this parameter. "
+                      "SequenceLength is dispensable.")
+            .NewOutput("StateOut", "Store the global drop state when training")
+            .NewOutput("Reserve",
+                       "A temporary output Tensor to store the reserve_data"));

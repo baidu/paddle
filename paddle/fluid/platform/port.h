@@ -14,19 +14,18 @@
 
 #pragma once
 
-#include <cstdio>
-#include <stdexcept>
-
 #include <time.h>
+
+#include <cstdio>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #define GLOG_NO_ABBREVIATED_SEVERITIES  // msvc conflict logging with windows.h
 #include "glog/logging.h"
 
 #if !defined(_WIN32)
-#include <dlfcn.h>     //  dladdr
-#include <execinfo.h>  // backtrace
+#include <dlfcn.h>  // dladdr
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <algorithm>  // std::accumulate

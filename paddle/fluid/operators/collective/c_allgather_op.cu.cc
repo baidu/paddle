@@ -37,7 +37,10 @@ class CAllGatherOpCUDAKernel : public framework::OpKernel<T> {
     int rid = ctx.Attr<int>("ring_id");
     auto place = ctx.GetPlace();
     auto comm = platform::NCCLCommContext::Instance().Get(rid, place);
-    PADDLE_ENFORCE_EQ(nranks, comm->nranks());
+    PADDLE_ENFORCE_EQ(
+        nranks, comm->nranks(),
+        platform::errors::InvalidArgument("nranks: %s should equal to %s",
+                                          nranks, comm->nranks()));
 
     framework::DDim out_dims = in->dims();
     out_dims[0] *= nranks;
@@ -59,7 +62,8 @@ class CAllGatherOpCUDAKernel : public framework::OpKernel<T> {
         send_buff, recv_buff, send_numel, static_cast<ncclDataType_t>(dtype),
         comm->comm(), stream));
 #else
-    PADDLE_THROW("PaddlePaddle should compile with GPU.");
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "PaddlePaddle should compile with GPU."));
 #endif
   }
 };

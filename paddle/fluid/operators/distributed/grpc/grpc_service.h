@@ -47,7 +47,8 @@ class SerializationTraits<
   static Status Serialize(
       const paddle::operators::distributed::GRPCVariableResponse& msg,
       grpc_byte_buffer** bp, bool* own_buffer) {
-    PADDLE_ENFORCE(false, "SerializationTraits::Serialize not implemented!");
+    PADDLE_THROW(paddle::platform::errors::Unimplemented(
+        "SerializationTraits::Serialize not implemented!"));
     return Status();
   }
   static Status Deserialize(
@@ -115,7 +116,8 @@ inline const char* GrpcMethodName(GrpcMethod id) {
   }
 
   // Shouldn't be reached.
-  PADDLE_ENFORCE(false, "Invalid id: not found valid method name");
+  PADDLE_THROW(platform::errors::InvalidArgument(
+      "Invalid id: not found valid method name"));
   return nullptr;
 }
 

@@ -163,7 +163,8 @@ class TestYolov3(unittest.TestCase):
         dygraph_loss = train(to_static=False)
         static_loss = train(to_static=True)
         self.assertTrue(
-            np.allclose(dygraph_loss, static_loss),
+            np.allclose(
+                dygraph_loss, static_loss, atol=1e-5, rtol=1e-3),
             msg="dygraph_loss: {} \nstatic_loss: {}".format(dygraph_loss,
                                                             static_loss))
 

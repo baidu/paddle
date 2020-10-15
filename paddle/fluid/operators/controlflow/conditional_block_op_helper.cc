@@ -162,6 +162,32 @@ void PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
   PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOpImpl(
       program, &fwd_ops, &bwd_ops);
 }
+void PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
+    const framework::ProgramDesc &program, int block_id,
+    const std::vector<framework::OperatorBase *> &all_ops) {
+  // If block_id is not 0, returns
+  // This is because all conditional_block_ops and conditional_block_grad_ops
+  // in the whole program would be processed when block_id is 0 (i.e.
+  // when Executor::Run() or ParallelExecutor constructs).
+
+  // What's more, all conditional_block_ops and conditional_block_grad_ops
+  // must be processed when block_id is zero. If not, conditional_block_op
+  // may run first and erase variables used in conditional_block_grad_op,
+  // and in this moment, conditional_block_grad_ops may be not constructed yet.
+  if (block_id != 0) return;
+
+  std::vector<OpVariant> fwd_ops, bwd_ops;
+  for (auto *op : all_ops) {
+    if (op->Type() == "conditional_block") {
+      fwd_ops.emplace_back(op);
+    } else if (op->Type() == "conditional_block_grad") {
+      bwd_ops.emplace_back(op);
+    }
+  }
+
+  PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOpImpl(
+      program, &fwd_ops, &bwd_ops);
+}
 
 void PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
     const framework::ProgramDesc &program,

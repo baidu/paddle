@@ -89,8 +89,9 @@ class ExpandAsGradOp : public framework::OperatorWithKernel {
 
  protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
-    PADDLE_ENFORCE_EQ(ctx->HasInput("X"), true);
-    PADDLE_ENFORCE_EQ(ctx->HasInput(framework::GradVarName("Out")), true);
+    OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "X", "ExpandAs");
+    OP_INOUT_CHECK(ctx->HasInput(framework::GradVarName("Out")), "Input",
+                   framework::GradVarName("Out"), "ExpandAs");
 
     auto x_dims = ctx->GetInputDim("X");
     auto x_grad_name = framework::GradVarName("X");

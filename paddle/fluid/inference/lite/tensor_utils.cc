@@ -46,6 +46,7 @@ platform::Place GetNativePlace(const TargetType& type, int id = 0) {
   switch (type) {
     case TargetType::kHost:
     case TargetType::kX86:
+    case TargetType::kARM:
       return platform::CPUPlace();
     case TargetType::kCUDA:
       return platform::CUDAPlace(id);

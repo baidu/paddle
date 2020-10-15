@@ -73,7 +73,7 @@ class TestRetainGraph(unittest.TestCase):
             fake_AB = paddle.concat((real_data.detach(), interpolatesv), 1)
             disc_interpolates = netD(fake_AB)
 
-            outs = paddle.fill_constant(disc_interpolates.shape,
+            outs = paddle.fluid.layers.fill_constant(disc_interpolates.shape,
                                         disc_interpolates.dtype, 1.0)
             gradients = paddle.grad(
                 outputs=disc_interpolates,
@@ -85,7 +85,7 @@ class TestRetainGraph(unittest.TestCase):
 
             gradients = paddle.reshape(gradients[0], [real_data.shape[0], -1])
 
-            gradient_penalty = paddle.reduce_mean((paddle.norm(
+            gradient_penalty = paddle.fluid.layers.reduce_mean((paddle.norm(
                 gradients + 1e-16, 2, 1) - constant)**
                                                   2) * lambda_gp  # added eps
             return gradient_penalty, gradients
@@ -113,7 +113,7 @@ class TestRetainGraph(unittest.TestCase):
         fake_AB = paddle.concat((realA, fakeB), 1)
         G_pred_fake = d(fake_AB.detach())
 
-        false_target = paddle.fill_constant(G_pred_fake.shape, 'float32', 0.0)
+        false_target = paddle.fluid.layers.fill_constant(G_pred_fake.shape, 'float32', 0.0)
 
         G_gradient_penalty, _ = self.cal_gradient_penalty(
             d, realA, fakeB, lambda_gp=10.0)
@@ -125,7 +125,7 @@ class TestRetainGraph(unittest.TestCase):
         optim_g.clear_gradients()
         fake_AB = paddle.concat((realA, fakeB), 1)
         G_pred_fake = d(fake_AB)
-        true_target = paddle.fill_constant(G_pred_fake.shape, 'float32', 1.0)
+        true_target = paddle.fluid.layers.fill_constant(G_pred_fake.shape, 'float32', 1.0)
         loss_g = l1_criterion(fakeB, realB) + gan_criterion(G_pred_fake,
                                                             true_target)
 

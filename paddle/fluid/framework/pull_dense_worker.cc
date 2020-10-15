@@ -14,13 +14,10 @@ limitations under the License. */
 #include <time.h>
 
 #include "paddle/fluid/framework/device_worker.h"
+#include "paddle/fluid/framework/fleet/fleet_wrapper.h"
 
 namespace paddle {
 namespace framework {
-
-class LoDTensor;
-class Scope;
-class Variable;
 
 std::shared_ptr<PullDenseWorker> PullDenseWorker::s_instance_ = NULL;
 std::mutex PullDenseWorker::mutex_for_version_;
@@ -70,7 +67,7 @@ void PullDenseWorker::Initialize(const TrainerDesc& param) {
 }
 
 void PullDenseWorker::CreatePinVar() {
-#if (defined PADDLE_WITH_CUDA) || (defined PADDLE_WITH_PSLIB)
+#if (defined PADDLE_WITH_CUDA) || (defined PADDLE_WITH_XPU)
   // for (auto& v : dense_value_names_) {
   //  for (auto& name : v.second) {
   for (int i = 0; i < dwp_param_.program_config(0).pull_dense_table_id_size();

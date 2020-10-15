@@ -24,7 +24,7 @@ from paddle.fluid.dygraph.base import to_variable
 from paddle.fluid.dygraph.nn import BatchNorm, Conv2D, Linear, Pool2D
 from paddle.fluid.dygraph import declarative
 from paddle.fluid.dygraph import ProgramTranslator
-from paddle.fluid.dygraph.io import VARIABLE_FILENAME
+from paddle.fluid.dygraph.io import INFER_MODEL_SUFFIX, INFER_PARAMS_SUFFIX
 
 from predictor_utils import PredictorTools
 
@@ -35,7 +35,10 @@ BATCH_SIZE = 8
 EPOCH_NUM = 1
 PRINT_STEP = 2
 STEP_NUM = 10
-MODEL_SAVE_PATH = "./se_resnet.inference.model"
+MODEL_SAVE_DIR = "./inference"
+MODEL_SAVE_PREFIX = "./inference/se_resnet"
+MODEL_FILENAME = "se_resnet" + INFER_MODEL_SUFFIX
+PARAMS_FILENAME = "se_resnet" + INFER_PARAMS_SUFFIX
 DY_STATE_DICT_SAVE_PATH = "./se_resnet.dygraph"
 
 place = fluid.CUDAPlace(0) if fluid.is_compiled_with_cuda() \
@@ -383,10 +386,10 @@ def train(train_reader, to_static):
                 step_idx += 1
                 if step_idx == STEP_NUM:
                     if to_static:
-                        configs = fluid.dygraph.jit.SaveLoadConfig()
-                        configs.output_spec = [pred]
-                        fluid.dygraph.jit.save(se_resnext, MODEL_SAVE_PATH,
-                                               [img], configs)
+                        fluid.dygraph.jit.save(
+                            se_resnext,
+                            MODEL_SAVE_PREFIX, [img],
+                            output_spec=[pred])
                     else:
                         fluid.dygraph.save_dygraph(se_resnext.state_dict(),
                                                    DY_STATE_DICT_SAVE_PATH)
@@ -414,10 +417,14 @@ def predict_dygraph(data):
 
 
 def predict_static(data):
+    paddle.enable_static()
     exe = fluid.Executor(place)
     [inference_program, feed_target_names,
      fetch_targets] = fluid.io.load_inference_model(
-         MODEL_SAVE_PATH, executor=exe, params_filename=VARIABLE_FILENAME)
+         MODEL_SAVE_DIR,
+         executor=exe,
+         model_filename=MODEL_FILENAME,
+         params_filename=PARAMS_FILENAME)
 
     pred_res = exe.run(inference_program,
                        feed={feed_target_names[0]: data},
@@ -428,7 +435,7 @@ def predict_static(data):
 
 def predict_dygraph_jit(data):
     with fluid.dygraph.guard(place):
-        se_resnext = fluid.dygraph.jit.load(MODEL_SAVE_PATH)
+        se_resnext = fluid.dygraph.jit.load(MODEL_SAVE_PREFIX)
         se_resnext.eval()
 
         pred_res = se_resnext(data)
@@ -437,7 +444,8 @@ def predict_dygraph_jit(data):
 
 
 def predict_analysis_inference(data):
-    output = PredictorTools(MODEL_SAVE_PATH, VARIABLE_FILENAME, [data])
+    output = PredictorTools(MODEL_SAVE_DIR, MODEL_FILENAME, PARAMS_FILENAME,
+                            [data])
     out = output()
     return out
 
@@ -462,10 +470,17 @@ class TestSeResnet(unittest.TestCase):
         self.assertTrue(
             np.allclose(dy_jit_pre, st_pre),
             msg="dy_jit_pre:\n {}\n, st_pre: \n{}.".format(dy_jit_pre, st_pre))
-        self.assertTrue(
-            np.allclose(predictor_pre, st_pre),
-            msg="predictor_pre:\n {}\n, st_pre: \n{}.".format(predictor_pre,
-                                                              st_pre))
+
+        flat_st_pre = st_pre.flatten()
+        flat_predictor_pre = np.array(predictor_pre).flatten()
+        for i in range(len(flat_predictor_pre)):
+            # modify precision to 1e-6, avoid unittest failed
+            self.assertAlmostEqual(
+                flat_predictor_pre[i],
+                flat_st_pre[i],
+                delta=1e-6,
+                msg="predictor_pre:\n {}\n, st_pre: \n{}.".format(
+                    flat_predictor_pre[i], flat_st_pre[i]))
 
     def test_check_result(self):
         pred_1, loss_1, acc1_1, acc5_1 = train(

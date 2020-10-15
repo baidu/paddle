@@ -397,8 +397,10 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         self.assertTrue(
             np.array_equal(m.unique()[0].numpy(), paddle.unique(m)[0].numpy()))
         self.assertTrue(
-            np.array_equal(m.unique_with_counts()[2],
-                           paddle.unique_with_counts(m)[2]))
+            np.array_equal(
+                m.unique(return_counts=True)[1],
+                paddle.unique(
+                    m, return_counts=True)[1]))
         self.assertTrue(np.array_equal(x.flip([0]), paddle.flip(x, [0])))
         self.assertTrue(np.array_equal(x.unbind(0), paddle.unbind(x, 0)))
         self.assertTrue(np.array_equal(x.roll(1), paddle.roll(x, 1)))
@@ -472,12 +474,6 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         x = paddle.to_tensor([[True, False], [True, False]])
         y = paddle.to_tensor([[False, False], [False, True]])
         self.assertTrue(
-            np.array_equal(x.reduce_all().numpy(), paddle.reduce_all(x).numpy(
-            )))
-        self.assertTrue(
-            np.array_equal(x.reduce_any().numpy(), paddle.reduce_any(x).numpy(
-            )))
-        self.assertTrue(
             np.array_equal(
                 x.logical_and(y).numpy(), paddle.logical_and(x, y).numpy()))
         self.assertTrue(
@@ -499,22 +495,12 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
                 x.where(a, b).numpy(), paddle.where(x, a, b).numpy()))
 
         self.assertTrue(inspect.ismethod(a.dot))
-        self.assertTrue(inspect.ismethod(a.elementwise_add))
-        self.assertTrue(inspect.ismethod(a.elementwise_div))
-        self.assertTrue(inspect.ismethod(a.elementwise_floordiv))
-        self.assertTrue(inspect.ismethod(a.elementwise_mod))
-        self.assertTrue(inspect.ismethod(a.elementwise_sub))
         self.assertTrue(inspect.ismethod(a.logsumexp))
         self.assertTrue(inspect.ismethod(a.multiplex))
         self.assertTrue(inspect.ismethod(a.prod))
-        self.assertTrue(inspect.ismethod(a.reduce_max))
-        self.assertTrue(inspect.ismethod(a.reduce_min))
-        self.assertTrue(inspect.ismethod(a.reduce_prod))
-        self.assertTrue(inspect.ismethod(a.reduce_sum))
         self.assertTrue(inspect.ismethod(a.scale))
         self.assertTrue(inspect.ismethod(a.stanh))
-        self.assertTrue(inspect.ismethod(a.sums))
-        self.assertTrue(inspect.ismethod(a.elementwise_sum))
+        self.assertTrue(inspect.ismethod(a.add_n))
         self.assertTrue(inspect.ismethod(a.max))
         self.assertTrue(inspect.ismethod(a.maximum))
         self.assertTrue(inspect.ismethod(a.min))
@@ -527,7 +513,6 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         self.assertTrue(inspect.ismethod(a.inverse))
         self.assertTrue(inspect.ismethod(a.log1p))
         self.assertTrue(inspect.ismethod(a.erf))
-        self.assertTrue(inspect.ismethod(a.addcmul))
         self.assertTrue(inspect.ismethod(a.addmm))
         self.assertTrue(inspect.ismethod(a.clip))
         self.assertTrue(inspect.ismethod(a.trace))
@@ -547,8 +532,6 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         self.assertTrue(inspect.ismethod(a.argmax))
         self.assertTrue(inspect.ismethod(a.argmin))
         self.assertTrue(inspect.ismethod(a.argsort))
-        self.assertTrue(inspect.ismethod(a.has_inf))
-        self.assertTrue(inspect.ismethod(a.has_nan))
         self.assertTrue(inspect.ismethod(a.masked_select))
         self.assertTrue(inspect.ismethod(a.topk))
         self.assertTrue(inspect.ismethod(a.index_select))
@@ -556,7 +539,6 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         self.assertTrue(inspect.ismethod(a.sort))
         self.assertTrue(inspect.ismethod(a.index_sample))
         self.assertTrue(inspect.ismethod(a.mean))
-        self.assertTrue(inspect.ismethod(a.reduce_mean))
         self.assertTrue(inspect.ismethod(a.std))
         self.assertTrue(inspect.ismethod(a.numel))
 

@@ -86,7 +86,7 @@ class PairwiseDistance(layers.Layer):
                                  'PairwiseDistance')
         check_variable_and_dtype(y, 'y', ['float32', 'float64'],
                                  'PairwiseDistance')
-        sub = paddle.elementwise_sub(x, y)
+        sub = paddle.fluid.layers.elementwise_sub(x, y)
 
         helper = LayerHelper("PairwiseDistance", name=self.name)
         attrs = {

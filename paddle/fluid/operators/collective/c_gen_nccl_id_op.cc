@@ -61,9 +61,12 @@ class CGenNCCLIdOp : public framework::OperatorBase {
                        const platform::DeviceContext& dev_ctx) const {
     std::string var_name = Output("Out");
     auto var = scope->FindVar(var_name);
-    PADDLE_ENFORCE_NOT_NULL(var);
+    PADDLE_ENFORCE_NOT_NULL(
+        var, platform::errors::InvalidArgument("Output can not be Null"));
     auto id = var->GetMutable<ncclUniqueId>();
-    PADDLE_ENFORCE(platform::dynload::ncclGetUniqueId(id));
+    PADDLE_ENFORCE_EQ(platform::dynload::ncclGetUniqueId(id), 0,
+                      platform::errors::InvalidArgument(
+                          "ncclGetUniqueId failed with id %s", id));
 
     std::vector<std::string> endpoint_list =
         Attr<std::vector<std::string>>("other_endpoints");

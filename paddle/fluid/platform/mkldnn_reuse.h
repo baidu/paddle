@@ -853,6 +853,9 @@ class PoolingMKLDNNHandler : public MKLDNNHandlerT<T, mkldnn::pooling_forward,
         CorrectOutputSize(src_tz, dst_tz, ksize, paddings, strides,
                           mkldnn_paddings[1]);
       }
+
+      ComputeAdaptivePoolParameters(ctx, src_tz, ksize, strides);
+
       this->AcquireForwardPrimitiveDescriptor(
           is_test ? mkldnn::prop_kind::forward_inference
                   : mkldnn::prop_kind::forward_training,
@@ -917,6 +920,27 @@ class PoolingMKLDNNHandler : public MKLDNNHandlerT<T, mkldnn::pooling_forward,
       }
     }
     return mem_p;
+  }
+
+  static void ComputeAdaptivePoolParameters(
+      const paddle::framework::ExecutionContext& ctx,
+      const std::vector<int64_t>& src_tz, std::vector<int64_t>& ksize,
+      std::vector<int64_t>& strides) {
+    if (ctx.Attr<bool>("adaptive")) {
+      // (jczaja): oneDNN is supporting only unchangable in size pool window
+      PADDLE_ENFORCE_EQ(
+          src_tz[src_tz.size() - 1] % ksize[1], 0,
+          platform::errors::Unimplemented(
+              "Input dim must be divisible by corressponding ksize dim."));
+      PADDLE_ENFORCE_EQ(
+          src_tz[src_tz.size() - 2] % ksize[0], 0,
+          platform::errors::Unimplemented(
+              "Input dim must be divisible by corressponding ksize dim."));
+      ksize[0] = src_tz[src_tz.size() - 2] / ksize[0];
+      ksize[1] = src_tz[src_tz.size() - 1] / ksize[1];
+      strides[0] = ksize[0];
+      strides[1] = ksize[1];
+    }
   }
 
  private:

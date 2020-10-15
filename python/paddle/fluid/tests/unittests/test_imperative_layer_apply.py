@@ -31,11 +31,11 @@ class LeNetDygraph(fluid.dygraph.Layer):
             nn.Conv2d(
                 1, 6, 3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Pool2D(2, 'max', 2),
+            paddle.fluid.dygraph.Pool2D(2, 'max', 2),
             nn.Conv2d(
                 6, 16, 5, stride=1, padding=0),
             nn.ReLU(),
-            nn.Pool2D(2, 'max', 2))
+            paddle.fluid.dygraph.Pool2D(2, 'max', 2))
 
         if num_classes > 0:
             self.fc = nn.Sequential(
@@ -54,17 +54,17 @@ class LeNetDygraph(fluid.dygraph.Layer):
 
 def init_weights(layer):
     if type(layer) == nn.Linear:
-        new_weight = paddle.fill_constant(
+        new_weight = paddle.fluid.layers.fill_constant(
             layer.weight.shape, layer.weight.dtype, value=0.9)
         layer.weight.set_value(new_weight)
-        new_bias = paddle.fill_constant(
+        new_bias = paddle.fluid.layers.fill_constant(
             layer.bias.shape, layer.bias.dtype, value=-0.1)
         layer.bias.set_value(new_bias)
     elif type(layer) == nn.Conv2d:
-        new_weight = paddle.fill_constant(
+        new_weight = paddle.fluid.layers.fill_constant(
             layer.weight.shape, layer.weight.dtype, value=0.7)
         layer.weight.set_value(new_weight)
-        new_bias = paddle.fill_constant(
+        new_bias = paddle.fluid.layers.fill_constant(
             layer.bias.shape, layer.bias.dtype, value=-0.2)
         layer.bias.set_value(new_bias)
 

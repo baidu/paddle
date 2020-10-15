@@ -144,4 +144,5 @@ cc_test(op_debug_string_test SRCS op_debug_string_test.cc DEPS elementwise_add_o
 
 if(WITH_MKLDNN)
 include(mkldnn/inplace_op_tests.cmake)
+include(mkldnn/nhwc_op_tests.cmake)
 endif()

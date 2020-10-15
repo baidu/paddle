@@ -32,11 +32,15 @@ inline void FCOutputSize(const framework::DDim& in_dims,
   auto in_mat_dims = framework::flatten_to_2d(in_dims, in_num_col_dims);
   auto w_dims0 = padding_weights ? w_dims[0] - 4 : w_dims[0];
   auto w_dims1 = padding_weights ? w_dims[1] - 4 : w_dims[1];
-  PADDLE_ENFORCE_EQ(in_mat_dims[1], w_dims0,
-                    platform::errors::InvalidArgument(
-                        "Fully Connected input and weigth size do not match. "
-                        "input width: %d,weight height: %d",
-                        in_mat_dims[1], w_dims0));
+  PADDLE_ENFORCE_EQ(
+      in_mat_dims[1], w_dims0,
+      platform::errors::InvalidArgument(
+          "The input's second dimension and weight's first dimension is "
+          "expected to be the same. But recieved input's second dimension is "
+          "%d, input's shape is %s; weight's first dimension is %d, weight's "
+          "shape is %s.",
+          in_mat_dims[1], in_mat_dims, w_dims0,
+          framework::make_ddim({w_dims0, w_dims1})));
 
   out_dims.reserve(static_cast<size_t>(in_num_col_dims + 1));
   for (int i = 0; i < in_num_col_dims; ++i) {

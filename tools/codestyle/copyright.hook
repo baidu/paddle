@@ -1,15 +1,29 @@
+# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import io, re
-import sys, os
-import subprocess
-import platform
+import io
+import re
+import sys
+import os
+import datetime
 
-COPYRIGHT = '''
-Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+COPYRIGHT = '''Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,74 +35,80 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.
-'''
+limitations under the License.'''
 
-LANG_COMMENT_MARK = None
+def _generate_copyright(comment_mark):
+    copyright=COPYRIGHT.split(os.linesep)
+    header = copyright[0].rstrip()
 
-NEW_LINE_MARK = None
+    p = re.search('(\d{4})', header).group(0)
+    now = datetime.datetime.now()
 
-COPYRIGHT_HEADER = None
+    header = header.replace(p,str(now.year))
 
-if platform.system() == "Windows":
-    NEW_LINE_MARK = "\r\n"
-else:
-    NEW_LINE_MARK = '\n'
-    COPYRIGHT_HEADER = COPYRIGHT.split(NEW_LINE_MARK)[1]
-    p = re.search('(\d{4})', COPYRIGHT_HEADER).group(0)
-    process = subprocess.Popen(["date", "+%Y"], stdout=subprocess.PIPE)
-    date, err = process.communicate()
-    date = date.decode("utf-8").rstrip("\n")
-    COPYRIGHT_HEADER = COPYRIGHT_HEADER.replace(p, date)
+    ans=[comment_mark + " " + header + os.linesep]
+    for idx, line in enumerate(copyright[1:]):
+        ans.append(comment_mark + " " + line.rstrip() + os.linesep)
+
+    return ans
+
+def _get_comment_mark(path):
+    lang_type=re.compile(r"\.(py|sh)$")
+    if lang_type.search(path) is not None:
+        return "#"
+
+    lang_type=re.compile(r"\.(h|c|hpp|cc|cpp|cu|go|cuh|proto)$")
+    if lang_type.search(path) is not None:
+        return "//"
+
+    return None
 
 
-def generate_copyright(template, lang='C'):
-    if lang == 'Python':
-        LANG_COMMENT_MARK = '#'
+RE_ENCODE = re.compile(r"^[ \t\v]*#.*?coding[:=]", re.IGNORECASE)
+RE_COPYRIGHT = re.compile(r".*Copyright \(c\) \d{4}", re.IGNORECASE)
+RE_SHEBANG = re.compile(r"^[ \t\v]*#[ \t]?\!")
+
+def _check_copyright(path):
+    head=[]
+    try:
+        with open(path) as f:
+            head = [next(f) for x in range(4)]
+    except StopIteration:
+        pass
+
+    for idx, line in enumerate(head):
+        if RE_COPYRIGHT.search(line) is not None:
+            return True
+
+    return False
+
+def generate_copyright(path, comment_mark):
+    original_contents = io.open(path, encoding="utf-8").readlines()
+    head = original_contents[0:4]
+
+    insert_line_no=0
+    for i, line in enumerate(head):
+        if RE_ENCODE.search(line) or RE_SHEBANG.search(line):
+            insert_line_no=i+1
+
+    copyright = _generate_copyright(comment_mark)
+    if insert_line_no == 0:
+        new_contents = copyright
+        if len(original_contents) > 0 and len(original_contents[0].strip()) != 0:
+            new_contents.append(os.linesep)
+        new_contents.extend(original_contents)
     else:
-        LANG_COMMENT_MARK = "//"
+        new_contents=original_contents[0:insert_line_no]
+        new_contents.append(os.linesep)
+        new_contents.extend(copyright)
+        if len(original_contents) > insert_line_no and len(original_contents[insert_line_no].strip()) != 0:
+            new_contents.append(os.linesep)
+        new_contents.extend(original_contents[insert_line_no:])
+    new_contents="".join(new_contents)
 
-    lines = template.split(NEW_LINE_MARK)
-    BLANK = " "
-    ans = LANG_COMMENT_MARK + BLANK + COPYRIGHT_HEADER + NEW_LINE_MARK
-    for lino, line in enumerate(lines):
-        if lino == 0 or lino == 1 or lino == len(lines) - 1: continue
-        if len(line)  == 0:
-            BLANK = ""
-        else:
-            BLANK = " "
-        ans += LANG_COMMENT_MARK + BLANK + line + NEW_LINE_MARK
+    with io.open(path, 'w') as output_file:
+        output_file.write(new_contents)
 
-    return ans + "\n"
-
-
-def lang_type(filename):
-    if filename.endswith(".py"):
-        return "Python"
-    elif filename.endswith(".h"):
-        return "C"
-    elif filename.endswith(".c"):
-        return "C"
-    elif filename.endswith(".hpp"):
-        return "C"
-    elif filename.endswith(".cc"):
-        return "C"
-    elif filename.endswith(".cpp"):
-        return "C"
-    elif filename.endswith(".cu"):
-        return "C"
-    elif filename.endswith(".cuh"):
-        return "C"
-    elif filename.endswith(".go"):
-        return "C"
-    elif filename.endswith(".proto"):
-        return "C"
-    else:
-        print("Unsupported filetype %s", filename)
-        exit(0)
-
-
-PYTHON_ENCODE = re.compile("^[ \t\v]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)")
 
 
 def main(argv=None):
@@ -98,23 +118,16 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     retv = 0
-    for filename in args.filenames:
-        fd = io.open(filename, encoding="utf-8")
-        first_line = fd.readline()
-        second_line = fd.readline()
-        if "COPYRIGHT (C)" in first_line.upper(): continue
-        if first_line.startswith("#!") or PYTHON_ENCODE.match(
-                second_line) != None or PYTHON_ENCODE.match(first_line) != None:
+    for path in args.filenames:
+        comment_mark = _get_comment_mark(path)
+        if comment_mark is None:
+            print("warning:Unsupported file", path, file=sys.stderr)
             continue
-        original_contents = io.open(filename, encoding="utf-8").read()
-        new_contents = generate_copyright(
-            COPYRIGHT, lang_type(filename)) + original_contents
-        print('Auto Insert Copyright Header {}'.format(filename))
-        retv = 1
-        with io.open(filename, 'w') as output_file:
-            output_file.write(new_contents)
 
-    return retv
+        if _check_copyright(path):
+            continue
+
+        generate_copyright(path, comment_mark)
 
 
 if __name__ == '__main__':

@@ -168,5 +168,59 @@ class TestBatchNorm(unittest.TestCase):
             self.assertTrue(np.allclose(y1, y2))
 
 
+class TestBatchNormChannelLast(unittest.TestCase):
+    def setUp(self):
+        self.original_dtyep = paddle.get_default_dtype()
+        paddle.set_default_dtype("float64")
+        self.places = [fluid.CPUPlace()]
+        if core.is_compiled_with_cuda() and core.op_support_gpu("batch_norm"):
+            self.places.append(fluid.CUDAPlace(0))
+
+    def tearDown(self):
+        paddle.set_default_dtype(self.original_dtyep)
+
+    def test_1d(self):
+        for p in self.places:
+            with fluid.dygraph.guard(p):
+                x = paddle.randn([2, 6, 4])
+                net1 = paddle.nn.BatchNorm1d(4, data_format="NLC")
+                net2 = paddle.nn.BatchNorm1d(4)
+                net2.weight = net1.weight
+                net2.bias = net1.bias
+                y1 = net1(x)
+                channel_first_x = paddle.transpose(x, [0, 2, 1])
+                y2 = net2(channel_first_x)
+                y2 = paddle.transpose(y2, [0, 2, 1])
+                self.assertEqual(np.allclose(y1.numpy(), y2.numpy()), True)
+
+    def test_2d(self):
+        for p in self.places:
+            with fluid.dygraph.guard(p):
+                x = paddle.randn([2, 6, 6, 4])
+                net1 = paddle.nn.BatchNorm2d(4, data_format="NHWC")
+                net2 = paddle.nn.BatchNorm2d(4)
+                net2.weight = net1.weight
+                net2.bias = net1.bias
+                y1 = net1(x)
+                channel_first_x = paddle.transpose(x, [0, 3, 1, 2])
+                y2 = net2(channel_first_x)
+                y2 = paddle.transpose(y2, [0, 2, 3, 1])
+                self.assertEqual(np.allclose(y1.numpy(), y2.numpy()), True)
+
+    def test_3d(self):
+        for p in self.places:
+            with fluid.dygraph.guard(p):
+                x = paddle.randn([2, 6, 6, 6, 4])
+                net1 = paddle.nn.BatchNorm3d(4, data_format="NDHWC")
+                net2 = paddle.nn.BatchNorm3d(4)
+                net2.weight = net1.weight
+                net2.bias = net1.bias
+                y1 = net1(x)
+                channel_first_x = paddle.transpose(x, [0, 4, 1, 2, 3])
+                y2 = net2(channel_first_x)
+                y2 = paddle.transpose(y2, [0, 2, 3, 4, 1])
+                self.assertEqual(np.allclose(y1.numpy(), y2.numpy()), True)
+
+
 if __name__ == '__main__':
     unittest.main()

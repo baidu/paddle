@@ -32,6 +32,7 @@ STEP_NUM = 10
 
 
 def train_static(args, batch_generator):
+    paddle.enable_static()
     paddle.manual_seed(SEED)
     paddle.framework.random._manual_program_seed(SEED)
     train_prog = fluid.Program()

@@ -192,9 +192,9 @@ class TestGatherNdError(unittest.TestCase):
                                          paddle.static.Program()):
 
             shape = [8, 9, 6]
-            x = paddle.data(shape=shape, dtype='float32', name='x')
-            index = paddle.data(shape=shape, dtype='bool', name='index')
-            index_float = paddle.data(
+            x = paddle.fluid.data(shape=shape, dtype='float32', name='x')
+            index = paddle.fluid.data(shape=shape, dtype='bool', name='index')
+            index_float = paddle.fluid.data(
                 shape=shape, dtype='float32', name='index_float')
             np_x = np.random.random(shape).astype('float32')
             np_index = np.array(np.random.randint(2, size=shape, dtype=bool))

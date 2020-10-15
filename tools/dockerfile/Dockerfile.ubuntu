@@ -29,7 +29,7 @@ RUN apt-get update && \
     python-matplotlib \
     automake locales clang-format swig  \
     liblapack-dev liblapacke-dev \
-    net-tools libtool module-init-tools && \
+    net-tools libtool module-init-tools shellcheck && \
     apt-get clean -y
 
 # Downgrade gcc&&g++
@@ -156,19 +156,14 @@ RUN pip3 --no-cache-dir install -U wheel py-cpuinfo==5.0.0 && \
 
 RUN pip3 --no-cache-dir install 'pre-commit==1.10.4' 'ipython==5.3.0' && \
     pip3 --no-cache-dir install 'ipykernel==4.6.0' 'jupyter==1.0.0' && \
-    pip3 --no-cache-dir install opencv-python==4.2.0.32 && \
     pip3.6 --no-cache-dir install 'pre-commit==1.10.4' 'ipython==5.3.0' && \
     pip3.6 --no-cache-dir install 'ipykernel==4.6.0' 'jupyter==1.0.0' && \
-    pip3.6 --no-cache-dir install opencv-python==4.2.0.32 && \
     pip3.7 --no-cache-dir install 'pre-commit==1.10.4' 'ipython==5.3.0' && \
     pip3.7 --no-cache-dir install 'ipykernel==4.6.0' 'jupyter==1.0.0' && \
-    pip3.7 --no-cache-dir install opencv-python==4.2.0.32 && \
     pip3.8 --no-cache-dir install 'pre-commit==1.10.4' 'ipython==5.3.0' && \
     pip3.8 --no-cache-dir install 'ipykernel==4.6.0' 'jupyter==1.0.0' && \
-    pip3.8 --no-cache-dir install opencv-python==4.2.0.32 && \
     pip --no-cache-dir install 'pre-commit==1.10.4' 'ipython==5.3.0' && \
-    pip --no-cache-dir install 'ipykernel==4.6.0' 'jupyter==1.0.0' && \
-    pip --no-cache-dir install opencv-python==4.2.0.32
+    pip --no-cache-dir install 'ipykernel==4.6.0'
 
 #For docstring checker
 RUN pip3 --no-cache-dir install pylint pytest astroid isort && \

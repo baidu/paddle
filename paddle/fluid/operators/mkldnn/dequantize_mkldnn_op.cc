@@ -16,6 +16,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/data_layout_transform.h"
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/operators/dequantize_op.h"
+#include "paddle/fluid/platform/errors.h"
 #include "paddle/fluid/platform/mkldnn_helper.h"
 #include "paddle/fluid/platform/mkldnn_reuse.h"
 
@@ -37,14 +38,29 @@ class DeQuantOpKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto* input = ctx.Input<Tensor>("Input");
     auto scale_data = ctx.Attr<float>("Scale");
+    auto scale_shift = ctx.Attr<float>("Shift");
+    bool with_shift = scale_shift != 0.0f;
     auto* output = ctx.Output<Tensor>("Output");
+
+    PADDLE_ENFORCE_NE(scale_data, 0.0f,
+                      platform::errors::InvalidArgument(
+                          "Dequantization scale cannot be 0.0"));
+    PADDLE_ENFORCE_GE(scale_shift, 0,
+                      platform::errors::Unimplemented(
+                          "Dequantization shift must be nonnegative."));
+    PADDLE_ENFORCE_LE(
+        scale_shift, 255,
+        platform::errors::Unimplemented(
+            "Dequantization shift must be less than or equal to 255."));
+
     auto& dev_ctx =
         ctx.template device_context<platform::MKLDNNDeviceContext>();
     const auto& engine = dev_ctx.GetEngine();
 
     const T* input_data = input->data<T>();
     float* output_data = output->mutable_data<float>(ctx.GetPlace());
-    std::vector<float> reorder_scale = {1.0f / scale_data};
+
+    float reorder_shift = -scale_shift / scale_data;
 
     auto src_tz = paddle::framework::vectorize<int64_t>(input->dims());
     auto dst_tz = paddle::framework::vectorize<int64_t>(output->dims());
@@ -65,7 +81,15 @@ class DeQuantOpKernel : public framework::OpKernel<T> {
     if (reorder_p == nullptr) {
       mkldnn::primitive_attr attri;
       int mask = 0;
-      attri.set_output_scales(mask, reorder_scale);
+      float reorder_scale = 1. / scale_data;
+      attri.set_output_scales(mask, {reorder_scale});
+
+      if (with_shift) {
+        mkldnn::post_ops post_operations;
+        post_operations.append_sum();
+        attri.set_post_ops(post_operations);
+        std::fill(output_data, output_data + output->numel(), reorder_shift);
+      }
 
       auto src_md = platform::MKLDNNMemDesc({src_tz}, src_dt, src_fmt);
       src_memory = std::make_shared<mkldnn::memory>(
@@ -92,6 +116,8 @@ class DeQuantOpKernel : public framework::OpKernel<T> {
 
       dst_memory = std::static_pointer_cast<mkldnn::memory>(
           dev_ctx.GetBlob(key_dst_mem));
+      if (with_shift)
+        std::fill(output_data, output_data + output->numel(), reorder_shift);
       dst_memory->set_data_handle(output->mutable_data<float>(ctx.GetPlace()));
     }
 

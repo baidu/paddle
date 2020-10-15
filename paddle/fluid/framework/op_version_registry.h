@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+/* Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ limitations under the License. */
 
 #include <boost/any.hpp>
 #include "paddle/fluid/framework/framework.pb.h"
+#include "paddle/fluid/framework/op_version_proto.h"
 #include "paddle/fluid/platform/enforce.h"
 
 namespace paddle {
@@ -159,12 +160,14 @@ class OpVersionRegistrar {
     op_version_map_.insert({op_type, OpVersion()});
     return op_version_map_[op_type];
   }
+  const std::unordered_map<std::string, OpVersion>& GetVersionMap() {
+    return op_version_map_;
+  }
   uint32_t GetVersionID(const std::string& op_type) const {
     auto it = op_version_map_.find(op_type);
     if (it == op_version_map_.end()) {
       return 0;
     }
-
     return it->second.GetVersionID();
   }
 
@@ -174,6 +177,14 @@ class OpVersionRegistrar {
   OpVersionRegistrar() = default;
   OpVersionRegistrar& operator=(const OpVersionRegistrar&) = delete;
 };
+
+inline void SaveOpVersions(
+    const std::unordered_map<std::string, OpVersion>& src,
+    pb::OpVersionMap* dst) {
+  for (const auto& pair : src) {
+    (*dst)[pair.first].SetVersionID(pair.second.GetVersionID());
+  }
+}
 
 class OpVersionComparator {
  public:

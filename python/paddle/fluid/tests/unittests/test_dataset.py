@@ -105,11 +105,15 @@ class TestDataset(unittest.TestCase):
         dataset.load_into_memory()
         dataset.local_shuffle()
 
-        exe = fluid.Executor(fluid.CPUPlace())
-        exe.run(fluid.default_startup_program())
+        paddle.enable_static()
+
+        exe = paddle.static.Executor(paddle.CPUPlace())
+        startup_program = paddle.static.Program()
+        main_program = paddle.static.Program()
+        exe.run(startup_program)
         for i in range(2):
             try:
-                exe.train_from_dataset(fluid.default_main_program(), dataset)
+                exe.train_from_dataset(main_program, dataset)
             except ImportError as e:
                 pass
             except Exception as e:
@@ -181,20 +185,24 @@ class TestDataset(unittest.TestCase):
             use_var=slots_vars)
         dataset.set_filelist([filename1, filename2])
         dataset.load_into_memory()
+        paddle.enable_static()
+
+        exe = paddle.static.Executor(paddle.CPUPlace())
+        startup_program = paddle.static.Program()
+        main_program = paddle.static.Program()
         exe = fluid.Executor(fluid.CPUPlace())
-        exe.run(fluid.default_startup_program())
+        exe.run(startup_program)
         if self.use_data_loader:
             data_loader = fluid.io.DataLoader.from_dataset(dataset,
                                                            fluid.cpu_places(),
                                                            self.drop_last)
             for i in range(self.epoch_num):
                 for data in data_loader():
-                    exe.run(fluid.default_main_program(), feed=data)
+                    exe.run(main_program, feed=data)
         else:
             for i in range(self.epoch_num):
                 try:
-                    exe.train_from_dataset(fluid.default_main_program(),
-                                           dataset)
+                    exe.train_from_dataset(main_program, dataset)
                 except Exception as e:
                     self.assertTrue(False)
 
@@ -551,8 +559,10 @@ class TestDataset(unittest.TestCase):
         except Exception as e:
             self.assertTrue(False)
 
-        os.remove("./test_queue_dataset_run_a.txt")
-        os.remove("./test_queue_dataset_run_b.txt")
+        if os.path.exists("./test_queue_dataset_run_a.txt"):
+            os.remove("./test_queue_dataset_run_a.txt")
+        if os.path.exists("./test_queue_dataset_run_b.txt"):
+            os.remove("./test_queue_dataset_run_b.txt")
 
     def test_queue_dataset_run_2(self):
         """
@@ -603,8 +613,10 @@ class TestDataset(unittest.TestCase):
                 except Exception as e:
                     self.assertTrue(False)
 
-        os.remove("./test_queue_dataset_run_a.txt")
-        os.remove("./test_queue_dataset_run_b.txt")
+        if os.path.exists("./test_queue_dataset_run_a.txt"):
+            os.remove("./test_queue_dataset_run_a.txt")
+        if os.path.exists("./test_queue_dataset_run_b.txt"):
+            os.remove("./test_queue_dataset_run_b.txt")
 
     def test_queue_dataset_run_3(self):
         """
@@ -661,8 +673,10 @@ class TestDataset(unittest.TestCase):
                 except Exception as e:
                     self.assertTrue(False)
 
-        os.remove("./test_queue_dataset_run_a.txt")
-        os.remove("./test_queue_dataset_run_b.txt")
+        if os.path.exists("./test_queue_dataset_run_a.txt"):
+            os.remove("./test_queue_dataset_run_a.txt")
+        if os.path.exists("./test_queue_dataset_run_b.txt"):
+            os.remove("./test_queue_dataset_run_b.txt")
 
 
 class TestDatasetWithDataLoader(TestDataset):

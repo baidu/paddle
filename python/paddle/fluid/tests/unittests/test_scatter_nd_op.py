@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 from op_test import OpTest
 import paddle.fluid as fluid
+import paddle
 
 
 def numpy_scatter_nd(ref, index, updates, fun):
@@ -282,6 +283,24 @@ class TestScatterNdOpRaise(unittest.TestCase):
                     raise ValueError
 
         self.assertRaises(ValueError, check_raise_is_test)
+
+
+class TestDygraph(unittest.TestCase):
+    def test_dygraph(self):
+        with fluid.dygraph.guard(fluid.CPUPlace()):
+            index_data = np.array([[1, 1], [0, 1], [1, 3]]).astype(np.int64)
+            index = fluid.dygraph.to_variable(index_data)
+            updates = paddle.rand(shape=[3, 9, 10], dtype='float32')
+            shape = [3, 5, 9, 10]
+            output = paddle.scatter_nd(index, updates, shape)
+
+    def test_dygraph(self):
+        with fluid.dygraph.guard(fluid.CPUPlace()):
+            x = paddle.rand(shape=[3, 5, 9, 10], dtype='float32')
+            updates = paddle.rand(shape=[3, 9, 10], dtype='float32')
+            index_data = np.array([[1, 1], [0, 1], [1, 3]]).astype(np.int64)
+            index = fluid.dygraph.to_variable(index_data)
+            output = paddle.scatter_nd_add(x, index, updates)
 
 
 if __name__ == "__main__":

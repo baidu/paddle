@@ -192,11 +192,6 @@ bool AnalysisPredictor::PrepareProgram(
     // If config_.ir_optim() is False, parameters is loaded in LoadParameters(),
     // still need to create other persistable variables.
     // So in both case, create persistable variables at first.
-    if (!CheckOperatorCompatible()) {
-      LOG(WARNING) << "WARNING: Results may be DIFF! "
-                      "Please use the corresponding version of the model and "
-                      "prediction library, and do not use the develop branch.";
-    }
     executor_->CreateVariables(*inference_program_, 0, true, sub_scope_);
 
     // if enable_ir_optim_ is false,
@@ -505,6 +500,10 @@ void AnalysisPredictor::PrepareArgument() {
         config_.mkldnn_quantizer_config()->enabled_op_types());
     argument_.SetQuantizeExcludedOpIds(
         config_.mkldnn_quantizer_config()->excluded_op_ids());
+  }
+  if (config_.use_mkldnn_bfloat16_) {
+    LOG(INFO) << "Bfloat16 is enabled";
+    argument_.SetBfloat16EnabledOpTypes(config_.bfloat16_enabled_op_types_);
   }
 #endif
 
@@ -996,40 +995,6 @@ std::unique_ptr<PaddlePredictor> AnalysisPredictor::Clone() {
 
 std::string AnalysisPredictor::GetSerializedProgram() const {
   return inference_program_->Proto()->SerializeAsString();
-}
-
-bool AnalysisPredictor::CheckOperatorCompatible() {
-  if (!inference_program_) {
-    PADDLE_THROW(platform::errors::PreconditionNotMet(
-        "Inference program version check failed because the program does not "
-        "exist."));
-    return false;
-  }
-  bool res = true;
-  op_compatible_map_.ReadFromProto(*inference_program_->OpCompatibleMap());
-  const auto &version = framework::DumpVersion(framework::kCurProgramVersion);
-  LOG(INFO) << "MODEL VERSION: "
-            << framework::DumpVersion(inference_program_->Version());
-  LOG(INFO) << "PREDICTOR VERSION: " << version;
-  std::set<std::string> op_types;
-  for (size_t i = 0; i < inference_program_->Size(); ++i) {
-    const auto &block = inference_program_->Block(i);
-    for (const auto *op : block.AllOps()) {
-      op_types.insert(op->Type());
-    }
-  }
-  for (const auto type : op_types) {
-    auto compatible_type =
-        op_compatible_map_.IsRequireMiniVersion(type, version);
-    if (compatible_type != framework::OpCompatibleType::compatible) {
-      if (!framework::kCurProgramVersion) {
-        LOG(WARNING) << " - Version incompatible ("
-                     << static_cast<int>(compatible_type) << ") " << type;
-      }
-      res = false;
-    }
-  }
-  return res;
 }
 
 // Add SaveOptimModel

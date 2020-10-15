@@ -159,9 +159,9 @@ void RPCServer::RegisterVar(const std::string& var_name,
 
   {
     std::unique_lock<std::mutex> lock(mutex_);
-    if (var_map_.find(var_name) != var_map_.end()) {
-      PADDLE_ENFORCE(false, "%s alreay in var_map", var_name);
-    }
+    PADDLE_ENFORCE_EQ(
+        var_map_.find(var_name), var_map_.end(),
+        platform::errors::AlreadyExists("%s already in var_map.", var_name));
     var_map_[var_name] = h;
   }
 

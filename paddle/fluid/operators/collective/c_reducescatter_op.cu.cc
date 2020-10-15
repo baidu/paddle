@@ -61,7 +61,8 @@ class CReduceScatterOpCUDAKernel : public framework::OpKernel<T> {
         send_buff, recv_buff, recv_numel, static_cast<ncclDataType_t>(dtype),
         ncclSum, comm->comm(), stream));
 #else
-    PADDLE_THROW("PaddlePaddle should compile with GPU.");
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "PaddlePaddle should compile with GPU."));
 #endif
   }
 };

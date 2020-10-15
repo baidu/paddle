@@ -93,16 +93,16 @@ class CompiledProgram(object):
     for example, the operators' fusion in the computation graph, memory
     optimization during the execution of the computation graph, etc.
     For more information about build_strategy, please refer to
-    :code:`fluid.BuildStrategy`.
+    :code:`paddle.static.BuildStrategy`.
 
     Args:
-        program_or_graph (Graph|Program): This parameter is the Program or Graph
+        program_or_graph (Graph|Program): This argument is the Program or Graph
             being executed.
-        build_strategy(BuildStrategy): This parameter is used to compile the
+        build_strategy(BuildStrategy): This argument is used to compile the
             program or graph with the specified options, such as operators' fusion
             in the computational graph and memory optimization during the execution
             of the computational graph. For more information about build_strategy,
-            please refer to :code:`fluid.BuildStrategy`. The default is None.
+            please refer to :code:`paddle.static.BuildStrategy`. The default is None.
 
     Returns:
         CompiledProgram
@@ -110,25 +110,28 @@ class CompiledProgram(object):
     Example:
         .. code-block:: python
 
-          import paddle.fluid as fluid
-          import numpy
+            import numpy
+            import paddle
+            import paddle.static as static
 
-          place = fluid.CUDAPlace(0) # fluid.CPUPlace()
-          exe = fluid.Executor(place)
+            paddle.enable_static()
 
-          data = fluid.data(name='X', shape=[None, 1], dtype='float32')
-          hidden = fluid.layers.fc(input=data, size=10)
-          loss = fluid.layers.mean(hidden)
-          fluid.optimizer.SGD(learning_rate=0.01).minimize(loss)
+            place = paddle.CUDAPlace(0) # paddle.CPUPlace()
+            exe = static.Executor(place)
 
-          exe.run(fluid.default_startup_program())
-          compiled_prog = fluid.CompiledProgram(
-                   fluid.default_main_program())
+            data = static.data(name='X', shape=[None, 1], dtype='float32')
+            hidden = static.nn.fc(x=data, size=10)
+            loss = paddle.mean(hidden)
+            paddle.optimizer.SGD(learning_rate=0.01).minimize(loss)
 
-          x = numpy.random.random(size=(10, 1)).astype('float32')
-          loss_data, = exe.run(compiled_prog,
-                               feed={"X": x},
-                               fetch_list=[loss.name])
+            exe.run(static.default_startup_program())
+            compiled_prog = static.CompiledProgram(
+                static.default_main_program())
+
+            x = numpy.random.random(size=(10, 1)).astype('float32')
+            loss_data, = exe.run(compiled_prog,
+                                feed={"X": x},
+                                fetch_list=[loss.name])
     """
 
     def __init__(self, program_or_graph, build_strategy=None):
@@ -169,13 +172,16 @@ class CompiledProgram(object):
         exec_strategy to set some optimizations that can be applied during the construction
         and computation of the Graph, such as reducing the number of AllReduce operations,
         specifying the size of the thread pool used in the computation Graph running the model,
-        and so on. **Note: If build_strategy is specified when building CompiledProgram and calling
-        with_data_parallel, build_strategy in CompiledProgram will be overwritten, therefore,
-        if it is data parallel training, it is recommended to set build_strategy when calling
-        with_data_parallel interface.**
+        and so on. 
+        
+        .. note::
+            If build_strategy is specified when building CompiledProgram and calling 
+            with_data_parallel, build_strategy in CompiledProgram will be overwritten, therefore, 
+            if it is data parallel training, it is recommended to set build_strategy when calling 
+            with_data_parallel interface.
 
         Args:
-            loss_name (str): This parameter is the name of the loss variable of the model.
+            loss_name (str): This parameter is the name of the loss Tensor of the model.
                 **Note: If it is model training, you must set loss_name, otherwise the
                 result may be problematic**. The default is None.
             build_strategy(BuildStrategy): This parameter is used to compile the
@@ -192,7 +198,7 @@ class CompiledProgram(object):
                 specified by share_vars_from. This parameter needs to be set when model testing
                 is required during model training, and the data parallel mode is used for
                 training and testing. Since CompiledProgram will only distribute parameter
-                variables to other devices when it is first executed, the CompiledProgram
+                Tensors to other devices when it is first executed, the CompiledProgram
                 specified by share_vars_from must be run before the current CompiledProgram.
                 The default is None.
             places(list(CUDAPlace)|list(CPUPlace)|None): This parameter specifies the device
@@ -214,50 +220,53 @@ class CompiledProgram(object):
         Example:
             .. code-block:: python
 
-              import paddle.fluid as fluid
-              import numpy
-              import os
+                import numpy
+                import os
+                import paddle
+                import paddle.static as static
 
-              use_cuda = True
-              place = fluid.CUDAPlace(0) if use_cuda else fluid.CPUPlace()
-              parallel_places = [fluid.CUDAPlace(0), fluid.CUDAPlace(1)] if use_cuda else [fluid.CPUPlace()] * 2
+                paddle.enable_static()
 
-              # NOTE: If you use CPU to run the program, you need
-              # to specify the CPU_NUM, otherwise, fluid will use
-              # all the number of the logic core as the CPU_NUM,
-              # in that case, the batch size of the input should be
-              # greater than CPU_NUM, if not, the process will be
-              # failed by an exception.
-              if not use_cuda:
-                  os.environ['CPU_NUM'] = str(2)
+                use_cuda = True
+                place = paddle.CUDAPlace(0) if use_cuda else paddle.CPUPlace()
+                parallel_places = [paddle.CUDAPlace(0), paddle.CUDAPlace(1)] if use_cuda else [paddle.CPUPlace()] * 2
 
-              exe = fluid.Executor(place)
+                # NOTE: If you use CPU to run the program, you need
+                # to specify the CPU_NUM, otherwise, paddle will use
+                # all the number of the logic core as the CPU_NUM,
+                # in that case, the batch size of the input should be
+                # greater than CPU_NUM, if not, the process will be
+                # failed by an exception.
+                if not use_cuda:
+                    os.environ['CPU_NUM'] = str(2)
 
-              data = fluid.data(name='X', shape=[None, 1], dtype='float32')
-              hidden = fluid.layers.fc(input=data, size=10)
-              loss = fluid.layers.mean(hidden)
+                exe = static.Executor(place)
 
-              test_program = fluid.default_main_program().clone(for_test=True)
-              fluid.optimizer.SGD(learning_rate=0.01).minimize(loss)
+                data = static.data(name='X', shape=[None, 1], dtype='float32')
+                hidden = static.nn.fc(x=data, size=10)
+                loss = paddle.mean(hidden)
 
-              exe.run(fluid.default_startup_program())
-              compiled_train_prog = fluid.CompiledProgram(
-                  fluid.default_main_program()).with_data_parallel(
-                          loss_name=loss.name, places=parallel_places)
-              # NOTE: if not set share_vars_from=compiled_train_prog,
-              # the parameters used in test process are different with 
-              # the parameters used by train process
-              compiled_test_prog = fluid.CompiledProgram(
-                  test_program).with_data_parallel(
-                          share_vars_from=compiled_train_prog,
-                          places=parallel_places)
+                test_program = static.default_main_program().clone(for_test=True)
+                paddle.optimizer.SGD(learning_rate=0.01).minimize(loss)
 
-              train_data = numpy.random.random(size=(10, 1)).astype('float32')
-              loss_data, = exe.run(compiled_train_prog,
+                exe.run(static.default_startup_program())
+                compiled_train_prog = static.CompiledProgram(
+                    static.default_main_program()).with_data_parallel(
+                            loss_name=loss.name, places=parallel_places)
+                # NOTE: if not set share_vars_from=compiled_train_prog,
+                # the parameters used in test process are different with 
+                # the parameters used by train process
+                compiled_test_prog = static.CompiledProgram(
+                    test_program).with_data_parallel(
+                            share_vars_from=compiled_train_prog,
+                            places=parallel_places)
+
+                train_data = numpy.random.random(size=(10, 1)).astype('float32')
+                loss_data, = exe.run(compiled_train_prog,
                                 feed={"X": train_data},
                                 fetch_list=[loss.name])
-              test_data = numpy.random.random(size=(10, 1)).astype('float32')
-              loss_data, = exe.run(compiled_test_prog,
+                test_data = numpy.random.random(size=(10, 1)).astype('float32')
+                loss_data, = exe.run(compiled_test_prog,
                                 feed={"X": test_data},
                                 fetch_list=[loss.name])
         """

@@ -39,8 +39,8 @@ proto::ProgramDesc *ProgramDesc::Proto() {
   return &desc_;
 }
 
-proto::OpCompatibleMap *ProgramDesc::OpCompatibleMap() {
-  return desc_.mutable_op_compatible_map();
+proto::OpVersionMap *ProgramDesc::OpVersionMap() {
+  return desc_.mutable_op_version_map();
 }
 
 int64_t ProgramDesc::Version() const { return desc_.version().version(); }

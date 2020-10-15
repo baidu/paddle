@@ -169,6 +169,10 @@ class TestHeterPsCTR2x2(FleetDistHeterRunnerBase):
             except fluid.core.EOFException:
                 self.reader.reset()
 
+        if fleet.is_first_worker():
+            model_path = tempfile.mkdtemp()
+            fleet.save_persistables(executor=exe, dirname=model_path)
+            shutil.rmtree(model_path)
         fleet.stop_worker()
 
     def do_dataset_training(self, fleet):

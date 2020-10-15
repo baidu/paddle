@@ -66,6 +66,7 @@ class Quant2Int8MkldnnPass(object):
         self._fc_ops = ['fc']
         self._relu_ops = ['relu', 'relu6']
         self._matmul_ops = ['matmul']
+        self._gru_ops = ['fusion_gru']
         self._weight_scales = {}
         # Collect the Input and Output sclaes from Fake quant models
         self._var_quant_scales = {}
@@ -449,8 +450,43 @@ class Quant2Int8MkldnnPass(object):
                     self._var_quant_scales[weight_var_name] = (use_unsigned_int,
                                                                lod_tensor)
 
+        def _compute_gru_weight_scales(wx_name, wh_name):
+            for op in graph.all_op_nodes():
+                if op.op().type() in self._gru_ops:
+                    wx_var_name = op.input(wx_name)[0]
+                    wh_var_name = op.input(wh_name)[0]
+                    wx = np.array(self._load_param(self._scope, wx_var_name))
+                    wh = np.array(self._load_param(self._scope, wh_var_name))
+                    OC = wh.shape[0]
+                    scale_ur = 1.0 / np.max(np.abs(
+                        np.concatenate(
+                            [
+                                wx[:, :2 * OC], wh.flatten()[:2 * OC * OC]
+                                .reshape(OC, 2 * OC)
+                            ],
+                            axis=0)),
+                                            axis=0)
+                    scale_o = 1.0 / np.max(np.abs(
+                        np.concatenate(
+                            [
+                                wx[:, 2 * OC:], wh.flatten()[2 * OC * OC:]
+                                .reshape(OC, OC)
+                            ],
+                            axis=0)),
+                                           axis=0)
+
+                    gru_weights_scale = np.concatenate(
+                        [scale_ur, scale_o]).astype('float')
+
+                    lod_tensor = self._convert_scale2tensor(gru_weights_scale)
+                    use_unsigned_int = False
+                    self._var_quant_scales[wx_var_name] = (use_unsigned_int,
+                                                           lod_tensor)
+
         _compute_var_scales(self._conv_ops, "Filter", axis=1)
         _compute_var_scales(self._fc_ops, "W", axis=0)
+        _compute_var_scales(self._gru_ops, "WeightH", axis=0)
+        _compute_gru_weight_scales("WeightX", "WeightH")
         return graph
 
     def _find_avg_pooling_ids(self, graph):

@@ -14,12 +14,16 @@
 
 from __future__ import print_function
 import unittest
+import paddle
 import paddle.fluid as fluid
 
 
 class TestInstallCheck(unittest.TestCase):
-    def test_install_check(self):
+    def test_paddle_fluid(self):
         fluid.install_check.run_check()
+
+    def test_paddle_utils(self):
+        paddle.utils.run_check()
 
 
 if __name__ == '__main__':

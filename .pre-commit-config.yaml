@@ -48,5 +48,13 @@ repos:
         name: copyright_checker
         entry: python ./tools/codestyle/copyright.hook
         language: system
-        files: \.(c|cc|cxx|cpp|cu|h|hpp|hxx|proto|py)$
+        files: \.(c|cc|cxx|cpp|cu|h|hpp|hxx|proto|py|sh)$
         exclude: (?!.*third_party)^.*$ | (?!.*book)^.*$
+-   repo: local
+    hooks:
+    -   id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: system
+        files: .sh$
+        exclude: (paddle_build.sh|fast_install.sh|check_file_diff_approvals.sh)

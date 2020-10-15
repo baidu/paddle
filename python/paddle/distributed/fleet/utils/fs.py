@@ -749,9 +749,6 @@ class HDFSClient(FS):
                 client = HDFSClient(hadoop_home, configs)
                 client.download("hdfs:/test_hdfs_client", "./")
         """
-        if self.is_exist(local_path):
-            raise FSFileExistsError("{} exists".format(local_path))
-
         if not self.is_exist(fs_path):
             raise FSFileNotExistsError("{} not exits".format(fs_path))
 

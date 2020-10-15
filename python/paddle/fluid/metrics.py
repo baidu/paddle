@@ -851,6 +851,9 @@ class DetectionMAP(object):
 
             import paddle.fluid as fluid
 
+            import paddle
+            paddle.enable_static()
+
             batch_size = None # can be any size
             image_boxs_num = 10
             bounding_bboxes_num = 21

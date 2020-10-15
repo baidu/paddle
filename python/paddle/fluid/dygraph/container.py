@@ -34,27 +34,26 @@ class Sequential(Layer):
     Examples:
         .. code-block:: python
 
-            import paddle.fluid as fluid
+            import paddle
             import numpy as np
 
             data = np.random.uniform(-1, 1, [30, 10]).astype('float32')
-            with fluid.dygraph.guard():
-                data = fluid.dygraph.to_variable(data)
-                # create Sequential with iterable Layers
-                model1 = fluid.dygraph.Sequential(
-                    fluid.Linear(10, 1), fluid.Linear(1, 2)
-                )
-                model1[0]  # access the first layer
-                res1 = model1(data)  # sequential execution
+            data = paddle.to_tensor(data)
+            # create Sequential with iterable Layers
+            model1 = paddle.nn.Sequential(
+                paddle.nn.Linear(10, 1), paddle.nn.Linear(1, 2)
+            )
+            model1[0]  # access the first layer
+            res1 = model1(data)  # sequential execution
 
-                # create Sequential with name Layer pairs
-                model2 = fluid.dygraph.Sequential(
-                    ('l1', fluid.Linear(10, 2)),
-                    ('l2', fluid.Linear(2, 3))
-                )
-                model2['l1']  # access l1 layer
-                model2.add_sublayer('l3', fluid.Linear(3, 3))  # add sublayer
-                res2 = model2(data)  # sequential execution
+            # create Sequential with name Layer pairs
+            model2 = paddle.nn.Sequential(
+                ('l1', paddle.nn.Linear(10, 2)),
+                ('l2', paddle.nn.Linear(2, 3))
+            )
+            model2['l1']  # access l1 layer
+            model2.add_sublayer('l3', paddle.nn.Linear(3, 3))  # add sublayer
+            res2 = model2(data)  # sequential execution
 
     """
 
@@ -99,15 +98,15 @@ class ParameterList(Layer):
     Examples:
         .. code-block:: python
 
-            import paddle.fluid as fluid
+            import paddle
             import numpy as np
 
-            class MyLayer(fluid.Layer):
+            class MyLayer(paddle.nn.Layer):
                 def __init__(self, num_stacked_param):
                     super(MyLayer, self).__init__()
                     # create ParameterList with iterable Parameters
-                    self.params = fluid.dygraph.ParameterList(
-                        [fluid.layers.create_parameter(
+                    self.params = paddle.nn.ParameterList(
+                        [paddle.create_parameter(
                             shape=[2, 2], dtype='float32')] * num_stacked_param)
 
                 def forward(self, x):
@@ -119,27 +118,26 @@ class ParameterList(Layer):
                                     "Y": p},
                             outputs={"Out": tmp},
                             attrs={"x_num_col_dims": 1,
-                                   "y_num_col_dims": 1})
+                                    "y_num_col_dims": 1})
                         x = tmp
                     return x
 
             data_np = np.random.uniform(-1, 1, [5, 2]).astype('float32')
-            with fluid.dygraph.guard():
-                x = fluid.dygraph.to_variable(data_np)
-                num_stacked_param = 4
-                model = MyLayer(num_stacked_param)
-                print(len(model.params))  # 4
-                res = model(x)
-                print(res.shape)  # [5, 2]
+            x = paddle.to_tensor(data_np)
+            num_stacked_param = 4
+            model = MyLayer(num_stacked_param)
+            print(len(model.params))  # 4
+            res = model(x)
+            print(res.shape)  # [5, 2]
 
-                replaced_param = fluid.layers.create_parameter(shape=[2, 3], dtype='float32')
-                model.params[num_stacked_param - 1] = replaced_param  # replace last param
-                res = model(x)
-                print(res.shape)  # [5, 3]
-                model.params.append(fluid.layers.create_parameter(shape=[3, 4], dtype='float32'))  # append param
-                print(len(model.params))  # 5
-                res = model(x)
-                print(res.shape)  # [5, 4]
+            replaced_param = paddle.create_parameter(shape=[2, 3], dtype='float32')
+            model.params[num_stacked_param - 1] = replaced_param  # replace last param
+            res = model(x)
+            print(res.shape)  # [5, 3]
+            model.params.append(paddle.create_parameter(shape=[3, 4], dtype='float32'))  # append param
+            print(len(model.params))  # 5
+            res = model(x)
+            print(res.shape)  # [5, 4]
     """
 
     def __init__(self, parameters=None):
@@ -183,14 +181,15 @@ class LayerList(Layer):
 
     Examples:
         .. code-block:: python
-            import paddle.fluid as fluid
+
+            import paddle
             import numpy as np
 
-            class MyLayer(fluid.Layer):
+            class MyLayer(paddle.nn.Layer):
                 def __init__(self):
                     super(MyLayer, self).__init__()
-                    self.linears = fluid.dygraph.LayerList(
-                        [fluid.dygraph.Linear(10, 10) for i in range(10)])
+                    self.linears = paddle.nn.LayerList(
+                        [paddle.nn.Linear(10, 10) for i in range(10)])
 
                 def forward(self, x):
                     # LayerList can act as an iterable, or be indexed using ints
@@ -239,13 +238,13 @@ class LayerList(Layer):
 
         Examples:
             .. code-block:: python
-                import paddle.fluid as fluid
 
-                with fluid.dygraph.guard():
-                    linears = fluid.dygraph.LayerList([fluid.dygraph.Linear(10, 10) for i in range(10)])
-                    another = fluid.dygraph.Linear(10, 10)
-                    linears.append(another)
-                    print(len(linears))  # 11
+                import paddle
+
+                linears = paddle.nn.LayerList([paddle.nn.Linear(10, 10) for i in range(10)])
+                another = paddle.nn.Linear(10, 10)
+                linears.append(another)
+                print(len(linears))  # 11
         """
         self.add_sublayer(str(len(self)), sublayer)
         return self
@@ -260,13 +259,13 @@ class LayerList(Layer):
 
         Examples:
             .. code-block:: python
-                import paddle.fluid as fluid
 
-                with fluid.dygraph.guard():
-                    linears = fluid.dygraph.LayerList([fluid.dygraph.Linear(10, 10) for i in range(10)])
-                    another = fluid.dygraph.Linear(10, 10)
-                    linears.insert(3, another)
-                    print(linears[3] is another)  # True
+                import paddle
+
+                linears = paddle.nn.LayerList([paddle.nn.Linear(10, 10) for i in range(10)])
+                another = paddle.nn.Linear(10, 10)
+                linears.insert(3, another)
+                print(linears[3] is another)  # True
         """
         assert isinstance(index, int) and \
                0 <= index < len(self._sub_layers), \
@@ -284,14 +283,14 @@ class LayerList(Layer):
 
         Examples:
             .. code-block:: python
-                import paddle.fluid as fluid
 
-                with fluid.dygraph.guard():
-                    linears = fluid.dygraph.LayerList([fluid.dygraph.Linear(10, 10) for i in range(10)])
-                    another_list = fluid.dygraph.LayerList([fluid.dygraph.Linear(10, 10) for i in range(5)])
-                    linears.extend(another_list)
-                    print(len(linears))  # 15
-                    print(another_list[0] is linears[10])  # True
+                import paddle
+
+                linears = paddle.nn.LayerList([paddle.nn.Linear(10, 10) for i in range(10)])
+                another_list = paddle.nn.LayerList([paddle.nn.Linear(10, 10) for i in range(5)])
+                linears.extend(another_list)
+                print(len(linears))  # 15
+                print(another_list[0] is linears[10])  # True
         """
         offset = len(self)
         for i, sublayer in enumerate(sublayers):

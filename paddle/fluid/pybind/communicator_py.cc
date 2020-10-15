@@ -109,10 +109,15 @@ void BindLargeScaleKV(py::module* m) {
              auto* sparse_variable = self.Get(table_name);
              sparse_variable->Load(dir);
            })
-      .def("save", [](LargeScaleKV& self, const std::string& table_name,
-                      const std::string& dir) {
+      .def("save",
+           [](LargeScaleKV& self, const std::string& table_name,
+              const std::string& dir) {
+             auto* sparse_variable = self.Get(table_name);
+             sparse_variable->Save(dir);
+           })
+      .def("size", [](LargeScaleKV& self, const std::string& table_name) {
         auto* sparse_variable = self.Get(table_name);
-        sparse_variable->Save(dir);
+        return sparse_variable->Size();
       });
 }
 }  // namespace pybind

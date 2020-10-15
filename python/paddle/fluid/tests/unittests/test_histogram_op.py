@@ -58,12 +58,66 @@ class TestHistogramOpAPI(unittest.TestCase):
                 msg='histogram output is wrong, out =' + str(actual.numpy()))
 
 
+class TestHistogramOpError(unittest.TestCase):
+    """Test histogram op error."""
+
+    def run_network(self, net_func):
+        main_program = fluid.Program()
+        startup_program = fluid.Program()
+        with fluid.program_guard(main_program, startup_program):
+            net_func()
+            exe = fluid.Executor()
+            exe.run(main_program)
+
+    def test_bins_error(self):
+        """Test bins should be greater than or equal to 1."""
+
+        def net_func():
+            input_value = paddle.fluid.layers.fill_constant(
+                shape=[3, 4], dtype='float32', value=3.0)
+            paddle.histogram(input=input_value, bins=-1, min=1, max=5)
+
+        with self.assertRaises(fluid.core.EnforceNotMet):
+            self.run_network(net_func)
+
+    def test_min_max_error(self):
+        """Test max must be larger or equal to min."""
+
+        def net_func():
+            input_value = paddle.fluid.layers.fill_constant(
+                shape=[3, 4], dtype='float32', value=3.0)
+            paddle.histogram(input=input_value, bins=1, min=5, max=1)
+
+        with self.assertRaises(fluid.core.EnforceNotMet):
+            self.run_network(net_func)
+
+    def test_min_max_range_error(self):
+        """Test range of min, max is not finite"""
+
+        def net_func():
+            input_value = paddle.fluid.layers.fill_constant(
+                shape=[3, 4], dtype='float32', value=3.0)
+            paddle.histogram(input=input_value, bins=1, min=-np.inf, max=5)
+
+        with self.assertRaises(fluid.core.EnforceNotMet):
+            self.run_network(net_func)
+
+    def test_type_errors(self):
+        with program_guard(Program()):
+            # The input type must be Variable.
+            self.assertRaises(
+                TypeError, paddle.histogram, 1, bins=5, min=1, max=5)
+            # The input type must be 'int32', 'int64', 'float32', 'float64'
+            x_bool = fluid.data(name='x_bool', shape=[4, 3], dtype='bool')
+            self.assertRaises(
+                TypeError, paddle.histogram, x_bool, bins=5, min=1, max=5)
+
+
 class TestHistogramOp(OpTest):
     def setUp(self):
         self.op_type = "histogram"
         self.init_test_case()
-        np_input = np.random.randint(
-            low=0, high=20, size=self.in_shape, dtype=np.int64)
+        np_input = np.random.uniform(low=0.0, high=20.0, size=self.in_shape)
         self.inputs = {"X": np_input}
         self.init_attrs()
         Out, _ = np.histogram(

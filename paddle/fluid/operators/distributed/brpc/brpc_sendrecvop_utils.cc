@@ -155,11 +155,15 @@ void SerializeToIOBuf(const std::string& name, framework::Variable* var,
     return;
 #endif
   } else {
-    PADDLE_THROW("Serialize does not support type: %s",
-                 typeid(var->Type()).name());
+    PADDLE_THROW(platform::errors::InvalidArgument(
+        "Serialize does not support type: %s", typeid(var->Type()).name()));
   }
 
-  PADDLE_ENFORCE_NOT_NULL(payload);
+  PADDLE_ENFORCE_NOT_NULL(
+      payload,
+      platform::errors::InvalidArgument(
+          "Not support type: %s, need to be LOD_TENSOR or SELECTED_ROWS.",
+          var->Type()));
 
   // FIXME(gongwb): it seems that can use zero copy.
   if (var_is_not_stable) {
@@ -186,7 +190,10 @@ void SerializeToIOBuf(const std::string& name, framework::Variable* var,
 
   if (var->IsType<framework::SelectedRows>()) {
     auto* slr = var->GetMutable<framework::SelectedRows>();
-    PADDLE_ENFORCE(VectorElemName(slr->rows()) == typeid(int64_t).name());
+    PADDLE_ENFORCE_EQ(VectorElemName(slr->rows()), typeid(int64_t).name(),
+                      platform::errors::InvalidArgument(
+                          "Got wrong type: %s, expect type: int64_t",
+                          VectorElemName(slr->rows())));
     size_t rows_memory_size = slr->rows().size() * sizeof(int64_t);
 
     IOBufWriter::Append(name, iobuf,
@@ -202,7 +209,9 @@ void DeserializeFromIOBuf(const ::sendrecv::VariableMessage& meta,
                           const framework::Scope* scope,
                           framework::Variable** var, int* trainer_id) {
   operators::distributed::BRPCVariableResponse resp(scope, &ctx);
-  PADDLE_ENFORCE(resp.Parse(iobuf, meta) == 0, "parse iobuf to tensor error!");
+  PADDLE_ENFORCE_EQ(
+      resp.Parse(iobuf, meta), 0,
+      platform::errors::InvalidArgument("parse iobuf to tensor error!"));
   *var = resp.GetVar();
   *trainer_id = resp.GetTrainerId();
 }

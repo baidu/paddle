@@ -19,7 +19,7 @@ import tarfile
 import os
 
 import paddle
-import paddle.fluid.incubate.data_generator as data_generator
+import paddle.distributed.fleet as fleet
 from paddle.fluid.log_helper import get_logger
 
 logger = get_logger(
@@ -59,7 +59,7 @@ def load_lr_input_record(sent):
     return res
 
 
-class DatasetCtrReader(data_generator.MultiSlotDataGenerator):
+class DatasetCtrReader(fleet.MultiSlotDataGenerator):
     def generate_sample(self, line):
         def iter():
             fs = line.strip().split('\t')

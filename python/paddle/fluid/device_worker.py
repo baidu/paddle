@@ -221,6 +221,13 @@ class DownpourSGD(DeviceWorker):
                 for i in program_configs[program_id]["pull_dense"]:
                     pc.pull_dense_table_id.extend([i])
                     dense_table_set.add(i)
+                # code for partial push dense table such as multitask
+                if "cond2denseid" in program_configs[program_id]:
+                    cond2denseid = program_configs[program_id]["cond2denseid"]
+                    for key, value in cond2denseid.items():
+                        mc_map = pc.partial_pushdense_condtable_map.add()
+                        mc_map.key = key
+                        mc_map.value = value
                 break
 
         trainer_desc.device_worker_name = opt_info.get("worker_class",

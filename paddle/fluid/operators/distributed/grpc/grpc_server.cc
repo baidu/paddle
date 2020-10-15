@@ -57,7 +57,8 @@ class RequestBase {
         status_(PROCESS),
         request_handler_(request_handler),
         req_id_(req_id) {
-    PADDLE_ENFORCE(cq_);
+    PADDLE_ENFORCE_NOT_NULL(cq_, platform::errors::InvalidArgument(
+                                     "ServerCompletionQueue cq are empty"));
   }
   virtual ~RequestBase() {}
   virtual void Process() = 0;
@@ -105,9 +106,8 @@ class RequestSend final : public RequestBase {
                        ::grpc::ServerCompletionQueue* cq,
                        RequestHandler* request_handler, int req_id)
       : RequestBase(service, cq, request_handler, req_id), responder_(&ctx_) {
-    request_.reset(new GRPCVariableResponse(
-        request_handler->scope(), request_handler->dev_ctx(),
-        request_handler->distributed_mode()));
+    request_.reset(new GRPCVariableResponse(request_handler->scope(),
+                                            request_handler->dev_ctx(), true));
     int method_id = static_cast<int>(distributed::GrpcMethod::kSendVariable);
     service_->RequestAsyncUnary(
         method_id, &ctx_, request_.get(), &responder_, cq_, cq_,
@@ -398,12 +398,13 @@ class RequestCheckpointNotify final : public RequestBase {
     std::string checkpoint_notify = request_->Varname();
     std::string checkpoint_dir = request_->OutVarname();
     int trainer_id = request_->GetTrainerId();
+    std::string table_name = request_->TableName();
 
     VLOG(4) << "RequestCheckpointNotify notify: " << checkpoint_notify
             << ", dir: " << checkpoint_dir;
 
     request_handler_->Handle(checkpoint_notify, scope, nullptr, nullptr,
-                             trainer_id, checkpoint_dir);
+                             trainer_id, checkpoint_dir, table_name);
     Finish(reply_, &responder_);
   }
 
@@ -419,9 +420,8 @@ class RequestNotify final : public RequestBase {
                          ::grpc::ServerCompletionQueue* cq,
                          RequestHandler* request_handler, int req_id)
       : RequestBase(service, cq, request_handler, req_id), responder_(&ctx_) {
-    request_.reset(new GRPCVariableResponse(
-        request_handler->scope(), request_handler->dev_ctx(),
-        request_handler->distributed_mode()));
+    request_.reset(new GRPCVariableResponse(request_handler->scope(),
+                                            request_handler->dev_ctx(), true));
     int method_id = static_cast<int>(distributed::GrpcMethod::kRequestNotify);
     service_->RequestAsyncUnary(
         method_id, &ctx_, request_.get(), &responder_, cq_, cq_,
@@ -454,9 +454,8 @@ class RequestSendAndRecv final : public RequestBase {
                               ::grpc::ServerCompletionQueue* cq,
                               RequestHandler* request_handler, int req_id)
       : RequestBase(service, cq, request_handler, req_id), responder_(&ctx_) {
-    request_.reset(new GRPCVariableResponse(
-        request_handler->scope(), request_handler->dev_ctx(),
-        request_handler->distributed_mode()));
+    request_.reset(new GRPCVariableResponse(request_handler->scope(),
+                                            request_handler->dev_ctx(), true));
 
     int method_id =
         static_cast<int>(distributed::GrpcMethod::kRequestSendAndRecv);
@@ -550,8 +549,9 @@ void AsyncGRPCServer::StartServer() {
     sleep(3);
   }
 
-  PADDLE_ENFORCE_NE(selected_port_, 0, "can't bind to address:%s",
-                    bind_address_);
+  PADDLE_ENFORCE_NE(
+      selected_port_, 0,
+      platform::errors::Unavailable("can't bind to address:%s", bind_address_));
 
   std::function<void(const std::string&, int)> f =
       std::bind(&AsyncGRPCServer::TryToRegisterNewOne, this,
@@ -649,7 +649,8 @@ void AsyncGRPCServer::TryToRegisterNewOne(const std::string& rpc_name,
   } else if (rpc_name == kRequestSendAndRecv) {
     b = new RequestSendAndRecv(service_.get(), cq.get(), handler, req_id);
   } else {
-    PADDLE_ENFORCE(false, "not supported rpc");
+    PADDLE_THROW(
+        platform::errors::InvalidArgument("not supported rpc: %s", rpc_name));
   }
 
   reqs[req_id] = b;
@@ -677,7 +678,10 @@ void AsyncGRPCServer::HandleRequest(
     auto& reqs = rpc_reqs_[rpc_name];
     RequestBase* base = nullptr;
     {
-      PADDLE_ENFORCE(req_id >= 0 && req_id < kRequestBufSize);
+      PADDLE_ENFORCE_EQ(
+          (req_id >= 0 && req_id < kRequestBufSize), true,
+          platform::errors::OutOfRange("request id: %s out of bounds: [0, %s)",
+                                       req_id, kRequestBufSize));
       std::unique_lock<std::mutex> lock(cq_mutex_);
       base = reqs[req_id];
     }

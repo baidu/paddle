@@ -25,7 +25,7 @@ from paddle.fluid import core, Program, program_guard
 class TestOnesLikeAPIError(unittest.TestCase):
     def test_errors(self):
         with program_guard(Program(), Program()):
-            x = paddle.data('x', [3, 4])
+            x = paddle.fluid.data('x', [3, 4])
             self.assertRaises(TypeError, ones_like, x, 'int8')
 
 
@@ -35,7 +35,7 @@ class TestOnesLikeAPI(unittest.TestCase):
         startup_program = Program()
         train_program = Program()
         with program_guard(train_program, startup_program):
-            x = paddle.data('X', shape)
+            x = paddle.fluid.data('X', shape)
 
             # 'bool', 'float32', 'float64', 'int32', 'int64'
             out1 = ones_like(x)

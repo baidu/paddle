@@ -30,7 +30,8 @@ template <typename T>
 class CReduceScatterOpCPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    PADDLE_THROW("Unimplemented cpu kernel for CReduceScatterOp.");
+    PADDLE_THROW(platform::errors::Unimplemented(
+        "Unimplemented cpu kernel for CReduceScatterOp."));
   }
 };
 

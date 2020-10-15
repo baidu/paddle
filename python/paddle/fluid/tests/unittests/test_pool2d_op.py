@@ -102,14 +102,21 @@ def avg_pool2D_forward_naive(x,
                 c_start = adaptive_start_index(j, W, ksize[1])
                 c_end = adaptive_end_index(j, W, ksize[1])
             else:
-                r_start = np.max((i * strides[0] - paddings[0], 0))
-                r_end = np.min((i * strides[0] + ksize[0] - paddings[0], H))
-                c_start = np.max((j * strides[1] - paddings[1], 0))
-                c_end = np.min((j * strides[1] + ksize[1] - paddings[1], W))
+                r_start = i * strides[0] - paddings[0]
+                r_end = i * strides[0] + ksize[0] - paddings[0]
+                c_start = j * strides[1] - paddings[1]
+                c_end = j * strides[1] + ksize[1] - paddings[1]
+                field_size = (r_end - r_start) * (c_end - c_start)
+                r_start = np.max((r_start, 0))
+                r_end = np.min((r_end, H))
+                c_start = np.max((c_start, 0))
+                c_end = np.min((c_end, W))
+
             x_masked = x[:, :, r_start:r_end, c_start:c_end]
 
-            field_size = ((r_end - r_start) * (c_end - c_start)) \
-                if (exclusive or adaptive) else (ksize[0] * ksize[1])
+            if (exclusive or adaptive):
+                field_size = (r_end - r_start) * (c_end - c_start)
+
             if data_type == np.int8 or data_type == np.uint8:
                 out[:, :, i, j] = (np.rint(
                     np.sum(x_masked, axis=(2, 3)) /
@@ -207,22 +214,34 @@ def pool2D_forward_naive(x,
                 in_w_start = adaptive_start_index(j, W, ksize[1])
                 in_w_end = adaptive_end_index(j, W, ksize[1])
             else:
-                in_w_start = np.max((j * strides[1] - pad_w_left, 0))
-                in_w_end = np.min((j * strides[1] + ksize[1] - pad_w_left, W))
+                in_h_start = i * strides[0] - pad_h_up
+                in_w_start = j * strides[1] - pad_w_left
+                in_h_end = i * strides[0] + ksize[0] - pad_h_up
+                in_w_end = j * strides[1] + ksize[1] - pad_w_left
+
+                field_size = (in_h_end - in_h_start) * (in_w_end - in_w_start)
+                in_h_start = np.max((in_h_start, 0))
+                in_w_start = np.max((in_w_start, 0))
+                in_h_end = np.min((in_h_end, H))
+                in_w_end = np.min((in_w_end, W))
 
             if data_format == 'NCHW':
                 x_masked = x[:, :, in_h_start:in_h_end, in_w_start:in_w_end]
                 if pool_type == 'avg':
-                    field_size = ((in_h_end - in_h_start) * (in_w_end - in_w_start)) \
-                        if (exclusive or adaptive) else (ksize[0] * ksize[1])
+                    if (exclusive or adaptive):
+                        field_size = (in_h_end - in_h_start) * (
+                            in_w_end - in_w_start)
+
+#                         if (exclusive or adaptive) else (ksize[0] * ksize[1])
                     out[:, :, i, j] = np.sum(x_masked, axis=(2, 3)) / field_size
                 elif pool_type == 'max':
                     out[:, :, i, j] = np.max(x_masked, axis=(2, 3))
             elif data_format == 'NHWC':
                 x_masked = x[:, in_h_start:in_h_end, in_w_start:in_w_end, :]
                 if pool_type == 'avg':
-                    field_size = ((in_h_end - in_h_start) * (in_w_end - in_w_start)) \
-                        if (exclusive or adaptive) else (ksize[0] * ksize[1])
+                    if (exclusive or adaptive):
+                        field_size = (in_h_end - in_h_start) * (
+                            in_w_end - in_w_start)
                     out[:, i, j, :] = np.sum(x_masked, axis=(1, 2)) / field_size
                 elif pool_type == 'max':
                     out[:, i, j, :] = np.max(x_masked, axis=(1, 2))

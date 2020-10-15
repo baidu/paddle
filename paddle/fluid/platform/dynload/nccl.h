@@ -64,6 +64,13 @@ NCCL_RAND_ROUTINE_EACH(DECLARE_DYNAMIC_LOAD_NCCL_WRAP)
 NCCL_RAND_ROUTINE_EACH_AFTER_2212(DECLARE_DYNAMIC_LOAD_NCCL_WRAP)
 #endif
 
+#if NCCL_VERSION_CODE >= 2703
+#define NCCL_RAND_ROUTINE_EACH_AFTER_2703(__macro) \
+  __macro(ncclSend);                               \
+  __macro(ncclRecv);
+NCCL_RAND_ROUTINE_EACH_AFTER_2703(DECLARE_DYNAMIC_LOAD_NCCL_WRAP)
+#endif
+
 }  // namespace dynload
 }  // namespace platform
 }  // namespace paddle

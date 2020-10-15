@@ -23,6 +23,7 @@ import paddle
 
 __all__ = [
     'bernoulli',
+    'multinomial',
     'standard_normal',
     'normal',
     'uniform',
@@ -82,6 +83,71 @@ def bernoulli(x, name=None):
         dtype=x.dtype)  # maybe set out to int32 ? 
     helper.append_op(
         type='bernoulli', inputs={"X": x}, outputs={'Out': out}, attrs={})
+    return out
+
+
+def multinomial(x, num_samples=1, replacement=False, name=None):
+    """
+    This OP returns a Tensor filled with random values sampled from a Multinomical
+    distribution. The input ``x`` is a tensor with probabilities for generating the
+    random number. Each element in ``x`` should be larger or equal to 0, but not all
+    0. ``replacement`` indicates whether it is a replaceable sample. If ``replacement``
+    is True, a category can be sampled more than once.
+
+    Args:
+        x(Tensor):  A tensor with probabilities for generating the random number. The data type
+            should be float32, float64.
+        num_samples(int, optional): Number of samples, default is 1.
+        replacement(bool, optional): Whether it is a replaceable sample, default is False.
+        name(str, optional): The default value is None. Normally there is no
+            need for user to set this property. For more information, please
+            refer to :ref:`api_guide_Name`.
+    Returns:
+        Tensor: A Tensor filled with sampled category index after ``num_samples`` times samples.
+
+    Examples:
+        .. code-block:: python
+
+        import paddle
+
+        paddle.disable_static()
+
+        x = paddle.rand([2,4])
+        print(x.numpy())
+        # [[0.7713825  0.4055941  0.433339   0.70706886]
+        # [0.9223313  0.8519825  0.04574518 0.16560672]]
+
+        out1 = paddle.multinomial(x, num_samples=5, replacement=True)
+        print(out1.numpy())
+        # [[3 3 1 1 0]
+        # [0 0 0 0 1]]
+
+        # out2 = paddle.multinomial(x, num_samples=5)
+        # OutOfRangeError: When replacement is False, number of samples
+        #  should be less than non-zero categories
+
+        out3 = paddle.multinomial(x, num_samples=3)
+        print(out3.numpy())
+        # [[0 2 3]
+        # [0 1 3]]
+
+    """
+
+    if in_dygraph_mode():
+        return core.ops.multinomial(x, 'num_samples', num_samples,
+                                    'replacement', replacement)
+
+    check_variable_and_dtype(x, "x", ["float32", "float64"], "multinomial")
+
+    helper = LayerHelper("multinomial", **locals())
+    out = helper.create_variable_for_type_inference(
+        dtype=convert_np_dtype_to_dtype_('int64'))
+    helper.append_op(
+        type='multinomial',
+        inputs={"X": x},
+        outputs={'Out': out},
+        attrs={'num_samples': num_samples,
+               'replacement': replacement})
     return out
 
 
@@ -365,8 +431,8 @@ def uniform(shape, dtype=None, min=-1.0, max=1.0, seed=0, name=None):
 
             # example 2:
             # attr shape is a list which contains Tensor.
-            dim_1 = paddle.fill_constant([1], "int64", 2)
-            dim_2 = paddle.fill_constant([1], "int32", 3)
+            dim_1 = paddle.fluid.layers.fill_constant([1], "int64", 2)
+            dim_2 = paddle.fluid.layers.fill_constant([1], "int32", 3)
             result_2 = paddle.tensor.random.uniform(shape=[dim_1, dim_2])
             # [[-0.9951253,   0.30757582, 0.9899647 ],
             #  [ 0.5864527,   0.6607096,  -0.8886161 ]]

@@ -50,8 +50,14 @@ class DpsgdOpKernel : public framework::OpKernel<T> {
     auto *param_out = ctx.Output<framework::Tensor>("ParamOut");
 
     auto sz = param_out->numel();
-    PADDLE_ENFORCE_EQ(param->numel(), sz);
-    PADDLE_ENFORCE_EQ(grad->numel(), sz);
+    PADDLE_ENFORCE_EQ(param->numel(), sz,
+                      platform::errors::InvalidArgument(
+                          "Input parameter's number of elements is error, "
+                          "expected %zu, but received %zu."));
+    PADDLE_ENFORCE_EQ(grad->numel(), sz,
+                      platform::errors::InvalidArgument(
+                          "Input gradient's number of elements is error, "
+                          "expected %zu, but received %zu."));
 
     const T *lr = learning_rate->data<T>();
     const T *param_data = param->data<T>();

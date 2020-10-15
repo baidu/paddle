@@ -26,6 +26,7 @@ import functools
 import pickle
 from contextlib import closing
 from six import string_types
+import paddle
 import paddle.fluid as fluid
 import paddle.fluid.unique_name as nameGen
 from paddle.fluid import core
@@ -60,38 +61,6 @@ class TestCollectiveAPIRunnerBase(object):
             else:
                 break
 
-    def initCommunicator(self, program, rank, nranks, wait_port,
-                         current_endpoint, endpoints):
-        other_endpoints = endpoints[:]
-        other_endpoints.remove(current_endpoint)
-        if rank == 0 and wait_port:
-            self.wait_server_ready(other_endpoints)
-        block = program.global_block()
-        nccl_id_var = block.create_var(
-            name=nameGen.generate('nccl_id'),
-            persistable=True,
-            type=core.VarDesc.VarType.RAW)
-
-        block.append_op(
-            type='c_gen_nccl_id',
-            inputs={},
-            outputs={'Out': nccl_id_var},
-            attrs={
-                'rank': rank,
-                'endpoint': current_endpoint,
-                'other_endpoints': other_endpoints
-            })
-
-        block.append_op(
-            type='c_comm_init',
-            inputs={'X': nccl_id_var},
-            outputs={},
-            attrs={
-                'nranks': nranks,
-                'rank': rank,
-                'ring_id': self.global_ring_id
-            })
-
     def run_trainer(self, args):
         train_prog = fluid.Program()
         startup_prog = fluid.Program()
@@ -100,23 +69,12 @@ class TestCollectiveAPIRunnerBase(object):
         current_endpoint = args["currentendpoint"]
         nranks = 2
         result = self.get_model(train_prog, startup_prog, rank)
+        paddle.distributed.init_parallel_env()
         if args['backend'] == 'nccl':
-            self.initCommunicator(startup_prog, rank, nranks, True,
-                                  current_endpoint, endpoints)
             device_id = int(os.getenv("FLAGS_selected_gpus", "0"))
             place = fluid.CUDAPlace(
                 device_id)  #if args.use_gpu else fluid.CPUPlace()
         else:
-            strategy = fluid.core.GlooParallelStrategy()
-            strategy.rank = rank
-            strategy.rank_num = nranks
-            strategy.prefix = ""
-            strategy.iface = "lo"
-            strategy.init_seconds = 999999
-            strategy.run_seconds = 999999
-            strategy.path = "/tmp/tmp%d" % args['path_id']
-            gloo = fluid.core.GlooParallelContext(strategy)
-            gloo.init()
             place = fluid.CPUPlace()
         exe = fluid.Executor(place)
         exe.run(startup_prog)
@@ -199,8 +157,8 @@ class TestDistBase(unittest.TestCase):
         tr_cmd = "%s %s"
         tr0_cmd = tr_cmd % (self._python_interp, model_file)
         tr1_cmd = tr_cmd % (self._python_interp, model_file)
-        tr0_pipe = open("/tmp/tr0_err.log", "wb")
-        tr1_pipe = open("/tmp/tr1_err.log", "wb")
+        tr0_pipe = open("/tmp/tr0_err.log", "w")
+        tr1_pipe = open("/tmp/tr1_err.log", "w")
         #print(tr0_cmd) 
         tr0_proc = subprocess.Popen(
             tr0_cmd.strip().split(),
@@ -221,6 +179,10 @@ class TestDistBase(unittest.TestCase):
         # close trainer file
         tr0_pipe.close()
         tr1_pipe.close()
+        with open("/tmp/tr0_err.log", "r") as f:
+            sys.stderr.write('trainer 0 stderr file: %s\n' % f.read())
+        with open("/tmp/tr1_err.log", "r") as f:
+            sys.stderr.write('trainer 1 stderr file: %s\n' % f.read())
         return pickle.loads(tr0_out), pickle.loads(
             tr1_out), tr0_proc.pid, tr1_proc.pid
 
@@ -247,6 +209,7 @@ class TestDistBase(unittest.TestCase):
         if check_error_log:
             required_envs["GLOG_v"] = "3"
             required_envs["GLOG_logtostderr"] = "1"
+            required_envs["GLOO_LOG_LEVEL"] = "TRACE"
         tr0_out, tr1_out, pid0, pid1 = self._run_cluster(model_file,
                                                          required_envs)
         np.random.seed(pid0)

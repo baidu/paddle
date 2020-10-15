@@ -381,7 +381,8 @@ class BatchNormKernel<platform::CPUDeviceContext, T>
           break;
         }
         default:
-          PADDLE_THROW("Unknown storage order: %s", data_layout_str);
+          PADDLE_THROW(platform::errors::InvalidArgument(
+              "Unknown storage order: %s", data_layout_str));
       }
 
       // if MomentumTensor is set, use MomentumTensor value, momentum
@@ -446,7 +447,8 @@ class BatchNormKernel<platform::CPUDeviceContext, T>
         break;
       }
       default:
-        PADDLE_THROW("Unknown storage order: %d", data_layout);
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unknown storage order: %d", data_layout));
     }
   }
 };
@@ -799,7 +801,8 @@ class BatchNormGradKernel<platform::CPUDeviceContext, T>
         break;
       }
       default:
-        PADDLE_THROW("Unknown storage order: %s", data_layout_str);
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unknown storage order: %s", data_layout_str));
     }
   }
 };

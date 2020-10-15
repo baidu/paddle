@@ -179,29 +179,15 @@ message BlockDesc {
   optional int32 forward_block_idx = 5 [ default = -1 ];
 }
 
-// CompatibleInfo is used to determine if a feature is compatible and
-// provides the information.
-message CompatibleInfo {
-  enum Type {
-    COMPATIBLE = 0;
-    DEFINITELY_NOT = 1;
-    POSSIBLE = 2;
-    BUG_FIX = 3;
-    PRECISION_CHANGE = 4;
-  }
-  required string version = 1;
-  required Type type = 2;
-}
-
-// In some cases, Paddle Fluid may perform operator definition iterations,
-// and the operator uses OpCompatibleMap for compatibility testing.
-message OpCompatibleMap {
-  message OpCompatiblePair {
+// In some cases, Paddle may perform operator definition iterations,
+// and the operator uses OpVersionMap for compatibility testing.
+message OpVersion { required int32 version = 1; }
+message OpVersionMap {
+  message OpVersionPair {
     required string op_name = 1;
-    required CompatibleInfo compatible_info = 2;
+    required OpVersion op_version = 2;
   }
-  repeated OpCompatiblePair pair = 1;
-  optional string default_required_version = 2;
+  repeated OpVersionPair pair = 1;
 }
 
 // Please refer to
@@ -210,8 +196,8 @@ message OpCompatibleMap {
 // TODO(panyx0718): A model can have multiple programs. Need a
 // way to distinguish them. Maybe ID or name?
 message ProgramDesc {
-  reserved 2; // For backward compatibility.
+  reserved 2, 3; // For backward compatibility.
   repeated BlockDesc blocks = 1;
   optional Version version = 4;
-  optional OpCompatibleMap op_compatible_map = 3;
+  optional OpVersionMap op_version_map = 5;
 }

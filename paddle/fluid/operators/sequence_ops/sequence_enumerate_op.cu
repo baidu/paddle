@@ -58,7 +58,10 @@ class SequenceEnumerateOpCUDAKernel : public framework::OpKernel<T> {
 
     PADDLE_ENFORCE_EQ(
         static_cast<uint64_t>(in_dims[0]), in_lod[0].back(),
-        "The actual input data's size mismatched with LoD information.");
+        platform::errors::InvalidArgument(
+            "The actual input data's size mismatched with LoD information."
+            "Received input data size is %d (actual) vs %d (loD information).",
+            static_cast<uint64_t>(in_dims[0]), in_lod[0].back()));
 
     /* Generate enumerate sequence set */
     auto stream = context.cuda_device_context().stream();

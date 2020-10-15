@@ -21,6 +21,7 @@ from paddle.fluid.framework import Program
 from paddle.fluid.compiler import CompiledProgram
 from paddle.fluid.executor import Executor
 from paddle.fluid.parallel_executor import ParallelExecutor
+from paddle.fluid.framework import Variable, Parameter
 
 from .runtime_base import RuntimeBase
 from ..base.private_helper_function import wait_server_ready
@@ -69,7 +70,52 @@ class ParameterServerRuntime(RuntimeBase):
             self.async_strategy, self.role_maker)
         return compiled_config
 
-    def _load_sparse_params(self, dirname, varnames):
+    def _load_sparse_params(self,
+                            executor,
+                            dirname,
+                            varnames,
+                            main_program=None):
+        assert vars != None
+        check_vars = []
+        load_prog = Program()
+        load_block = load_prog.global_block()
+
+        def _in_varnames(var):
+            return var.name in varnames
+
+        load_vars = list(
+            filter(_in_varnames, fluid.default_main_program().list_vars()))
+        if main_program is None:
+            main_program = self.origin_main_program
+
+        from paddle.fluid.incubate.fleet.parameter_server.ir.public import _get_varname_parts
+        for each_var in load_vars:
+            assert isinstance(each_var, Variable)
+
+            origin_varname, _, _ = _get_varname_parts(each_var.name)
+
+            new_var = fluid.io._clone_var_in_block_(load_block, each_var)
+            var_path = os.path.join(dirname, origin_varname)
+            if not os.path.exists(var_path):
+                raise ValueError("SelectedRows var {} can not find at {}".
+                                 format(new_var.name, var_path))
+
+            if os.path.isfile(var_path):
+                load_block.append_op(
+                    type='sparse_tensor_load',
+                    inputs={},
+                    outputs={'Out': [new_var]},
+                    attrs={
+                        'file_path': os.path.join(dirname, origin_varname),
+                        'node_index': self.role_maker._server_index(),
+                        'node_num': self.role_maker._server_num(),
+                        'shape': each_var.shape
+                    })
+            check_vars.append(each_var)
+
+        executor.run(load_prog)
+
+    def _load_distributed_params(self, dirname, varnames):
         from paddle.fluid.communicator import LargeScaleKV
         from paddle.fluid.incubate.fleet.parameter_server.ir.public import _get_varname_parts
 
@@ -210,18 +256,23 @@ class ParameterServerRuntime(RuntimeBase):
             warnings.warn("communicator has been initialized, skip")
 
     def _get_executor(self):
-        if self.role_maker._is_heter_worker():
-            if self.role_maker._get_heter_worker_device() == "GPU":
-                gpu_id = int(os.getenv("FLAGS_selected_gpus", "0"))
-                executor = Executor(fluid.CUDAPlace(gpu_id))
-            elif self.role_maker._get_heter_worker_device() == "XPU":
-                xpu_id = int(os.getenv("FLAGS_selected_xpus", "0"))
-                executor = Executor(fluid.XPUPlace(xpu_id))
-            else:
-                raise ValueError("Not Support Device {}".format(
-                    self.role_maker._get_heter_worker_device()))
-        else:
-            executor = fluid.Executor(fluid.CPUPlace())
+        executor = fluid.Executor(fluid.CPUPlace())
+        if self.role_maker._is_heter_parameter_server_mode:
+            heter_worker_device_guard = self.context[
+                "valid_strategy"].a_sync_configs[
+                    "heter_worker_device_guard"].upper()
+            if heter_worker_device_guard not in ["GPU", "XPU", "CPU"]:
+                raise ValueError("Heter Worker Not Support Device {}".format(
+                    heter_worker_device_guard))
+            if self.role_maker._is_heter_worker():
+                if heter_worker_device_guard == "GPU":
+                    executor = Executor(
+                        fluid.CUDAPlace(
+                            int(os.getenv("FLAGS_selected_gpus", "0"))))
+                elif heter_worker_device_guard == "XPU":
+                    executor = Executor(
+                        fluid.XPUPlace(
+                            int(os.getenv("FLAGS_selected_xpus", "0"))))
         return executor
 
     def _init_server(self, *args, **kwargs):
@@ -233,13 +284,39 @@ class ParameterServerRuntime(RuntimeBase):
             model_dirname = None
 
         executor = self._get_executor()
+        if self.role_maker._is_heter_worker() and self.context[
+                "valid_strategy"].a_sync_configs["launch_barrier"]:
+            # for heter trainer wait server ready
+            wait_server_ready(self.role_maker._get_pserver_endpoints())
         executor.run(fluid.default_startup_program())
 
         if self.role_maker._is_heter_worker():
             self._init_worker()
-
-        if self.role_maker._is_heter_worker():
             return
+
+        sparse_varnames = self.compiled_strategy.get_sparse_varname_on_ps(False)
+        sparse_related_optimize_varnames = []
+        for var_name in sparse_varnames:
+            sparse_related_optimize_varnames += self.compiled_strategy.get_optimize_varname_on_ps(
+                var_name)
+        sparse_related_optimize_varnames = list(
+            set(sparse_related_optimize_varnames))
+        distribtued_varnames = self.compiled_strategy.get_sparse_varname_on_ps(
+            True)
+        distributed_related_optimize_varnames = []
+        for var_name in distribtued_varnames:
+            distributed_related_optimize_varnames += self.compiled_strategy.get_optimize_varname_on_ps(
+                var_name)
+        distributed_related_optimize_varnames = list(
+            set(distributed_related_optimize_varnames))
+
+        remaining_vars = list(
+            filter(
+                ParameterServerRuntime.__exclude_vars(
+                    sparse_varnames + distribtued_varnames +
+                    sparse_related_optimize_varnames +
+                    distributed_related_optimize_varnames),
+                fluid.default_main_program().list_vars()))
 
         if not model_dirname:
             return
@@ -247,28 +324,24 @@ class ParameterServerRuntime(RuntimeBase):
         if not os.path.isdir(model_dirname):
             raise ValueError("There is no directory named '%s'", model_dirname)
 
-        sparse_varnames = self.compiled_strategy.get_sparse_varname_on_ps(True)
-
-        distribtued_varnames = self.compiled_strategy.get_sparse_varname_on_ps(
-            False)
-
-        remaining_vars = list(
-            filter(
-                ParameterServerRuntime.__exclude_vars(sparse_varnames +
-                                                      distribtued_varnames),
-                fluid.default_main_program().list_vars()))
-
+        # load dense
         fluid.io.load_vars(
             executor,
             main_program=fluid.default_main_program(),
             dirname=model_dirname,
             vars=remaining_vars)
 
+        # load sparse
         self._load_sparse_params(
-            dirname=model_dirname, varnames=sparse_varnames)
+            executor=executor,
+            dirname=model_dirname,
+            varnames=sparse_varnames + sparse_related_optimize_varnames)
 
-        # todo(tangwei12) load distributed vars
-        # self._load_sparse_params(dirname=model_dir, varnames=distribtued_varnames)
+        # load large scale
+        self._load_distributed_params(
+            dirname=model_dirname,
+            varnames=distribtued_varnames +
+            distributed_related_optimize_varnames)
 
     def _run_server(self):
         executor = self._get_executor()
@@ -448,8 +521,7 @@ class ParameterServerRuntime(RuntimeBase):
         executor.run(prog)
         return context.keys()
 
-    def _save_distributed_params(self, executor, dirname, context,
-                                 main_program):
+    def _save_distributed_params(self, executor, dirname, context, mode):
         prog = Program()
         block = prog.global_block()
 
@@ -458,7 +530,7 @@ class ParameterServerRuntime(RuntimeBase):
                 type='checkpoint_notify',
                 attrs={
                     "varname": name,
-                    "is_slice": True,
+                    "mode": mode,
                     "slice_varnames": var_ctx.split_varnames(),
                     "remote_varnames": var_ctx.split_varnames(),
                     "endpoints": var_ctx.split_endpoints(),
@@ -468,15 +540,16 @@ class ParameterServerRuntime(RuntimeBase):
         executor.run(prog)
         return context.keys()
 
-    def _save_distributed_persistables(self, executor, dirname, main_program):
+    def _save_distributed_persistables(self, executor, dirname, main_program,
+                                       mode):
         dense_ctx = self.compiled_strategy.get_communicator_recv_context(
-            recv_type=1)
+            recv_type=1, use_origin_program=True)
 
         sparse_ctx = self.compiled_strategy.get_communicator_recv_context(
-            recv_type=2)
+            recv_type=2, use_origin_program=True)
 
         distributed_ctx = self.compiled_strategy.get_communicator_recv_context(
-            recv_type=3)
+            recv_type=3, use_origin_program=True)
 
         recv_dense_varnames = self._save_dense_params(executor, dirname,
                                                       dense_ctx, main_program)
@@ -485,7 +558,7 @@ class ParameterServerRuntime(RuntimeBase):
             executor, dirname, sparse_ctx, main_program)
 
         recv_distributed_varnames = self._save_distributed_params(
-            executor, dirname, distributed_ctx, main_program)
+            executor, dirname, distributed_ctx, mode)
 
         saved_varnames = recv_dense_varnames + list(
             recv_sparse_varnames) + list(recv_distributed_varnames)
@@ -505,6 +578,7 @@ class ParameterServerRuntime(RuntimeBase):
                                         executor,
                                         dirname,
                                         main_program=None,
+                                        mode=0,
                                         **kwargs):
         """
         This function filters out all variables with `persistable==True` from the
@@ -528,14 +602,15 @@ class ParameterServerRuntime(RuntimeBase):
             )
 
         if main_program is None:
-            main_program = fluid.default_main_program()
+            main_program = self.compiled_strategy.get_origin_ps_main_program()
 
         if isinstance(main_program, CompiledProgram):
             raise TypeError(
                 "in fleet.save_persistables() function, main_program must be as Program type, CompiledProgram is not allowed"
             )
 
-        self._save_distributed_persistables(executor, dirname, main_program)
+        self._save_distributed_persistables(executor, dirname, main_program,
+                                            mode)
 
     def _ps_inference_save_inference_model(self,
                                            executor,
@@ -581,7 +656,8 @@ class ParameterServerRuntime(RuntimeBase):
 
             program = Program.parse_from_string(program_desc_str)
             program._copy_dist_param_info_from(fluid.default_main_program())
-            self._ps_inference_save_persistables(executor, dirname, program)
+            self._ps_inference_save_persistables(
+                executor, dirname, program, mode=0)
 
     def _save_inference_model(self, *args, **kwargs):
         self._ps_inference_save_inference_model(*args, **kwargs)

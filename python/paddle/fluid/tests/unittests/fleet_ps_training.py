@@ -20,8 +20,12 @@ from paddle.fluid.incubate.fleet.base import role_maker
 
 input_x = fluid.layers.data(name="x", shape=[32], dtype='float32')
 input_y = fluid.layers.data(name="y", shape=[1], dtype='int64')
+input_y = fluid.layers.cast(input_y, dtype="float32")
 
-cost = mlp(input_x, input_y)
+with fluid.device_guard("gpu"):
+    input_y = fluid.layers.cast(input_y, dtype="int64")
+    cost = mlp(input_x, input_y)
+
 optimizer = fluid.optimizer.Adagrad(learning_rate=0.01)
 
 role = role_maker.PaddleCloudRoleMaker()

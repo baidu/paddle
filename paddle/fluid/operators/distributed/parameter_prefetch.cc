@@ -156,8 +156,14 @@ void prefetch_core(
       const auto *out_var_data = prefetch_out_var.data<float>();
       auto &dims = prefetch_out_var.dims();
 
-      PADDLE_ENFORCE_EQ(dims.size(), 2, "");
-      PADDLE_ENFORCE_EQ(ids_in_this_section.size(), dims[0]);
+      PADDLE_ENFORCE_EQ(dims.size(), 2,
+                        platform::errors::InvalidArgument(
+                            "The size of Tensor dims must be 2."));
+      PADDLE_ENFORCE_EQ(ids_in_this_section.size(), dims[0],
+                        platform::errors::InvalidArgument(
+                            "The size of ids in this section must equal to "
+                            "dims[0]: %s, but got %s",
+                            dims[0], ids_in_this_section.size()));
 
       auto row_numel = dims[1];
 

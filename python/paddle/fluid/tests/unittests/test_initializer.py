@@ -17,6 +17,7 @@ from __future__ import print_function
 import numpy as np
 import unittest
 
+import paddle
 import paddle.fluid as fluid
 import paddle.fluid.framework as framework
 import paddle.fluid.initializer as initializer
@@ -29,6 +30,14 @@ def check_cast_op(op):
     return op.type == 'cast' and \
            op.attr('in_dtype') == VarDesc.VarType.FP32 and \
            op.attr('out_dtype') == VarDesc.VarType.FP16
+
+
+def output_hist(out):
+    hist, _ = np.histogram(out, range=(-1, 1))
+    hist = hist.astype("float32")
+    hist /= float(out.size)
+    prob = 0.1 * np.ones((10))
+    return hist, prob
 
 
 class TestConstantInitializer(unittest.TestCase):
@@ -581,6 +590,32 @@ class TestSetGlobalInitializer(unittest.TestCase):
         self.assertAlmostEqual(param_init_op.attr('max'), 0.5, delta=DELTA)
         self.assertEqual(param_init_op.attr('seed'), 0)
         fluid.set_global_initializer(None)
+
+
+class TestUniformInitializerDygraph(unittest.TestCase):
+    def test_uniform_initializer(self, dtype="float32"):
+        """
+        In dygraph mode, we can use initializer directly to initialize a tensor.
+        """
+        paddle.disable_static()
+
+        tensor = paddle.zeros([1024, 1024])
+        tensor.stop_gradient = False
+        self.assertTrue(np.allclose(np.zeros((1024, 1024)), tensor.numpy()))
+
+        uniform_ = paddle.nn.initializer.Uniform()
+        uniform_(tensor)
+
+        self.assertEqual(tensor.stop_gradient,
+                         False)  # stop_gradient is not changed
+
+        hist, prob = output_hist(tensor.numpy())
+
+        self.assertTrue(
+            np.allclose(
+                hist, prob, rtol=0, atol=1e-3), "hist: " + str(hist))
+
+        paddle.enable_static()
 
 
 if __name__ == '__main__':

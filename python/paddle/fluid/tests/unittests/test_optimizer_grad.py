@@ -22,6 +22,9 @@ import paddle.fluid as fluid
 import paddle.fluid.optimizer as optimizer
 from paddle.fluid.backward import _append_grad_suffix_
 
+import paddle
+paddle.enable_static()
+
 np.random.seed(10)
 
 SHAPE = [16, 10]
@@ -255,8 +258,8 @@ class TestAdamOptimizer(TestOptimizer):
         moment2_out = beta2 * moment2 + (1. - beta2) * np.square(grad)
 
         lr = attr['lr'] * np.sqrt(1. - beta2_pow) / (1. - beta1_pow)
-        param_out = param - lr * (moment1_out /
-                                  (np.sqrt(moment2_out) + epsilon))
+        param_out = param - lr * (moment1_out / (np.sqrt(moment2_out) + epsilon
+                                                 * np.sqrt(1 - beta2_pow)))
 
         # update hyper-parameter of optimizer
         self.param_attr[name]['beta1_pow'] = beta1_pow * beta1

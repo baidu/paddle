@@ -27,28 +27,28 @@ class TestChunkOpError(unittest.TestCase):
         with program_guard(Program(), Program()):
             # The type of axis in chunk_op should be int or Variable.
             def test_axis_type():
-                x1 = paddle.data(shape=[4], dtype='float16', name='x3')
+                x1 = paddle.fluid.data(shape=[4], dtype='float16', name='x3')
                 paddle.chunk(x=x1, chunks=2, axis=3.2)
 
             self.assertRaises(TypeError, test_axis_type)
 
             # The type of axis in chunk op should be int or Variable.
             def test_axis_variable_type():
-                x2 = paddle.data(shape=[4], dtype='float16', name='x9')
-                x3 = paddle.data(shape=[1], dtype='float16', name='x10')
+                x2 = paddle.fluid.data(shape=[4], dtype='float16', name='x9')
+                x3 = paddle.fluid.data(shape=[1], dtype='float16', name='x10')
                 paddle.chunk(input=x2, chunks=2, axis=x3)
 
             self.assertRaises(TypeError, test_axis_variable_type)
 
             # The type of num_or_sections in chunk_op should be int, tuple or list.
             def test_chunks_type():
-                x4 = paddle.data(shape=[4], dtype='float16', name='x4')
+                x4 = paddle.fluid.data(shape=[4], dtype='float16', name='x4')
                 paddle.chunk(input=x4, chunks=2.1, axis=3)
 
             self.assertRaises(TypeError, test_chunks_type)
 
             def test_axis_type_tensor():
-                x5 = paddle.data(shape=[4], dtype='float16', name='x6')
+                x5 = paddle.fluid.data(shape=[4], dtype='float16', name='x6')
                 paddle.chunk(input=x5, chunks=2, axis=3.2)
 
             self.assertRaises(TypeError, test_axis_type_tensor)
@@ -57,8 +57,8 @@ class TestChunkOpError(unittest.TestCase):
 class API_TestChunk(unittest.TestCase):
     def test_out(self):
         with fluid.program_guard(fluid.Program(), fluid.Program()):
-            data1 = paddle.data('data1', shape=[4, 6, 6], dtype='float64')
-            data2 = paddle.data('data2', shape=[1], dtype='int32')
+            data1 = paddle.fluid.data('data1', shape=[4, 6, 6], dtype='float64')
+            data2 = paddle.fluid.data('data2', shape=[1], dtype='int32')
             x0, x1, x2 = paddle.chunk(data1, chunks=3, axis=data2)
             place = paddle.CPUPlace()
             exe = paddle.static.Executor(place)
@@ -76,7 +76,7 @@ class API_TestChunk(unittest.TestCase):
 class API_TestChunk1(unittest.TestCase):
     def test_out(self):
         with fluid.program_guard(fluid.Program(), fluid.Program()):
-            data1 = paddle.data('data1', shape=[4, 6, 6], dtype='float64')
+            data1 = paddle.fluid.data('data1', shape=[4, 6, 6], dtype='float64')
             x0, x1, x2 = paddle.chunk(data1, chunks=3, axis=2)
             place = paddle.CPUPlace()
             exe = paddle.static.Executor(place)

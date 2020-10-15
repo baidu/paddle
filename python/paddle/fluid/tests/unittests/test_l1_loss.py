@@ -44,8 +44,8 @@ class TestFunctionalL1Loss(unittest.TestCase):
         self.assertTrue(dy_result.shape, [10, 10, 5])
 
     def run_static(self, use_gpu=False):
-        input = paddle.data(name='input', shape=[10, 10, 5], dtype='float32')
-        label = paddle.data(name='label', shape=[10, 10, 5], dtype='float32')
+        input = paddle.fluid.data(name='input', shape=[10, 10, 5], dtype='float32')
+        label = paddle.fluid.data(name='label', shape=[10, 10, 5], dtype='float32')
         result0 = paddle.nn.functional.l1_loss(input, label)
         result1 = paddle.nn.functional.l1_loss(input, label, reduction='sum')
         result2 = paddle.nn.functional.l1_loss(input, label, reduction='none')
@@ -90,9 +90,9 @@ class TestFunctionalL1Loss(unittest.TestCase):
     # test case the raise message
     def test_errors(self):
         def test_value_error():
-            input = paddle.data(
+            input = paddle.fluid.data(
                 name='input', shape=[10, 10, 5], dtype='float32')
-            label = paddle.data(
+            label = paddle.fluid.data(
                 name='label', shape=[10, 10, 5], dtype='float32')
             loss = paddle.nn.functional.l1_loss(
                 input, label, reduction='reduce_mean')
@@ -127,8 +127,8 @@ class TestClassL1Loss(unittest.TestCase):
         self.assertTrue(dy_result.shape, [10, 10, 5])
 
     def run_static(self, use_gpu=False):
-        input = paddle.data(name='input', shape=[10, 10, 5], dtype='float32')
-        label = paddle.data(name='label', shape=[10, 10, 5], dtype='float32')
+        input = paddle.fluid.data(name='input', shape=[10, 10, 5], dtype='float32')
+        label = paddle.fluid.data(name='label', shape=[10, 10, 5], dtype='float32')
         l1_loss = paddle.nn.loss.L1Loss()
         result0 = l1_loss(input, label)
         l1_loss = paddle.nn.loss.L1Loss(reduction='sum')

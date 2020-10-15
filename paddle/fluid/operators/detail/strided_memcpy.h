@@ -41,7 +41,8 @@ struct StridedMemcpyFunctor<T, 0> {
       memory::Copy(gpu_place, dst, gpu_place, src, sizeof(T),
                    cuda_ctx.stream());
 #else
-      PADDLE_THROW("Paddle is not compiled with GPU");
+      PADDLE_THROW(
+          platform::errors::Unavailable("Paddle is not compiled with GPU."));
 #endif
     }
   }
@@ -64,7 +65,8 @@ struct StridedMemcpyFunctor<T, 1> {
       memory::Copy(gpu_place, dst, gpu_place, src, sizeof(T) * dst_dim[0],
                    cuda_ctx.stream());
 #else
-      PADDLE_THROW("Paddle is not compiled with GPU");
+      PADDLE_THROW(
+          platform::errors::Unavailable("Paddle is not compiled with GPU."));
 #endif
     }
   }

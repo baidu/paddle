@@ -69,8 +69,10 @@ class SequenceMaskOpMaker : public framework::OpProtoAndCheckerMaker {
                  "= max(Input(X)).")
         .SetDefault(-1)
         .AddCustomChecker([](const int& v) {
-          PADDLE_ENFORCE(v < 0 || v >= 1,
-                         "Attr(maxlen) must be less than 0 or larger than 1");
+          PADDLE_ENFORCE_EQ(
+              v < 0 || v >= 1, true,
+              platform::errors::InvalidArgument(
+                  "Attr(maxlen) must be less than 0 or larger than 1"));
         });
     AddAttr<int>("out_dtype", "Output data type");
     AddComment(R"DOC(

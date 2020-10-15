@@ -12,52 +12,141 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle.distributed.fleet as fleet
-import paddle.distributed.fleet.base.role_maker as role_maker
 import unittest
 import paddle
+import paddle.fluid as fluid
+import paddle.distributed.fleet as fleet
+from paddle.distributed.fleet.meta_optimizers import AMPOptimizer
 import os
+from fleet_meta_optimizer_base import TestFleetMetaOptimizer
+
+paddle.enable_static()
 
 
-class TestFleetAMPOptimizer(unittest.TestCase):
-    def setUp(self):
-        os.environ["PADDLE_TRAINER_ID"] = "0"
-        os.environ["PADDLE_TRAINER_ENDPOINTS"] = "127.0.0.1:36001"
+class TestFleetAMPOptimizer(TestFleetMetaOptimizer):
+    def test_amp_optimizer_backward(self):
+        """ test amp optimizer backward """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
 
-    def test_amp_optimizer(self):
-        role = role_maker.PaddleCloudRoleMaker(is_collective=True)
-        fleet.init(role)
-        input_x = paddle.fluid.layers.data(
-            name="x", shape=[32], dtype='float32')
-        input_y = paddle.fluid.layers.data(name="y", shape=[1], dtype='int64')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = AMPOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
 
-        fc_1 = paddle.fluid.layers.fc(input=input_x, size=64, act='tanh')
-        fc_2 = paddle.fluid.layers.fc(input=fc_1, size=64, act='tanh')
-        prediction = paddle.fluid.layers.fc(input=[fc_2], size=2, act='softmax')
-        cost = paddle.fluid.layers.cross_entropy(
-            input=prediction, label=input_y)
-        avg_cost = paddle.fluid.layers.mean(x=cost)
+        ops = [op.type for op in avg_cost.block.ops]
+        self.assertIn('cast', ops)
+        self.assertNotIn('check_finite_and_unscale', ops)
 
-        strategy = paddle.distributed.fleet.DistributedStrategy()
-        strategy.amp = True
-        strategy.amp_configs = {
-            "init_loss_scaling": 32768,
-            "decr_every_n_nan_or_inf": 2,
-            "incr_every_n_steps": 1000,
-            "incr_ratio": 2.0,
-            "use_dynamic_loss_scaling": True,
-            "decr_ratio": 0.5,
-            "custom_white_list": ['softmax'],
-            "custom_black_list": ['tanh'],
-        }
+    def test_amp_optimizer_backward_gradients(self):
+        """ test amp optimizer backward + gradients"""
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
 
-        optimizer = paddle.fluid.optimizer.SGD(learning_rate=0.01)
-        optimizer = fleet.distributed_optimizer(optimizer, strategy=strategy)
-        optimizer.minimize(avg_cost)
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = AMPOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+        with fluid.program_guard(train_prog, startup_prog):
+            opt.apply_gradients(params_grads)
 
         ops = [op.type for op in avg_cost.block.ops]
         self.assertIn('cast', ops)
         self.assertIn('check_finite_and_unscale', ops)
+
+    def test_amp_optimizer_backward_optimize(self):
+        """ test amp optimizer backward + optimizer """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = AMPOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+        opt.apply_optimize(avg_cost, startup_prog, params_grads)
+
+        ops = [op.type for op in avg_cost.block.ops]
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
+
+    def test_amp_optimizer(self):
+        """ test amp """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'amp')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        ops = [op.type for op in avg_cost.block.ops]
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
+
+    def test_amp_recompute_optimizer(self):
+        """ test amp + recompute """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'amp')
+        self.set_strategy(strategy, 'recompute')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        strategy = fleet._final_strategy()
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
+
+        # recompute
+        self.assertIn('subprog', ''.join(outs))
+
+    def test_amp_recompute_lars_optimizer(self):
+        """ test amp + recompute """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'amp')
+        self.set_strategy(strategy, 'recompute')
+        self.set_strategy(strategy, 'lars')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        strategy = fleet._final_strategy()
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
+
+        # recompute
+        self.assertIn('subprog', ''.join(outs))
+
+        # lars
+        self.assertIn('lars_momentum', ops)
+
+    def test_amp_recompute_lamb_optimizer(self):
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'amp')
+        self.set_strategy(strategy, 'recompute')
+        self.set_strategy(strategy, 'lamb')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog, 'adam')
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
+
+        # recompute
+        self.assertIn('subprog', ''.join(outs))
+
+        # lamb
+        self.assertIn('lamb', ops)
 
 
 if __name__ == "__main__":

@@ -31,9 +31,10 @@ framework::OpKernelType DeQuantOp::GetExpectedKernelType(
 }
 
 void DeQuantOpMaker::Make() {
-  AddInput("Input", "input data");
-  AddOutput("Output", "output data");
-  AddAttr<float>("Scale", "scale data").SetDefault({1.0f});
+  AddInput("Input", "Input data");
+  AddOutput("Output", "Output data");
+  AddAttr<float>("Scale", "Scale data").SetDefault({1.0f});
+  AddAttr<float>("Shift", "Shift data").SetDefault({0.0f});
   AddComment(R"DOC(This op will dequantize data from INT8 to FP32)DOC");
 }
 

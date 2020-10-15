@@ -448,6 +448,7 @@ VarHandlePtr BRPCClient::AsyncSendMessage(const std::string& ep,
 VarHandlePtr BRPCClient::AsyncCheckpointNotify(const std::string& ep,
                                                const std::string& dirname,
                                                const std::string& varname,
+                                               const int mode,
                                                int64_t time_out) {
   sendrecv::VariableMessage req;
   req.set_varname(varname);

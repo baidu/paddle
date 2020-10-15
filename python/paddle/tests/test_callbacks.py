@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 import unittest
 import time
 import random
 import tempfile
 import shutil
+import paddle
 
 from paddle import Model
 from paddle.static import InputSpec
@@ -101,6 +103,32 @@ class TestCallbacks(unittest.TestCase):
     def test_callback_verbose_2(self):
         self.verbose = 2
         self.run_callback()
+
+    def test_visualdl_callback(self):
+        # visualdl not support python3
+        if sys.version_info < (3, ):
+            return
+
+        inputs = [InputSpec([-1, 1, 28, 28], 'float32', 'image')]
+        labels = [InputSpec([None, 1], 'int64', 'label')]
+
+        train_dataset = paddle.vision.datasets.MNIST(mode='train')
+        eval_dataset = paddle.vision.datasets.MNIST(mode='test')
+
+        net = paddle.vision.LeNet()
+        model = paddle.Model(net, inputs, labels)
+
+        optim = paddle.optimizer.Adam(0.001, parameters=net.parameters())
+        model.prepare(
+            optimizer=optim,
+            loss=paddle.nn.CrossEntropyLoss(),
+            metrics=paddle.metric.Accuracy())
+
+        callback = paddle.callbacks.VisualDL(log_dir='visualdl_log_dir')
+        model.fit(train_dataset,
+                  eval_dataset,
+                  batch_size=64,
+                  callbacks=callback)
 
 
 if __name__ == '__main__':

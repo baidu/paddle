@@ -247,8 +247,6 @@ static void NMS(const platform::CUDADeviceContext &ctx, const Tensor &proposals,
                 const Tensor &sorted_indices, const T nms_threshold,
                 Tensor *keep_out) {
   int boxes_num = proposals.dims()[0];
-  PADDLE_ENFORCE_EQ(boxes_num, sorted_indices.dims()[0]);
-
   const int col_blocks = DIVUP(boxes_num, kThreadsPerBlock);
   dim3 blocks(DIVUP(boxes_num, kThreadsPerBlock),
               DIVUP(boxes_num, kThreadsPerBlock));

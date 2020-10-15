@@ -18,7 +18,9 @@ import numpy as np
 import warnings
 from multiprocessing import Process, Manager
 
+import paddle
 import paddle.fluid as fluid
+from paddle.distributed.fleet.base.private_helper_function import wait_server_ready
 
 
 class Role:
@@ -77,9 +79,10 @@ class Gloo(object):
         self._worker_num = worker_num
         self._server_num = server_num
         self._need_init_all = need_init_all
-        self._iface = self.__get_default_iface()
+        self._iface = ""
         self._prefix = kwargs.get("store.prefix", "")
 
+        http_server = None
         if self._rendezvous == Gloo.RENDEZVOUS.HDFS:
             dfs_name = kwargs.get("dfs.name", "")
             dfs_ugi = kwargs.get("dfs.ugi", "")
@@ -99,15 +102,18 @@ class Gloo(object):
         elif self._rendezvous == Gloo.RENDEZVOUS.HTTP:
             ip = kwargs.get("http.host", "")
             port = kwargs.get("http.port", "")
+            start_http_server = kwargs.get("start_http_server", False)
+            http_server_d = kwargs.get("http_server_d")
 
             if not ip or not port:
                 raise ValueError(self._err_type)
-            self._init_http(ip, port, self._prefix)
-
+            http_server = self._init_http(ip, port, self._prefix,
+                                          start_http_server, http_server_d)
         else:
             raise ValueError(self._err_type)
 
         self._is_initialized = True
+        self._http_server = http_server
 
     def _init_fs(self, fs_path, prefix):
         def init(rank, nodes, role):
@@ -163,32 +169,32 @@ class Gloo(object):
             gloo = init(rank, nodes, "ALL")
             self._nodes_comm = gloo
 
-    def _init_http(self, ip, port, prefix):
+    def _init_http(self, ip, port, prefix, start_http_server, http_server_d):
         def __start_kv_server(http_server_d, size_d):
             from paddle.distributed.fleet.utils.http_server import KVServer
             http_server = KVServer(port, size_d)
             http_server.start()
             wait_seconds = 5
-            while http_server_d.get("running",
-                                    False) and not http_server.shoud_stop():
+            while http_server_d.get("running", False):
                 time.sleep(wait_seconds)
             http_server.stop()
 
-        def init_kv_server():
+        def init_kv_server(http_server_d):
             size_d = {
                 "trainer": self._worker_num,
                 "pserver": self._server_num,
                 "all": self._worker_num + self._server_num
             }
 
-            _http_server_d = {"running": True}
+            http_server_d["running"] = True
             # child process for http server
             _http_server = Process(
-                target=__start_kv_server, args=(_http_server_d, size_d))
+                target=__start_kv_server, args=(http_server_d, size_d))
             _http_server.daemon = True
             # set running status to True
             # start child process
             _http_server.start()
+            return _http_server
 
         def init(rank, nodes, role):
             gloo = fluid.core.Gloo()
@@ -199,12 +205,15 @@ class Gloo(object):
             gloo.set_timeout_seconds(self._init_timeout_seconds,
                                      self._run_timeout_seconds)
             gloo.set_http_store(ip, port, role)
+            ep = ":".join([ip, str(port)])
+            wait_server_ready([ep])
+            gloo.init()
             return gloo
 
         port = int(port)
 
-        if self._role == Role.SERVER and self._role_id == 0:
-            init_kv_server()
+        if start_http_server:
+            http_server = init_kv_server(http_server_d)
 
         if self._role == Role.WORKER:
             rank, nodes = self._get_rank_nodes(Role.WORKER)
@@ -219,6 +228,9 @@ class Gloo(object):
             rank, nodes = self._get_rank_nodes(Role.ALL)
             gloo = init(rank, nodes, "ALL")
             self._nodes_comm = gloo
+        if start_http_server:
+            http_server_d["running"] = False
+            http_server.join()
 
     def _get_rank_nodes(self, role):
         nodes = 0
@@ -254,26 +266,33 @@ class Gloo(object):
         """
         get default physical interface
         """
-        import netifaces
-        gateways = netifaces.gateways()
-        if gateways.get(netifaces.AF_INET) != None:
-            gateway = gateways[netifaces.AF_INET]
-            if len(gateway) > 0 and len(gateway[0]) > 1:
-                return gateway[0][1]
+        res = os.popen("route -A inet").read().strip().split("\n")
+
+        gateway_idx = None
+        iface_idx = None
+        for item in res:
+            item = item.split()
+            if "Gateway" in item and "Iface" in item:
+                gateway_idx = item.index("Gateway")
+                iface_idx = item.index("Iface")
+            elif gateway_idx != None and iface_idx != None:
+                gateway = None
+                if len(item) > gateway_idx:
+                    gateway = item[gateway_idx]
+                if gateway and gateway != '*' and gateway != "0.0.0.0" and len(
+                        item) > iface_idx:
+                    return item[iface_idx]
         return "lo"
 
     def __get_default_iface_from_interfaces(self):
         """
         get default physical interface
         """
-        import netifaces
-        for intf_name in netifaces.interfaces():
-            addresses = netifaces.ifaddresses(intf_name)
-            if netifaces.AF_INET in addresses:
-                ipv4_addresses = addresses[netifaces.AF_INET]
-                for ipv4_address in ipv4_addresses:
-                    if 'broadcast' in ipv4_address:
-                        return intf_name
+        res = os.popen("ip -f inet addr | awk NR%3==1").read().strip().split(
+            "\n")
+        for item in res:
+            if "BROADCAST" in item:
+                return item.split(":")[1].strip()
         return "lo"
 
     def barrier(self, comm_world):
@@ -511,13 +530,6 @@ class RoleMakerBase(object):
         return self._heter_trainer_endpoints[(self._current_id) %
                                              self._heter_worker_num()]
 
-    def _get_heter_worker_device(self):
-        """
-        Returns:
-            string: heter_trainer's device of current node, e.g: CPU/GPU/XPU
-        """
-        return self._heter_trainer_device.upper()
-
 
 class PaddleCloudRoleMaker(RoleMakerBase):
     def __init__(self, is_collective=False, **kwargs):
@@ -529,8 +541,8 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         self._kwargs = kwargs
         self._role_is_generated = False
 
-        self._server_endpoints = None
-        self._worker_endpoints = None
+        self._server_endpoints = []
+        self._worker_endpoints = []
 
         self._gloo = Gloo()  # gloo instance
 
@@ -658,88 +670,99 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         return self._role == Role.HETER_WORKER
 
     def _ps_env(self):
-        try:
-            # Environment variable PADDLE_PSERVERS_IP_PORT_LIST must be set
-            # format: string(ip:port,ip:port), eg. 127.0.0.1:6001,127.0.0.1:6002
-            self._server_endpoints = os.getenv("PADDLE_PSERVERS_IP_PORT_LIST")
+        # Environment variable PADDLE_PSERVERS_IP_PORT_LIST must be set
+        # format: string(ip:port,ip:port), eg. 127.0.0.1:6001,127.0.0.1:6002
+        self._server_endpoints = os.getenv("PADDLE_PSERVERS_IP_PORT_LIST", None)
 
-            if self._server_endpoints is None:
-                # back to non_distributed execution.
-                self._server_endpoints = ""
-                self._trainers_num = 1
-                self._role = Role.WORKER
-                self._current_id = 0
-                self._nodes_num = 1
-                self._heter_trainers_num = 0
-                self._heter_trainer_endpoints = None
-                self._non_distributed = True
-                return
+        if self._server_endpoints is None:
+            # back to non_distributed execution.
+            self._server_endpoints = ""
+            self._trainers_num = 1
+            self._role = Role.WORKER
+            self._current_id = 0
+            self._nodes_num = 1
+            self._heter_trainers_num = 0
+            self._heter_trainer_endpoints = None
+            self._non_distributed = True
+            return
 
-            self._server_endpoints = self._server_endpoints.split(",")
+        self._server_endpoints = self._server_endpoints.split(",")
 
-            self._worker_endpoints = os.getenv("PADDLE_TRAINER_ENDPOINTS")
-            if self._worker_endpoints:
-                self._worker_endpoints = self._worker_endpoints.split(",")
-            else:
-                self._worker_endpoints = []
+        self._worker_endpoints = os.getenv("PADDLE_TRAINER_ENDPOINTS", None)
+        if self._worker_endpoints != None:
+            self._worker_endpoints = self._worker_endpoints.split(",")
+        else:
+            self._worker_endpoints = []
 
-            trainers_num = int(os.environ["PADDLE_TRAINERS_NUM"])
-            training_role = os.environ["TRAINING_ROLE"]
-
-            if training_role not in ["TRAINER", "PSERVER", "HETER_TRAINER"]:
-                raise ValueError(
-                    "TRAINING_ROLE must be PSERVER or TRAINER or HETER_TRAINER, but get {}, please check your environment.".
-                    format(training_role))
-
-            # For heter parameter server env setting
-            heter_trainer_eplist = os.getenv(
-                "PADDLE_HETER_TRAINER_IP_PORT_LIST", None)
-            heter_trainer_device = os.getenv("PADDLE_HETER_TRAINER_DEVICE",
-                                             None)
-            if heter_trainer_eplist and heter_trainer_device:
-                try:
-                    heter_trainer_eplist = os.environ[
-                        "PADDLE_HETER_TRAINER_IP_PORT_LIST"].split(",")
-                except:
-                    raise ValueError(
-                        "Can not Find PADDLE_HETER_TRAINER_IP_PORT_LIST in env or its format doesn't match the requirement: 'IP:PORT,IP:PORT' ."
-                    )
-
-                self._is_heter_parameter_server_mode = True
-                heter_trainers_num = len(heter_trainer_eplist)
-                current_node_device = heter_trainer_device.upper()
-                if current_node_device not in ["CPU", "GPU", "XPU"]:
-                    raise ValueError(
-                        "Heter Trainer doesn't support {} device now, please use CPU / GPU / XPU(KunLun)".
-                        format(heter_trainer_device))
-                self._heter_trainer_device = current_node_device
-            else:
-                self._is_heter_parameter_server_mode = False
-                heter_trainers_num = 0
-
-            if training_role == "TRAINER":
-                role = Role.WORKER
-                current_id = int(os.environ["PADDLE_TRAINER_ID"])
-                if len(self._worker_endpoints) > 0:
-                    self._cur_endpoint = self._worker_endpoints[current_id]
-            elif training_role == "PSERVER":
-                role = Role.SERVER
-                port = os.environ["PADDLE_PORT"]
-                ip = os.environ["POD_IP"]
-                self._cur_endpoint = ip + ":" + port
-                current_id = self._server_endpoints.index(self._cur_endpoint)
-            elif training_role == "HETER_TRAINER":
-                role = Role.HETER_WORKER
-                cur_ip = os.environ["POD_IP"]
-                cur_port = os.environ["PADDLE_PORT"]
-                curr_endpoint = ":".join([cur_ip, cur_port])
-                current_id = heter_trainer_eplist.index(curr_endpoint)
-            else:
-                raise ValueError(
-                    "TRAINING_ROLE must be PSERVER or TRAINER or HETER_TRAINER")
-        except ValueError as e:
+        trainers_num = os.getenv("PADDLE_TRAINERS_NUM", None)
+        if trainers_num == None:
             raise ValueError(
-                "Something wrong with PaddleCloud, please check environment")
+                "Can not find PADDLE_TRAINERS_NUM, please check your environment."
+            )
+        trainers_num = int(trainers_num)
+
+        training_role = os.getenv("TRAINING_ROLE", None)
+        if training_role == None:
+            raise ValueError(
+                "Can not find TRAINING_ROLE, please check your environment.")
+
+        if training_role not in ["TRAINER", "PSERVER", "HETER_TRAINER"]:
+            raise ValueError(
+                "TRAINING_ROLE must be PSERVER or TRAINER or HETER_TRAINER, but get {}, please check your environment.".
+                format(training_role))
+
+        # For heter parameter server env setting
+        heter_trainer_eplist = os.getenv("PADDLE_HETER_TRAINER_IP_PORT_LIST",
+                                         "")
+        if heter_trainer_eplist != "":
+            try:
+                heter_trainer_eplist = os.environ[
+                    "PADDLE_HETER_TRAINER_IP_PORT_LIST"].split(",")
+            except:
+                raise ValueError(
+                    "Can not Find PADDLE_HETER_TRAINER_IP_PORT_LIST in env or its format doesn't match the requirement: 'IP:PORT,IP:PORT' ."
+                )
+
+            self._is_heter_parameter_server_mode = True
+            heter_trainers_num = len(heter_trainer_eplist)
+        else:
+            self._is_heter_parameter_server_mode = False
+            heter_trainers_num = 0
+
+        if training_role == "TRAINER":
+            role = Role.WORKER
+            current_id = os.getenv("PADDLE_TRAINER_ID", None)
+            if current_id == None:
+                raise ValueError(
+                    "Can not find PADDLE_TRAINER_ID, please check your environment."
+                )
+            current_id = int(current_id)
+            if len(self._worker_endpoints) > 0:
+                self._cur_endpoint = self._worker_endpoints[current_id]
+        elif training_role == "PSERVER":
+            role = Role.SERVER
+            port = os.getenv("PADDLE_PORT", None)
+            if port == None:
+                raise ValueError(
+                    "Can not find PADDLE_PORT, please check your environment.")
+            ip = os.getenv("POD_IP", None)
+            if ip == None:
+                raise ValueError(
+                    "Can not find POD_IP, please check your environment.")
+            self._cur_endpoint = ip + ":" + port
+            current_id = self._server_endpoints.index(self._cur_endpoint)
+        elif training_role == "HETER_TRAINER":
+            role = Role.HETER_WORKER
+            cur_port = os.getenv("PADDLE_PORT", None)
+            if cur_port == None:
+                raise ValueError(
+                    "Can not find PADDLE_PORT, please check your environment.")
+            cur_ip = os.getenv("POD_IP", None)
+            if cur_ip == None:
+                raise ValueError(
+                    "Can not find POD_IP, please check your environment.")
+            curr_endpoint = ":".join([cur_ip, cur_port])
+            current_id = heter_trainer_eplist.index(curr_endpoint)
 
         self._trainers_num = trainers_num
         self._role = role
@@ -793,12 +816,25 @@ class PaddleCloudRoleMaker(RoleMakerBase):
                 "store.prefix": prefix,
             }
         elif rendezvous_type == Gloo.RENDEZVOUS.HTTP:
-            ip = os.getenv("PADDLE_GLOO_HTTP_HOST", "")
-            port = os.getenv("PADDLE_GLOO_HTTP_PORT", "")
+            start_http_server = False
+            manager = Manager()
+            http_server_d = manager.dict()
+            http_server_d["running"] = False
+            if self._is_collective:
+                ep_rank_0 = self._worker_endpoints[0]
+                if self._is_first_worker():
+                    start_http_server = True
+            else:
+                ep_rank_0 = os.getenv("PADDLE_GLOO_HTTP_ENDPOINT", "")
+                if self._is_server() and self._server_index() == 0:
+                    start_http_server = True
+            ip, port = ep_rank_0.split(':')
             kwargs = {
                 "http.host": ip,
                 "http.port": port,
                 "store.prefix": prefix,
+                'start_http_server': start_http_server,
+                'http_server_d': http_server_d,
             }
         else:
             dfs_path = os.getenv("PADDLE_GLOO_FS_PATH", "")
@@ -825,6 +861,9 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             need_init_all=need_init_all,
             kwargs=kwargs)
 
+        if rendezvous_type == Gloo.RENDEZVOUS.HTTP:
+            http_server_d['running'] = False
+
     def _generate_role(self):
         """
         generate role for role maker
@@ -835,7 +874,8 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             else:
                 self._collective_env()
             self._role_is_generated = True
-            self._gloo_init()
+            if not paddle.fluid.framework.in_dygraph_mode():
+                self._gloo_init()
 
 
 class UserDefinedRoleMaker(PaddleCloudRoleMaker):

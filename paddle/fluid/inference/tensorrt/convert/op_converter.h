@@ -164,6 +164,7 @@ class OpConverter {
       const std::unordered_set<std::string>& parameters,
       const std::vector<std::string>& outputs, TensorRTEngine* engine) {
     engine->InitNetwork();
+    bool all_dynamic_shape_set = true;
     for (auto& input : inputs) {
       if (parameters.count(input)) continue;
       auto* var = block_desc->FindVar(input);
@@ -181,6 +182,13 @@ class OpConverter {
         auto max_input_shape = engine->max_input_shape()[input];
         auto optim_input_shape = engine->optim_input_shape()[input];
         size_t ranks = min_input_shape.size();
+        if (ranks == 0) {
+          all_dynamic_shape_set = false;
+          LOG(INFO) << "trt input [" << input.c_str()
+                    << "] dynamic shape info not set, please check and retry.";
+          // check other input
+          continue;
+        }
         std::vector<int64_t> input_shape;
         input_shape.push_back(-1);
         for (size_t i = 1; i < ranks; i++) {
@@ -207,6 +215,10 @@ class OpConverter {
             Vec2TRT_Dims(var_shape, input));
       }
     }
+    PADDLE_ENFORCE_EQ(all_dynamic_shape_set, true,
+                      platform::errors::InvalidArgument(
+                          "some trt inputs dynamic shape info not set, "
+                          "check the INFO log above for more details."));
     framework::proto::BlockDesc* block_proto = block_desc->Proto();
     ConvertBlock(*block_proto, parameters, scope, engine);
     for (auto& output : outputs) {

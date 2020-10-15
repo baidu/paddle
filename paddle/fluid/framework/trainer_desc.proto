@@ -148,12 +148,17 @@ message CopyTableConfig {
   repeated TableDependencyMap table_denpendency_map = 12;
 }
 
+message CondTableMap {
+  required int32 key = 1;
+  required int32 value = 2;
+}
 message ProgramConfig {
   required string program_id = 1;
   repeated int32 push_sparse_table_id = 2;
   repeated int32 push_dense_table_id = 3;
   repeated int32 pull_sparse_table_id = 4;
   repeated int32 pull_dense_table_id = 5;
+  repeated CondTableMap partial_pushdense_condtable_map = 10;
 }
 
 message PullDenseWorkerParameter {

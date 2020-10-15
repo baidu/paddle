@@ -28,13 +28,27 @@ function test_launch_ps(){
     fi
 }
 
+function test_launch_ps_heter(){
+    fleetrun --server_num=2 --worker_num=2 --heter_worker_num=2 fleet_ps_training.py 2> ut.elog
+    if grep -q "server are killed" ut.elog; then
+        echo "test heter pserver launch succeed"
+    else
+        echo "test pserver launch failed"
+        exit -1
+    fi
+}
+
 if [[ ${WITH_GPU} == "OFF" ]]; then
+    echo "in cpu test mode"
     test_launch_ps
     exit 0
 fi
 
+echo "No.1 unittest"
 test_launch_ps
+test_launch_ps_heter
 # use default values
+echo "No.2 unittest"
 fleetrun multi_process.py fleetrun
 
 # use paddlecloud
@@ -48,6 +62,7 @@ export PADDLE_TRAINER_ID=0
 export PADDLE_PORT=35789
 export TRAINER_PORTS_NUM=2
 
+echo "No.3 unittest"
 distributed_args="--ips=${cluster_node_ips} --gpus=0,1 --log_dir=testlog"
 CUDA_VISIBLE_DEVICES=0,1 fleetrun ${distributed_args} multi_process.py fleetrun
 
@@ -83,7 +98,7 @@ fi
 unset PADDLE_PORT
 export DISTRIBUTED_TRAINER_ENDPOINTS=127.0.0.1:6170,127.0.0.1:6171,127.0.0.2:6170,127.0.0.2:6171
 
-echo ""
+echo "No.4 unittest"
 echo "paddle.distributed.launch async poll process test"
 if ! CUDA_VISIBLE_DEVICES=0,1 fleetrun ${distributed_args} multi_process.py fleetrun abort; then
     echo "train abort as planned"
@@ -112,5 +127,6 @@ rm -rf $file_0_0 $file_0_1
 
 distributed_args="--gpus=0,1 --log_dir=testlog"
 export PADDLE_LAUNCH_LOG="test_launch_filelock_0"
+echo "No.5 unittest"
 CUDA_VISIBLE_DEVICES=0,1 fleetrun ${distributed_args} find_ports.py
 str_0="worker_endpoints:127.0.0.1:6070,127.0.0.1:6071"

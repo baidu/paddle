@@ -91,7 +91,8 @@ class LSTMPKernel : public framework::OpKernel<T> {
     else if (act_type == math::detail::ActivationType::kReLU)
       ReluFunctor<T>()(d, x, y);
     else
-      PADDLE_THROW("unsupported activation type");
+      PADDLE_THROW(
+          platform::errors::InvalidArgument("unsupported activation type"));
   }
 
   void Compute(const framework::ExecutionContext& ctx) const override {
@@ -263,7 +264,8 @@ class LSTMPGradKernel : public framework::OpKernel<T> {
     else if (act_type == math::detail::ActivationType::kReLU)
       ReluGradFunctor<T>()(d, x, y, dy, dx);
     else
-      PADDLE_THROW("unsupported activation type");
+      PADDLE_THROW(
+          platform::errors::InvalidArgument("unsupported activation type"));
   }
 
   void Compute(const framework::ExecutionContext& ctx) const override {

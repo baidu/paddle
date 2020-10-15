@@ -388,7 +388,8 @@ class DataNormKernel<platform::CPUDeviceContext, T>
         break;
       }
       default:
-        PADDLE_THROW("Unknown storage order: %d", data_layout);
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unknown storage order: %d", data_layout));
     }
   }
 };
@@ -464,7 +465,8 @@ class DataNormGradOp : public framework::OperatorWithKernel {
       const framework::ExecutionContext &ctx) const override {
     const auto *var = ctx.InputVar(framework::GradVarName("Y"));
     if (var == nullptr) {
-      PADDLE_THROW("can't find Y@GRAD");
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "Y@GRAD can not be found for computation"));
     }
     const Tensor *t = nullptr;
     if (var->IsType<Tensor>()) {
@@ -473,7 +475,8 @@ class DataNormGradOp : public framework::OperatorWithKernel {
       t = &var->Get<LoDTensor>();
     }
     if (t == nullptr) {
-      PADDLE_THROW("can't find Y@GRAD");
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "Y@GRAD can not be found for computation"));
     }
 
     // TODO(pzelazko-intel): enable MKLDNN layout when it's ready
@@ -696,7 +699,8 @@ class DataNormGradKernel<platform::CPUDeviceContext, T>
         break;
       }
       default:
-        PADDLE_THROW("Unknown storage order: %s", data_layout_str);
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Unknown storage order: %s", data_layout_str));
     }
   }
 };

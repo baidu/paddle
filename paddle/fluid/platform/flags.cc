@@ -536,3 +536,25 @@ DEFINE_int32(
     "gradient accumulation, if the number of gradients need to that "
     "less FLAGS_max_inplace_grad_add, than it will be use several grad_add"
     "instead of sum. Default is 0.");
+
+/**
+ * Debug related FLAG
+ * Name: tracer_mkldnn_ops_on
+ * Since Version: 2.0.0
+ * Value Range: string, default=empty
+ * Example:
+ * Note: Holds list of operation types with OneDNN kernels to be enabled.
+ */
+DEFINE_string(tracer_mkldnn_ops_on, "",
+              "List of OneDNN operation types to be turned on");
+
+/**
+ * Debug related FLAG
+ * Name: tracer_mkldnn_ops_off
+ * Since Version: 2.0.0
+ * Value Range: string, default=empty
+ * Example:
+ * Note: Holds list of operation types with OneDNN kernels to be disabled.
+ */
+DEFINE_string(tracer_mkldnn_ops_off, "",
+              "List of OneDNN operation types to be turned off");

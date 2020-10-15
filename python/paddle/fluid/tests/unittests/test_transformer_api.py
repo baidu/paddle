@@ -609,6 +609,13 @@ class TestTransformer(unittest.TestCase):
             trans_output = transformer(src, tgt, src_mask, tgt_mask,
                                        memory_mask)
 
+    def test_generate_square_subsequent_mask(self):
+        length = 5
+        d_model, n_head, dim_feedforward = 8, 4, 64
+        transformer = Transformer(
+            d_model, n_head, dim_feedforward=dim_feedforward)
+        mask = transformer.generate_square_subsequent_mask(length)
+
 
 if __name__ == "__main__":
     unittest.main()

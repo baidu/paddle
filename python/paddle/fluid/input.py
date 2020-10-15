@@ -220,24 +220,96 @@ def embedding(input,
     Returns:
         Variable: Embedding Tensor or LoDTensor mapped by input. The data type is the same as :attr:`dtype` .
 
-    Examples:
+    Static Examples:
         .. code-block:: python
 
-          import paddle.fluid as fluid
-          import numpy as np
-          data = fluid.data(name='x', shape=[None, 10], dtype='int64')
+            import paddle
+            import numpy as np
+            paddle.enable_static()
+            
+            x = paddle.static.data(name="x", shape = [2, 4], dtype=np.int64)
+            embedding = paddle.nn.Embedding(10, 3,
+                        weight_attr=paddle.nn.initializer.Constant(value=1.0))
+            adam = paddle.optimizer.SGD(parameters=[embedding.weight], learning_rate=0.01)
+            output = embedding(x)
+            m_output=paddle.mean(output)
+            
+            adam.minimize(m_output)
+            
+            place = paddle.CPUPlace()
+            exe = paddle.static.Executor(place)
+            exe.run(paddle.static.default_startup_program())
+            
+            x = np.array([[7, 2, 4, 5],[4, 3, 2, 9]], dtype=np.int64)
+            
+            # x is a Numpy.
+            # x.data = [[7, 2, 4, 5], [4, 3, 2, 9]]
+            # x.shape = [2, 4]
+            
+            out, = exe.run(paddle.static.default_main_program(), feed={'x':x}, fetch_list=[output])
+            
+            # out is a Numpy.
+            # out.data = [[1., 1., 1.],
+            #             [1., 1., 1.],
+            #             [1., 1., 1.],
+            #             [1., 1., 1.]],
+            #
+            #            [[1., 1., 1.],
+            #             [1., 1., 1.],
+            #             [1., 1., 1.],
+            #             [0., 0., 0.]]]
+            # out.shape = [2, 4, 3]
 
-          # example 1
-          emb_1 = fluid.embedding(input=data, size=[128, 64])
 
-          # example 2: load custom or pre-trained word vectors
-          weight_data = np.random.random(size=(128, 100))  # word vectors with numpy format
-          w_param_attrs = fluid.ParamAttr(
-              name="emb_weight",
-              learning_rate=0.5,
-              initializer=fluid.initializer.NumpyArrayInitializer(weight_data),
-              trainable=True)
-          emb_2 = fluid.embedding(input=data, size=(128, 100), param_attr=w_param_attrs, dtype='float32')   
+    Dygraph Examples:
+        .. code-block:: python
+
+            import paddle
+            import numpy as np
+            
+            paddle.disable_static()
+            
+            x_data = np.arange(3, 6).reshape((3, 1)).astype(np.int64)
+            
+            # x is a Tensor.
+            # x.data = [[3], [4], [5]]
+            # x.shape = [3, 1]
+            x = paddle.to_tensor(x_data, stop_gradient=False)
+            
+            # embedding weight shape = [10, 3]
+            embedding = paddle.nn.Embedding(10, 3, sparse=True)
+            
+            # embedding weight data = [10, 3]
+            w0 = np.full(shape=(10, 3), fill_value=2).astype(np.float32)
+            
+            # embedding.weight.shape = [10, 3]
+            # embedding.weight.data =
+            #                        [[2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.],
+            #                         [2., 2., 2.]]
+            embedding.weight.set_value(w0)
+            
+            adam = paddle.optimizer.Adam(
+                parameters=[embedding.weight], learning_rate=0.01)
+            adam.clear_grad()
+            
+            # out is Tensor
+            # out.shape: [3, 1, 3]
+            # out.layout: NCHW
+            # out.dtype: float
+            # out.data: [2 2 2 2 2 2 2 2 2]
+            out = embedding(x)
+            
+            out.backward()
+            adam.step()
+
     """
 
     helper = LayerHelper('embedding', **locals())

@@ -123,7 +123,9 @@ cc_library(attribute SRCS attribute.cc DEPS framework_proto boost enforce)
 cc_test(program_desc_test SRCS program_desc_test.cc DEPS proto_desc
 device_context)
 
-cc_library(op_version_registry SRCS op_version_registry.cc DEPS framework_proto boost)
+cc_library(op_version_proto SRCS op_version_proto.cc DEPS framework_proto boost)
+
+cc_library(op_version_registry SRCS op_version_registry.cc DEPS op_version_proto framework_proto boost)
 cc_test(op_version_registry_test SRCS op_version_registry_test.cc DEPS op_version_registry)
 
 cc_library(op_proto_maker SRCS op_proto_maker.cc DEPS framework_proto attribute glog)
@@ -245,7 +247,8 @@ cc_library(parallel_executor SRCS parallel_executor.cc DEPS
         graph build_strategy collective_helper
         fast_threaded_ssa_graph_executor variable_helper)
 
-cc_test(dist_multi_trainer_test SRCS dist_multi_trainer_test.cc DEPS executor)
+cc_test(dist_multi_trainer_test SRCS dist_multi_trainer_test.cc DEPS
+    conditional_block_op executor)
 cc_library(prune SRCS prune.cc DEPS framework_proto boost)
 cc_test(prune_test SRCS prune_test.cc DEPS op_info prune recurrent_op device_context)
 cc_test(var_type_inference_test SRCS var_type_inference_test.cc DEPS op_registry

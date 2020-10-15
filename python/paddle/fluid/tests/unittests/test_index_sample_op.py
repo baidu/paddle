@@ -15,6 +15,8 @@
 from __future__ import print_function
 
 import unittest
+import paddle
+import paddle.fluid as fluid
 import numpy as np
 from op_test import OpTest
 
@@ -98,9 +100,7 @@ class TestCase4(TestIndexSampleOp):
 
 class TestIndexSampleShape(unittest.TestCase):
     def test_shape(self):
-        import paddle.fluid as fluid
-        import paddle
-
+        paddle.enable_static()
         # create x value
         x_shape = (2, 5)
         x_type = "float64"
@@ -124,5 +124,22 @@ class TestIndexSampleShape(unittest.TestCase):
         res = exe.run(feed=feed, fetch_list=[output])
 
 
+class TestIndexSampleDynamic(unittest.TestCase):
+    def test_result(self):
+        with fluid.dygraph.guard():
+            x = paddle.to_tensor(
+                [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0],
+                 [9.0, 10.0, 11.0, 12.0]],
+                dtype='float32')
+            index = paddle.to_tensor(
+                [[0, 1, 2], [1, 2, 3], [0, 0, 0]], dtype='int32')
+            out_z1 = paddle.index_sample(x, index)
+
+            except_output = np.array(
+                [[1.0, 2.0, 3.0], [6.0, 7.0, 8.0], [9.0, 9.0, 9.0]])
+            assert out_z1.numpy().all() == except_output.all()
+
+
 if __name__ == "__main__":
+    paddle.enable_static()
     unittest.main()

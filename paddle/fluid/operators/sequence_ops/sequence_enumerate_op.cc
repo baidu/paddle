@@ -43,8 +43,11 @@ class SequenceEnumerateOpMaker : public framework::OpProtoAndCheckerMaker {
               "Output LoDTensor of SequenceEnumerate operator.");
     AddAttr<int>("win_size", "(int) The enumerate sequence window size.")
         .AddCustomChecker([](const int& win_size) {
-          PADDLE_ENFORCE(win_size >= 2,
-                         "The window size should be not less than 2.");
+          PADDLE_ENFORCE_GE(win_size, 2,
+                            platform::errors::InvalidArgument(
+                                "The window size should be not less than 2."
+                                "Received window size is %d",
+                                win_size));
         });
     AddAttr<int>("pad_value", "(int) The enumerate sequence padding value.")
         .SetDefault(0);

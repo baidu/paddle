@@ -20,6 +20,7 @@ import paddle
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
 import paddle.fluid.core as core
+from paddle.static import program_guard, Program
 from op_test import OpTest
 
 
@@ -37,7 +38,7 @@ class TestMVOp(OpTest):
         self.check_grad(['X', 'Vec'], 'Out')
 
     def init_config(self):
-        self.x = np.random.random((5, 100)).astype("float64")
+        self.x = np.random.random((2, 100)).astype("float64")
         self.vec = np.random.random((100)).astype("float64")
 
 
@@ -57,21 +58,36 @@ class TestMVAPI(unittest.TestCase):
         paddle.enable_static()
 
     def test_static_graph(self):
-        paddle.enable_static()
+        for x_stop_gradient in [False, True]:
+            for vec_stop_gradient in [False, True]:
 
-        self.input_x = np.random.rand(5, 100).astype("float64")
-        self.input_vec = np.random.rand(100).astype("float64")
+                paddle.enable_static()
 
-        data_x = paddle.static.data("x", shape=[5, 100], dtype="float64")
-        data_vec = paddle.static.data("vec", shape=[100], dtype="float64")
-        result_vec = paddle.mv(data_x, data_vec)
-        self.place = paddle.CPUPlace()
-        exe = paddle.static.Executor(self.place)
-        res, = exe.run(feed={"x": self.input_x,
-                             "vec": self.input_vec},
-                       fetch_list=[result_vec])
-        z_expected = np.array(np.dot(self.input_x, self.input_vec))
-        self.assertTrue(np.allclose(res, z_expected))
+                train_program = Program()
+                startup_program = Program()
+
+                self.input_x = np.random.rand(5, 100).astype("float64")
+                self.input_vec = np.random.rand(100).astype("float64")
+
+                with program_guard(train_program, startup_program):
+                    data_x = paddle.static.data(
+                        "x", shape=[5, 100], dtype="float64")
+                    data_vec = paddle.static.data(
+                        "vec", shape=[100], dtype="float64")
+
+                    data_x.stop_gradient = x_stop_gradient
+                    data_vec.stop_gradient = vec_stop_gradient
+
+                    result_vec = paddle.mv(data_x, data_vec)
+
+                    self.place = paddle.CPUPlace()
+                    exe = paddle.static.Executor(self.place)
+                    res, = exe.run(
+                        feed={"x": self.input_x,
+                              "vec": self.input_vec},
+                        fetch_list=[result_vec])
+                    z_expected = np.array(np.dot(self.input_x, self.input_vec))
+                    self.assertTrue(np.allclose(res, z_expected))
 
 
 class TestMVError(unittest.TestCase):

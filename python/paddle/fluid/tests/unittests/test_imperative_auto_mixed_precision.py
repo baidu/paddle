@@ -196,6 +196,84 @@ class TestAmpScaler(unittest.TestCase):
                     np.array_equal(param.numpy(), params_init[param.name]))
 
 
+class TestResnet2(unittest.TestCase):
+    def train_resnet(self, enable_amp=True):
+        seed = 90
+
+        batch_size = train_parameters["batch_size"]
+        batch_num = 1
+
+        paddle.disable_static()
+
+        paddle.manual_seed(seed)
+        paddle.framework.random._manual_program_seed(seed)
+
+        resnet = ResNet(use_cudnn=True)
+        optimizer = optimizer_setting(
+            train_parameters, parameter_list=resnet.parameters())
+        np.random.seed(seed)
+        train_reader = paddle.batch(
+            paddle.dataset.flowers.train(use_xmap=False), batch_size=batch_size)
+
+        dy_param_init_value = {}
+        for param in resnet.parameters():
+            dy_param_init_value[param.name] = param.numpy()
+
+        program = None
+        scaler = paddle.amp.GradScaler(
+            enable=enable_amp, init_loss_scaling=2.**10)
+
+        for batch_id, data in enumerate(train_reader()):
+            if batch_id >= batch_num:
+                break
+            dy_x_data = np.array(
+                [x[0].reshape(3, 224, 224) for x in data]).astype('float32')
+            if len(np.array([x[1]
+                             for x in data]).astype('int64')) != batch_size:
+                continue
+            y_data = np.array([x[1] for x in data]).astype('int64').reshape(-1,
+                                                                            1)
+            img = paddle.to_tensor(dy_x_data)
+            label = paddle.to_tensor(y_data)
+            label.stop_gradient = True
+
+            with paddle.amp.auto_cast(enable=enable_amp):
+                out = resnet(img)
+
+            loss = paddle.nn.functional.cross_entropy(input=out, label=label)
+            avg_loss = paddle.mean(x=loss)
+
+            dy_out = avg_loss.numpy()
+
+            scaled_loss = scaler.scale(avg_loss)
+            scaled_loss.backward()
+
+            scaler.minimize(optimizer, scaled_loss)
+
+            dy_grad_value = {}
+            for param in resnet.parameters():
+                if param.trainable:
+                    np_array = np.array(param._grad_ivar().value().get_tensor())
+                    dy_grad_value[param.name + fluid.core.grad_var_suffix(
+                    )] = np_array
+
+            resnet.clear_gradients()
+
+            dy_param_value = {}
+            for param in resnet.parameters():
+                dy_param_value[param.name] = param.numpy()
+
+            paddle.enable_static()
+
+        return dy_out, dy_param_value, dy_grad_value
+
+    def test_resnet(self):
+        out_fp32 = self.train_resnet(enable_amp=False)
+        out_amp = self.train_resnet(enable_amp=True)
+        print(out_fp32[0], out_amp[0])
+        self.assertTrue(np.allclose(out_fp32[0], out_amp[0], atol=1.e-2))
+
+
 class TestResnet(unittest.TestCase):
     def train_resnet(self, enable_amp=True):
         seed = 90

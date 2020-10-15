@@ -87,9 +87,17 @@ class UniqueOp : public framework::OperatorWithKernel {
  protected:
   framework::OpKernelType GetExpectedKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::OpKernelType(
-        OperatorWithKernel::IndicateVarDataType(ctx, "X"),
-        platform::CPUPlace());
+    // Return CPUPlace when Attr("is_sorted") is false. Because it means
+    // that fluid.layers.unique is called, but there is no cuda kernel.
+    if (!ctx.Attr<bool>("is_sorted")) {
+      return framework::OpKernelType(
+          OperatorWithKernel::IndicateVarDataType(ctx, "X"),
+          platform::CPUPlace());
+    } else {
+      // new version paddle.unique is called.
+      return framework::OpKernelType(
+          OperatorWithKernel::IndicateVarDataType(ctx, "X"), ctx.GetPlace());
+    }
   }
 };
 

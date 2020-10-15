@@ -119,7 +119,7 @@ class DatasetBase(object):
 
     def set_filelist(self, filelist):
         """
-        Set file list in current worker.
+        Set file list in current worker. The filelist is indicated by a list of file names (string).
 
         Examples:
             .. code-block:: python
@@ -129,7 +129,7 @@ class DatasetBase(object):
               dataset.set_filelist(['a.txt', 'b.txt'])
 
         Args:
-            filelist(list): file list
+            filelist(list[str]): list of file names of inputs.
         """
         self.dataset.set_filelist(filelist)
         self.filelist = filelist
@@ -240,6 +240,8 @@ class DatasetBase(object):
 
 class InMemoryDataset(DatasetBase):
     """
+    :api_attr: Static Graph
+
     InMemoryDataset, it will load data into memory
     and shuffle data before training.
 
@@ -265,6 +267,8 @@ class InMemoryDataset(DatasetBase):
 
     def _init_distributed_settings(self, **kwargs):
         """
+        :api_attr: Static Graph
+
         should be called only once in user's python scripts to initialize distributed-related setings of dataset instance
         Args:
             kwargs: Keyword arguments. Currently, we support following keys in **kwargs:
@@ -323,6 +327,8 @@ class InMemoryDataset(DatasetBase):
 
     def update_settings(self, **kwargs):
         """
+        :api_attr: Static Graph
+
         should be called in user's python scripts to update setings of dataset instance
         Args:
             kwargs: Keyword arguments. Currently, we support following keys in **kwargs,
@@ -400,6 +406,8 @@ class InMemoryDataset(DatasetBase):
 
     def init(self, **kwargs):
         """
+        :api_attr: Static Graph
+
         should be called only once in user's python scripts to initialize setings of dataset instance
         Args:
             kwargs: Keyword arguments. Currently, we support following keys in **kwargs:
@@ -450,11 +458,16 @@ class InMemoryDataset(DatasetBase):
                     ["test_queue_dataset_run_a.txt", "test_queue_dataset_run_b.txt"])
                 dataset.load_into_memory()
 
-                exe = fluid.Executor(fluid.CPUPlace() if not core.is_compiled_with_cuda(
-                ) else fluid.CUDAPlace(0))
-                exe.run(fluid.default_startup_program())
-                exe.train_from_dataset(fluid.default_main_program(),
-                                           dataset)
+                paddle.enable_static()
+                
+                place = paddle.CUDAPlace(0) if paddle.fluid.core.is_compiled_with_cuda() else paddle.CPUPlace()
+                exe = paddle.static.Executor(place)
+                startup_program = paddle.static.Program()
+                main_program = paddle.static.Program()
+                exe.run(startup_program)
+
+                exe.train_from_dataset(main_program, dataset)
+                
                 os.remove("./test_queue_dataset_run_a.txt")
                 os.remove("./test_queue_dataset_run_b.txt")
         """
@@ -639,6 +652,8 @@ class InMemoryDataset(DatasetBase):
 
     def load_into_memory(self):
         """
+        :api_attr: Static Graph
+        
         Load data into memory
 
         Examples:
@@ -655,6 +670,8 @@ class InMemoryDataset(DatasetBase):
 
     def preload_into_memory(self, thread_num=None):
         """
+        :api_attr: Static Graph
+
         Load data into memory in async mode
 
         Args:
@@ -679,6 +696,8 @@ class InMemoryDataset(DatasetBase):
 
     def wait_preload_done(self):
         """
+        :api_attr: Static Graph
+
         Wait preload_into_memory done
 
         Examples:
@@ -696,6 +715,8 @@ class InMemoryDataset(DatasetBase):
 
     def local_shuffle(self):
         """
+        :api_attr: Static Graph
+
         Local shuffle
 
         Examples:
@@ -712,6 +733,8 @@ class InMemoryDataset(DatasetBase):
 
     def global_shuffle(self, fleet=None, thread_num=12):
         """
+        :api_attr: Static Graph
+
         Global shuffle.
         Global shuffle can be used only in distributed mode. i.e. multiple
         processes on single machine or multiple machines training together.
@@ -771,9 +794,11 @@ class InMemoryDataset(DatasetBase):
               dataset.set_filelist(filelist)
               dataset.load_into_memory()
               dataset.global_shuffle(fleet)
-              exe = fluid.Executor(fluid.CPUPlace())
-              exe.run(fluid.default_startup_program())
-              exe.train_from_dataset(fluid.default_main_program(), dataset)
+              exe = paddle.static.Executor(paddle.CPUPlace())
+              startup_program = paddle.static.Program()
+              main_program = paddle.static.Program()
+              exe.run(startup_program)
+              exe.train_from_dataset(main_program, dataset)
               dataset.release_memory()
 
         """
@@ -781,6 +806,8 @@ class InMemoryDataset(DatasetBase):
 
     def get_memory_data_size(self, fleet=None):
         """
+        :api_attr: Static Graph
+
         Get memory data size, user can call this function to know the num
         of ins in all workers after load into memory.
 
@@ -817,6 +844,8 @@ class InMemoryDataset(DatasetBase):
 
     def get_shuffle_data_size(self, fleet=None):
         """
+        :api_attr: Static Graph
+
         Get shuffle data size, user can call this function to know the num
         of ins in all workers after local/global shuffle.
 
@@ -901,6 +930,8 @@ class InMemoryDataset(DatasetBase):
 
 class QueueDataset(DatasetBase):
     """
+    :api_attr: Static Graph
+
     QueueDataset, it will process data streamly.
 
     Examples:
@@ -920,6 +951,8 @@ class QueueDataset(DatasetBase):
 
     def init(self, **kwargs):
         """
+        :api_attr: Static Graph
+
         should be called only once in user's python scripts to initialize setings of dataset instance
         """
         super(QueueDataset, self).init(**kwargs)

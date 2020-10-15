@@ -117,7 +117,8 @@ void BeamSearchDecodeFunctor::apply() const {
 
 template <>
 void BeamSearchDecodeFunctor::apply<bool>() const {
-  PADDLE_THROW("beam search decode op does not support bool!");
+  PADDLE_THROW(platform::errors::InvalidArgument(
+      "beam search decode op does not support bool!"));
 }
 
 class BeamSearchDecodeOp : public framework::OperatorBase {

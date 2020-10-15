@@ -51,6 +51,16 @@ if(WIN32)
   endif(NOT MSVC)
 endif(WIN32)
 
+if(WITH_MUSL)
+    add_definitions(-DPADDLE_WITH_MUSL)
+
+    message(STATUS, "Set compile option WITH_MKL=OFF when WITH_MUSL=ON")
+    SET(WITH_MKL OFF)
+
+    message(STATUS, "Set compile option WITH_GPU=OFF when WITH_MUSL=ON")
+    SET(WITH_GPU OFF)
+endif()
+
 if(WITH_PSLIB)
     add_definitions(-DPADDLE_WITH_PSLIB)
 endif()

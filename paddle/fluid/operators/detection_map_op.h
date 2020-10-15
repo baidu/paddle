@@ -78,11 +78,16 @@ class DetectionMAPOpKernel : public framework::OpKernel<T> {
 
     auto& label_lod = in_label->lod();
     auto& detect_lod = in_detect->lod();
-    PADDLE_ENFORCE_EQ(label_lod.size(), 1UL,
-                      "Only support one level sequence now.");
+    PADDLE_ENFORCE_EQ(
+        label_lod.size(), 1UL,
+        platform::errors::InvalidArgument("Only support LodTensor of lod_level "
+                                          "with 1 in label, but received %d.",
+                                          label_lod.size()));
     PADDLE_ENFORCE_EQ(label_lod[0].size(), detect_lod[0].size(),
-                      "The batch_size of input(Label) and input(Detection) "
-                      "must be the same.");
+                      platform::errors::InvalidArgument(
+                          "The batch_size of input(Label) and input(Detection) "
+                          "must be the same, but received %d:%d",
+                          label_lod[0].size(), detect_lod[0].size()));
 
     std::vector<std::map<int, std::vector<Box>>> gt_boxes;
     std::vector<std::map<int, std::vector<std::pair<T, Box>>>> detect_boxes;
@@ -185,7 +190,12 @@ class DetectionMAPOpKernel : public framework::OpKernel<T> {
             box.is_difficult = true;
           boxes[label].push_back(box);
         } else {
-          PADDLE_ENFORCE_EQ(input_label.dims()[1], 5);
+          PADDLE_ENFORCE_EQ(
+              input_label.dims()[1], 5,
+              platform::errors::InvalidArgument(
+                  "The input label width"
+                  " must be 5, but received %d, please check your input data",
+                  input_label.dims()[1]));
           Box box(labels(i, 1), labels(i, 2), labels(i, 3), labels(i, 4));
           boxes[label].push_back(box);
         }

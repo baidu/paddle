@@ -50,20 +50,25 @@ class BilateralSliceOp : public framework::OperatorWithKernel {
     int64_t input_chans = input_dims[1];
 
     int64_t output_chans;
-    if (has_offset) {
-      PADDLE_ENFORCE_EQ((coeffs_chans % (input_chans + 1)), 0,
-                        platform::errors::InvalidArgument(
-                            "Slicing with affine offset, coefficients grid "
-                            "should have n_out*(n_in+1) channels, but got %d",
-                            coeffs_chans));
-      output_chans = coeffs_chans / (input_chans + 1);
+    if ((!ctx->IsRuntime()) && ((coeffs_chans < 0) || (input_chans < 0))) {
+      output_chans = -1;
     } else {
-      PADDLE_ENFORCE_EQ((coeffs_chans % input_chans), 0,
-                        platform::errors::InvalidArgument(
-                            "Slicing without affine offset, coefficients grid "
-                            "should have n_out*n_in channels, but got %d .",
-                            coeffs_chans));
-      output_chans = coeffs_chans / input_chans;
+      if (has_offset) {
+        PADDLE_ENFORCE_EQ((coeffs_chans % (input_chans + 1)), 0,
+                          platform::errors::InvalidArgument(
+                              "Slicing with affine offset, coefficients grid "
+                              "should have n_out*(n_in+1) channels, but got %d",
+                              coeffs_chans));
+        output_chans = coeffs_chans / (input_chans + 1);
+      } else {
+        PADDLE_ENFORCE_EQ(
+            (coeffs_chans % input_chans), 0,
+            platform::errors::InvalidArgument(
+                "Slicing without affine offset, coefficients grid "
+                "should have n_out*n_in channels, but got %d .",
+                coeffs_chans));
+        output_chans = coeffs_chans / input_chans;
+      }
     }
 
     std::vector<int64_t> output_dims;

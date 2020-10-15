@@ -24,10 +24,9 @@ class SplitByrefOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE(ctx->HasInput("X"),
-                   "Input(X) of SplitOp should not be null.");
-    PADDLE_ENFORCE_GE(ctx->Outputs("Out").size(), 1UL,
-                      "Outputs(Out) of SplitOp should not be empty.");
+    OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "Ids", "SplitByrefOp");
+    OP_INOUT_CHECK(ctx->HasOutputs("Out"), "Output", "Out", "SplitByrefOp");
+
     auto in_dims = ctx->GetInputDim("X");
     auto outs_names = ctx->Outputs("Out");
     size_t num = static_cast<size_t>(ctx->Attrs().Get<int>("num"));
@@ -41,9 +40,9 @@ class SplitByrefOp : public framework::OperatorWithKernel {
       if (ctx->IsRuntime()) {
         in_axis_dim = in_dims[0];
       }
-      PADDLE_ENFORCE_EQ(in_axis_dim % num, 0,
-                        "tensor split does not result"
-                        " in an equal division");
+      PADDLE_ENFORCE_EQ(in_axis_dim % num, 0, platform::errors::InvalidArgument(
+                                                  "tensor split does not result"
+                                                  " in an equal division"));
       size_t out_axis_dim = in_axis_dim / num;
       for (size_t i = 0; i < outs_number; ++i) {
         auto dim = in_dims;
@@ -51,9 +50,10 @@ class SplitByrefOp : public framework::OperatorWithKernel {
         outs_dims.push_back(dim);
       }
     } else if (sections.size() > 0) {
-      PADDLE_ENFORCE_EQ(sections.size(), outs_number,
-                        "tensor split sections size"
-                        "should be equal to output size.");
+      PADDLE_ENFORCE_EQ(
+          sections.size(), outs_number,
+          platform::errors::InvalidArgument("tensor split sections size"
+                                            "should be equal to output size"));
       for (size_t i = 0; i < outs_number; ++i) {
         auto dim = in_dims;
         dim[0] = sections[i];

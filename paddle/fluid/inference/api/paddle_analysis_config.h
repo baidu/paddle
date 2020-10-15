@@ -414,6 +414,14 @@ struct PD_INFER_DECL AnalysisConfig {
   ///
   bool mkldnn_bfloat16_enabled() const { return use_mkldnn_bfloat16_; }
 
+  /// \brief Specify the operator type list to use Bfloat16 acceleration.
+  ///
+  /// \param op_list The operator type list.
+  ///
+  void SetBfloat16Op(std::unordered_set<std::string> op_list) {
+    bfloat16_enabled_op_types_ = op_list;
+  }
+
   ///
   /// \brief A boolean state telling whether the thread local CUDA stream is
   /// enabled.
@@ -606,6 +614,7 @@ struct PD_INFER_DECL AnalysisConfig {
   bool use_mkldnn_quantizer_{false};
   std::shared_ptr<MkldnnQuantizerConfig> mkldnn_quantizer_config_;
   bool use_mkldnn_bfloat16_{false};
+  std::unordered_set<std::string> bfloat16_enabled_op_types_;
 
   // If the config is already used on a predictor, it becomes invalid.
   // Any config can only be used with one predictor.

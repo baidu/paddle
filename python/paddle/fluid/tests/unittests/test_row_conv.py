@@ -69,7 +69,7 @@ class RowConvTestCase(unittest.TestCase):
                 x = fluid.data(
                     "input", [-1, -1, self.num_channels], dtype=self.dtype)
                 w = fluid.data("weight", self.weight_shape, dtype=self.dtype)
-                y = F.row_conv(x, w, act=self.act)
+                y = F.extension.row_conv(x, w, act=self.act)
         exe = fluid.Executor(place)
         exe.run(start)
         y_np, = exe.run(main,
@@ -82,7 +82,7 @@ class RowConvTestCase(unittest.TestCase):
         with dg.guard(place):
             x_var = dg.to_variable(self.input)
             w_var = dg.to_variable(self.weight)
-            y_var = F.row_conv(x_var, w_var, act=self.act)
+            y_var = F.extension.row_conv(x_var, w_var, act=self.act)
             y_np = y_var.numpy()
         return y_np
 

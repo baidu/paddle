@@ -16,71 +16,87 @@ import unittest
 import paddle
 import os
 
+import paddle
+import paddle.fluid as fluid
 import paddle.distributed.fleet as fleet
 import paddle.distributed.fleet.base.role_maker as role_maker
+from fleet_meta_optimizer_base import TestFleetMetaOptimizer
+
+paddle.enable_static()
 
 
-class TestFleetLocalSGDMetaOptimizer(unittest.TestCase):
-    def setUp(self):
-        os.environ["PADDLE_TRAINER_ID"] = "1"
-        os.environ[
-            "PADDLE_TRAINER_ENDPOINTS"] = "127.0.0.1:36001,127.0.0.1:36002"
-
+class TestFleetLocalSGDMetaOptimizer(TestFleetMetaOptimizer):
     def test_localsgd_optimizer(self):
-        role = role_maker.PaddleCloudRoleMaker(is_collective=True)
-        fleet.init(role)
-        input_x = paddle.fluid.layers.data(
-            name="x", shape=[32], dtype='float32')
-        input_y = paddle.fluid.layers.data(name="y", shape=[1], dtype='int64')
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'localsgd')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
 
-        fc = paddle.fluid.layers.fc(input=input_x, size=64, act='tanh')
-        prediction = paddle.fluid.layers.fc(input=[fc], size=2, act='softmax')
-        cost = paddle.fluid.layers.cross_entropy(
-            input=prediction, label=input_y)
-        avg_cost = paddle.fluid.layers.mean(x=cost)
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            ''.join(op.output('Out')) for op in avg_cost.block.ops
+            if op.type == 'conditional_block'
+        ]
 
-        strategy = paddle.distributed.fleet.DistributedStrategy()
-        strategy.localsgd = True
-        strategy.auto = True
-        config = strategy.localsgd_configs
-        config['k_steps'] = 1
-        config['begin_step'] = 1
-        strategy.localsgd_configs = config
+        self.assertIn('conditional_block', ops)
+        self.assertIn('@SNAPSHOT', ''.join(outs))
 
-        optimizer = paddle.fluid.optimizer.SGD(learning_rate=0.01)
-        optimizer = fleet.distributed_optimizer(optimizer, strategy=strategy)
-        optimizer.minimize(avg_cost)
+    def test_localsgd_amp_optimizer(self):
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'localsgd')
+        self.set_strategy(strategy, 'amp')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            ''.join(op.output('Out')) for op in avg_cost.block.ops
+            if op.type == 'conditional_block'
+        ]
+
+        self.assertIn('conditional_block', ops)
+        self.assertIn('@SNAPSHOT', ''.join(outs))
+
+        # amp
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
 
 
-class TestFleetAdaptiveLocalSGDMetaOptimizer(unittest.TestCase):
-    def setUp(self):
-        os.environ["PADDLE_TRAINER_ID"] = "1"
-        os.environ[
-            "PADDLE_TRAINER_ENDPOINTS"] = "127.0.0.1:36001,127.0.0.1:36002"
-
+class TestFleetAdaptiveLocalSGDMetaOptimizer(TestFleetMetaOptimizer):
     def test_adaptive_localsgd_optimizer(self):
-        role = role_maker.PaddleCloudRoleMaker(is_collective=True)
-        fleet.init(role)
-        input_x = paddle.fluid.layers.data(
-            name="x", shape=[32], dtype='float32')
-        input_y = paddle.fluid.layers.data(name="y", shape=[1], dtype='int64')
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'adaptive_localsgd')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
 
-        fc = paddle.fluid.layers.fc(input=input_x, size=64, act='tanh')
-        prediction = paddle.fluid.layers.fc(input=[fc], size=2, act='softmax')
-        cost = paddle.fluid.layers.cross_entropy(
-            input=prediction, label=input_y)
-        avg_cost = paddle.fluid.layers.mean(x=cost)
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            ''.join(op.output('Out')) for op in avg_cost.block.ops
+            if op.type == 'conditional_block'
+        ]
 
-        strategy = paddle.distributed.fleet.DistributedStrategy()
-        strategy.adaptive_localsgd = True
-        config = strategy.adaptive_localsgd_configs
-        config['init_k_steps'] = 1
-        config['begin_step'] = 1
-        strategy.adaptive_localsgd_configs = config
+        self.assertIn('conditional_block', ops)
+        self.assertIn('@SNAPSHOT', ''.join(outs))
 
-        optimizer = paddle.fluid.optimizer.SGD(learning_rate=0.01)
-        optimizer = fleet.distributed_optimizer(optimizer, strategy=strategy)
-        optimizer.minimize(avg_cost)
+    def test_localsgd_amp_optimizer(self):
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'adaptive_localsgd')
+        self.set_strategy(strategy, 'amp')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            ''.join(op.output('Out')) for op in avg_cost.block.ops
+            if op.type == 'conditional_block'
+        ]
+
+        self.assertIn('conditional_block', ops)
+        self.assertIn('@SNAPSHOT', ''.join(outs))
+
+        # amp
+        self.assertIn('cast', ops)
+        self.assertIn('check_finite_and_unscale', ops)
 
 
 if __name__ == "__main__":

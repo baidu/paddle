@@ -24,6 +24,8 @@ from paddle.fluid import Program, program_guard
 import paddle
 import paddle.nn.functional as F
 
+paddle.enable_static()
+
 CUDA_BLOCK_SIZE = 32
 
 
@@ -490,8 +492,8 @@ class TestWarpCTCOpError(unittest.TestCase):
             logits = np.random.uniform(0.1, 1.0, [20, 15]).astype("float32")
             # labels should not be blank
             labels = np.random.randint(0, 15 - 1, [15, 1], dtype="int32")
-            softmax = paddle.to_variable(logits)
-            labels = paddle.to_variable(labels)
+            softmax = paddle.to_tensor(logits)
+            labels = paddle.to_tensor(labels)
 
             fluid.layers.warpctc(input=softmax, label=labels)
 

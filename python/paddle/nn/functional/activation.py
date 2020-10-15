@@ -14,26 +14,22 @@
 
 # TODO: define activation functions of neural network
 from ...fluid.layers import brelu  #DEFINE_ALIAS
-from ...fluid.layers import erf  #DEFINE_ALIAS
+# from ...fluid.layers import erf  #DEFINE_ALIAS
 from ...fluid.layers import hard_sigmoid  #DEFINE_ALIAS
 from ...fluid.layers import hard_swish  #DEFINE_ALIAS
 from ...fluid.layers import maxout  #DEFINE_ALIAS
-from ...fluid.layers import soft_relu  #DEFINE_ALIAS
+# from ...fluid.layers import soft_relu  #DEFINE_ALIAS
 from ...fluid.layers import swish  #DEFINE_ALIAS
 from ...fluid.layers import sigmoid  #DEFINE_ALIAS
-from ...fluid.layers import thresholded_relu  #DEFINE_ALIAS
 from ...tensor.math import tanh  #DEFINE_ALIAS
 
 __all__ = [
-    'brelu',
     'elu',
-    'erf',
     'gelu',
     'hardshrink',
     'hardtanh',
-    'hard_sigmoid',
-    'hard_swish',
-    'hsigmoid',
+    'hardsigmoid',
+    'hardswish',
     'leaky_relu',
     'log_sigmoid',
     'maxout',
@@ -41,7 +37,6 @@ __all__ = [
     'relu',
     'relu6',
     'selu',
-    'soft_relu',
     'softmax',
     'softplus',
     'softshrink',
@@ -75,10 +70,10 @@ def elu(x, alpha=1.0, name=None):
         alpha (float, optional): The 'alpha' value of the ELU formulation. Default is 1.0.
         name (str, optional): Name for the operation (optional, default is None).
             For more information, please refer to :ref:`api_guide_Name`.
-    
+
     Returns:
         A Tensor with the same data type and shape as ``x`` .
-    
+
     Examples:
         .. code-block:: python
 
@@ -89,7 +84,7 @@ def elu(x, alpha=1.0, name=None):
             paddle.disable_static()
 
             x = paddle.to_tensor(np.array([[-1,6],[1,15.6]]))
-            out = F.elu(x, alpha=0.2) 
+            out = F.elu(x, alpha=0.2)
             # [[-0.12642411  6.        ]
             #  [ 1.          15.6      ]]
     """
@@ -123,16 +118,16 @@ def gelu(x, approximate=False, name=None):
     .. math::
 
         gelu(x) = 0.5 * x * (1 + erf(\\frac{x}{\\sqrt{2}}))
-    
+
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
         approximate (bool, optional): Wether to enable approximation. Default is False.
         name (str, optional): Name for the operation (optional, default is None).
             For more information, please refer to :ref:`api_guide_Name`.
-    
+
     Returns:
         A Tensor with the same data type and shape as ``x`` .
-    
+
     Examples:
         .. code-block:: python
 
@@ -265,125 +260,106 @@ def hardtanh(x, min=-1.0, max=1.0, name=None):
     return out
 
 
-def hsigmoid(input,
-             label,
-             weight,
-             bias,
-             num_classes,
-             path_table=None,
-             path_code=None,
-             is_sparse=False):
+def hardsigmoid(x, name=None):
     """
-	:alias_main: paddle.nn.functional.hsigmoid
-	:alias: paddle.nn.functional.hsigmoid,paddle.nn.functional.activation.hsigmoid
+    hardsigmoid activation.
 
-    The hierarchical sigmoid organizes the classes into a complete binary tree to reduce the computational complexity
-    and speed up the model training, especially the training of language model.
-    Each leaf node of the complete binary tree represents a class(word) and each non-leaf node acts as a binary classifier.
-    For each class(word), there's a unique path from root to itself, hsigmoid calculate the cost for each non-leaf node on
-    the path, and sum them to get a total cost.
-    Comparing to softmax, the OP can reduce the computational complexity from :math:`O(N)` to :math:`O(logN)`, where :math:`N`
-    represents the number of classes or the size of word dict.
+    A 3-part piecewise linear approximation of sigmoid(https://arxiv.org/abs/1603.00391),
+    which is much faster than sigmoid.
 
-    The OP supports default tree and custom tree. For the default tree, you can refer to `Hierarchical Probabilistic Neural
-    Network Language Model <http://www.iro.umontreal.ca/~lisa/pointeurs/hierarchical-nnlm-aistats05.pdf>`_. For the custom
-    tree, you need to set :attr:`is_custom` to True, and do the following steps (take the language model as an example):
+    .. math::
 
-    1. Using a custom word dict to build a binary tree, each leaf node should be an word in the word dict.
-    2. Creating a dict map word_id -> path that from the word to the root node, we call it path_table.
-    3. Creating a dict map word_id -> code of path that from the word to the root node, we call it path_code.
-       Code means the label of each binary classifier, 1 indicate true, 0 indicate false.
-    4. Now, each word should has its path and code along the path, you can pass a batch of path and code related
-       to the same batch of inputs.
+        hardsigmoid(x)=
+            \\left\\{
+            \\begin{aligned}
+            &0, & & \\text{if } x \\leq -3 \\\\
+            &1, & & \\text{if } x \\geq 3 \\\\
+            &x/6 + 1/2, & & \\text{otherwise}
+            \\end{aligned}
+            \\right.
 
     Parameters:
-        input (Variable): A tensor with the shape [N, D], where N is the size of mini-batch,
-            and D is the feature size. Its data type supports float32 and float64.
-        label (Variable): A tensor contains the labels of training data. Its shape is [N, 1]
-            and data type is int64.
-        weight (Variable): A tensor with shape (num_classes - 1, D) if not using custom tree(path_code and path_table is None), or (num_classes, D) if using custom tree.
-        bias (Variable): A tensor with shape (num_classes - 1, 1) if not using custom tree(path_code and path_table is None), or (num_classes, 1) if using custom tree.
-        num_classes (int): The number of classes or the size of word dict, must be greater than 2.
-            If the default tree is used (:attr:`is_custom` is set to False), :attr:`num_classes`
-            should not be None. If the custom tree is used (:attr:`is_custom` is set to True),
-            :attr:`num_classes` should be the number of non-leaf nodes, which indicates the num of
-            classes using by the binary classifier.
-        path_table (Variable, optional): A tensor that stores each batch of samples' path from leaf to root
-            node, its shape is [N, L] and data type is int64, where L is the length of path. For each sample i,
-            path_table[i] is a np.array like structure and each element in this array is the indexes in parent
-            nodes' weight matrix. Default: None.
-        path_code (Variable, optional): A tensor that stores each batch of samples' code of path from leaf
-            to root node, its shape is [N, L] and data type is int64, which is the same as :attr:`path_table`.
-            Each code of path is consisted with the code of nodes from leaf to root node. Default: None.
-        is_sparse (bool, optional): Whether use sparse updating instead of dense updating, if it's True, the
-            gradient of W and input will be sparse. Default: False.
+        x (Tensor): The input Tensor with data type float32, float64.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
-        Variable: A tensor with the cost of hierarchical sigmoid, its shape is [N, 1] and data type is the same as :attr:`input`.
+        A Tensor with the same data type and shape as ``x`` .
 
     Examples:
         .. code-block:: python
 
-            from paddle import fluid, nn
-            import paddle.fluid.dygraph as dg
+            import paddle
             import paddle.nn.functional as F
-            import numpy as np
 
-            main = fluid.Program()
-            start = fluid.Program()
-            feature_size = 6
-            num_classes = 8
-            with fluid.unique_name.guard():
-                with fluid.program_guard(main, start):
-                    x = fluid.data("input", [-1, feature_size],
-                                  dtype="float32")
-                    label = fluid.data("labels", [-1, 1], dtype="int64")
-                    w = fluid.data("weight", (num_classes -1, feature_size), dtype="float32")
-                    b = fluid.data("bias", (num_classes -1, ), dtype="float32")
-                    y = F.hsigmoid(x, label, w, b, num_classes)
-
-            place = fluid.CPUPlace()
-            exe = fluid.Executor(place)
-            exe.run(start)
-            feed_dict = {
-                "input": np.random.randn(4, feature_size).astype(np.float32),
-                "labels": np.random.randint(0, num_classes, (4, 1)).astype(np.int64),
-                "weight": np.random.randn(num_classes - 1, feature_size).astype(np.float32),
-                "bias": np.random.randn(num_classes - 1, ).astype(np.float32),
-            }
-            y_np, = exe.run(main, feed=feed_dict, fetch_list=[y])
-            print(y_np.shape)
-
-          # (4, 1)
+            x = paddle.to_tensor([-4., 5., 1.])
+            out = F.hardsigmoid(x) # [0., 1., 0.666667]
     """
 
-    attrs = {
-        "num_classes": num_classes,
-        "is_sparse": is_sparse,
-        "remote_prefetch": is_sparse
-    }
+    if in_dygraph_mode():
+        return core.ops.hard_sigmoid(x, 'slope', 0.1666666666666667, 'offset',
+                                     0.5)
 
-    inputs = {
-        "X": input,
-        "W": weight,
-        "Bias": bias,
-        "PathTable": path_table,
-        "PathCode": path_code,
-        "Label": label
-    }
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'],
+                             'hardsigmoid')
 
-    helper = LayerHelper('hierarchical_sigmoid', **locals())
-    dtype = helper.input_dtype()
-
-    out = helper.create_variable_for_type_inference(dtype)
-    pre_out = helper.create_variable_for_type_inference(dtype)
-    outputs = {"Out": out, "PreOut": pre_out, "W_Out": weight}
-
+    helper = LayerHelper('hardsigmoid', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
     helper.append_op(
-        type="hierarchical_sigmoid",
-        inputs=inputs,
-        outputs=outputs,
-        attrs=attrs)
+        type='hard_sigmoid',
+        inputs={'X': x},
+        outputs={'Out': out},
+        attrs={'slope': 0.1666666666666667,
+               'offset': 0.5})
+    return out
+
+
+def hardswish(x, name=None):
+    """
+    hardswish activation
+
+    hardswish is proposed in MobileNetV3, and performs better in computational stability
+    and efficiency compared to swish function. For more details please refer
+    to: https://arxiv.org/pdf/1905.02244.pdf
+
+    .. math::
+
+        hardswish(x)=
+            \\left\\{
+            \\begin{aligned}
+            &0, & & \\text{if } x \\leq -3 \\\\
+            &x, & & \\text{if } x \\geq 3 \\\\
+            &\\frac{x(x+3)}{6}, & & \\text{otherwise}
+            \\end{aligned}
+            \\right.
+
+    Parameters:
+        x (Tensor): The input Tensor with data type float32, float64.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type and shape as ``x`` .
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            import paddle.nn.functional as F
+
+            x = paddle.to_tensor([-4., 5., 1.])
+            out = F.hardswish(x) # [0., 5., 0.666667]
+    """
+
+    if in_dygraph_mode():
+        return core.ops.hard_swish(x)
+
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'],
+                             'hardswish')
+
+    helper = LayerHelper('hardswish', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(type='hard_swish', inputs={'X': x}, outputs={'Out': out})
     return out
 
 
@@ -489,7 +465,7 @@ def prelu(x, weight, name=None):
     assert len(weight.shape
                ) == 1, "The dim count of weight shape should be 1 in prelu()."
 
-    # NOTE(): The input of this API should be ``N,C,...`` format, 
+    # NOTE(): The input of this API should be ``N,C,...`` format,
     # which means x.shape[0] is batch_size and x.shape[0] is channel.
     mode = 'all'
     if weight.shape[0] > 1:
@@ -559,15 +535,15 @@ def log_sigmoid(x, name=None):
     .. math::
 
         log\\_sigmoid(x) = log \\frac{1}{1 + e^{-x}}
-    
+
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
         name (str, optional): Name for the operation (optional, default is None).
             For more information, please refer to :ref:`api_guide_Name`.
-    
+
     Returns:
         A Tensor with the same data type and shape as ``x`` .
-    
+
     Examples:
         .. code-block:: python
 
@@ -588,6 +564,81 @@ def log_sigmoid(x, name=None):
     helper = LayerHelper("log_sigmoid", **locals())
     out = helper.create_variable_for_type_inference(x.dtype)
     helper.append_op(type='logsigmoid', inputs={'X': x}, outputs={'Out': out})
+    return out
+
+
+def maxout(x, groups, axis=1, name=None):
+    """
+    maxout activation.
+
+    Assumed the input shape is (N, Ci, H, W).
+    The output shape is (N, Co, H, W).
+    Then Co = Ci/groups and the operator formula is as follows:
+
+    .. math::
+
+        &out_{si+j} = \\max_{k} x_{gsi + sk + j} \\\\
+        &g = groups \\\\
+        &s = \\frac{input.size}{num\\_channels} \\\\
+        &0 \\le i < \\frac{num\\_channels}{groups} \\\\
+        &0 \\le j < s \\\\
+        &0 \\le k < groups
+
+    Parameters:
+        x (Tensor): The input is 4-D Tensor with shape [N, C, H, W] or [N, H, W, C], the data type
+            of input is float32 or float64.
+        groups (int, optional): The groups number of maxout. `groups` specifies the
+            index of channel dimension where maxout will be performed. This must be
+            a factor of number of features. Default is 1.
+        axis (int, optional): The axis along which to perform maxout calculations.
+            It should be 1 when data format is NCHW, be -1 or 3 when data format
+            is NHWC. If ``axis`` < 0, it works the same way as :math:`axis + D` ,
+            where D is the dimensions of ``x`` . ``axis`` only supports 1, 3 or -1.
+            Default is 1.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type as ``x`` .
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            import paddle.nn.functional as F
+
+            x = paddle.rand([1, 2, 3, 4])
+            # [[[[0.5002636  0.22272532 0.17402348 0.2874594 ]
+            #    [0.95313174 0.6228939  0.7129065  0.7087491 ]
+            #    [0.02879342 0.88725346 0.61093384 0.38833922]]
+            #   [[0.5231306  0.03807496 0.91661984 0.15602879]
+            #    [0.666127   0.616567   0.30741522 0.24044901]
+            #    [0.7142536  0.7351477  0.31588817 0.23782359]]]]
+            out = F.maxout(x, groups=2)
+            # [[[[0.5231306  0.22272532 0.91661984 0.2874594 ]
+            #    [0.95313174 0.6228939  0.7129065  0.7087491 ]
+            #    [0.7142536  0.88725346 0.61093384 0.38833922]]]]
+    """
+
+    if in_dygraph_mode():
+        return core.ops.maxout(x, 'groups', groups, 'axis', axis)
+
+    check_variable_and_dtype(x, 'x', ['float32', 'float64'], 'maxout')
+    if axis not in [1, -1, 3]:
+        raise ValueError(
+            "Attr(axis) should be 1 when data format is NCHW, -1 or 3 when data format is NHWC. Received "
+            "Attr(axis): %s." % str(axis))
+    if axis == -1:
+        axis = 3
+
+    helper = LayerHelper('maxout', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(
+        type='maxout',
+        inputs={'X': x},
+        outputs={'Out': out},
+        attrs={'groups': groups,
+               'axis': axis})
     return out
 
 
@@ -613,8 +664,6 @@ def relu6(x, name=None):
             import paddle
             import paddle.nn.functional as F
             import numpy as np
-
-            paddle.disable_static()
 
             x = paddle.to_tensor(np.array([-1, 0.3, 6.5]))
             out = F.relu6(x) # [0, 0.3, 6]
@@ -665,8 +714,6 @@ def selu(x,
             import paddle
             import paddle.nn.functional as F
             import numpy as np
-
-            paddle.disable_static()
 
             x = paddle.to_tensor(np.array([[0.0, 1.0],[2.0, 3.0]]))
             out = F.selu(x) # [[0, 1.050701],[2.101402, 3.152103]]
@@ -778,7 +825,7 @@ def softmax(x, axis=-1, dtype=None, name=None):
             :math:`axis + D` . Default is -1.
         dtype (str|np.dtype|core.VarDesc.VarType, optional): The desired data
             type of the output tensor. If dtype is specified, ``x`` is casted
-            to ``dtype`` before the operation is performed. This is useful for 
+            to ``dtype`` before the operation is performed. This is useful for
             preventing data type overflows. Supported dtype: float32, float64.
             If ``dtype`` is None, the output Tensor has the same dtype as x.
             Default is None.
@@ -881,8 +928,6 @@ def softplus(x, beta=1, threshold=20, name=None):
             import paddle.nn.functional as F
             import numpy as np
 
-            paddle.disable_static()
-
             x = paddle.to_tensor(np.array([-0.4, -0.2, 0.1, 0.3]))
             out = F.softplus(x) # [0.513015, 0.598139, 0.744397, 0.854355]
     """
@@ -930,8 +975,6 @@ def softshrink(x, threshold=0.5, name=None):
             import paddle.nn.functional as F
             import numpy as np
 
-            paddle.disable_static()
-
             x = paddle.to_tensor(np.array([-0.9, -0.2, 0.1, 0.8]))
             out = F.softshrink(x) # [-0.4, 0, 0, 0.3]
     """
@@ -978,8 +1021,6 @@ def softsign(x, name=None):
             import paddle.nn.functional as F
             import numpy as np
 
-            paddle.disable_static()
-
             x = paddle.to_tensor(np.array([-0.4, -0.2, 0.1, 0.3]))
             out = F.softsign(x) # [-0.285714, -0.166667, 0.0909091, 0.230769]
     """
@@ -991,6 +1032,47 @@ def softsign(x, name=None):
     helper = LayerHelper('softsign', **locals())
     out = helper.create_variable_for_type_inference(x.dtype)
     helper.append_op(type='softsign', inputs={'X': x}, outputs={'Out': out})
+    return out
+
+
+def swish(x, name=None):
+    """
+    swish activation.
+
+    .. math::
+
+        swish(x) = \\frac{x}{1 + e^{-x}}
+
+    Parameters:
+        x (Tensor): The input Tensor with data type float32, float64.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type and shape as ``x`` .
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            import paddle.nn.functional as F
+            import numpy as np
+
+            x = paddle.to_tensor(np.array([-2., 0., 1.]))
+            out = F.swish(x) # [-0.238406, 0., 0.731059]
+    """
+
+    if in_dygraph_mode():
+        return core.ops.swish(x, 'beta', 1.0)
+
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'], 'swish')
+    helper = LayerHelper('swish', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(
+        type='swish',
+        inputs={'X': x},
+        outputs={'Out': out},
+        attrs={'beta': 1.0})
     return out
 
 
@@ -1017,8 +1099,6 @@ def tanhshrink(x, name=None):
             import paddle.nn.functional as F
             import numpy as np
 
-            paddle.disable_static()
-
             x = paddle.to_tensor(np.array([-0.4, -0.2, 0.1, 0.3]))
             out = F.tanhshrink(x) # [-0.020051, -0.00262468, 0.000332005, 0.00868739]
     """
@@ -1030,6 +1110,52 @@ def tanhshrink(x, name=None):
     helper = LayerHelper('tanh_shrink', **locals())
     out = helper.create_variable_for_type_inference(x.dtype)
     helper.append_op(type='tanh_shrink', inputs={'X': x}, outputs={'Out': out})
+    return out
+
+
+def thresholded_relu(x, threshold=1.0, name=None):
+    """
+    thresholded relu activation.
+
+    .. math::
+
+        thresholded\\_relu(x) = \\begin{cases}
+                                 x, \\text{if } x > threshold \\\\
+                                 0, \\text{otherwise}
+                                \\end{cases}
+
+    Parameters:
+        x (Tensor): The input Tensor with data type float32, float64.
+        threshold (float, optional): The value of threshold for thresholded_relu. Default is 1.0
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type and shape as ``x`` .
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            import paddle.nn.functional as F
+            import numpy as np
+
+            x = paddle.to_tensor(np.array([2., 0., 1.]))
+            out = F.thresholded_relu(x) # [2., 0., 0.]
+    """
+
+    if in_dygraph_mode():
+        return core.ops.thresholded_relu(x, 'threshold', threshold)
+
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'],
+                             'thresholded_relu')
+    helper = LayerHelper('thresholded_relu', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(
+        type='thresholded_relu',
+        inputs={'X': x},
+        outputs={'Out': out},
+        attrs={'threshold': threshold})
     return out
 
 
@@ -1051,13 +1177,13 @@ def log_softmax(x, axis=-1, dtype=None, name=None):
             :math:`axis + D` . Default is -1.
         dtype (str|np.dtype|core.VarDesc.VarType, optional): The desired data
             type of the output tensor. If dtype is specified, ``x`` is casted
-            to ``dtype`` before the operation is performed. This is useful for 
+            to ``dtype`` before the operation is performed. This is useful for
             preventing data type overflows. Supported dtype: float32, float64.
             If ``dtype`` is None, the output Tensor has the same dtype as x.
             Default is None.
         name (str, optional): Name for the operation (optional, default is None).
             For more information, please refer to :ref:`api_guide_Name`.
- 
+
     Returns:
         A Tensor with the same shape and data type (use ``dtype`` if it is
         specified) as x.

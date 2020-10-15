@@ -31,12 +31,16 @@ framework::OpKernelType QuantOp::GetExpectedKernelType(
 }
 
 void QuantOpMaker::Make() {
-  AddInput("Input", "input data");
-  AddOutput("Output", "output data");
+  AddInput("Input", "Input data");
+  AddOutput("Output", "Output data");
   AddAttr<bool>("is_negative_input",
                 "(bool, default false) Only used in mkldnn INT8 kernel")
       .SetDefault(false);
-  AddAttr<float>("Scale", "scale data").SetDefault({1.0f});
+  AddAttr<float>("Scale", "Scale data").SetDefault({1.0f});
+  AddAttr<float>(
+      "Shift",
+      "Shift data. When Shift is non-zero, data is quantized to unsigned int8.")
+      .SetDefault({0.0f});
   AddAttr<std::string>("output_format",
                        "Convert format to NHWC or NCHW during quantization.")
       .SetDefault("NHWC");

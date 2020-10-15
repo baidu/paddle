@@ -455,8 +455,8 @@ class TestAdamOpV2(unittest.TestCase):
         state_dict = adam.state_dict()
         adam.set_state_dict(state_dict)
 
-        #learning_rate is _LRScheduler
-        learning_rate = paddle.optimizer.CosineAnnealingLR(
+        #learning_rate is LRScheduler
+        learning_rate = paddle.optimizer.lr.CosineAnnealingDecay(
             learning_rate=0.1, T_max=10)
         adam = paddle.optimizer.Adam(
             learning_rate=learning_rate,
@@ -499,7 +499,7 @@ class TestAdamOpV2(unittest.TestCase):
         cur_lr = adam.get_lr()
         assert (lr == cur_lr)
         with self.assertRaises(TypeError):
-            lr_var = paddle.create_global_var(
+            lr_var = paddle.fluid.layers.create_global_var(
                 shape=[1], value=lr, dtype='float32')
             adam.set_lr(lr_var)
 

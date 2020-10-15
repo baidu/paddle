@@ -14,6 +14,7 @@
 
 from __future__ import print_function
 
+import paddle
 import unittest
 import numpy as np
 import paddle.fluid as fluid
@@ -152,6 +153,198 @@ class TestLRNOpError(unittest.TestCase):
             # the input must be float32
             in_w = fluid.data(name="in_w", shape=[None, 3, 3, 3], dtype="int64")
             self.assertRaises(TypeError, fluid.layers.lrn, in_w)
+
+
+class TestLocalResponseNormFAPI(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(123)
+        self.places = [fluid.CPUPlace()]
+        if core.is_compiled_with_cuda():
+            self.places.append(fluid.CUDAPlace(0))
+
+    def check_static_3d_input(self, place):
+        with fluid.program_guard(fluid.Program(), fluid.Program()):
+            in_np1 = np.random.random([3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 1))
+
+            input1 = fluid.data(
+                name="input1", shape=[3, 40, 40], dtype="float32")
+            input2 = fluid.data(
+                name="input2", shape=[3, 40, 40], dtype="float32")
+            res1 = paddle.nn.functional.local_response_norm(
+                x=input1, size=5, data_format='NCL')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=input2, size=5, data_format='NLC')
+            exe = fluid.Executor(place)
+            fetches = exe.run(fluid.default_main_program(),
+                              feed={"input1": in_np1,
+                                    "input2": in_np2},
+                              fetch_list=[res1, res2])
+
+            fetches1_tran = np.transpose(fetches[1], (0, 2, 1))
+            self.assertTrue(np.allclose(fetches[0], fetches1_tran))
+
+    def check_static_4d_input(self, place):
+        with fluid.program_guard(fluid.Program(), fluid.Program()):
+            input1 = fluid.data(
+                name="input1", shape=[3, 3, 40, 40], dtype="float32")
+            input2 = fluid.data(
+                name="input2", shape=[3, 40, 40, 3], dtype="float32")
+
+            res1 = paddle.nn.functional.local_response_norm(
+                x=input1, size=5, data_format='NCHW')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=input2, size=5, data_format='NHWC')
+
+            in_np1 = np.random.random([3, 3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 3, 1))
+
+            exe = fluid.Executor(place)
+            fetches = exe.run(fluid.default_main_program(),
+                              feed={"input1": in_np1,
+                                    "input2": in_np2},
+                              fetch_list=[res1, res2])
+
+            fetches1_tran = np.transpose(fetches[1], (0, 3, 1, 2))
+            self.assertTrue(np.allclose(fetches[0], fetches1_tran))
+
+    def check_static_5d_input(self, place):
+        with fluid.program_guard(fluid.Program(), fluid.Program()):
+            input1 = fluid.data(
+                name="input1", shape=[3, 3, 3, 40, 40], dtype="float32")
+            input2 = fluid.data(
+                name="input2", shape=[3, 3, 40, 40, 3], dtype="float32")
+            res1 = paddle.nn.functional.local_response_norm(
+                x=input1, size=5, data_format='NCDHW')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=input2, size=5, data_format='NDHWC')
+
+            in_np1 = np.random.random([3, 3, 3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 3, 4, 1))
+
+            exe = fluid.Executor(place)
+            fetches = exe.run(fluid.default_main_program(),
+                              feed={"input1": in_np1,
+                                    "input2": in_np2},
+                              fetch_list=[res1, res2])
+
+            fetches1_tran = np.transpose(fetches[1], (0, 4, 1, 2, 3))
+            self.assertTrue(np.allclose(fetches[0], fetches1_tran))
+
+    def test_static(self):
+        for place in self.places:
+            self.check_static_3d_input(place=place)
+            self.check_static_4d_input(place=place)
+            self.check_static_5d_input(place=place)
+
+    def check_dygraph_3d_input(self, place):
+        with fluid.dygraph.guard(place):
+            in_np1 = np.random.random([3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 1))
+
+            in1 = paddle.to_tensor(in_np1)
+            in2 = paddle.to_tensor(in_np2)
+
+            res1 = paddle.nn.functional.local_response_norm(
+                x=in1, size=5, data_format='NCL')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=in2, size=5, data_format='NLC')
+
+            res2_tran = np.transpose(res2.numpy(), (0, 2, 1))
+            self.assertTrue(np.allclose(res1.numpy(), res2_tran))
+
+    def check_dygraph_4d_input(self, place):
+        with fluid.dygraph.guard(place):
+            in_np1 = np.random.random([3, 3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 3, 1))
+
+            in1 = paddle.to_tensor(in_np1)
+            in2 = paddle.to_tensor(in_np2)
+
+            res1 = paddle.nn.functional.local_response_norm(
+                x=in1, size=5, data_format='NCHW')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=in2, size=5, data_format='NHWC')
+
+            res2_tran = np.transpose(res2.numpy(), (0, 3, 1, 2))
+            self.assertTrue(np.allclose(res1.numpy(), res2_tran))
+
+    def check_dygraph_5d_input(self, place):
+        with fluid.dygraph.guard(place):
+            in_np1 = np.random.random([3, 3, 3, 40, 40]).astype("float32")
+            in_np2 = np.transpose(in_np1, (0, 2, 3, 4, 1))
+
+            in1 = paddle.to_tensor(in_np1)
+            in2 = paddle.to_tensor(in_np2)
+
+            res1 = paddle.nn.functional.local_response_norm(
+                x=in1, size=5, data_format='NCDHW')
+            res2 = paddle.nn.functional.local_response_norm(
+                x=in2, size=5, data_format='NDHWC')
+
+            res2_tran = np.transpose(res2.numpy(), (0, 4, 1, 2, 3))
+            self.assertTrue(np.allclose(res1.numpy(), res2_tran))
+
+    def test_dygraph(self):
+        for place in self.places:
+            self.check_dygraph_3d_input(place)
+            self.check_dygraph_4d_input(place)
+            self.check_dygraph_5d_input(place)
+
+
+class TestLocalResponseNormFAPIError(unittest.TestCase):
+    def test_errors(self):
+        with program_guard(Program(), Program()):
+
+            def test_Variable():
+                # the input of lrn must be Variable.
+                x1 = fluid.create_lod_tensor(
+                    np.array([-1, 3, 5, 5]), [[1, 1, 1, 1]], fluid.CPUPlace())
+                paddle.nn.functional.local_response_norm(x1, size=5)
+
+            self.assertRaises(TypeError, test_Variable)
+
+            def test_datatype():
+                x = fluid.data(name='x', shape=[3, 4, 5, 6], dtype="int32")
+                paddle.nn.functional.local_response_norm(x, size=5)
+
+            self.assertRaises(TypeError, test_datatype)
+
+            def test_dataformat():
+                x = fluid.data(name='x', shape=[3, 4, 5, 6], dtype="float32")
+                paddle.nn.functional.local_response_norm(
+                    x, size=5, data_format="NCTHW")
+
+            self.assertRaises(ValueError, test_dataformat)
+
+            def test_dim():
+                x = fluid.data(name='x', shape=[3, 4], dtype="float32")
+                paddle.nn.functional.local_response_norm(x, size=5)
+
+            self.assertRaises(ValueError, test_dim)
+
+
+class TestLocalResponseNormCAPI(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(123)
+        self.places = [fluid.CPUPlace()]
+        if core.is_compiled_with_cuda():
+            self.places.append(fluid.CUDAPlace(0))
+
+    def test_dygraph(self):
+        for place in self.places:
+            with fluid.dygraph.guard(place):
+                in1 = paddle.rand(shape=(3, 3, 40, 40), dtype="float32")
+                in2 = paddle.transpose(in1, [0, 2, 3, 1])
+
+                m1 = paddle.nn.LocalResponseNorm(size=5, data_format='NCHW')
+                m2 = paddle.nn.LocalResponseNorm(size=5, data_format='NHWC')
+
+                res1 = m1(in1)
+                res2 = m2(in2)
+
+                res2_tran = np.transpose(res2.numpy(), (0, 3, 1, 2))
+                self.assertTrue(np.allclose(res1.numpy(), res2_tran))
 
 
 if __name__ == "__main__":

@@ -170,7 +170,7 @@ class TestFlatten2OpError(unittest.TestCase):
             x2 = np.arange(image_shape[0] * image_shape[1] * image_shape[2] *
                            image_shape[3]).reshape(image_shape) / 100.
             x2 = x2.astype('float16')
-            x2_var = paddle.data(name='x2', shape=[3, 2, 4, 5], dtype='float16')
+            x2_var = paddle.fluid.data(name='x2', shape=[3, 2, 4, 5], dtype='float16')
             paddle.flatten(x2_var)
 
         self.assertRaises(TypeError, test_type)

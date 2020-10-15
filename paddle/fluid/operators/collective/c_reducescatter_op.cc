@@ -24,14 +24,15 @@ class CReduceScatterOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE(ctx->HasInput("X"), "Input(X) should not be null");
-    PADDLE_ENFORCE(ctx->HasOutput("Out"), "Output(Out) should not be null.");
+    OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "X", "ReduceScatter");
+    OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "X", "ReduceScatter");
     int nranks = ctx->Attrs().Get<int>("nranks");
     framework::DDim dim = ctx->GetInputDim("X");
     if (dim[0] > 0 || dim[0] < -1) {
-      PADDLE_ENFORCE(dim[0] % nranks == 0,
-                     "dim[0] (%d) is not divisible by nranks(%d)", dim[0],
-                     nranks);
+      PADDLE_ENFORCE_EQ(
+          dim[0] % nranks, 0,
+          platform::errors::InvalidArgument(
+              "dim[0] (%d) is not divisible by nranks(%d)", dim[0], nranks));
       dim[0] /= nranks;
     }
     ctx->SetOutputDim("Out", dim);

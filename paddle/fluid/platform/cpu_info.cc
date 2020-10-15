@@ -164,6 +164,13 @@ bool MayIUse(const cpu_isa_t cpu_isa) {
         // AVX512F: EBX Bit 16
         int avx512f_mask = (1 << 16);
         return (reg[1] & avx512f_mask) != 0;
+      } else if (cpu_isa == avx512_core) {
+        unsigned int avx512f_mask = (1 << 16);
+        unsigned int avx512dq_mask = (1 << 17);
+        unsigned int avx512bw_mask = (1 << 30);
+        unsigned int avx512vl_mask = (1 << 31);
+        return ((reg[1] & avx512f_mask) && (reg[1] & avx512dq_mask) &&
+                (reg[1] & avx512bw_mask) && (reg[1] & avx512vl_mask));
       }
     }
 #endif

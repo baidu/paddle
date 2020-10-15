@@ -13,9 +13,8 @@
 # limitations under the License.
 
 # TODO: define statistical functions of a tensor  
-from ..fluid.layers import reduce_mean  #DEFINE_ALIAS
 
-__all__ = ['mean', 'reduce_mean', 'std', 'var', 'numel']
+__all__ = ['mean', 'std', 'var', 'numel']
 
 import numpy as np
 from ..fluid.framework import Variable

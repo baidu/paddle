@@ -88,7 +88,7 @@ class TestNNLogSoftmaxAPI(unittest.TestCase):
         logsoftmax = paddle.nn.LogSoftmax(axis)
         # test static api
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data(name='x', shape=self.x_shape)
+            x = paddle.fluid.data(name='x', shape=self.x_shape)
             y = logsoftmax(x)
             exe = paddle.static.Executor(self.place)
             out = exe.run(feed={'x': self.x}, fetch_list=[y])
@@ -120,7 +120,7 @@ class TestNNFunctionalLogSoftmaxAPI(unittest.TestCase):
             x = x.astype(dtype)
         ref_out = np.apply_along_axis(ref_log_softmax, axis, x)
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data(name='x', shape=self.x_shape)
+            x = paddle.fluid.data(name='x', shape=self.x_shape)
             y = F.log_softmax(x, axis, dtype)
             exe = paddle.static.Executor(self.place)
             out = exe.run(feed={'x': self.x}, fetch_list=[y])
@@ -139,10 +139,10 @@ class TestNNFunctionalLogSoftmaxAPI(unittest.TestCase):
 
     def test_errors(self):
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data(name='X1', shape=[100], dtype='int32')
+            x = paddle.fluid.data(name='X1', shape=[100], dtype='int32')
             self.assertRaises(TypeError, F.log_softmax, x)
 
-            x = paddle.data(name='X2', shape=[100], dtype='float32')
+            x = paddle.fluid.data(name='X2', shape=[100], dtype='float32')
             self.assertRaises(TypeError, F.log_softmax, x, dtype='int32')
 
 

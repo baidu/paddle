@@ -13,36 +13,10 @@
 # limitations under the License.
 
 # TODO: define the extention functions
-from ...fluid.layers import add_position_encoding  #DEFINE_ALIAS
-from ...fluid.layers import multiclass_nms  #DEFINE_ALIAS
-from ...fluid.layers import target_assign  #DEFINE_ALIAS
-from ...fluid.layers import temporal_shift  #DEFINE_ALIAS
-
-from ...fluid.layers import continuous_value_model  #DEFINE_ALIAS
-from ...fluid.layers import filter_by_instag  #DEFINE_ALIAS
-from ...fluid.layers import polygon_box_transform  #DEFINE_ALIAS
-from ...fluid.layers import random_crop  #DEFINE_ALIAS
-from ...fluid.layers import rpn_target_assign  #DEFINE_ALIAS
-from ...fluid.layers import similarity_focus  #DEFINE_ALIAS
-from ...fluid.layers import warpctc  #DEFINE_ALIAS
 
 __all__ = [
-    'add_position_encoding',
-    #       'autoincreased_step_counter',
-    'continuous_value_model',
-    'filter_by_instag',
-    #       'linear_chain_crf',
-    #       'merge_selected_rows',
-    'multiclass_nms',
-    'polygon_box_transform',
-    'random_crop',
-    'row_conv',
-    'rpn_target_assign',
-    'similarity_focus',
-    'target_assign',
-    'temporal_shift',
-    'warpctc',
-    'diag_embed'
+    'diag_embed',
+    'row_conv'
 ]
 
 import numpy as np
@@ -176,8 +150,6 @@ def diag_embed(input, offset=0, dim1=-2, dim2=-1):
 @templatedoc()
 def row_conv(input, weight, act=None):
     """
-	:alias_main: paddle.nn.functional.row_conv
-	:alias: paddle.nn.functional.row_conv,paddle.nn.functional.extension.row_conv
 
     ${comment}
 
@@ -217,7 +189,7 @@ def row_conv(input, weight, act=None):
             with dg.guard(place):
                 x_var = dg.to_variable(x)
                 w_var = dg.to_variable(weight)
-                y_var = F.row_conv(x_var, w_var)
+                y_var = F.extension.row_conv(x_var, w_var)
                 y_np = y_var.numpy()
 
             print(y_np.shape)

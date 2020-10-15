@@ -16,6 +16,7 @@ from ... import default_main_program
 from ... import default_startup_program
 from ... import layers
 from ... import unique_name
+from ... import program_guard
 from . import fp16_utils
 from .fp16_utils import rewrite_program
 from .fp16_utils import update_role_var_grad
@@ -58,21 +59,40 @@ class OptimizerWithMixedPrecision(object):
         self._optimizer = optimizer
         self._amp_lists = amp_lists
         self._param_grads = None
-        self._train_program = default_main_program()
-        self._startup_prog = default_startup_program()
+        self._train_program = None
+
         self._scaled_loss = None
-        self._loss_scaling = layers.create_global_var(
-            name=unique_name.generate("loss_scaling"),
-            shape=[1],
-            value=init_loss_scaling,
-            dtype='float32',
-            persistable=True)
+        self._loss_scaling = None
+        self._init_loss_scaling = init_loss_scaling
         self._use_dynamic_loss_scaling = use_dynamic_loss_scaling
         if self._use_dynamic_loss_scaling:
             self._incr_every_n_steps = incr_every_n_steps
             self._decr_every_n_nan_or_inf = decr_every_n_nan_or_inf
             self._incr_ratio = incr_ratio
             self._decr_ratio = decr_ratio
+            self._num_good_steps = None
+            self._num_bad_steps = None
+
+    def get_loss_scaling(self):
+        """Return the real-time loss scaling factor.
+        """
+        return self._loss_scaling
+
+    def get_scaled_loss(self):
+        """Return the scaled loss.
+        It's useful when you feed customed loss into executor.
+        """
+        return self._scaled_loss
+
+    def _init_amp_var(self):
+        self._loss_scaling = layers.create_global_var(
+            name=unique_name.generate("loss_scaling"),
+            shape=[1],
+            value=self._init_loss_scaling,
+            dtype='float32',
+            persistable=True)
+
+        if self._use_dynamic_loss_scaling:
             self._num_good_steps = layers.create_global_var(
                 name=unique_name.generate("num_good_steps"),
                 shape=[1],
@@ -86,28 +106,16 @@ class OptimizerWithMixedPrecision(object):
                 dtype='int32',
                 persistable=True)
 
-        # Ensure the data type of learning rate vars is float32 (same as the 
+        # Ensure the data type of learning rate vars is float32 (same as the
         # master parameter dtype)
-        if isinstance(optimizer._learning_rate, float):
-            optimizer._learning_rate_map[default_main_program()] = \
-                        layers.create_global_var(
-                        name=unique_name.generate("learning_rate"),
-                        shape=[1],
-                        value=float(optimizer._learning_rate),
-                        dtype='float32',
-                        persistable=True)
-
-    def get_loss_scaling(self):
-        """Return the real-time loss scaling factor.
-        """
-        return self._loss_scaling
-
-    def get_scaled_loss(self):
-        """Return the scaled loss.
-        It's useful when you feed customed loss into executor.
-        """
-
-        return self._scaled_loss
+        if isinstance(self._optimizer._learning_rate, float):
+            self._optimizer._learning_rate_map[default_main_program()] = \
+                    layers.create_global_var(
+                    name=unique_name.generate("learning_rate"),
+                    shape=[1],
+                    value=float(self._optimizer._learning_rate),
+                    dtype='float32',
+                    persistable=True)
 
     def backward(self,
                  loss,
@@ -131,16 +139,21 @@ class OptimizerWithMixedPrecision(object):
             A list of (param, grad), which is a tuple of a parameter and its 
             gradient respectively, and the scaled loss.
         """
-        rewrite_program(self._train_program, self._amp_lists)
-        self._scaled_loss = loss * self._loss_scaling
-        self._params_grads = self._optimizer.backward(
-            self._scaled_loss, startup_program, parameter_list, no_grad_set,
-            callbacks)
-        # Change the op_role_var attr for some ops, so that gradients
-        # transferred across GPUs can be FP16.
-        update_role_var_grad(self._train_program, self._params_grads)
+        train_program = loss.block.program
+        self._train_program = train_program
 
-        return self._params_grads
+        with program_guard(train_program, startup_program):
+            self._init_amp_var()
+
+            rewrite_program(train_program, self._amp_lists)
+            self._scaled_loss = loss * self._loss_scaling
+            params_grads = self._optimizer.backward(
+                self._scaled_loss, startup_program, parameter_list, no_grad_set,
+                callbacks)
+            # Change the op_role_var attr for some ops, so that gradients
+            # transferred across GPUs can be FP16.
+            update_role_var_grad(train_program, params_grads)
+        return params_grads
 
     def apply_gradients(self, params_grads):
         """
@@ -182,6 +195,12 @@ class OptimizerWithMixedPrecision(object):
 
         return optimize_ops
 
+    def apply_optimize(self, loss, startup_program, params_grads):
+        program = loss.block.program
+        with program_guard(program, startup_program):
+            optimize_ops = self.apply_gradients(params_grads)
+        return optimize_ops
+
     def minimize(self,
                  loss,
                  startup_program=None,
@@ -207,7 +226,8 @@ class OptimizerWithMixedPrecision(object):
             parameter_list=parameter_list,
             no_grad_set=no_grad_set)
 
-        optimize_ops = self.apply_gradients(scaled_params_grads)
+        optimize_ops = self.apply_optimize(loss, startup_program,
+                                           scaled_params_grads)
 
         return optimize_ops, scaled_params_grads
 

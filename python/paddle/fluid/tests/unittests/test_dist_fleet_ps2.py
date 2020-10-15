@@ -183,8 +183,12 @@ class TestPSPassWithBow(unittest.TestCase):
 
         from paddle.fluid.communicator import LargeScaleKV
         kv = LargeScaleKV()
+
         kv.save("__emb__.block0",
                 os.path.join(model_dir, "__emb__", "__emb__.block0"))
+
+        kv.size("__emb__.block0")
+
         fluid.framework.switch_main_program(fluid.Program())
         fleet.init_server(model_dir)
         shutil.rmtree(model_dir)

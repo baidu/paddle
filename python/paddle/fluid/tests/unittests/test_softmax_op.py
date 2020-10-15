@@ -315,7 +315,7 @@ class TestSoftmaxAPI(unittest.TestCase):
 
     def test_static_check(self):
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data('X', self.x_np.shape, 'float32')
+            x = paddle.fluid.data('X', self.x_np.shape, 'float32')
             out1 = F.softmax(x)
             m = paddle.nn.Softmax()
             out2 = m(x)
@@ -354,10 +354,10 @@ class TestSoftmaxAPI(unittest.TestCase):
             # The input type must be Variable.
             self.assertRaises(TypeError, F.softmax, 1)
             # The input dtype must be float16, float32, float64.
-            x_int32 = paddle.data(name='x_int32', shape=[2, 3], dtype='int32')
+            x_int32 = paddle.fluid.data(name='x_int32', shape=[2, 3], dtype='int32')
             self.assertRaises(TypeError, F.softmax, x_int32)
             # support the input dtype is float16
-            x_fp16 = paddle.data(name='x_fp16', shape=[2, 3], dtype='float16')
+            x_fp16 = paddle.fluid.data(name='x_fp16', shape=[2, 3], dtype='float16')
             F.softmax(x_fp16)
 
 

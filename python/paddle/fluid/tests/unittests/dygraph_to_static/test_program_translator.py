@@ -64,11 +64,9 @@ def get_source_code(func):
 class StaticCode1():
     # TODO: Transform return statement
     def dyfunc_with_if_else(x_v, label=None):
-        __return_1 = fluid.layers.fill_constant(
-            shape=[1], dtype='bool', value=False)
-        __return_0 = fluid.layers.fill_constant(
-            shape=[1], dtype='bool', value=False)
-        __return_value_init_0 = fluid.layers.fill_constant(
+        __return_1 = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=False)
+        __return_0 = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=False)
+        __return_value_init_0 = paddle.fluid.layers.fill_constant(
             shape=[1], dtype='float64', value=0.0)
         __return_value_0 = __return_value_init_0
 
@@ -80,13 +78,13 @@ class StaticCode1():
             x_v = x_v + 1
             return x_v
 
-        x_v = fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
+        x_v = paddle.jit.dy2static.convert_ifelse(
             fluid.layers.mean(x_v)[0] > 5, true_fn_0, false_fn_0, (x_v, ),
             (x_v, ), (x_v, ))
 
         def true_fn_1(__return_0, __return_value_0, label, x_v):
             loss = fluid.layers.cross_entropy(x_v, label)
-            __return_0 = fluid.layers.fill_constant(
+            __return_0 = paddle.fluid.layers.fill_constant(
                 shape=[1], dtype='bool', value=True)
             __return_value_0 = loss
             return __return_0, __return_value_0
@@ -94,14 +92,13 @@ class StaticCode1():
         def false_fn_1(__return_0, __return_value_0):
             return __return_0, __return_value_0
 
-        __return_0, __return_value_0 = (
-            fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
-                label is not None, true_fn_1, false_fn_1,
-                (__return_0, __return_value_0, label, x_v),
-                (__return_0, __return_value_0), (__return_0, __return_value_0)))
+        __return_0, __return_value_0 = (paddle.jit.dy2static.convert_ifelse(
+            label is not None, true_fn_1, false_fn_1,
+            (__return_0, __return_value_0, label, x_v),
+            (__return_0, __return_value_0), (__return_0, __return_value_0)))
 
         def true_fn_2(__return_1, __return_value_0, x_v):
-            __return_1 = fluid.layers.fill_constant(
+            __return_1 = paddle.fluid.layers.fill_constant(
                 shape=[1], dtype='bool', value=True)
             __return_value_0 = x_v
             return __return_1, __return_value_0
@@ -109,23 +106,19 @@ class StaticCode1():
         def false_fn_2(__return_1, __return_value_0):
             return __return_1, __return_value_0
 
-        __return_1, __return_value_0 = (
-            fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
-                fluid.dygraph.dygraph_to_static.convert_operators.
-                convert_logical_not(__return_0), true_fn_2, false_fn_2,
-                (__return_1, __return_value_0, x_v),
-                (__return_1, __return_value_0), (__return_1, __return_value_0)))
+        __return_1, __return_value_0 = (paddle.jit.dy2static.convert_ifelse(
+            paddle.jit.dy2static.convert_logical_not(__return_0), true_fn_2,
+            false_fn_2, (__return_1, __return_value_0, x_v),
+            (__return_1, __return_value_0), (__return_1, __return_value_0)))
         return __return_value_0
 
 
 class StaticCode2():
     # TODO: Transform return statement
     def dyfunc_with_if_else(x_v, label=None):
-        __return_3 = fluid.layers.fill_constant(
-            shape=[1], dtype='bool', value=False)
-        __return_2 = fluid.layers.fill_constant(
-            shape=[1], dtype='bool', value=False)
-        __return_value_init_1 = fluid.layers.fill_constant(
+        __return_3 = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=False)
+        __return_2 = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=False)
+        __return_value_init_1 = paddle.fluid.layers.fill_constant(
             shape=[1], dtype='float64', value=0.0)
         __return_value_1 = __return_value_init_1
 
@@ -137,13 +130,13 @@ class StaticCode2():
             x_v = x_v + 1
             return x_v
 
-        x_v = fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
+        x_v = paddle.jit.dy2static.convert_ifelse(
             fluid.layers.mean(x_v)[0] > 5, true_fn_3, false_fn_3, (x_v, ),
             (x_v, ), (x_v, ))
 
         def true_fn_4(__return_2, __return_value_1, label, x_v):
             loss = fluid.layers.cross_entropy(x_v, label)
-            __return_2 = fluid.layers.fill_constant(
+            __return_2 = paddle.fluid.layers.fill_constant(
                 shape=[1], dtype='bool', value=True)
             __return_value_1 = loss
             return __return_2, __return_value_1
@@ -151,14 +144,13 @@ class StaticCode2():
         def false_fn_4(__return_2, __return_value_1):
             return __return_2, __return_value_1
 
-        __return_2, __return_value_1 = (
-            fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
-                label is not None, true_fn_4, false_fn_4,
-                (__return_2, __return_value_1, label, x_v),
-                (__return_2, __return_value_1), (__return_2, __return_value_1)))
+        __return_2, __return_value_1 = (paddle.jit.dy2static.convert_ifelse(
+            label is not None, true_fn_4, false_fn_4,
+            (__return_2, __return_value_1, label, x_v),
+            (__return_2, __return_value_1), (__return_2, __return_value_1)))
 
         def true_fn_5(__return_3, __return_value_1, x_v):
-            __return_3 = fluid.layers.fill_constant(
+            __return_3 = paddle.fluid.layers.fill_constant(
                 shape=[1], dtype='bool', value=True)
             __return_value_1 = x_v
             return __return_3, __return_value_1
@@ -166,12 +158,10 @@ class StaticCode2():
         def false_fn_5(__return_3, __return_value_1):
             return __return_3, __return_value_1
 
-        __return_3, __return_value_1 = (
-            fluid.dygraph.dygraph_to_static.convert_operators.convert_ifelse(
-                fluid.dygraph.dygraph_to_static.convert_operators.
-                convert_logical_not(__return_2), true_fn_5, false_fn_5,
-                (__return_3, __return_value_1, x_v),
-                (__return_3, __return_value_1), (__return_3, __return_value_1)))
+        __return_3, __return_value_1 = (paddle.jit.dy2static.convert_ifelse(
+            paddle.jit.dy2static.convert_logical_not(__return_2), true_fn_5,
+            false_fn_5, (__return_3, __return_value_1, x_v),
+            (__return_3, __return_value_1), (__return_3, __return_value_1)))
         return __return_value_1
 
 

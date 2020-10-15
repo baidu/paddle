@@ -252,7 +252,11 @@ void LiteSubgraphPass::SetUpEngine(
   } else if (use_xpu) {
     target_type = TARGET(kXPU);
   } else {
+#ifdef PADDLE_WITH_ARM
+    target_type = TARGET(kARM);
+#else
     target_type = TARGET(kX86);
+#endif
   }
 
   paddle::lite_api::PrecisionType precision_type =

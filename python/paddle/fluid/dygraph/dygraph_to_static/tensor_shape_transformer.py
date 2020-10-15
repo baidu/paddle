@@ -26,7 +26,7 @@ from paddle.fluid.dygraph.dygraph_to_static.static_analysis import StaticAnalysi
 def create_convert_shape_node(var_shape_node):
     assert isinstance(var_shape_node, (gast.Attribute, gast.Subscript))
 
-    convert_var_shape_func = "fluid.dygraph.dygraph_to_static.convert_operators.convert_var_shape"
+    convert_var_shape_func = "paddle.jit.dy2static.convert_var_shape"
 
     if isinstance(var_shape_node, gast.Attribute):
         api_shape_node = gast.Call(

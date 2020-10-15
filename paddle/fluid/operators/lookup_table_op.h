@@ -159,9 +159,9 @@ class LookupTableGradKernel : public framework::OpKernel<T> {
       auto *table_t = context.Input<SelectedRows>("W");
       table_dim = table_t->value().dims();
     } else {
-      PADDLE_THROW(
+      PADDLE_THROW(platform::errors::InvalidArgument(
           "The parameter W of a LookupTable "
-          "must be either LoDTensor or SelectedRows");
+          "must be either LoDTensor or SelectedRows"));
     }
 
     int64_t padding_idx = context.Attr<int64_t>("padding_idx");

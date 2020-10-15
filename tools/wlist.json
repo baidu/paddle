@@ -279,7 +279,6 @@
         "thresholded_relu",
         "group_norm",
         "random_crop",
-        "py_func",
         "row_conv",
         "hard_shrink",
         "ssd_loss",

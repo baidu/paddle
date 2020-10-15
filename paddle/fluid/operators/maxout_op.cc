@@ -84,6 +84,18 @@ class MaxOutOp : public framework::OperatorWithKernel {
                                      "larger than 1. But received %d.",
                                      groups));
     PADDLE_ENFORCE_EQ(
+        axis == 1 || axis == -1 || axis == 3, true,
+        platform::errors::InvalidArgument(
+            "axis only supported 1, -1 or 3, but recevied axis is: %d", axis));
+    PADDLE_ENFORCE_EQ(in_x_dims.size(), 4,
+                      platform::errors::InvalidArgument(
+                          "x's dims should be 4, but received x's dims is: %d",
+                          in_x_dims.size()));
+
+    if (axis < 0) {
+      axis += in_x_dims.size();
+    }
+    PADDLE_ENFORCE_EQ(
         in_x_dims[axis] % groups, 0,
         platform::errors::InvalidArgument(
             "The number of input channels for Op(maxout) "

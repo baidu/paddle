@@ -14,40 +14,144 @@
 
 import unittest
 import paddle
+import paddle.fluid as fluid
 import os
+from fleet_meta_optimizer_base import TestFleetMetaOptimizer
+from paddle.distributed.fleet.meta_optimizers import RecomputeOptimizer
+
+paddle.enable_static()
 
 
-class TestFleetRecomputeMetaOptimizer(unittest.TestCase):
-    def setUp(self):
-        os.environ["POD_IP"] = "127.0.0.1"
-        os.environ["PADDLE_TRAINER_ENDPOINTS"] = "127.0.0.1:36001"
-        os.environ["PADDLE_TRAINERS_NUM"] = "2"
-        os.environ["PADDLE_PSERVERS_IP_PORT_LIST"] = \
-                       "127.0.0.1:36001,127.0.0.2:36001"
+class TestFleetRecomputeMetaOptimizer(TestFleetMetaOptimizer):
+    def test_recompute_optimizer_backward(self):
+        """ test recompute optimizer backward """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        self.set_strategy(strategy, 'recompute')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = RecomputeOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('subprog', ''.join(outs))
+
+    def test_recompute_optimizer_backward_gradients(self):
+        """ test recompute optimizer backward + gradients """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        self.set_strategy(strategy, 'recompute')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = RecomputeOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+        with fluid.program_guard(train_prog, startup_prog):
+            opt.apply_gradients(params_grads)
+
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('subprog', ''.join(outs))
+
+    def test_recompute_optimizer_backward_optimize(self):
+        """ test recompute optimizer backward + optimize """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        self.set_strategy(strategy, 'recompute')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = RecomputeOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+        opt.apply_optimize(avg_cost, startup_prog, params_grads)
+
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('subprog', ''.join(outs))
+
+    def test_recompute_optimizer_backward(self):
+        """ test recompute optimizer backward """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        self.set_strategy(strategy, 'recompute')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = RecomputeOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('subprog', ''.join(outs))
+
+    def test_recompute_optimizer_backward(self):
+        """ test recompute optimizer backward """
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+
+        self.set_strategy(strategy, 'recompute')
+        opt = fluid.optimizer.MomentumOptimizer(
+            learning_rate=0.001, momentum=0.9)
+        opt = RecomputeOptimizer(opt)
+        opt.user_defined_strategy = strategy
+        params_grads = opt.backward(avg_cost, startup_prog)
+
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+        self.assertIn('subprog', ''.join(outs))
 
     def test_recompute_optimizer(self):
-        import paddle.distributed.fleet as fleet
-        import paddle.distributed.fleet.base.role_maker as role_maker
-        role = role_maker.PaddleCloudRoleMaker(is_collective=True)
-        fleet.init(role)
-        input_x = paddle.fluid.layers.data(
-            name="x", shape=[32], dtype='float32')
-        input_y = paddle.fluid.layers.data(name="y", shape=[1], dtype='int64')
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'recompute')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
 
-        fc_1 = paddle.fluid.layers.fc(input=input_x, size=64, act='tanh')
-        fc_2 = paddle.fluid.layers.fc(input=fc_1, size=64, act='tanh')
-        prediction = paddle.fluid.layers.fc(input=[fc_2], size=2, act='softmax')
-        cost = paddle.fluid.layers.cross_entropy(
-            input=prediction, label=input_y)
-        avg_cost = paddle.fluid.layers.mean(x=cost)
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
 
-        strategy = paddle.distributed.fleet.DistributedStrategy()
-        strategy.recompute = True
-        strategy.recompute_configs = {"checkpoints": ["fc_1.tmp_0"]}
+        self.assertIn('subprog', ''.join(outs))
 
-        optimizer = paddle.fluid.optimizer.SGD(learning_rate=0.01)
-        optimizer = fleet.distributed_optimizer(optimizer, strategy=strategy)
-        optimizer.minimize(avg_cost)
+    def test_recompute_lars_optimizer(self):
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'recompute')
+        self.set_strategy(strategy, 'lars')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog)
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+
+        self.assertIn('subprog', ''.join(outs))
+        self.assertIn('lars_momentum', ops)
+
+    def test_recompute_lamb_optimizer(self):
+        train_prog, startup_prog = fluid.Program(), fluid.Program()
+        avg_cost, strategy = self.net(train_prog, startup_prog)
+        self.set_strategy(strategy, 'recompute')
+        self.set_strategy(strategy, 'lamb')
+        self.optimizer(avg_cost, strategy, train_prog, startup_prog, 'adam')
+
+        ops = [op.type for op in avg_cost.block.ops]
+        outs = [
+            op.output('Out')[0] for op in avg_cost.block.ops if op.type == 'mul'
+        ]
+
+        self.assertIn('subprog', ''.join(outs))
+        self.assertIn('lamb', ops)
 
 
 if __name__ == "__main__":

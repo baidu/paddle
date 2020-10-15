@@ -31,6 +31,7 @@ from paddle.fluid.dygraph.nn import Conv2D
 from paddle.fluid.dygraph.nn import Pool2D
 from paddle.fluid.dygraph.nn import Linear
 from paddle.fluid.log_helper import get_logger
+from paddle.fluid.dygraph.io import INFER_MODEL_SUFFIX, INFER_PARAMS_SUFFIX
 
 paddle.enable_static()
 
@@ -231,10 +232,11 @@ class TestImperativeQat(unittest.TestCase):
             before_save = lenet(test_img)
 
         # save inference quantized model
-        path = "./mnist_infer_model"
+        path = "./qat_infer_model/lenet"
+        save_dir = "./qat_infer_model"
         paddle.jit.save(
             layer=lenet,
-            model_path=path,
+            path=path,
             input_spec=[
                 paddle.static.InputSpec(
                     shape=[None, 1, 28, 28], dtype='float32')
@@ -245,12 +247,12 @@ class TestImperativeQat(unittest.TestCase):
         else:
             place = core.CPUPlace()
         exe = fluid.Executor(place)
-        [inference_program, feed_target_names, fetch_targets] = (
-            fluid.io.load_inference_model(
-                dirname=path,
-                executor=exe,
-                model_filename="__model__",
-                params_filename="__variables__"))
+        [inference_program, feed_target_names,
+         fetch_targets] = fluid.io.load_inference_model(
+             dirname=save_dir,
+             executor=exe,
+             model_filename="lenet" + INFER_MODEL_SUFFIX,
+             params_filename="lenet" + INFER_PARAMS_SUFFIX)
         after_save, = exe.run(inference_program,
                               feed={feed_target_names[0]: test_data},
                               fetch_list=fetch_targets)
@@ -339,7 +341,7 @@ class TestImperativeQat(unittest.TestCase):
 
         paddle.jit.save(
             layer=lenet,
-            model_path="./dynamic_mnist",
+            path="./dynamic_mnist/model",
             input_spec=[
                 paddle.static.InputSpec(
                     shape=[None, 1, 28, 28], dtype='float32')

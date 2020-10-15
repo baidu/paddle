@@ -12,8 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#define EIGEN_USE_GPU
-
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/operators/histogram_op.h"
 #include "paddle/fluid/platform/cuda_primitives.h"
@@ -32,27 +30,37 @@ inline int GET_BLOCKS(const int N) {
 }
 
 template <typename T, typename IndexType>
-__device__ static IndexType GetBin(T bVal, T minvalue, T maxvalue,
+__device__ static IndexType GetBin(T input_value, T min_value, T max_value,
                                    int64_t nbins) {
-  IndexType bin =
-      static_cast<int>((bVal - minvalue) * nbins / (maxvalue - minvalue));
-  if (bin == nbins) bin -= 1;
-  return bin;
+  IndexType bin = static_cast<int>((input_value - min_value) * nbins /
+                                   (max_value - min_value));
+  IndexType output_index = bin < nbins - 1 ? bin : nbins - 1;
+  return output_index;
 }
 
 template <typename T, typename IndexType>
-__global__ void KernelHistogram(const T* input, const int totalElements,
-                                const int64_t nbins, const T minvalue,
-                                const T maxvalue, int64_t* output) {
-  CUDA_KERNEL_LOOP(linearIndex, totalElements) {
-    const IndexType inputIdx = threadIdx.x + blockIdx.x * blockDim.x;
-    const auto inputVal = input[inputIdx];
-    if (inputVal >= minvalue && inputVal <= maxvalue) {
-      const IndexType bin =
-          GetBin<T, IndexType>(inputVal, minvalue, maxvalue, nbins);
-      const IndexType outputIdx = bin < nbins - 1 ? bin : nbins - 1;
-      paddle::platform::CudaAtomicAdd(&output[outputIdx], 1);
+__global__ void KernelHistogram(const T* input, const int total_elements,
+                                const int64_t nbins, const T min_value,
+                                const T max_value, int64_t* output) {
+  extern __shared__ int64_t buf_hist[];
+  for (int i = threadIdx.x; i < nbins; i += blockDim.x) {
+    buf_hist[i] = 0;
+  }
+  __syncthreads();
+
+  CUDA_KERNEL_LOOP(input_index, total_elements) {
+    // const IndexType input_index = threadIdx.x + blockIdx.x * blockDim.x;
+    const auto input_value = input[input_index];
+    if (input_value >= min_value && input_value <= max_value) {
+      const IndexType output_index =
+          GetBin<T, IndexType>(input_value, min_value, max_value, nbins);
+      paddle::platform::CudaAtomicAdd(&buf_hist[output_index], 1);
     }
+  }
+  __syncthreads();
+
+  for (int i = threadIdx.x; i < nbins; i += blockDim.x) {
+    paddle::platform::CudaAtomicAdd(&output[i], buf_hist[i]);
   }
 }
 
@@ -125,8 +133,9 @@ class HistogramCUDAKernel : public framework::OpKernel<T> {
 
     auto stream =
         context.template device_context<platform::CUDADeviceContext>().stream();
-    KernelHistogram<T, IndexType><<<GET_BLOCKS(input_numel),
-                                    PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
+    KernelHistogram<
+        T, IndexType><<<GET_BLOCKS(input_numel), PADDLE_CUDA_NUM_THREADS,
+                        nbins * sizeof(int64_t), stream>>>(
         input_data, input_numel, nbins, output_min, output_max, out_data);
   }
 };

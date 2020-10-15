@@ -49,7 +49,7 @@ def run_check():
     This func should not be called only if you need to verify installation
 
     Examples:
-        .. code-block: python
+        .. code-block:: python
 
             import paddle.fluid as fluid
             fluid.install_check.run_check()

@@ -744,13 +744,13 @@ class DistributedStrategy(object):
             strategy.adaptive_localsgd = True # by default this is false
 
         """
-        return self.strategy.localsgd
+        return self.strategy.adaptive_localsgd
 
     @adaptive_localsgd.setter
     @is_strict_auto
     def adaptive_localsgd(self, flag):
         if isinstance(flag, bool):
-            self.strategy.localsgd = flag
+            self.strategy.adaptive_localsgd = flag
         else:
             print("WARNING: adaptive_localsgd should have value of bool type")
 
@@ -1244,8 +1244,7 @@ class DistributedStrategy(object):
                         if getattr(self.strategy, f.name):
                             draws += border + "\n"
                             draws += h1_format.format(
-                                "{} = True, please check {}_configs".format(
-                                    f.name, f.name))
+                                "{}=True <-> {}_configs".format(f.name, f.name))
                             draws += line + "\n"
                             my_configs = getattr(self.strategy,
                                                  f.name + "_configs")

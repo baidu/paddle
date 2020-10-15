@@ -32,8 +32,8 @@ def test_static(x_np, y_np, p=2.0, epsilon=1e-6, keepdim=False):
     ) else fluid.CPUPlace()
 
     with paddle.static.program_guard(prog, startup_prog):
-        x = paddle.data(name='x', shape=x_np.shape, dtype=x_np.dtype)
-        y = paddle.data(name='y', shape=y_np.shape, dtype=x_np.dtype)
+        x = paddle.fluid.data(name='x', shape=x_np.shape, dtype=x_np.dtype)
+        y = paddle.fluid.data(name='y', shape=y_np.shape, dtype=x_np.dtype)
         dist = paddle.nn.layer.distance.PairwiseDistance(
             p=p, epsilon=epsilon, keepdim=keepdim)
         distance = dist(x, y)

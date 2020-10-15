@@ -58,8 +58,9 @@ class EditDistanceKernel : public framework::OpKernel<T> {
 
     if (normalized) {
       for (size_t i = 1; i < ref_lod.size(); ++i) {
-        PADDLE_ENFORCE(ref_lod[i] > ref_lod[i - 1],
-                       "Reference string %d is empty.", i);
+        PADDLE_ENFORCE_GT(ref_lod[i], ref_lod[i - 1],
+                          platform::errors::InvalidArgument(
+                              "Reference string %d is empty.", i));
       }
     }
     auto num_strs = hyp_lod.size() - 1;
@@ -106,10 +107,11 @@ class EditDistanceKernel : public framework::OpKernel<T> {
       }
 
       if (normalized) {
-        PADDLE_ENFORCE(n > 0,
-                       "The reference string (#%d) cannot be empty "
-                       "when Attr(normalized) is enabled.",
-                       n);
+        PADDLE_ENFORCE_GT(n, 0UL,
+                          platform::errors::InvalidArgument(
+                              "The reference string (#%d) cannot be empty "
+                              "when Attr(normalized) is enabled.",
+                              n));
         distance = distance / n;
       }
       out[num] = distance;

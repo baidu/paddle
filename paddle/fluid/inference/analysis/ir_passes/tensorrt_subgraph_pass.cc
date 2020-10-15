@@ -18,6 +18,7 @@
 
 #include "paddle/fluid/framework/ir/graph_pattern_detector.h"
 #include "paddle/fluid/framework/ir/subgraph_detector.h"
+#include "paddle/fluid/framework/op_version_registry.h"
 #include "paddle/fluid/inference/analysis/helper.h"
 #include "paddle/fluid/inference/analysis/ir_passes/tensorrt_subgraph_pass.h"
 #include "paddle/fluid/inference/tensorrt/convert/op_converter.h"
@@ -358,3 +359,31 @@ REGISTER_PASS(tensorrt_subgraph_pass,
     .RequirePassAttr("max_batch_size")
     .RequirePassAttr("workspace_size")
     .RequirePassAttr("min_subgraph_size");
+
+REGISTER_PASS_CAPABILITY(tensorrt_subgraph_pass)
+    .AddCombination(
+        paddle::framework::compatible::OpVersionComparatorCombination()
+            .EQ("conv2d", 0)
+            .EQ("pool2d", 0)
+            .EQ("relu", 0)
+            .EQ("softmax", 0)
+            .EQ("sigmoid", 0)
+            .EQ("hard_swish", 0)
+            .EQ("depthwise_conv2d", 0)
+            .EQ("batch_norm", 0)
+            .EQ("concat", 0)
+            .EQ("tanh", 0)
+            .EQ("pad", 0)
+            .EQ("elementwise_add", 0)
+            .EQ("elementwise_mul", 0)
+            .EQ("prelu", 0)
+            .LE("conv2d_transpose", 1)
+            .LE("leaky_relu", 1)
+            .EQ("fc", 0)
+            .EQ("shuffle_channel", 0)
+            .EQ("swish", 0)
+            .EQ("split", 0)
+            .EQ("instance_norm", 0)
+            .EQ("gelu", 0)
+            .EQ("layer_norm", 0)
+            .EQ("scale", 0));

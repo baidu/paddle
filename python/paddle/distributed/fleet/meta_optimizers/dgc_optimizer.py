@@ -31,6 +31,10 @@ class DGCOptimizer(MetaOptimizerBase):
             loss, role_maker, user_defined_optimizer, user_defined_strategy)
 
         opt = self.inner_opt
+
+        if not self.role_maker._is_collective:
+            return
+
         if not isinstance(opt, Momentum):
             return
 
@@ -84,6 +88,13 @@ class DGCOptimizer(MetaOptimizerBase):
                  callbacks=None):
         return self.dgc_opt.backward(loss, startup_program, parameter_list,
                                      no_grad_set, callbacks)
+
+    def apply_gradients(self, params_grads):
+        return self.dgc_opt.apply_gradients(params_grads=params_grads)
+
+    def apply_optimize(self, loss, startup_program, params_grads):
+        return self.dgc_opt.apply_optimize(
+            loss, startup_program=startup_program, params_grads=params_grads)
 
     def minimize_impl(self,
                       loss,

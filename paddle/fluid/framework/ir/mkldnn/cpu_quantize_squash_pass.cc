@@ -76,6 +76,8 @@ void CPUQuantizeSquashPass::DequantQuantSquash(
         BOOST_GET_CONST(float, dequant_op->Op()->GetAttr("Scale"));
     float quant_scale =
         BOOST_GET_CONST(float, quant_op->Op()->GetAttr("Scale"));
+    float dequant_shift = dequant_op->Op()->GetAttrIfExists<float>("Shift");
+    float quant_shift = quant_op->Op()->GetAttrIfExists<float>("Shift");
     PADDLE_ENFORCE_NE(
         nodes_keep_counter->find(dequant_out), nodes_keep_counter->end(),
         platform::errors::NotFound("The dequant output node is not found."));
@@ -83,7 +85,7 @@ void CPUQuantizeSquashPass::DequantQuantSquash(
     // check if dequantize op should be kept or removed, decrease the counter
     bool keep_dequant = (*nodes_keep_counter)[dequant_out]-- > 1;
 
-    if (dequant_scale == quant_scale) {
+    if (dequant_scale == quant_scale && dequant_shift == quant_shift) {
       // squash dequantize-quantize to nothing
       auto quant_out_var_name = quant_out->Name();
       auto next_op_inputs = next_op_desc->InputNames();
@@ -110,7 +112,9 @@ void CPUQuantizeSquashPass::DequantQuantSquash(
       desc.SetInput("Input", std::vector<std::string>({dequant_in->Name()}));
       desc.SetOutput("Output", std::vector<std::string>({quant_out->Name()}));
       desc.SetAttr("Scale_in", dequant_scale);
+      desc.SetAttr("Shift_in", dequant_shift);
       desc.SetAttr("Scale_out", quant_scale);
+      desc.SetAttr("Shift_out", quant_shift);
 
       auto requant_op = g->CreateOpNode(&desc);
 
@@ -293,6 +297,7 @@ void CPUQuantizeSquashPass::MultipleQuantizeSquash(Graph* graph) const {
         }));
     auto* first_quant_out = first_quant_op->outputs[0];
     float scale = first_quant_op->Op()->GetAttrIfExists<float>("Scale");
+    float shift = first_quant_op->Op()->GetAttrIfExists<float>("Shift");
 
     PADDLE_ENFORCE_NE(scale, 0,
                       platform::errors::InvalidArgument(
@@ -302,7 +307,8 @@ void CPUQuantizeSquashPass::MultipleQuantizeSquash(Graph* graph) const {
       auto quant_op = prev_out->outputs[iter];
       if (quant_op->IsOp() && quant_op->Op()->Type() == "quantize" &&
           quant_op->id() != first_quant_op->id() &&
-          quant_op->Op()->GetAttrIfExists<float>("Scale") == scale) {
+          quant_op->Op()->GetAttrIfExists<float>("Scale") == scale &&
+          quant_op->Op()->GetAttrIfExists<float>("Shift") == shift) {
         auto quant_out = quant_op->outputs[0];
         auto last_op = quant_out->outputs[0];
 

@@ -22,6 +22,7 @@ import paddle.fluid as fluid
 from paddle.fluid import core
 from paddle.fluid.dygraph.parallel import DataParallel
 from paddle.fluid.dygraph.base import to_variable
+from paddle.fluid.dygraph.parallel import _coalesce_tensors, _split_tensors, _reshape_inplace
 
 
 class MyLayer(fluid.Layer):
@@ -57,8 +58,8 @@ class TestImperativeParallelCoalesceSplit(unittest.TestCase):
                 orig_var_shapes.append(var.shape)
 
             # execute interface
-            coalesced_vars = test_layer._coalesce_tensors(var_groups)
-            test_layer._split_tensors(coalesced_vars)
+            coalesced_vars = _coalesce_tensors(var_groups)
+            _split_tensors(coalesced_vars)
 
             # compare
             for orig_var_shape, var in zip(orig_var_shapes, vars):
@@ -74,7 +75,7 @@ class TestImperativeParallelCoalesceSplit(unittest.TestCase):
             new_shape = [5, 10]
             x_data = np.random.random(ori_shape).astype("float32")
             x = to_variable(x_data)
-            test_layer._reshape_inplace(x, new_shape)
+            _reshape_inplace(x, new_shape)
             self.assertEqual(x.shape, new_shape)
 
 

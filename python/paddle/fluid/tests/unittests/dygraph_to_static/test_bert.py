@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import time
 import unittest
-
 import numpy as np
+
+import paddle
 import paddle.fluid as fluid
 from paddle.fluid.dygraph.dygraph_to_static import ProgramTranslator
-from paddle.fluid.dygraph.io import VARIABLE_FILENAME
+from paddle.fluid.dygraph.io import INFER_MODEL_SUFFIX, INFER_PARAMS_SUFFIX
 
 from bert_dygraph_model import PretrainModelLayer
 from bert_utils import get_bert_config, get_feed_data_reader
@@ -31,7 +33,10 @@ place = fluid.CUDAPlace(0) if fluid.is_compiled_with_cuda() else fluid.CPUPlace(
 SEED = 2020
 STEP_NUM = 10
 PRINT_STEP = 2
-MODEL_SAVE_PATH = "./bert.inference.model"
+MODEL_SAVE_DIR = "./inference"
+MODEL_SAVE_PREFIX = "./inference/bert"
+MODEL_FILENAME = "bert" + INFER_MODEL_SUFFIX
+PARAMS_FILENAME = "bert" + INFER_PARAMS_SUFFIX
 DY_STATE_DICT_SAVE_PATH = "./bert.dygraph"
 
 
@@ -85,7 +90,7 @@ def train(bert_config, data_reader, to_static):
             step_idx += 1
             if step_idx == STEP_NUM:
                 if to_static:
-                    fluid.dygraph.jit.save(bert, MODEL_SAVE_PATH)
+                    fluid.dygraph.jit.save(bert, MODEL_SAVE_PREFIX)
                 else:
                     fluid.dygraph.save_dygraph(bert.state_dict(),
                                                DY_STATE_DICT_SAVE_PATH)
@@ -104,11 +109,15 @@ def train_static(bert_config, data_reader):
 
 
 def predict_static(data):
+    paddle.enable_static()
     exe = fluid.Executor(place)
     # load inference model
     [inference_program, feed_target_names,
      fetch_targets] = fluid.io.load_inference_model(
-         MODEL_SAVE_PATH, executor=exe, params_filename=VARIABLE_FILENAME)
+         MODEL_SAVE_DIR,
+         executor=exe,
+         model_filename=MODEL_FILENAME,
+         params_filename=PARAMS_FILENAME)
     pred_res = exe.run(inference_program,
                        feed=dict(zip(feed_target_names, data)),
                        fetch_list=fetch_targets)
@@ -143,7 +152,7 @@ def predict_dygraph(bert_config, data):
 
 def predict_dygraph_jit(data):
     with fluid.dygraph.guard(place):
-        bert = fluid.dygraph.jit.load(MODEL_SAVE_PATH)
+        bert = fluid.dygraph.jit.load(MODEL_SAVE_PREFIX)
         bert.eval()
 
         src_ids, pos_ids, sent_ids, input_mask, mask_label, mask_pos, labels = data
@@ -155,7 +164,8 @@ def predict_dygraph_jit(data):
 
 
 def predict_analysis_inference(data):
-    output = PredictorTools(MODEL_SAVE_PATH, VARIABLE_FILENAME, data)
+    output = PredictorTools(MODEL_SAVE_DIR, MODEL_FILENAME, PARAMS_FILENAME,
+                            data)
     out = output()
     return out
 

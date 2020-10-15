@@ -19,10 +19,13 @@ import numpy as np
 import paddle
 import paddle.fluid.core as core
 import paddle.fluid as fluid
+import paddle.nn.functional as F
 from paddle.fluid import Program, program_guard
+import paddle.fluid.initializer as I
 import math
 from op_test import OpTest, skip_check_grad_ci
 
+paddle.enable_static()
 np.random.seed(100)
 
 
@@ -56,7 +59,6 @@ class CodeTableWithCustomTree(object):
     def get_length(self):
         length = 0
         for ele in self.ptable_[self.index_]:  # find the first -1 to stop trace
-
             if ele >= 0:
                 length = length + 1
             else:
@@ -388,8 +390,192 @@ class TestHSigmoidOpWithCostumTreeWithoutBias(OpTest):
         self.check_grad(['X', 'W'], ['Out'], no_grad_set=set('Label'))
 
 
-class TestHSigmoidOpError(unittest.TestCase):
+class TestHSigmoidLossAPI(unittest.TestCase):
+    # test paddle.nn.functional.hsigmoid_loss, paddle.nn.HSigmoidLoss
+    def setUp(self):
+        self.dtype = 'float32'
+        self.batch_size = 4
+        self.feature_size = 6
+        self.num_classes = 8
+        self.is_custom = False
+        self.place = paddle.CPUPlace()
+
+        paddle.set_default_dtype(self.dtype)
+
+        self.x_np = np.random.uniform(
+            -1, 1, [self.batch_size, self.feature_size]).astype(self.dtype)
+        self.labels_np = np.random.randint(
+            self.num_classes, size=(self.batch_size, 1), dtype='int64')
+        self.weight_np = np.random.uniform(
+            -1, 1, [self.num_classes - 1, self.feature_size]).astype(self.dtype)
+        self.bias_np = np.random.uniform(-1, 1, (
+            self.num_classes - 1, )).astype(self.dtype)
+        self.path_table_np = None
+        self.path_code_np = None
+        _, self.out_np = hsigmoid(self.x_np, self.weight_np, self.labels_np,
+                                  self.bias_np, self.num_classes)
+        self.set_attrs()
+
+        if self.is_custom:
+            _, self.out_np = hsigmoidWithCustomTree(
+                self.x_np, self.weight_np, self.path_table_np,
+                self.path_code_np, self.labels_np,
+                self.bias_np.reshape(-1, 1), self.num_classes)
+
+    def set_attrs(self):
+        pass
+
+    def test_dygraph_api(self):
+        paddle.disable_static(self.place)
+        x = paddle.to_tensor(self.x_np)
+        labels = paddle.to_tensor(self.labels_np)
+        weight = paddle.to_tensor(self.weight_np)
+        bias = paddle.to_tensor(self.bias_np)
+        path_table = None
+        path_code = None
+        if self.is_custom:
+            path_table = paddle.to_tensor(self.path_table_np)
+            path_code = paddle.to_tensor(self.path_code_np)
+        out1 = F.hsigmoid_loss(x, labels, self.num_classes, weight, bias,
+                               path_table, path_code)
+
+        weight_attr = I.NumpyArrayInitializer(self.weight_np)
+        bias_attr = I.NumpyArrayInitializer(self.bias_np)
+        m = paddle.nn.HSigmoidLoss(self.feature_size, self.num_classes,
+                                   weight_attr, bias_attr, self.is_custom)
+        out2 = m(x, labels, path_table, path_code)
+
+        for out in [out1, out2]:
+            self.assertTrue(np.allclose(self.out_np, out.numpy()))
+        paddle.enable_static()
+
+    def test_static_api(self):
+        train_program = paddle.static.Program()
+        startup_program = paddle.static.Program()
+        with paddle.static.program_guard(train_program, startup_program):
+            x = paddle.static.data('x', [-1, self.feature_size])
+            labels = paddle.static.data('labels', [-1, 1], 'int64')
+            weight = paddle.static.data('weight', [-1, self.feature_size])
+            bias = paddle.static.data('bias', [-1, ])
+            path_table = None
+            path_code = None
+            if self.is_custom:
+                path_table = paddle.static.data('path_table', [-1, -1], 'int64')
+                path_code = paddle.static.data('path_code', [-1, -1], 'int64')
+            out1 = F.hsigmoid_loss(x, labels, self.num_classes, weight, bias,
+                                   path_table, path_code)
+
+            weight_attr = paddle.framework.ParamAttr(
+                initializer=I.NumpyArrayInitializer(self.weight_np))
+            bias_attr = paddle.framework.ParamAttr(
+                initializer=I.NumpyArrayInitializer(self.bias_np))
+            m = paddle.nn.HSigmoidLoss(self.feature_size, self.num_classes,
+                                       weight_attr, bias_attr, self.is_custom)
+            out2 = m(x, labels, path_table, path_code)
+
+            exe = paddle.static.Executor(self.place)
+            exe.run(startup_program)
+            feed_dict = {
+                'x': self.x_np,
+                'labels': self.labels_np,
+                'weight': self.weight_np,
+                'bias': self.bias_np
+            }
+            if self.is_custom:
+                feed_dict["path_code"] = self.path_code_np
+                feed_dict["path_table"] = self.path_table_np
+            ret1, ret2 = exe.run(train_program,
+                                 feed=feed_dict,
+                                 fetch_list=[out1, out2])
+
+            for ret in [ret1, ret2]:
+                self.assertTrue(np.allclose(self.out_np, ret))
+
+    def test_fluid_api(self):
+        train_program = fluid.Program()
+        startup_program = fluid.Program()
+        with fluid.program_guard(train_program, startup_program):
+            x = fluid.data('x', [-1, self.feature_size])
+            labels = fluid.data('labels', [-1, 1], 'int64')
+            path_table = None
+            path_code = None
+            if self.is_custom:
+                path_table = fluid.data('path_table', [-1, -1], 'int64')
+                path_code = fluid.data('path_code', [-1, -1], 'int64')
+            weight_attr = I.NumpyArrayInitializer(self.weight_np)
+            bias_attr = I.NumpyArrayInitializer(self.bias_np)
+            out = fluid.layers.hsigmoid(x, labels, self.num_classes,
+                                        weight_attr, bias_attr, 'out',
+                                        path_table, path_code, self.is_custom)
+
+            exe = fluid.Executor(self.place)
+            exe.run(startup_program)
+            feed_dict = {'x': self.x_np, 'labels': self.labels_np}
+            if self.is_custom:
+                feed_dict["path_code"] = self.path_code_np
+                feed_dict["path_table"] = self.path_table_np
+            ret, = exe.run(train_program, feed=feed_dict, fetch_list=[out])
+
+            self.assertTrue(np.allclose(ret, self.out_np))
+
     def test_errors(self):
+        with paddle.static.program_guard(paddle.static.Program(),
+                                         paddle.static.Program()):
+            # test paddle.nn.HSigmoidLoss
+            self.assertRaises(ValueError, paddle.nn.HSigmoidLoss, 6, 1)
+
+            # test paddle.nn.functional.hsigmoid_loss
+            x = paddle.static.data('x', [4, 6])
+            label = paddle.static.data('label', [4, 1], 'int64')
+            weight = paddle.static.data('weight', [7, 6])
+            bias = paddle.static.data('bias', [7])
+
+            x_int32 = paddle.static.data('x_int32', [4, 6], 'int32')
+            self.assertRaises(TypeError, F.hsigmoid_loss, x_int32, label, 8,
+                              weight)
+
+            label_float32 = paddle.static.data('label_float32', [4, 1],
+                                               'float32')
+            self.assertRaises(TypeError, F.hsigmoid_loss, x, label_float32, 8,
+                              weight)
+
+            weight_int32 = paddle.static.data('weight_int32', [7, 6], 'int32')
+            self.assertRaises(TypeError, F.hsigmoid_loss, x, label, 8,
+                              weight_int32)
+
+            bias_int32 = paddle.static.data('bias_int32', [7], 'int32')
+            self.assertRaises(
+                TypeError,
+                F.hsigmoid_loss,
+                x,
+                label,
+                8,
+                weight,
+                bias=bias_int32)
+
+            path_table_int32 = paddle.static.data('path_table_int32', [7],
+                                                  'int32')
+            self.assertRaises(
+                TypeError,
+                F.hsigmoid_loss,
+                x,
+                label,
+                8,
+                weight,
+                path_table=path_table_int32)
+
+            path_code_int32 = paddle.static.data('path_code_int32', [7],
+                                                 'int32')
+            self.assertRaises(
+                TypeError,
+                F.hsigmoid_loss,
+                x,
+                label,
+                8,
+                weight,
+                path_code=path_code_int32)
+
+        # test paddle.fluid.layers.hsigmoid
         with program_guard(Program()):
             label = fluid.data('label', [4, 1], 'int64')
             # The input type must be Variable.
@@ -408,6 +594,18 @@ class TestHSigmoidOpError(unittest.TestCase):
             label_int32 = fluid.data('label_int32', [4, 1], 'int32')
             self.assertRaises(TypeError, fluid.layers.hsigmoid, x_fp32,
                               label_int32, 2)
+
+
+class TestHSigmoidLossAPICustom(TestHSigmoidLossAPI):
+    def set_attrs(self):
+        self.is_custom = True
+        self.path_table_np = np.array([(0, 2, -1, -1, -1), (0, 1, 3, -1, -1), (
+            0, 1, 4, -1, -1), (0, 2, -1, -1, -1)]).astype(np.int64)
+        self.path_code_np = np.array([(0, 0, -1, -1, -1), (1, 1, 1, -1, -1), (
+            1, 0, 0, -1, -1), (0, 1, -1, -1, -1)]).astype(np.int64)
+
+    def test_errors(self):
+        pass
 
 
 if __name__ == '__main__':

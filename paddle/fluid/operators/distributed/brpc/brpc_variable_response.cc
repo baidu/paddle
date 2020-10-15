@@ -52,7 +52,8 @@ int BRPCVariableResponse::Parse(Source* source) {
         PADDLE_ENFORCE((meta_.type() == sendrecv::SELECTED_ROWS ||
                         meta_.type() == sendrecv::LOD_TENSOR) &&
                            meta_.varname() != "",
-                       "meta info should be got first!");
+                       platform::errors::PreconditionNotMet(
+                           "meta info should be got first!"));
 
         if (!CopySelectRowsData(&input, *dev_ctx_, num_bytes)) {
           return ret;
@@ -60,7 +61,8 @@ int BRPCVariableResponse::Parse(Source* source) {
         break;
       }
       default: {
-        PADDLE_ENFORCE(false, "not surpported %u fieldnumber", field);
+        PADDLE_THROW(platform::errors::Unavailable(
+            "not surpported %u fieldnumber", field));
         return ret;
       }
     }

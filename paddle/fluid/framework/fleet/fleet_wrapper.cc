@@ -29,6 +29,12 @@ limitations under the License. */
 #include "paddle/fluid/framework/fleet/fleet_wrapper.h"
 #include <algorithm>
 #include <utility>
+#include "paddle/fluid/framework/channel.h"
+#include "paddle/fluid/framework/data_feed.h"
+#include "paddle/fluid/framework/io/fs.h"
+#include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/scope.h"
+#include "paddle/fluid/platform/timer.h"
 
 namespace paddle {
 namespace framework {

@@ -15,12 +15,14 @@
 from __future__ import print_function
 
 import unittest
-from paddle.fluid.framework import default_main_program, Program, convert_np_dtype_to_dtype_, in_dygraph_mode
+import numpy as np
+import six
+
 import paddle
 import paddle.fluid as fluid
-import paddle.fluid.layers as layers
 import paddle.fluid.core as core
-import numpy as np
+import paddle.fluid.layers as layers
+from paddle.fluid.framework import default_main_program, Program, convert_np_dtype_to_dtype_, in_dygraph_mode
 
 
 class TestVarBase(unittest.TestCase):
@@ -53,6 +55,15 @@ class TestVarBase(unittest.TestCase):
                     np.array_equal(x.numpy(), np.array([1.2]).astype(
                         'float32')))
                 self.assertEqual(x.dtype, core.VarDesc.VarType.FP32)
+                clone_x = x.clone()
+                self.assertTrue(
+                    np.array_equal(clone_x.numpy(),
+                                   np.array([1.2]).astype('float32')))
+                self.assertEqual(clone_x.dtype, core.VarDesc.VarType.FP32)
+                y = clone_x**2
+                y.backward()
+                self.assertTrue(
+                    np.array_equal(x.grad, np.array([2.4]).astype('float32')))
 
                 # set_default_dtype take effect on complex
                 x = paddle.to_tensor(1 + 2j, place=place, stop_gradient=False)
@@ -401,6 +412,84 @@ class TestVarBase(unittest.TestCase):
             self.assertEqual(getattr(var_base, attr), getattr(static_var, attr))
 
         self.assertListEqual(list(var_base.shape), list(static_var.shape))
+
+    def test_tensor_str(self):
+        paddle.enable_static()
+        paddle.disable_static(paddle.CPUPlace())
+        paddle.manual_seed(10)
+        a = paddle.rand([10, 20])
+        paddle.set_printoptions(4, 100, 3)
+        a_str = str(a)
+
+        if six.PY2:
+            expected = '''Tensor(shape=[10L, 20L], dtype=float32, place=CPUPlace, stop_gradient=True,
+       [[0.2727, 0.5489, 0.8655, ..., 0.2916, 0.8525, 0.9000],
+        [0.3806, 0.8996, 0.0928, ..., 0.9535, 0.8378, 0.6409],
+        [0.1484, 0.4038, 0.8294, ..., 0.0148, 0.6520, 0.4250],
+        ...,
+        [0.3426, 0.1909, 0.7240, ..., 0.4218, 0.2676, 0.5679],
+        [0.5561, 0.2081, 0.0676, ..., 0.9778, 0.3302, 0.9559],
+        [0.2665, 0.8483, 0.5389, ..., 0.4956, 0.6862, 0.9178]])'''
+
+        else:
+            expected = '''Tensor(shape=[10, 20], dtype=float32, place=CPUPlace, stop_gradient=True,
+       [[0.2727, 0.5489, 0.8655, ..., 0.2916, 0.8525, 0.9000],
+        [0.3806, 0.8996, 0.0928, ..., 0.9535, 0.8378, 0.6409],
+        [0.1484, 0.4038, 0.8294, ..., 0.0148, 0.6520, 0.4250],
+        ...,
+        [0.3426, 0.1909, 0.7240, ..., 0.4218, 0.2676, 0.5679],
+        [0.5561, 0.2081, 0.0676, ..., 0.9778, 0.3302, 0.9559],
+        [0.2665, 0.8483, 0.5389, ..., 0.4956, 0.6862, 0.9178]])'''
+
+        self.assertEqual(a_str, expected)
+        paddle.enable_static()
+
+
+class TestVarBaseSetitem(unittest.TestCase):
+    def setUp(self):
+        paddle.disable_static()
+        self.tensor_x = paddle.to_tensor(np.ones((4, 2, 3)).astype(np.float32))
+        self.np_value = np.random.random((2, 3)).astype(np.float32)
+        self.tensor_value = paddle.to_tensor(self.np_value)
+
+    def _test(self, value):
+        paddle.disable_static()
+        id_origin = id(self.tensor_x)
+
+        self.tensor_x[0] = value
+
+        if isinstance(value, (six.integer_types, float)):
+            result = np.zeros((2, 3)).astype(np.float32) + value
+
+        else:
+            result = self.np_value
+
+        self.assertTrue(np.array_equal(self.tensor_x[0].numpy(), result))
+        self.assertEqual(id_origin, id(self.tensor_x))
+
+        self.tensor_x[1:2] = value
+        self.assertTrue(np.array_equal(self.tensor_x[1].numpy(), result))
+        self.assertEqual(id_origin, id(self.tensor_x))
+
+        self.tensor_x[...] = value
+        self.assertTrue(np.array_equal(self.tensor_x[3].numpy(), result))
+        self.assertEqual(id_origin, id(self.tensor_x))
+
+    def test_value_tensor(self):
+        paddle.disable_static()
+        self._test(self.tensor_value)
+
+    def test_value_numpy(self):
+        paddle.disable_static()
+        self._test(self.np_value)
+
+    def test_value_int(self):
+        paddle.disable_static()
+        self._test(10)
+
+    def test_value_float(self):
+        paddle.disable_static()
+        self._test(3.3)
 
 
 if __name__ == '__main__':

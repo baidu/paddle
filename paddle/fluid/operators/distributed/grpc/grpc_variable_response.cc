@@ -257,7 +257,8 @@ int GRPCVariableResponse::Parse(Source* source) {
         PADDLE_ENFORCE((meta_.type() == sendrecv::SELECTED_ROWS ||
                         meta_.type() == sendrecv::LOD_TENSOR) &&
                            meta_.varname() != "",
-                       "meta info should be got first!");
+                       platform::errors::PreconditionNotMet(
+                           "meta info should be got first!"));
 
         int num_bytes = 0;
         if (wt != WIRETYPE_LENGTH_DELIMITED ||

@@ -314,9 +314,7 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
                 if print_result is True:
                     print("loss:", loss.numpy())
                 
-                loss = dp_layer.scale_loss(loss)
                 loss.backward()
-                dp_layer.apply_collective_grads()
 
                 adam.step()
                 adam.clear_grad()
@@ -366,7 +364,7 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
         device = get_device()
         if device == 'cpu':
             # TODO: not supports cpu parallel now
-            nprocs = _cpu_num
+            nprocs = _cpu_num()
         else:
             nprocs = core.get_cuda_device_count()
 

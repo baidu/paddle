@@ -439,7 +439,7 @@ def barrier(group=0):
             paddle.distributed.barrier()
     """
     op_type = 'barrier'
-    temp = paddle.fill_constant([1], dtype="int32", value="1")
+    temp = fill_constant([1], dtype="int32", value="1")
     if in_dygraph_mode():
         return core.ops.barrier(temp, temp, 'ring_id', group)
     if not isinstance(group, int):

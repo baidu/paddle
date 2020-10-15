@@ -36,11 +36,7 @@ class TestCloudRoleMaker2(unittest.TestCase):
         from paddle.fluid.incubate.fleet.parameter_server.distribute_transpiler import fleet
         from paddle.fluid.incubate.fleet.base.role_maker import GeneralRoleMaker
         from paddle.fluid.incubate.fleet.base.role_maker import RoleMakerBase
-        try:
-            import netifaces
-        except:
-            print("warning: no netifaces, skip test_pslib_2")
-            return
+
         os.environ["POD_IP"] = "127.0.0.1"
         os.environ["PADDLE_PORT"] = "36001"
         os.environ["TRAINING_ROLE"] = "TRAINER"

@@ -42,21 +42,21 @@ class MVOp : public framework::OperatorWithKernel {
     OP_INOUT_CHECK(context->HasOutput("Out"), "Output", "Out", "mv");
 
     auto dim_x = context->GetInputDim("X");
-    auto dim_y = context->GetInputDim("Vec");
+    auto dim_vec = context->GetInputDim("Vec");
     PADDLE_ENFORCE_EQ(
         dim_x.size(), 2,
         platform::errors::InvalidArgument(
             "The rank of input X should be 2, but is %d", dim_x.size()));
     PADDLE_ENFORCE_EQ(
-        dim_y.size(), 1,
+        dim_vec.size(), 1,
         platform::errors::InvalidArgument(
-            "The rank of input Vec should be 1, but is %d", dim_y.size()));
-    PADDLE_ENFORCE_EQ(dim_x[1] == dim_y[0], true,
+            "The rank of input Vec should be 1, but is %d", dim_vec.size()));
+    PADDLE_ENFORCE_EQ(dim_x[1], dim_vec[0],
                       platform::errors::InvalidArgument(
-                          "The length of input X' second dim should equal the "
-                          "length of input Vec,"
-                          " but X[%d, %d], Vec[%d]",
-                          dim_x[0], dim_x[1], dim_y[0]));
+                          "X's second dimension is expected to be equal to "
+                          "Vec's first dimension"
+                          "but recieved X'shape = [%s], Vec's shape = [%s]",
+                          dim_x, dim_vec));
 
     framework::DDim dim_out = framework::make_ddim({dim_x[0]});
 

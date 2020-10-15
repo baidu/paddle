@@ -103,7 +103,7 @@ class BRPCClient : public RPCClient {
 
   VarHandlePtr AsyncCheckpointNotify(
       const std::string& ep, const std::string& dirname,
-      const std::string& varname,
+      const std::string& varname, const int mode,
       int64_t time_out = FLAGS_rpc_deadline) override;
 
   bool Wait() override;

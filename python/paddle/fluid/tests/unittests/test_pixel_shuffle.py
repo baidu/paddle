@@ -97,8 +97,8 @@ class TestPixelShuffleAPI(unittest.TestCase):
             place = paddle.CUDAPlace(0) if use_cuda else paddle.CPUPlace()
 
             paddle.enable_static()
-            x_1 = paddle.data(name="x", shape=[2, 9, 4, 4], dtype="float64")
-            x_2 = paddle.data(name="x2", shape=[2, 4, 4, 9], dtype="float64")
+            x_1 = paddle.fluid.data(name="x", shape=[2, 9, 4, 4], dtype="float64")
+            x_2 = paddle.fluid.data(name="x2", shape=[2, 4, 4, 9], dtype="float64")
             out_1 = F.pixel_shuffle(x_1, 3)
             out_2 = F.pixel_shuffle(x_2, 3, "NHWC")
 
@@ -123,8 +123,8 @@ class TestPixelShuffleAPI(unittest.TestCase):
             place = paddle.CUDAPlace(0) if use_cuda else paddle.CPUPlace()
 
             paddle.enable_static()
-            x_1 = paddle.data(name="x", shape=[2, 9, 4, 4], dtype="float64")
-            x_2 = paddle.data(name="x2", shape=[2, 4, 4, 9], dtype="float64")
+            x_1 = paddle.fluid.data(name="x", shape=[2, 9, 4, 4], dtype="float64")
+            x_2 = paddle.fluid.data(name="x2", shape=[2, 4, 4, 9], dtype="float64")
             # init instance
             ps_1 = paddle.nn.PixelShuffle(3)
             ps_2 = paddle.nn.PixelShuffle(3, "NHWC")

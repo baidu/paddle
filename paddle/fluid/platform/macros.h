@@ -25,6 +25,8 @@ limitations under the License. */
   classname& operator=(classname&&) = delete
 #endif
 
+#ifndef PADDLE_WITH_MUSL
 #if defined(__FLT_MAX__)
 #define FLT_MAX __FLT_MAX__
 #endif  // __FLT_MAX__
+#endif  // PADDLE_WITH_MUSL

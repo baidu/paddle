@@ -90,8 +90,9 @@ class BRPCServiceImpl : public SendRecvService {
   void _SendVariable(google::protobuf::RpcController* cntl_butil,
                      const VariableMessage* request, VoidMessage* response,
                      google::protobuf::Closure* done) {
-    PADDLE_ENFORCE(request_send_h_ != nullptr,
-                   "RequestSend handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_send_h_, platform::errors::PreconditionNotMet(
+                             "RequestSend handler should be registed first!"));
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
 
@@ -103,8 +104,9 @@ class BRPCServiceImpl : public SendRecvService {
     distributed::BRPCVariableResponse resp(request_send_h_->scope(),
                                            request_send_h_->dev_ctx(),
                                            request_send_h_->distributed_mode());
-    PADDLE_ENFORCE(resp.Parse(cntl->request_attachment(), *request) == 0,
-                   "parse iobuf to tensor error!");
+    PADDLE_ENFORCE_EQ(
+        resp.Parse(cntl->request_attachment(), *request), 0,
+        platform::errors::InvalidArgument("parse iobuf to tensor error!"));
 
     auto scope = resp.GetMutableLocalScope();
     auto invar = resp.GetVar();
@@ -132,8 +134,9 @@ class BRPCServiceImpl : public SendRecvService {
   void _GetVariable(google::protobuf::RpcController* cntl_butil,
                     const VariableMessage* request, VariableMessage* response,
                     google::protobuf::Closure* done) {
-    PADDLE_ENFORCE(request_get_h_ != nullptr,
-                   "RequestGet handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_get_h_, platform::errors::PreconditionNotMet(
+                            "RequestGet handler should be registed first!"));
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
@@ -164,8 +167,10 @@ class BRPCServiceImpl : public SendRecvService {
                              const VariableMessage* request,
                              VariableMessage* response,
                              google::protobuf::Closure* done) {
-    PADDLE_ENFORCE(request_getnobarrier_h_ != nullptr,
-                   "RequestGetNoBarrier handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_getnobarrier_h_,
+        platform::errors::PreconditionNotMet(
+            "RequestGetNoBarrier handler should be registed first!"));
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
@@ -204,8 +209,9 @@ class BRPCServiceImpl : public SendRecvService {
                          const VariableMessage* request,
                          VariableMessage* response,
                          google::protobuf::Closure* done) {
-    PADDLE_ENFORCE(request_prefetch_h_ != nullptr,
-                   "kRequestPrefetch handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(request_prefetch_h_,
+                   platform::errors::PreconditionNotMet(
+                       "kRequestPrefetch handler should be registed first!");
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
@@ -221,8 +227,9 @@ class BRPCServiceImpl : public SendRecvService {
     distributed::BRPCVariableResponse resp(
         request_prefetch_h_->scope(), request_prefetch_h_->dev_ctx(), true);
 
-    PADDLE_ENFORCE(resp.Parse(cntl->request_attachment(), *request) == 0,
-                   "parse iobuf to tensor error!");
+    PADDLE_ENFORCE_EQ(resp.Parse(cntl->request_attachment(), *request), 0,
+                   platform::errors::InvalidArgument(
+                       "parse iobuf to tensor error!"));
 
     auto scope = resp.GetMutableLocalScope();
     auto invar = scope->FindVar(in_var_name);
@@ -248,9 +255,10 @@ class BRPCServiceImpl : public SendRecvService {
   void _CheckpointNotify(google::protobuf::RpcController* cntl_butil,
                          const VariableMessage* request, VoidMessage* response,
                          google::protobuf::Closure* done) {
-    PADDLE_ENFORCE(
-        request_checkpoint_h_ != nullptr,
-        "kRequestCheckpointNotify handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_checkpoint_h_,
+        platform::errors::PreconditionNotMet(
+            "kRequestCheckpointNotify handler should be registed first!"));
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
@@ -277,9 +285,10 @@ class BRPCServiceImpl : public SendRecvService {
                           const VariableMessage* request,
                           VariableMessage* response,
                           google::protobuf::Closure* done) override {
-    PADDLE_ENFORCE(
-        request_get_monomer_handler_h_ != nullptr,
-        "kRequestGetMonomerVariable handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_get_monomer_handler_h_,
+        platform::errors::PreconditionNotMet(
+            "kRequestGetMonomerVariable handler should be registed first!"));
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);
@@ -309,9 +318,10 @@ class BRPCServiceImpl : public SendRecvService {
   void GetMonomerBarrier(google::protobuf::RpcController* cntl_butil,
                          const VariableMessage* request, VoidMessage* response,
                          google::protobuf::Closure* done) override {
-    PADDLE_ENFORCE(
-        request_get_monomer_barrier_handler_h_ != nullptr,
-        "RequestGetMonomerBarrier handler should be registed first!");
+    PADDLE_ENFORCE_NOT_NULL(
+        request_get_monomer_barrier_handler_h_,
+        platform::errors::PreconditionNotMet(
+            "RequestGetMonomerBarrier handler should be registed first!"));
 
     brpc::ClosureGuard done_guard(done);
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_butil);

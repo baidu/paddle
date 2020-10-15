@@ -146,16 +146,19 @@ class FakeChannelWiseQuantizeAbsMaxKernel : public framework::OpKernel<T> {
 
     auto* out = context.Output<framework::Tensor>("Out");
     auto* out_scale = context.Output<framework::Tensor>("OutScale");
-    T* out_scale_data = out_scale->mutable_data<T>(context.GetPlace());
     out->mutable_data<T>(context.GetPlace());
 
     int bit_length = context.Attr<int>("bit_length");
     int bin_cnt = std::pow(2, bit_length - 1) - 1;
     int quant_axis = context.Attr<int>("quant_axis");
+    bool is_test = context.Attr<bool>("is_test");
 
     auto& dev_ctx = context.template device_context<DeviceContext>();
-    FindChannelAbsMaxFunctor<DeviceContext, T>()(dev_ctx, *in, quant_axis,
-                                                 out_scale_data);
+    if (!is_test) {
+      T* out_scale_data = out_scale->mutable_data<T>(context.GetPlace());
+      FindChannelAbsMaxFunctor<DeviceContext, T>()(dev_ctx, *in, quant_axis,
+                                                   out_scale_data);
+    }
     ChannelClipAndFakeQuantFunctor<DeviceContext, T>()(
         dev_ctx, *in, *out_scale, bin_cnt, quant_axis, out);
   }

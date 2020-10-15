@@ -13,24 +13,95 @@
 # limitations under the License.
 
 
-def maximum_path_len_algo(optimizer_list):
-    max_idx = 0
-    max_len = 0
-    candidates = []
-    for idx, opt in enumerate(optimizer_list):
-        local_buffer = [opt]
-        for opt_inner in optimizer_list:
+def create_graph(optimizer_list):
+    nsize = len(optimizer_list)
+
+    edge = [[0] * nsize for _ in range(nsize)]  # adjacency matrix
+    indegree = [0] * nsize
+    for i, opt in enumerate(optimizer_list):
+        for j, opt_inner in enumerate(optimizer_list):
             if opt._can_update(opt_inner):
-                local_buffer.append(opt_inner)
-        if len(local_buffer) > max_len:
-            max_idx = idx
-            max_len = len(local_buffer)
-        candidates.append(local_buffer)
-    if len(candidates) == 0:
+                edge[i][j] = 1  # weight
+                indegree[j] += 1
+
+    return edge, indegree
+
+
+def topo_sort(edge, indegree):
+    nsize = len(indegree)
+
+    topo = [-1] * nsize
+    for i in range(nsize):
+        j = 0
+        while j < nsize and indegree[j] != 0:
+            j += 1
+        assert j < nsize, 'The combination of meta optimizers contains ring'
+
+        topo[i] = j
+        indegree[j] = -1
+        for k in range(nsize):
+            if edge[j][k] != 0:
+                indegree[k] -= 1
+
+    return topo
+
+
+def floyd(edge):
+    nsize = len(edge)
+    max_len = -1
+    max_edge = [-1, -1]
+
+    max_path = [[[] for _ in range(nsize)] for _ in range(nsize)]
+    for i in range(nsize):
+        for j in range(nsize):
+            if edge[i][j] > 0:
+                max_path[i][j] = [j]
+
+                if edge[i][j] > max_len:
+                    max_len = edge[i][j]
+                    max_edge = [i, j]
+
+    # use floyd algorithm to find max_path
+    for k in range(nsize):
+        for i in range(nsize):
+            for j in range(nsize):
+                # if a-->b-->c, but a-/->c, can only apply a-->b or b-->c,
+                # however if a-->b-->c, and a-->c, can apply a->b->c
+                if edge[i][j] == 0:
+                    continue
+
+                if edge[i][k] == 0 or edge[k][j] == 0:
+                    continue
+
+                if edge[i][j] < edge[i][k] + edge[k][j]:
+                    edge[i][j] = edge[i][k] + edge[k][j]
+                    max_path[i][j] = max_path[i][k] + max_path[k][j]
+
+                    max_len = edge[i][j]
+                    max_edge = [i, j]
+
+    if max_len == -1:
+        return [0]
+
+    return [max_edge[0]] + max_path[max_edge[0]][max_edge[1]]
+
+
+def maximum_path_len_algo(optimizer_list):
+    if len(optimizer_list) == 0:
         return None
-    for idx, opt in enumerate(candidates[max_idx][:-1]):
-        opt._update_inner_optimizer(candidates[max_idx][idx + 1])
-    return candidates[max_idx]
+
+    edge, indegree = create_graph(optimizer_list)
+    topo_sort(edge, indegree)
+    max_path = floyd(edge)
+
+    candidate = []
+    for idx in max_path:
+        candidate.append(optimizer_list[idx])
+
+    for idx, opt in enumerate(candidate[:-1]):
+        opt._update_inner_optimizer(candidate[idx + 1])
+
+    return candidate
 
 
 class StrategyCompilerBase(object):

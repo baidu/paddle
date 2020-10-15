@@ -127,5 +127,15 @@ def load_tests(loader, standard_tests, pattern):
     return suite
 
 
+class TestGridSampleAPI(unittest.TestCase):
+    def test_errors(self):
+        with self.assertRaises(ValueError):
+            x = paddle.randn([1, 1, 3, 3])
+            F.grid_sample(x, 1.0)
+        with self.assertRaises(ValueError):
+            x = paddle.randn([1, 1, 3, 3])
+            F.grid_sample(1.0, x)
+
+
 if __name__ == '__main__':
     unittest.main()

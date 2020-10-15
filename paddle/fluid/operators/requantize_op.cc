@@ -31,10 +31,12 @@ framework::OpKernelType ReQuantOp::GetExpectedKernelType(
 }
 
 void ReQuantOpMaker::Make() {
-  AddInput("Input", "input data");
-  AddOutput("Output", "output data");
-  AddAttr<float>("Scale_in", "scale in data").SetDefault({1.0f});
-  AddAttr<float>("Scale_out", "scale out data").SetDefault({1.0f});
+  AddInput("Input", "Input data");
+  AddOutput("Output", "Output data");
+  AddAttr<float>("Scale_in", "Scale in data").SetDefault({1.0f});
+  AddAttr<float>("Scale_out", "Scale out data").SetDefault({1.0f});
+  AddAttr<float>("Shift_in", "Shift in data").SetDefault({1.0f});
+  AddAttr<float>("Shift_out", "Shift out data").SetDefault({1.0f});
   AddComment(
       R"DOC(This op will re-quantize data from INT8 with scale_in to INT8 with scale_out)DOC");
 }

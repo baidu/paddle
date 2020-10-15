@@ -19,6 +19,7 @@ import numpy as np
 import paddle
 import paddle.fluid as fluid
 from op_test import OpTest
+paddle.enable_static()
 
 
 # Correct: General.

@@ -226,11 +226,29 @@ class TestReshapeUint8Op(TestReshapeInt8Op):
         self.dtype = np.uint8
 
 
+class TestReshapeOpBool(TestReshapeOp):
+    def setUp(self):
+        self.init_data()
+        self.op_type = "reshape2"
+        self.inputs = {
+            "X": np.random.choice(
+                [True, False], size=self.ori_shape)
+        }
+        self.attrs = {"shape": self.new_shape}
+        self.outputs = {
+            "Out": self.inputs["X"].reshape(self.infered_shape),
+            'XShape': np.random.random(self.ori_shape).astype("float32")
+        }
+
+    def test_check_grad(self):
+        pass
+
+
 # Test python API
 class TestReshapeAPI(unittest.TestCase):
     def _set_paddle_api(self):
-        self.fill_constant = paddle.fill_constant
-        self.data = paddle.data
+        self.fill_constant = paddle.fluid.layers.fill_constant
+        self.data = paddle.fluid.data
         self.reshape = paddle.reshape
         self.to_tensor = paddle.to_tensor
 
@@ -305,7 +323,7 @@ class TestReshapeAPI(unittest.TestCase):
 # Test Input Error
 class TestReshapeOpError(unittest.TestCase):
     def _set_paddle_api(self):
-        self.data = paddle.data
+        self.data = paddle.fluid.data
         self.reshape = paddle.reshape
 
     def _set_fluid_api(self):
@@ -324,7 +342,7 @@ class TestReshapeOpError(unittest.TestCase):
 
             # The x dtype of reshape_op must be float16, float32, float64, int32 or int64.
             def test_x_dtype():
-                x2 = self.data(name="x2", shape=[2, 25], dtype="bool")
+                x2 = self.data(name="x2", shape=[2, 25], dtype="int8")
                 self.reshape(x2, shape=[2, 5, 5])
 
             self.assertRaises(TypeError, test_x_dtype)

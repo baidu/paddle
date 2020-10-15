@@ -49,8 +49,8 @@ class TestFunctionalPReluAPI(unittest.TestCase):
 
     def static_check(self, weight_np):
         with paddle.static.program_guard(paddle.static.Program()):
-            x = paddle.data('X', self.x_np.shape, 'float32')
-            weight = paddle.data('Alpha', weight_np.shape, 'float32')
+            x = paddle.fluid.data('X', self.x_np.shape, 'float32')
+            weight = paddle.fluid.data('Alpha', weight_np.shape, 'float32')
             out = F.prelu(x, weight)
             exe = paddle.static.Executor(self.place)
             res = exe.run(feed={'X': self.x_np,
@@ -78,15 +78,15 @@ class TestFunctionalPReluAPI(unittest.TestCase):
 
     def test_error(self):
         with paddle.static.program_guard(paddle.static.Program()):
-            weight_fp32 = paddle.data(
+            weight_fp32 = paddle.fluid.data(
                 name='weight_fp32', shape=[1], dtype='float32')
             # The input type must be Variable.
             self.assertRaises(TypeError, F.prelu, x=1, weight=weight_fp32)
             # The input dtype must be float16, float32, float64.
-            x_int32 = paddle.data(name='x_int32', shape=[2, 3], dtype='int32')
+            x_int32 = paddle.fluid.data(name='x_int32', shape=[2, 3], dtype='int32')
             self.assertRaises(TypeError, F.prelu, x=x_int32, weight=weight_fp32)
             # support the input dtype is float16
-            x_fp16 = paddle.data(name='x_fp16', shape=[2, 3], dtype='float16')
+            x_fp16 = paddle.fluid.data(name='x_fp16', shape=[2, 3], dtype='float16')
             F.prelu(x=x_fp16, weight=weight_fp32)
 
 
@@ -100,7 +100,7 @@ class TestNNPReluAPI(unittest.TestCase):
         startup_program = paddle.static.Program()
         train_program = paddle.static.Program()
         with paddle.static.program_guard(train_program, startup_program):
-            x = paddle.data(name='X', shape=self.x_np.shape, dtype='float32')
+            x = paddle.fluid.data(name='X', shape=self.x_np.shape, dtype='float32')
             m = paddle.nn.PReLU()
             out = m(x)
             exe = paddle.static.Executor(self.place)

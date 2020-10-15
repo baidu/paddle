@@ -52,13 +52,19 @@ class SplitIdsOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE(ctx->HasInputs("Ids"), "SplitIdsOp must have input Ids.");
-    PADDLE_ENFORCE(ctx->HasOutputs("Out"), "SplitIdsOp must have output Out.");
+    OP_INOUT_CHECK(ctx->HasInputs("Ids"), "Input", "Ids", "SplitIdsOp");
+    OP_INOUT_CHECK(ctx->HasOutputs("Out"), "Output", "Out", "SplitIdsOp");
 
     auto ids_var_type = ctx->GetInputsVarType("Ids").front();
     auto ids_dims = ctx->GetInputsDim("Ids");
     if (ids_var_type == framework::proto::VarType::LOD_TENSOR) {
-      PADDLE_ENFORCE_EQ(ids_dims[0].size(), 2);
+      PADDLE_ENFORCE_EQ(
+          ids_dims[0].size(), 2,
+          platform::errors::InvalidArgument(
+              "ShapeError: The dimensions of the 'split_ids' must be 2. "
+              "But received split_ids's dimensions = %d, "
+              "split_ids's shape = [%s].",
+              ids_dims[0].size(), ids_dims[0]));
     }
   }
 

@@ -238,9 +238,8 @@ __global__ void grid_sample_cuda_kernel(const int nthreads, int n, int out_c,
         }
       }
     } else if (mode == Mode::nearest) {
-      int ix_nearest = static_cast<int>(round(ix));
-      int iy_nearest = static_cast<int>(round(iy));
-
+      int ix_nearest = static_cast<int>(std::nearbyint(ix));
+      int iy_nearest = static_cast<int>(std::nearbyint(iy));
       auto inp_offset_NC = n * inp_sN;
       auto out_ptr_NCHW = output + n * out_sN + h * out_sH + w * out_sW;
       for (int c = 0; c < out_c;
@@ -397,12 +396,14 @@ __global__ void grid_sampler_cuda_backward_kernel(
         }
       }
 
-      T* gGrid_ptr_NHW = grad_grid + index * grid_sW;
-      gGrid_ptr_NHW[0] = gix_mult * gix;
-      gGrid_ptr_NHW[1] = giy_mult * giy;
+      if (grad_grid != nullptr) {
+        T* gGrid_ptr_NHW = grad_grid + index * grid_sW;
+        gGrid_ptr_NHW[0] = gix_mult * gix;
+        gGrid_ptr_NHW[1] = giy_mult * giy;
+      }
     } else if (mode == Mode::nearest) {
-      int ix_nearest = static_cast<int>(::round(ix));
-      int iy_nearest = static_cast<int>(::round(iy));
+      int ix_nearest = static_cast<int>(std::nearbyint(ix));
+      int iy_nearest = static_cast<int>(std::nearbyint(iy));
 
       int gOut_offset = n * gOut_sN + h * gOut_sH + w * gOut_sW;
       T* gInp_ptr_NC = grad_input + n * inp_sN;
@@ -412,9 +413,11 @@ __global__ void grid_sampler_cuda_backward_kernel(
                    in_w, grad_output[gOut_offset]);
       }
 
-      T* gGrid_ptr_NHW = grad_grid + index * grid_sW;
-      gGrid_ptr_NHW[0] = static_cast<T>(0);
-      gGrid_ptr_NHW[1] = static_cast<T>(0);
+      if (grad_grid != nullptr) {
+        T* gGrid_ptr_NHW = grad_grid + index * grid_sW;
+        gGrid_ptr_NHW[0] = static_cast<T>(0);
+        gGrid_ptr_NHW[1] = static_cast<T>(0);
+      }
     }
   }
 }
@@ -460,11 +463,15 @@ class GridSampleGradOpCUDAKernel : public framework::OpKernel<T> {
     math::SetConstant<paddle::platform::CUDADeviceContext, T>()(
         ctx.template device_context<paddle::platform::CUDADeviceContext>(),
         input_grad, static_cast<T>(0));
-    auto* grid_grad = ctx.Output<Tensor>(framework::GradVarName("Grid"));
-    grid_grad->mutable_data<T>(ctx.GetPlace());
-    math::SetConstant<paddle::platform::CUDADeviceContext, T>()(
-        ctx.template device_context<paddle::platform::CUDADeviceContext>(),
-        grid_grad, static_cast<T>(0));
+
+    T* grid_grad_data = nullptr;
+    if (ctx.HasOutput(framework::GradVarName("Grid"))) {
+      auto* grid_grad = ctx.Output<Tensor>(framework::GradVarName("Grid"));
+      grid_grad_data = grid_grad->mutable_data<T>(ctx.GetPlace());
+      math::SetConstant<paddle::platform::CUDADeviceContext, T>()(
+          ctx.template device_context<paddle::platform::CUDADeviceContext>(),
+          grid_grad, static_cast<T>(0));
+    }
 
     int count = static_cast<int>(n * out_h * out_w);
     auto cu_stream = dev_ctx.stream();
@@ -472,8 +479,8 @@ class GridSampleGradOpCUDAKernel : public framework::OpKernel<T> {
     int grid_size = (count + block - 1) / block;
     grid_sampler_cuda_backward_kernel<T><<<block, grid_size, 0, cu_stream>>>(
         count, output_grad->data<T>(), input->data<T>(), grid->data<T>(), n, c,
-        out_h, out_w, in_h, in_w, input_grad->data<T>(), grid_grad->data<T>(),
-        mode, padding_mode, align_corners);
+        out_h, out_w, in_h, in_w, input_grad->data<T>(), grid_grad_data, mode,
+        padding_mode, align_corners);
   }
 };
 

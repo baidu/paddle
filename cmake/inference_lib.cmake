@@ -131,7 +131,7 @@ function(copy_part_of_thrid_party TARGET DST)
     if (LITE_BINARY_DIR)
         set(dst_dir "${DST}/third_party/install/lite")
         copy(${TARGET}
-                SRCS ${LITE_BINARY_DIR}/inference_lite_lib/*
+                SRCS ${LITE_BINARY_DIR}/${LITE_OUTPUT_BIN_DIR}/*
                 DSTS ${dst_dir})
     endif()
 endfunction()

@@ -21,7 +21,6 @@ limitations under the License. */
 #include <thread>  // NOLINT
 #include <utility>
 #include <vector>
-
 #include "gflags/gflags.h"
 #include "paddle/fluid/operators/distributed/distributed.h"
 #include "paddle/fluid/operators/distributed/request_handler.h"
@@ -51,7 +50,8 @@ class GetMonomerHandler final : public RequestHandler {
     VLOG(50) << "GetMonomerHandler recv " << var_name;
 
     *outvar = scope->FindVar(var_name);
-    PADDLE_ENFORCE(outvar != nullptr, "%s not found", var_name);
+    PADDLE_ENFORCE_NOT_NULL(
+        outvar, platform::errors::NotFound("var: %s is not found.", var_name));
 
     return true;
   }
