@@ -56,9 +56,11 @@ static nvinfer1::IRuntime* createInferRuntime(nvinfer1::ILogger* logger) {
   return static_cast<nvinfer1::IRuntime*>(
       dy::createInferRuntime_INTERNAL(logger, NV_TENSORRT_VERSION));
 }
-static nvinfer1::IPluginRegistry* getPluginRegistry() {
+#if IS_TRT_VERSION_GE(6000)
+static nvinfer1::IPluginRegistry* GetPluginRegistry() {
   return static_cast<nvinfer1::IPluginRegistry*>(dy::getPluginRegistry());
 }
+#endif
 
 // A logger for create TensorRT infer builder.
 class NaiveLogger : public nvinfer1::ILogger {
