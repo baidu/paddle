@@ -229,7 +229,7 @@ class NoamDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -325,7 +325,7 @@ class PiecewiseDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -407,7 +407,7 @@ class NaturalExpDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -485,7 +485,7 @@ class InverseTimeDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -580,7 +580,7 @@ class PolynomialDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -695,7 +695,7 @@ class LinearWarmup(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -798,7 +798,7 @@ class ExponentialDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -885,7 +885,7 @@ class MultiStepDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -992,7 +992,7 @@ class StepDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -1086,7 +1086,7 @@ class LambdaDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -1184,7 +1184,7 @@ class ReduceOnPlateau(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()
@@ -1390,7 +1390,7 @@ class CosineAnnealingDecay(LRScheduler):
                 for batch_id in range(2):
                     x = paddle.uniform([10, 10])
                     out = linear(x)
-                    loss = paddle.fluid.layers.reduce_mean(out)
+                    loss = paddle.mean(out)
                     loss.backward()
                     sgd.step()
                     sgd.clear_gradients()

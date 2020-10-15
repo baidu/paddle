@@ -377,7 +377,7 @@ class Optimizer(object):
                 linear = paddle.nn.Linear(10, 10)
                 inp = paddle.to_tensor(inp)
                 out = linear(inp)
-                loss = paddle.fluid.layers.reduce_mean(out)
+                loss = paddle.mean(out)
                 
                 bd = [2, 4, 6, 8]
                 value = [0.2, 0.4, 0.6, 0.8, 1.0]

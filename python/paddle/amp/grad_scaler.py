@@ -56,7 +56,7 @@ class GradScaler(AmpScaler):
         data = paddle.rand([10, 3, 32, 32])
         with paddle.amp.auto_cast():
             conv = model(data)
-            loss = paddle.fluid.layers.reduce_mean(conv) 
+            loss = paddle.mean(conv)
             scaled = scaler.scale(loss)  # scale the loss 
             scaled.backward()            # do backward
             scaler.minimize(optimizer, scaled)  # update parameters     
@@ -96,7 +96,7 @@ class GradScaler(AmpScaler):
             data = paddle.rand([10, 3, 32, 32])
             with paddle.amp.auto_cast():
                 conv = model(data)
-                loss = paddle.fluid.layers.reduce_mean(conv) 
+                loss = paddle.mean(conv)
                 scaled = scaler.scale(loss)  # scale the loss 
                 scaled.backward()            # do backward
                 scaler.minimize(optimizer, scaled)  # update parameters  
@@ -128,7 +128,7 @@ class GradScaler(AmpScaler):
             data = paddle.rand([10, 3, 32, 32])
             with paddle.amp.auto_cast():
                 conv = model(data)
-                loss = paddle.fluid.layers.reduce_mean(conv) 
+                loss = paddle.mean(conv)
                 scaled = scaler.scale(loss)  # scale the loss 
                 scaled.backward()            # do backward
                 scaler.minimize(optimizer, scaled)  # update parameters  

@@ -414,7 +414,7 @@ class TestLRScheduler(unittest.TestCase):
             for batch_id in range(2):
                 x = paddle.to_tensor(x)
                 out = linear(x)
-                loss = paddle.fluid.layers.reduce_mean(out)
+                loss = paddle.mean(out)
                 loss.backward()
                 adam.step()
                 adam.clear_grad()

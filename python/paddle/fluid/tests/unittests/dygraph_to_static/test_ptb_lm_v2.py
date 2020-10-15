@@ -187,7 +187,7 @@ class PtbModel(paddle.nn.Layer):
         loss = paddle.nn.functional.softmax_with_cross_entropy(
             logits=projection, label=label, soft_label=False)
         loss = paddle.reshape(loss, shape=[-1, self.num_steps])
-        loss = paddle.fluid.layers.reduce_mean(loss, dim=[0])
+        loss = paddle.mean(loss, axis=[0])
         loss = paddle.fluid.layers.reduce_sum(loss)
 
         return loss, last_hidden, last_cell

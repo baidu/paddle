@@ -85,7 +85,7 @@ class TestRetainGraph(unittest.TestCase):
 
             gradients = paddle.reshape(gradients[0], [real_data.shape[0], -1])
 
-            gradient_penalty = paddle.fluid.layers.reduce_mean((paddle.norm(
+            gradient_penalty = paddle.mean((paddle.norm(
                 gradients + 1e-16, 2, 1) - constant)**
                                                   2) * lambda_gp  # added eps
             return gradient_penalty, gradients
