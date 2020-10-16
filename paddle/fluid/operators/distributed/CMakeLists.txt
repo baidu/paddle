@@ -68,3 +68,5 @@ if(WITH_GPU)
         DEPS sendrecvop_rpc executor ${RPC_DEPS}
         selected_rows_functor  scope math_function)
 endif()
+set_tests_properties(rpc_server_test PROPERTIES TIMEOUT 120)
+set_tests_properties(heart_beat_monitor_test PROPERTIES TIMEOUT 120)
