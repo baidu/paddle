@@ -116,32 +116,44 @@ def pool3D_forward_naive(x,
         if adaptive:
             d_start = adaptive_start_index(k, D, ksize[0])
             d_end = adaptive_end_index(k, D, ksize[0])
-        else:
-            d_start = np.max((k * strides[0] - pad_d_forth, 0))
-            d_end = np.min((k * strides[0] + ksize[0] - pad_d_forth, D))
 
         for i in range(H_out):
             if adaptive:
                 h_start = adaptive_start_index(i, H, ksize[1])
                 h_end = adaptive_end_index(i, H, ksize[1])
-            else:
-                h_start = np.max((i * strides[1] - pad_h_up, 0))
-                h_end = np.min((i * strides[1] + ksize[1] - pad_h_up, H))
 
             for j in range(W_out):
                 if adaptive:
                     w_start = adaptive_start_index(j, W, ksize[2])
                     w_end = adaptive_end_index(j, W, ksize[2])
                 else:
-                    w_start = np.max((j * strides[2] - pad_w_left, 0))
-                    w_end = np.min((j * strides[2] + ksize[2] - pad_w_left, W))
 
+                    d_start = k * strides[0] - pad_d_forth
+                    d_end = np.min((k * strides[0] + ksize[0] - pad_d_forth,
+                                    D + pad_d_back))
+                    h_start = i * strides[1] - pad_h_up
+                    h_end = np.min(
+                        (i * strides[1] + ksize[1] - pad_h_up, H + pad_h_down))
+                    w_start = j * strides[2] - pad_w_left
+                    w_end = np.min((j * strides[2] + ksize[2] - pad_w_left,
+                                    W + pad_w_right))
+
+                    field_size = (d_end - d_start) * (h_end - h_start) * (
+                        w_end - w_start)
+                    w_start = np.max((w_start, 0))
+                    d_start = np.max((d_start, 0))
+                    h_start = np.max((h_start, 0))
+                    w_end = np.min((w_end, W))
+                    d_end = np.min((d_end, D))
+                    h_end = np.min((h_end, H))
                 if data_format == 'NCDHW':
                     x_masked = x[:, :, d_start:d_end, h_start:h_end, w_start:
                                  w_end]
                     if pool_type == 'avg':
-                        field_size = (d_end - d_start) * (h_end - h_start) * (w_end - w_start) \
-                            if (exclusive or adaptive) else ksize[0] * ksize[1] * ksize[2]
+                        if (exclusive or adaptive):
+                            field_size = (d_end - d_start) * (
+                                h_end - h_start) * (w_end - w_start)
+
                         out[:, :, k, i, j] = np.sum(x_masked,
                                                     axis=(2, 3, 4)) / field_size
                     elif pool_type == 'max':
@@ -151,8 +163,10 @@ def pool3D_forward_naive(x,
                     x_masked = x[:, d_start:d_end, h_start:h_end, w_start:
                                  w_end, :]
                     if pool_type == 'avg':
-                        field_size = (d_end - d_start) * (h_end - h_start) * (w_end - w_start) \
-                            if (exclusive or adaptive) else ksize[0] * ksize[1] * ksize[2]
+                        if (exclusive or adaptive):
+                            field_size = (d_end - d_start) * (
+                                h_end - h_start) * (w_end - w_start)
+
                         out[:, k, i, j, :] = np.sum(x_masked,
                                                     axis=(1, 2, 3)) / field_size
                     elif pool_type == 'max':
@@ -564,7 +578,7 @@ class TestAvgInclude_AsyPadding(TestCase2):
         self.exclusive = False
 
     def init_paddings(self):
-        self.paddings = [1, 2, 1, 1, 1, 0]
+        self.paddings = [2, 2, 1, 1, 0, 0]
 
 
 @unittest.skipIf(not core.is_compiled_with_cuda(),
