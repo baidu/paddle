@@ -59,6 +59,7 @@ HOSTDEVICE inline void StridedMemcpy(const T* x, const size_t* x_dims, T* out,
   size_t offset_i = offsets[i];
 
   if (i == rank - 1) {
+#if defined(__CUDA_ARCH__)
     PADDLE_ENFORCE(x_stride == 1,
                    "When i:%d == rank:%d - 1, x_stride of random_crop_op "
                    "expected to be 1, but got %ld. Please check input "
@@ -69,6 +70,21 @@ HOSTDEVICE inline void StridedMemcpy(const T* x, const size_t* x_dims, T* out,
                    "expected to be 1, but got %ld. Please check input "
                    "value.",
                    i, rank, out_stride);
+#else
+    PADDLE_ENFORCE_EQ(
+        x_stride, 1, platform::errors::InvalidArgument(
+                         "When i:%d == rank:%d - 1, x_stride of random_crop_op "
+                         "expected to be 1, but got %ld. Please check input "
+                         "value.",
+                         i, rank, x_stride));
+    PADDLE_ENFORCE_EQ(
+        out_stride, 1,
+        platform::errors::InvalidArgument(
+            "When i:%d == rank:%d - 1, out_stride of random_crop_op "
+            "expected to be 1, but got %ld. Please check input "
+            "value.",
+            i, rank, out_stride));
+#endif
     x += offset_i;
     for (size_t j = 0; j < out_dim_i; ++j) {
       *out++ = *x++;

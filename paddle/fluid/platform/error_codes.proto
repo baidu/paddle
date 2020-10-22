@@ -17,10 +17,6 @@ option optimize_for = LITE_RUNTIME;
 package paddle.platform.error;
 
 enum Code {
-  // Legacy error.
-  // Error type string: "Error"
-  LEGACY = 0;
-
   // Client specified an invalid argument.
   // Error type string: "InvalidArgumentError"
   INVALID_ARGUMENT = 1;

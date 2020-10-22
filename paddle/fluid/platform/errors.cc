@@ -23,9 +23,6 @@ typedef ::paddle::platform::error::Code Code;
 
 std::string error_name(Code code) {
   switch (code) {
-    case paddle::platform::error::LEGACY:
-      return "Error";
-      break;
     case paddle::platform::error::INVALID_ARGUMENT:
       return "InvalidArgumentError";
       break;

@@ -133,7 +133,8 @@ class ClipKernel : public framework::OpKernel<T> {
       trans(context.template device_context<DeviceContext>(), out_data,
             out_data + numel, out_data, ClipFunctor<T>(min, max));
     } else {
-      PADDLE_THROW("ClipOp only supports LoDTensor and SelectedRows");
+      PADDLE_THROW(platform::errors::Unavailable(
+          "ClipOp only supports LoDTensor and SelectedRows."));
     }
   }
 };

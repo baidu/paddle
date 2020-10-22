@@ -30,33 +30,8 @@ typedef ::paddle::platform::error::Code Code;
 
 class ErrorSummary {
  public:
-  // Note(chenweihang): Final deprecated constructor
-  //   This constructor is only used to be compatible with
-  //   current existing no error message PADDLE_ENFORCE_*
-  ErrorSummary() {
-    code_ = paddle::platform::error::LEGACY;
-    msg_ =
-        "An error occurred here. There is no accurate error hint for this "
-        "error yet. We are continuously in the process of increasing hint for "
-        "this kind of error check. It would be helpful if you could inform us "
-        "of how this conversion went by opening a github issue. And we will "
-        "resolve it with high priority.\n"
-        "  - New issue link: "
-        "https://github.com/PaddlePaddle/Paddle/issues/new\n"
-        "  - Recommended issue content: all error stack information";
-  }
-
-  // Note(chenweihang): Final deprecated constructor
-  //   This constructor is used to be compatible with
-  //   current existing untyped PADDLE_ENFORCE_*
-  //   PADDLE_ENFORCE
-  template <typename... Args>
-  explicit ErrorSummary(Args... args) {
-    code_ = paddle::platform::error::LEGACY;
-    msg_ = paddle::string::Sprintf(args...);
-  }
-
-  // Note(chenweihang): Recommended constructor
+  // Note(chenweihang): Only one constructor
+  // No longer supports PADDLE_ENFORCE without type or without error message
   explicit ErrorSummary(Code code, std::string msg) : code_(code), msg_(msg) {}
 
   Code code() const { return code_; }

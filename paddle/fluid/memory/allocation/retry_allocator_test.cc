@@ -105,7 +105,8 @@ class DummyAllocator : public Allocator {
 
  protected:
   Allocation *AllocateImpl(size_t size) override {
-    PADDLE_THROW_BAD_ALLOC("Always BadAlloc");
+    PADDLE_THROW_BAD_ALLOC(platform::errors::ResourceExhausted(
+        "Here is a test exception, always BadAlloc."));
   }
 
   void FreeImpl(Allocation *) override {}
@@ -120,7 +121,7 @@ TEST(RetryAllocator, RetryAllocatorLastAllocFailure) {
       ASSERT_TRUE(false);
       allocation.reset();
     } catch (BadAlloc &ex) {
-      ASSERT_TRUE(std::string(ex.what()).find("Always BadAlloc") !=
+      ASSERT_TRUE(std::string(ex.what()).find("always BadAlloc") !=
                   std::string::npos);
     }
   }

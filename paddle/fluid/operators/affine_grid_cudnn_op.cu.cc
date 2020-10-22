@@ -28,10 +28,9 @@ class CUDNNAffineGridOpKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     PADDLE_ENFORCE_EQ(
         platform::is_gpu_place(ctx.GetPlace()), true,
-        platform::errors::InvalidArgument("Only "
-                                          "support for CUDAPlace.Please switch "
-                                          "your context from CPUPlace to "
-                                          "CUDAPlace or update your cudnn."));
+        platform::errors::InvalidArgument(
+            "Only support for CUDAPlace.Please switch your context from "
+            "CPUPlace to CUDAPlace or update your cudnn."));
     auto& dev_ctx = ctx.template device_context<platform::CUDADeviceContext>();
     auto handle = dev_ctx.cudnn_handle();
     auto* theta = ctx.Input<Tensor>("Theta");
@@ -106,12 +105,9 @@ class CUDNNAffineGridGradOpKernel : public framework::OpKernel<T> {
     const T* output_grad_data = output_grad->data<T>();
     T* theta_grad_data = theta_grad->mutable_data<T>(ctx.GetPlace());
 
-    PADDLE_ENFORCE_EQ(
+    PADDLE_ENFORCE_CUDA_SUCCESS(
         platform::dynload::cudnnSpatialTfGridGeneratorBackward(
-            handle, cudnn_st_desc, output_grad_data, theta_grad_data),
-        0,
-        "Some errors "
-        "has occurred during forward computation in cudnn;");
+            handle, cudnn_st_desc, output_grad_data, theta_grad_data));
   }
 };
 
