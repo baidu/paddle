@@ -571,15 +571,26 @@ def max_pool1d(x,
     padding = _expand_low_nd_padding(padding)
 
     if in_dygraph_mode():
-        pool_out = core.ops.max_pool2d_with_index(
-            x, 'ksize', kernel_size, 'global_pooling', False, 'strides', stride,
-            'paddings', padding, 'padding_algorithm', padding_algorithm,
-            'use_cudnn', True, 'ceil_mode', ceil_mode, 'use_mkldnn', False,
-            'exclusive', True, 'data_format', data_format)
-        return (squeeze(pool_out[0], [2]), squeeze(
-            pool_out[1], [2])) if return_indices else squeeze(pool_out[0], [2])
+        if return_indices:
+            pool_out = core.ops.max_pool2d_with_index(
+                x, 'ksize', kernel_size, 'global_pooling', False, 'strides',
+                stride, 'paddings', padding, 'padding_algorithm',
+                padding_algorithm, 'use_cudnn', True, 'ceil_mode', ceil_mode,
+                'use_mkldnn', False, 'exclusive', True, 'data_format',
+                data_format)
+            return (squeeze(pool_out[0], [2]), squeeze(
+                pool_out[1],
+                [2])) if return_indices else squeeze(pool_out[0], [2])
+        else:
+            pool_out = core.ops.pool2d(
+                x, 'pooling_type', 'max', 'ksize', kernel_size,
+                'global_pooling', False, 'padding_algorithm', padding_algorithm,
+                'strides', stride, 'paddings', padding, 'use_cudnn', True,
+                'ceil_mode', ceil_mode, 'use_mkldnn', False, 'exclusive', True,
+                'data_format', data_format)
+            return squeeze(pool_out, [2])
 
-    op_type = 'max_pool2d_with_index'
+    op_type = 'max_pool2d_with_index' if return_indices else "pool2d"
     helper = LayerHelper(op_type, **locals())
     dtype = helper.input_dtype()
     pool_out = helper.create_variable_for_type_inference(dtype)
@@ -696,7 +707,7 @@ def max_pool2d(x,
         )
 
     if in_dygraph_mode():
-        if data_format == "NCHW":
+        if return_indices:
             output = core.ops.max_pool2d_with_index(
                 x, 'ksize', kernel_size, 'global_pooling', False, 'strides',
                 stride, 'paddings', padding, 'padding_algorithm',
@@ -704,7 +715,7 @@ def max_pool2d(x,
                 'use_mkldnn', False, 'exclusive', True, 'data_format',
                 data_format)
             return output if return_indices else output[0]
-        elif data_format == "NHWC" and not return_indices:
+        else:
             output = core.ops.pool2d(
                 x, 'pooling_type', 'max', 'ksize', kernel_size,
                 'global_pooling', False, 'padding_algorithm', padding_algorithm,
@@ -713,7 +724,7 @@ def max_pool2d(x,
                 'data_format', data_format)
             return output
 
-    op_type = 'max_pool2d_with_index' if data_format == "NCHW" else "max_pool2d"
+    op_type = 'max_pool2d_with_index' if return_indices else "pool2d"
     helper = LayerHelper(op_type, **locals())
     dtype = helper.input_dtype()
     pool_out = helper.create_variable_for_type_inference(dtype)
@@ -822,7 +833,7 @@ def max_pool3d(x,
         )
 
     if in_dygraph_mode():
-        if data_format == "NCDHW":
+        if return_indices:
             output = core.ops.max_pool3d_with_index(
                 x, 'pooling_type', 'max', 'ksize', kernel_size, 'strides',
                 stride, 'paddings', padding, 'global_pooling', False,
@@ -830,7 +841,7 @@ def max_pool3d(x,
                 'ceil_mode', ceil_mode, 'use_mkldnn', False, 'exclusive', True,
                 'data_format', data_format)
             return output if return_indices else output[0]
-        elif data_format == "NDHWC" and not return_indices:
+        else:
             output = core.ops.pool3d(
                 x, 'pooling_type', 'max', 'ksize', kernel_size,
                 'global_pooling', False, 'padding_algorithm', padding_algorithm,
@@ -839,7 +850,7 @@ def max_pool3d(x,
                 'data_format', data_format)
             return output
 
-    op_type = "max_pool3d_with_index" if data_format == "NCDHW" else "max_pool3d"
+    op_type = "max_pool3d_with_index" if return_indices else "pool3d"
     helper = LayerHelper(op_type, **locals())
     dtype = helper.input_dtype()
     pool_out = helper.create_variable_for_type_inference(dtype)
