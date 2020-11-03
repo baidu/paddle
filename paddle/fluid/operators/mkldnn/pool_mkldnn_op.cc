@@ -55,7 +55,10 @@ class PoolMKLDNNOpKernel : public paddle::framework::OpKernel<T> {
     if ((ctx.Attr<bool>("is_test") == false) &&
         (ctx.Attr<std::string>("pooling_type") == "max")) {
       // Training
-      auto workspace_memory = handler.AcquireWorkspaceMemory();
+      Tensor* mid = ctx.Output<Tensor>("MidOut");
+      auto workspace_memory = handler.AcquireWorkspaceMemory(mid);
+      mid->set_layout(framework::DataLayout::kMKLDNN);
+      mid->set_format(platform::GetMKLDNNFormat(*workspace_memory));
       pool_p->execute(astream, {{MKLDNN_ARG_SRC, *src_memory},
                                 {MKLDNN_ARG_DST, *dst_memory},
                                 {MKLDNN_ARG_WORKSPACE, *workspace_memory}});
@@ -79,6 +82,7 @@ class PoolMKLDNNGradOpKernel : public paddle::framework::OpKernel<T> {
                       paddle::platform::errors::PreconditionNotMet(
                           "Operator DNNL PoolGrad must use CPUPlace"));
     const Tensor* in_x = ctx.Input<Tensor>("X");
+    const Tensor* mid = ctx.Input<Tensor>("MidOut");
     const Tensor* out_grad = ctx.Input<Tensor>(framework::GradVarName("Out"));
     Tensor* in_x_grad = ctx.Output<Tensor>(framework::GradVarName("X"));
 
@@ -157,7 +161,7 @@ class PoolMKLDNNGradOpKernel : public paddle::framework::OpKernel<T> {
     mkldnn::stream astream(dev_ctx.GetEngine());
     if (pooling_type == "max") {
       // Max - pooling needs Workspace
-      auto workspace_memory = handler.AcquireWorkspaceMemory();
+      auto workspace_memory = handler.AcquireBackwardWorkspaceMemory(mid);
       pool_bwd_p->execute(astream, {{MKLDNN_ARG_DIFF_SRC, *diff_src_memory},
                                     {MKLDNN_ARG_DIFF_DST, *diff_dst_memory},
                                     {MKLDNN_ARG_WORKSPACE, *workspace_memory}});

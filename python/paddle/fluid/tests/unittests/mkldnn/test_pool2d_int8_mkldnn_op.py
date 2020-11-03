@@ -41,6 +41,7 @@ class TestPool2DMKLDNNInt8_Op(TestPool2D_Op):
             self.dtype)).astype(self.dtype)
         self.inputs = {'X': OpTest.np_dtype_to_fluid_dtype(input)}
         self.outputs = {'Out': output}
+        self.attrs['is_test'] = True
 
     def test_check_output(self):
         # TODO(wangzhongpu): support mkldnn op in dygraph mode

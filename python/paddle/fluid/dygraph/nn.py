@@ -881,11 +881,14 @@ class Pool2D(layers.Layer):
         inputs = {"X": [input]}
 
         pool_out = self._helper.create_variable_for_type_inference(self._dtype)
+        mid_out = helper.create_variable_for_type_inference(
+            dtype=dtype, stop_gradient=True)
 
         self._helper.append_op(
             type=self._l_type,
             inputs={"X": input},
-            outputs={"Out": pool_out},
+            outputs={"Out": pool_out,
+                     "MidOut": mid_out},
             attrs=attrs)
         return pool_out
 

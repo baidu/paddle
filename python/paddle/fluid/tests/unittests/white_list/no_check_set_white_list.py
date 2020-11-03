@@ -19,6 +19,7 @@ no_check_set_white_list = [
     'flatten2',
     'flatten_contiguous_range',
     'lrn',
+    'pool2d',
     'squeeze2',
     'reshape2',
     'transpose2',

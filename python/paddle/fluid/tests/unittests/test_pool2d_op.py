@@ -289,10 +289,17 @@ class TestPool2D_Op(OpTest):
             "padding_algorithm": self.padding_algorithm,
         }
 
-        self.outputs = {'Out': output}
+        if self.has_mkldnn():
+            self.mid_out = np.empty(self.shape).astype("float32")
+            self.outputs = {'Out': output, 'MidOut': self.mid_out}
+        else:
+            self.outputs = {'Out': output}
 
     def has_cudnn(self):
         return core.is_compiled_with_cuda() and self.use_cudnn
+
+    def has_mkldnn(self):
+        return core.is_compiled_with_mkldnn() and self.use_mkldnn
 
     def test_check_output(self):
         # TODO(wangzhongpu): support mkldnn op in dygraph mode
@@ -301,7 +308,9 @@ class TestPool2D_Op(OpTest):
             self.check_output_with_place(
                 place, atol=1e-5, check_dygraph=(self.use_mkldnn == False))
         else:
-            self.check_output(check_dygraph=(self.use_mkldnn == False))
+            self.check_output(
+                no_check_set=['MidOut'],
+                check_dygraph=(self.use_mkldnn == False))
 
     def test_check_grad(self):
         if self.dtype == np.float16:

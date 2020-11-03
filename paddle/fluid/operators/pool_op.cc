@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/pool_op.h"
+#include <algorithm>
 #include <unordered_map>
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/cudnn_helper.h"
@@ -246,6 +247,25 @@ framework::OpKernelType PoolOpGrad::GetKernelTypeForVar(
                                  tensor.place(), tensor.layout());
 }
 
+template <typename T>
+class Pool2dGradOpMaker : public framework::SingleGradOpMaker<T> {
+ public:
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
+  void Apply(GradOpPtr<T> op) const override {
+    op->SetType(this->ForwardOpType() + "_grad");
+    op->SetInput("X", this->Input("X"));
+    op->SetInput("Out", this->Output("Out"));
+
+    auto fwd_outputs = this->OutputNames();
+    if ( std::count(fwd_outputs.begin(), fwd_outputs.end(), std::string("MidOut")) == 1) {
+	op->SetInput("MidOut", this->Output("MidOut"));
+    }
+    op->SetInput(framework::GradVarName("Out"), this->OutputGrad("Out"));
+    op->SetOutput(framework::GradVarName("X"), this->InputGrad("X"));
+    op->SetAttrMap(this->Attrs());
+  }
+};
+
 void Pool2dOpMaker::Make() {
   AddInput(
       "X",
@@ -260,6 +280,9 @@ void Pool2dOpMaker::Make() {
             "H is the height of the feature, "
             "and W is the width of the feature.");
 
+  AddOutput("MidOut",
+            "(Tensor) Middle result of Pool operator. It's computed in "
+            "forward process and also used in backward process.").AsDispensable();
   AddAttr<std::string>("pooling_type",
                        "(string), pooling type, can be \"max\" for max-pooling "
                        "and \"avg\" for average-pooling.")
@@ -648,10 +671,10 @@ Example:
 
 namespace ops = paddle::operators;
 
-REGISTER_OPERATOR(
-    pool2d, ops::PoolOp, ops::Pool2dOpMaker, ops::PoolOpInferVarType,
-    paddle::framework::DefaultGradOpMaker<paddle::framework::OpDesc, true>,
-    paddle::framework::DefaultGradOpMaker<paddle::imperative::OpBase, true>);
+REGISTER_OPERATOR(pool2d, ops::PoolOp, ops::Pool2dOpMaker,
+                  ops::PoolOpInferVarType,
+                  ops::Pool2dGradOpMaker<paddle::framework::OpDesc>,
+                  ops::Pool2dGradOpMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(pool2d_grad, ops::PoolOpGrad);
 
 REGISTER_OP_CPU_KERNEL(

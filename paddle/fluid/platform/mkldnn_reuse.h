@@ -912,26 +912,20 @@ class PoolingMKLDNNHandler : public MKLDNNHandlerT<T, mkldnn::pooling_forward,
         mkldnn_paddings[1]);
   }
 
-  std::shared_ptr<mkldnn::memory> AcquireWorkspaceMemory(void) {
-    mkldnn::memory::desc workspace_md = this->fwd_pd_->workspace_desc();
-    // Pooling PD has to be passed to Grad op that
-    // may be executed by diffrent thread, hence
-    // for that one we use key that does not contain TID
-    auto local_key = this->key_common_ + "@workspace";
-    auto mem_p = std::static_pointer_cast<mkldnn::memory>(
-        this->dev_ctx_.GetBlob(local_key));
-    if (mem_p == nullptr) {
-      static std::mutex acquire_barrier;
-      std::lock_guard<std::mutex> block_threads_until_finish_this_job(
-          acquire_barrier);
-      mem_p = std::static_pointer_cast<mkldnn::memory>(
-          this->dev_ctx_.GetBlob(local_key));
-      if (mem_p == nullptr) {
-        mem_p = std::make_shared<mkldnn::memory>(workspace_md, this->engine_);
-        this->dev_ctx_.SetBlob(local_key, mem_p);
-      }
-    }
-    return mem_p;
+  std::shared_ptr<mkldnn::memory> AcquireWorkspaceMemory(
+      framework::Tensor* workspace) {
+    T* ptr = workspace->mutable_data<T>(
+        this->place_, this->fwd_pd_->workspace_desc().get_size());
+    return this->AcquireMemoryFromPrimitive(this->fwd_pd_->workspace_desc(),
+                                            ptr, "@wrk_mem_p");
+  }
+
+  std::shared_ptr<mkldnn::memory> AcquireBackwardWorkspaceMemory(
+      const framework::Tensor* workspace) {
+    const T* workspace_data = workspace->data<T>();
+    return this->AcquireMemoryFromPrimitive(this->fwd_pd_->workspace_desc(),
+                                            to_void_cast<T>(workspace_data),
+                                            "@bwd-wrk_mem_p");
   }
 
   static void ComputeAdaptivePoolParameters(

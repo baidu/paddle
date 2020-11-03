@@ -2068,11 +2068,13 @@ def pool2d(input,
     helper = LayerHelper(op_type, **locals())
     dtype = helper.input_dtype()
     pool_out = helper.create_variable_for_type_inference(dtype)
-
+    mid_out = helper.create_variable_for_type_inference(
+        dtype=dtype, stop_gradient=True)
     helper.append_op(
         type=op_type,
         inputs={"X": input},
-        outputs={"Out": pool_out},
+        outputs={"Out": pool_out,
+                 "MidOut": mid_out},
         attrs={
             "pooling_type": pool_type,
             "ksize": pool_size,
