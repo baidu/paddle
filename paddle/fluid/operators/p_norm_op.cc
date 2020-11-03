@@ -105,6 +105,12 @@ class PnormOp : public framework::OperatorWithKernel {
     bool asvector = ctx->Attrs().Get<bool>("asvector");
     if (asvector) {
       reduce_dims.emplace_back(1);
+      if (keepdim) {
+        for (int i = 1; i < x_dim.size(); ++i) {
+          reduce_dims.emplace_back(1);
+        }
+        x_dim = framework::make_ddim(reduce_dims);
+      }
     } else {
       if (axis < 0) axis = x_dim.size() + axis;
       for (int i = 0; i < x_dim.size(); ++i) {

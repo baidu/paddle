@@ -183,12 +183,13 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
         x (Tensor): The input tensor could be N-D tensor, and the input data
             type could be float32 or float64.
         p (float|string, optional): Order of the norm. Supported values are `fro`, `0`, `1`, `2`,
-           `inf`,`-inf` and any positive real number yielding the corresponding p-norm.
-            Not supported: ord < 0, nuclear norm.
+            `inf`, `-inf` and any positive real number yielding the corresponding p-norm. Not supported: ord < 0 and nuclear norm. 
+            Default value is `fro`.
         axis (int|list|tuple, optional): The axis on which to apply norm operation. If axis is int
             or list(int)/tuple(int)  with only one element, the vector norm is computed over the axis.
             If `axis < 0`, the dimension to norm operation is rank(input) + axis.
             If axis is a list(int)/tuple(int) with two elements, the matrix norm is computed over the axis.
+            Defalut value is `None`.
         keepdim (bool, optional): Whether to reserve the reduced dimension in the
             output Tensor. The result tensor will have fewer dimension
             than the :attr:`input` unless :attr:`keepdim` is true, default
@@ -197,13 +198,9 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
             user to set this property. For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
-        Variable: Tensor, results of norm operation on the specified axis of input tensor,
+        Tensor: results of norm operation on the specified axis of input tensor,
         it's data type is the same as input's Tensor.
  
-    Raises:
-        TypeError, if out data type is different with the input data type.
-        ValueError, If `p` or `axis` is invalid.
-    
     Examples:
         .. code-block:: python
             
@@ -256,15 +253,13 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
                 "The dim of frobenius norm op should be None or two elements list!"
             )
         if in_dygraph_mode():
-            if dim is None: dim = [-1]
-            return core.ops.frobenius_norm(input, 'dim', dim, 'keepdim',
-                                           keepdim)
-        attrs = {
-            'dim': dim if dim != None else [-2, -1],
-            'keep_dim': keepdim,
-            'reduce_all': False
-        }
-        if len(attrs['dim']) == len(input.shape):
+            if dim is None:
+                return core.ops.frobenius_norm(input, 'keep_dim', keepdim,
+                                               'reduce_all', True)
+            return core.ops.frobenius_norm(input, 'dim', dim, 'keep_dim',
+                                           keepdim, 'reduce_all', False)
+        attrs = {'dim': dim, 'keep_dim': keepdim, 'reduce_all': False}
+        if dim is None:
             attrs['reduce_all'] = True
         check_variable_and_dtype(input, 'input', ['float32', 'float64'],
                                  'frobenius_norm')
@@ -351,42 +346,6 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
 
         return reduce_out
 
-    def p0_matrix_norm(input, porder=0., axis=axis, keepdim=False, name=None):
-        block = LayerHelper('norm', **locals())
-        out = block.create_variable_for_type_inference(
-            dtype=block.input_dtype())
-
-        cast_out = block.create_variable_for_type_inference(dtype=bool)
-        block.append_op(
-            type='cast',
-            inputs={'X': input},
-            outputs={'Out': cast_out},
-            attrs={
-                'in_dtype': input.dtype,
-                'out_dtype': int(core.VarDesc.VarType.BOOL)
-            })
-        cast_out2 = block.create_variable_for_type_inference(dtype=bool)
-        block.append_op(
-            type='cast',
-            inputs={'X': cast_out},
-            outputs={'Out': cast_out2},
-            attrs={
-                'in_dtype': cast_out.dtype,
-                'out_dtype': int(core.VarDesc.VarType.FP32)
-            })
-        sum_out = block.create_variable_for_type_inference(
-            dtype=block.input_dtype())
-        block.append_op(
-            type='reduce_sum',
-            inputs={'X': cast_out2},
-            outputs={'Out': sum_out},
-            attrs={
-                'dim': axis,
-                'keep_dim': keepdim,
-                'reduce_all': True if axis is None else False
-            })
-        return sum_out
-
     def p_matrix_norm(input, porder=1., axis=axis, keepdim=False, name=None):
         block = LayerHelper('norm', **locals())
         out = block.create_variable_for_type_inference(
@@ -448,7 +407,20 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
 
     #calculate vector norm, where axis is int or list with only one integer
     if isinstance(axis, int):
-        if isinstance(p, (int, float)):
+        if isinstance(p, str):
+            if p == "fro":
+                return vector_norm(
+                    x,
+                    porder=2,
+                    axis=axis,
+                    keepdim=keepdim,
+                    asvector=False,
+                    name=name)
+
+            else:
+                raise ValueError(
+                    "only valid string values are 'fro', found {}".format(p))
+        elif isinstance(p, (int, float)):
             return vector_norm(
                 x,
                 axis=axis,
@@ -464,10 +436,12 @@ def norm(x, p='fro', axis=None, keepdim=False, name=None):
     elif isinstance(axis, list) and len(axis) == 2:
         if p == "fro":
             return frobenius_norm(x, dim=axis, keepdim=keepdim, name=name)
-        elif p == 0:
-            return p0_matrix_norm(x, axis=axis, keepdim=keepdim, name=name)
         elif p == np.inf or p == -np.inf:
             return inf_norm(x, porder=p, axis=axis, keepdim=keepdim, name=name)
+        elif p == 0:
+            raise ValueError(
+                "just suport axis type int or list (length of list <=1) if p = 0, found {}".
+                format(axis))
         else:
             return p_matrix_norm(
                 x, porder=p, axis=axis, keepdim=keepdim, name=name)
