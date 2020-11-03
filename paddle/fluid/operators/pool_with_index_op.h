@@ -61,7 +61,10 @@ class MaxPoolWithIndexKernel : public framework::OpKernel<T1> {
         pool3d_forward(dev_ctx, *in_x, ksize, strides, paddings, adaptive, out,
                        mask);
       } break;
-      default: { PADDLE_THROW("Pool op only supports 2D and 3D input."); }
+      default: {
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Pool op only supports 2D and 3D input."));
+      }
     }
   }
 };
@@ -106,7 +109,10 @@ class MaxPoolWithIndexGradKernel : public framework::OpKernel<T1> {
           pool3d_backward(device_ctx, *out_grad, *mask, ksize, strides,
                           paddings, adaptive, in_x_grad);
         } break;
-        default: { PADDLE_THROW("Pool op only supports 2D and 3D input."); }
+        default: {
+          PADDLE_THROW(platform::errors::InvalidArgument(
+              "Pool op only supports 2D and 3D input."));
+        }
       }
     }
   }

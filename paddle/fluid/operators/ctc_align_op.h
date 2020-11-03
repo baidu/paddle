@@ -72,8 +72,11 @@ class CTCAlignKernel : public framework::OpKernel<T> {
       // check input dims and lod
       PADDLE_ENFORCE_EQ(
           input_dims[0], static_cast<int64_t>(input_lod[level].back()),
-          "The first dimension of Input(Input) should be equal to "
-          "the sum of all sequences' lengths.");
+          platform::errors::InvalidArgument(
+              "The first dimension %d of CTCAlign operator Input(Input) should "
+              "be equal to "
+              "the sum of all sequences' lengths %d.",
+              input_dims[0], static_cast<int64_t>(input_lod[level].back())));
 
       const size_t num_sequences = input_lod[level].size() - 1;
 

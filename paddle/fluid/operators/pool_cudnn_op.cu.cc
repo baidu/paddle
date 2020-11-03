@@ -45,8 +45,10 @@ template <typename T>
 class PoolCUDNNOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
-    PADDLE_ENFORCE_EQ(platform::is_gpu_place(ctx.GetPlace()), true,
-                      "It must use CUDAPlace.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_gpu_place(ctx.GetPlace()), true,
+        platform::errors::InvalidArgument("Pool operator CUDA kernel must use "
+                                          "CUDAPlace rather than CPUPlace."));
 
     const Tensor *input = ctx.Input<Tensor>("X");
     Tensor *output = ctx.Output<Tensor>("Out");
@@ -175,8 +177,10 @@ template <typename T>
 class PoolCUDNNGradOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
-    PADDLE_ENFORCE_EQ(platform::is_gpu_place(ctx.GetPlace()), true,
-                      "It must use CUDAPlace.");
+    PADDLE_ENFORCE_EQ(
+        platform::is_gpu_place(ctx.GetPlace()), true,
+        platform::errors::InvalidArgument("Pool operator CUDA kernel must use "
+                                          "CUDAPlace rather than CPUPlace."));
 
     const Tensor *input = ctx.Input<Tensor>("X");
     const Tensor *output = ctx.Input<Tensor>("Out");

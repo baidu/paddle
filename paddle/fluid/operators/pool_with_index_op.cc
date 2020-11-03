@@ -46,8 +46,11 @@ class MaxPoolWithIndexOp : public framework::OperatorWithKernel {
     std::vector<int> paddings = ctx->Attrs().Get<std::vector<int>>("paddings");
     bool adaptive = ctx->Attrs().Get<bool>("adaptive");
 
-    PADDLE_ENFORCE(in_x_dims.size() == 4 || in_x_dims.size() == 5,
-                   "Pooling intput should be 4-D or 5-D tensor.");
+    PADDLE_ENFORCE(
+        in_x_dims.size() == 4 || in_x_dims.size() == 5,
+        platform::errors::InvalidArgument("Pooling intput should be 4-D or 5-D "
+                                          "tensor but received %dD-Tensor",
+                                          in_x_dims.size()));
 
     if (ctx->Attrs().Get<bool>("global_pooling")) {
       ksize.resize(static_cast<size_t>(in_x_dims.size()) - 2);
@@ -57,16 +60,21 @@ class MaxPoolWithIndexOp : public framework::OperatorWithKernel {
       }
     }
 
-    PADDLE_ENFORCE_EQ(in_x_dims.size() - ksize.size(), 2U,
-                      platform::errors::InvalidArgument(
-                          "Input size and pooling size should be consistent."));
-    PADDLE_ENFORCE_EQ(ksize.size(), strides.size(),
-                      platform::errors::InvalidArgument(
-                          "Strides size and pooling size should be the same."));
+    PADDLE_ENFORCE_EQ(
+        in_x_dims.size() - ksize.size(), 2U,
+        platform::errors::InvalidArgument(
+            "The input size %d minus the kernel size %d should equal to 2.",
+            in_x_dims.size(), ksize.size()));
+    PADDLE_ENFORCE_EQ(
+        ksize.size(), strides.size(),
+        platform::errors::InvalidArgument(
+            "Strides size %d and pooling size %d should be the same.",
+            strides.size(), ksize.size()));
     PADDLE_ENFORCE_EQ(
         ksize.size(), paddings.size(),
         platform::errors::InvalidArgument(
-            "Paddings size and pooling size should be the same."));
+            "Paddings size %d and pooling size %d should be the same.",
+            paddings.size(), ksize.size()));
 
     std::vector<int64_t> output_shape({in_x_dims[0], in_x_dims[1]});
     if (adaptive) {

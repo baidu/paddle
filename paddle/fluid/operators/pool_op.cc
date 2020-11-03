@@ -38,18 +38,22 @@ int PoolOutputSize(int input_size, int filter_size, int padding_1,
   }
   PADDLE_ENFORCE_GT(
       output_size, 0,
-      "ShapeError: the output size must be greater than 0. But received: "
-      "output_size = %d due to the settings of input_size(%d), padding(%d,%d), "
-      "k_size(%d) and stride(%d). Please check again!",
-      output_size, input_size, padding_1, padding_2, filter_size, stride);
+      platform::errors::InvalidArgument(
+          "the output size must be greater than 0. But received: "
+          "output_size = %d due to the settings of input_size(%d), "
+          "padding(%d,%d), "
+          "k_size(%d) and stride(%d). Please check again!",
+          output_size, input_size, padding_1, padding_2, filter_size, stride));
   return output_size;
 }
 
 void PoolOp::InferShape(framework::InferShapeContext* ctx) const {
-  PADDLE_ENFORCE_EQ(ctx->HasInput("X"), true,
-                    "X(Input) of Pooling should not be null.");
-  PADDLE_ENFORCE_EQ(ctx->HasOutput("Out"), true,
-                    "Out(Output) of Pooling should not be null.");
+  PADDLE_ENFORCE_EQ(
+      ctx->HasInput("X"), true,
+      platform::errors::NotFound("Input(X) of Pool operator is not found."));
+  PADDLE_ENFORCE_EQ(
+      ctx->HasOutput("Out"), true,
+      platform::errors::NotFound("Output(Out) of Pool operator is not found."));
 
   std::string pooling_type = ctx->Attrs().Get<std::string>("pooling_type");
   std::vector<int> ksize = ctx->Attrs().Get<std::vector<int>>("ksize");
@@ -65,28 +69,32 @@ void PoolOp::InferShape(framework::InferShapeContext* ctx) const {
   auto in_x_dims = ctx->GetInputDim("X");
   PADDLE_ENFORCE_EQ(
       in_x_dims.size() == 4 || in_x_dims.size() == 5, true,
-      "ShapeError: the input of Op(pool) should be 4-D or 5-D Tensor. But "
-      "received: %u-D Tensor and it's shape is [%s].",
-      in_x_dims.size(), in_x_dims);
+      platform::errors::InvalidArgument(
+          "the input of Op(pool) should be 4-D or 5-D Tensor. But "
+          "received: %u-D Tensor and it's shape is [%s].",
+          in_x_dims.size(), in_x_dims));
 
   PADDLE_ENFORCE_EQ(
       in_x_dims.size() - ksize.size(), 2U,
-      "ShapeError: the dimension of input minus the size of "
-      "Attr(ksize) must be euqal to 2 in Op(pool). "
-      "But received: the dimension of input minus the size "
-      "of Attr(ksize) is %d, the "
-      "input's dimension is %d, the shape of input "
-      "is [%s], the Attr(ksize)'s size is %d, the Attr(ksize) is [%s].",
-      in_x_dims.size() - ksize.size(), in_x_dims.size(), in_x_dims,
-      ksize.size(), framework::make_ddim(ksize));
+      platform::errors::InvalidArgument(
+          "the dimension of input minus the size of "
+          "Attr(ksize) must be euqal to 2 in Op(pool). "
+          "But received: the dimension of input minus the size "
+          "of Attr(ksize) is %d, the "
+          "input's dimension is %d, the shape of input "
+          "is [%s], the Attr(ksize)'s size is %d, the Attr(ksize) is [%s].",
+          in_x_dims.size() - ksize.size(), in_x_dims.size(), in_x_dims,
+          ksize.size(), framework::make_ddim(ksize)));
 
-  PADDLE_ENFORCE_EQ(ksize.size(), strides.size(),
-                    "ShapeError: the size of Attr(ksize) and Attr(strides) in "
-                    "Op(pool) must be equal. "
-                    "But received: Attr(ksize)'s size is %d, Attr(strides)'s "
-                    "size is %d, Attr(ksize) is [%s], Attr(strides)is [%s].",
-                    ksize.size(), strides.size(), framework::make_ddim(ksize),
-                    framework::make_ddim(strides));
+  PADDLE_ENFORCE_EQ(
+      ksize.size(), strides.size(),
+      platform::errors::InvalidArgument(
+          "the size of Attr(ksize) and Attr(strides) in "
+          "Op(pool) must be equal. "
+          "But received: Attr(ksize)'s size is %d, Attr(strides)'s "
+          "size is %d, Attr(ksize) is [%s], Attr(strides)is [%s].",
+          ksize.size(), strides.size(), framework::make_ddim(ksize),
+          framework::make_ddim(strides)));
 
   // MKL-DNN Kernels are using NCHW order of dims description
   // so we ignore data_format consideration for MKL-DNN kernel
@@ -182,9 +190,12 @@ framework::OpKernelType PoolOp::GetKernelTypeForVar(
 }
 
 void PoolOpGrad::InferShape(framework::InferShapeContext* ctx) const {
-  PADDLE_ENFORCE_EQ(ctx->HasInput("X"), true, "Input(X) must not be null.");
+  PADDLE_ENFORCE_EQ(ctx->HasInput("X"), true,
+                    platform::errors::NotFound(
+                        "Input(X) of Pool Gradoperator is not found."));
   PADDLE_ENFORCE_EQ(ctx->HasOutput(framework::GradVarName("X")), true,
-                    "Input(X@GRAD) should not be null.");
+                    platform::errors::NotFound(
+                        "Input(X@GRAD) of Pool Gradoperator is not found."));
   ctx->SetOutputDim(framework::GradVarName("X"), ctx->GetInputDim("X"));
 }
 
@@ -210,7 +221,8 @@ framework::OpKernelType PoolOpGrad::GetExpectedKernelType(
   auto input_data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
   if (input_data_type == framework::proto::VarType::FP16) {
     PADDLE_ENFORCE_EQ(library_, framework::LibraryType::kCUDNN,
-                      "float16 can only be used when CUDNN is used");
+                      platform::errors::InvalidArgument(
+                          "Float16 can only be used when CUDNN is used"));
   }
   return framework::OpKernelType(input_data_type, ctx.GetPlace(), layout_,
                                  library_);

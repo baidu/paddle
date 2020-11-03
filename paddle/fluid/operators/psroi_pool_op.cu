@@ -176,22 +176,31 @@ class GPUPSROIPoolOpKernel : public framework::OpKernel<T> {
     int height = in_dims[2];
     int width = in_dims[3];
 
-    PADDLE_ENFORCE_EQ(input_channels,
-                      output_channels * pooled_height * pooled_width,
-                      "the channels of input X should equal the product of "
-                      "output_channels x pooled_height x pooled_width");
+    PADDLE_ENFORCE_EQ(
+        input_channels, output_channels * pooled_height * pooled_width,
+        platform::errors::InvalidArgument(
+            "The channels %d of input X should equal the product of "
+            "output_channels %d x pooled_height %d x pooled_width %d.",
+            input_channels, output_channels, pooled_height, pooled_width));
 
     int rois_num = rois->dims()[0];
     if (rois_num == 0) return;
 
     auto rois_lod = rois->lod().back();
     int rois_batch_size = rois_lod.size() - 1;
-    PADDLE_ENFORCE_EQ(
-        rois_batch_size, batch_size,
-        "The rois_batch_size and input(X) batch_size must be the same.");
+    PADDLE_ENFORCE_EQ(rois_batch_size, batch_size,
+                      platform::errors::InvalidArgument(
+                          "The batch size of input(ROIs) and input(X) must be "
+                          "the same but received batch size of input(ROIs) and "
+                          "input(X) is %d and %d respectively.",
+                          rois_batch_size, batch_size));
     int rois_num_with_lod = rois_lod[rois_batch_size];
     PADDLE_ENFORCE_EQ(rois_num, rois_num_with_lod,
-                      "The rois_num from input and lod must be the same.");
+                      platform::errors::InvalidArgument(
+                          "The number of rois from input(ROIs) and its LOD "
+                          "must be the same. Received rois %d of input(ROIs) "
+                          "but the number of rois %d from its LOD is %d",
+                          rois_num, rois_num_with_lod));
 
     // set rois batch id
     framework::Tensor rois_batch_id_list;

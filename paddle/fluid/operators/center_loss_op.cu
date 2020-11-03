@@ -30,8 +30,10 @@ __global__ void ComputeDifferent(T *centers_diff, const T *X, const T *centers,
 
   while (idy < K) {
     int64_t id = ids[idy];
-    PADDLE_ENFORCE(id >= 0, "received id:", id);
-    PADDLE_ENFORCE(id < N, "received id:", id);
+    PADDLE_ENFORCE(id >= 0, "Id should larger than 0 but received id: %d.", id);
+    PADDLE_ENFORCE(id < N, "Id should smaller than %d but received id: %d.", N,
+                   id);
+
     T *out = centers_diff + idy * D;
     const T *x = X + idy * D;
     const T *cent = centers + id * D;
@@ -52,8 +54,9 @@ __global__ void UpdateCenters(T *centers, T *centers_diff, const int64_t *ids,
   while (idy < K) {
     int count = 1;
     int64_t id = ids[idy];
-    PADDLE_ENFORCE(id >= 0, "received id:", id);
-    PADDLE_ENFORCE(id < N, "received id:", id);
+    PADDLE_ENFORCE(id >= 0, "Id should larger than 0 but received id: %d.", id);
+    PADDLE_ENFORCE(id < N, "Id should smaller than %d but received id: %d.", N,
+                   id);
 
     for (int i = 0; i < K; i++) {
       if (ids[i] == id) {
