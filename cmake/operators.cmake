@@ -126,7 +126,7 @@ function(op_library TARGET)
     foreach(manual_pybind_op "compare_all_op" "compare_op" "logical_op" "nccl_op"
 "tensor_array_read_write_op" "tensorrt_engine_op" "conv_fusion_op"
 "fusion_transpose_flatten_concat_op" "fusion_conv_inception_op"
-"sync_batch_norm_op" "dgc_op" "fused_fc_elementwise_layernorm_op"
+"sync_batch_norm_op" "dgc_op" "fused_fc_elementwise_layernorm_op" "fused_fc_reshape_elementwise_layernorm_op"
 "multihead_matmul_op" "fusion_group_op" "fused_bn_activation_op" "fused_embedding_eltwise_layernorm_op" "fusion_gru_op"
 "fused_bn_add_activation_op")
         if ("${TARGET}" STREQUAL "${manual_pybind_op}")

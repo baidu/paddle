@@ -103,16 +103,17 @@ const std::vector<std::string> kLiteSubgraphPasses({
 GpuPassStrategy::GpuPassStrategy() : PassStrategy({}) {
   passes_.assign({
     //   "identity_scale_op_clean_pass",             //
-    "is_test_pass",                                  //
-        "simplify_with_basic_ops_pass",              //
-        "conv_affine_channel_fuse_pass",             //
-        "conv_eltwiseadd_affine_channel_fuse_pass",  //
-        "conv_bn_fuse_pass",                         //
-        "conv_eltwiseadd_bn_fuse_pass",              //
-        "embedding_eltwise_layernorm_fuse_pass",     //
-        "multihead_matmul_fuse_pass_v2",             //
-        "fc_fuse_pass",                              //
-        "fc_elementwise_layernorm_fuse_pass",        //
+    "is_test_pass",                                    //
+        "simplify_with_basic_ops_pass",                //
+        "conv_affine_channel_fuse_pass",               //
+        "conv_eltwiseadd_affine_channel_fuse_pass",    //
+        "conv_bn_fuse_pass",                           //
+        "conv_eltwiseadd_bn_fuse_pass",                //
+        "embedding_eltwise_layernorm_fuse_pass",       //
+        "multihead_matmul_fuse_pass_v2",               //
+        "fc_fuse_pass",                                //
+        "fc_elementwise_layernorm_fuse_pass",          //
+        "fc_reshape_elementwise_layernorm_fuse_pass",  //
 #if CUDNN_VERSION >= 7100  // To run conv_fusion, the version of cudnn must be
                            // guaranteed at least v7
         "conv_elementwise_add_act_fuse_pass",   //

@@ -288,6 +288,15 @@ struct Layers {
     return out;
   }
 
+  VarDesc* gelu(VarDesc* x) {
+    VarDesc* out = lod_tensor(unique_name());
+    OpDesc* op = program_.MutableBlock(0)->AppendOp();
+    op->SetType("gelu");
+    op->SetInput("X", {x->Name()});
+    op->SetOutput("Out", {out->Name()});
+    return out;
+  }
+
   VarDesc* softmax(VarDesc* x, int axis) {
     VarDesc* out = lod_tensor(unique_name());
     OpDesc* op = program_.MutableBlock(0)->AppendOp();
