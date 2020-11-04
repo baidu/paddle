@@ -41,3 +41,4 @@ foreach(src ${DIST_TEST_OPS})
 endforeach()
 
 set_tests_properties(test_pretrained_model PROPERTIES TIMEOUT 600)
+set_tests_properties(test_dataset_imdb PROPERTIES TIMEOUT 150)
