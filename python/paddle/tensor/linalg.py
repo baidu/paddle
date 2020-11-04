@@ -624,27 +624,30 @@ def t(input, name=None):
         input (Variable): The input Tensor. It is a N-D (N<=2) Tensor of data types float16, float32, float64, int32.
         name(str, optional): The default value is None.  Normally there is no need for 
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`
+
     Returns:
         Variable: A transposed n-D Tensor, with data type being float16, float32, float64, int32, int64.
     
     For Example:
         .. code-block:: text
-        # Example 1 (0-D tensor)
-         x = tensor([0.79])
-         paddle.t(x) = tensor([0.79])
-         # Example 2 (1-D tensor)
-         x = tensor([0.79, 0.84, 0.32])
-         paddle.t(x) = tensor([0.79, 0.84, 0.32])
+
+            # Example 1 (0-D tensor)
+            x = tensor([0.79])
+            paddle.t(x) = tensor([0.79])
+            # Example 2 (1-D tensor)
+            x = tensor([0.79, 0.84, 0.32])
+            paddle.t(x) = tensor([0.79, 0.84, 0.32])
         
-         # Example 3 (2-D tensor)
-         x = tensor([0.79, 0.84, 0.32],
-                    [0.64, 0.14, 0.57])
-         paddle.t(x) = tensor([0.79, 0.64],
-                              [0.84, 0.14],
-                              [0.32, 0.57])
+            # Example 3 (2-D tensor)
+            x = tensor([0.79, 0.84, 0.32],
+                       [0.64, 0.14, 0.57])
+            paddle.t(x) = tensor([0.79, 0.64],
+                                 [0.84, 0.14],
+                                 [0.32, 0.57])
     
      Examples:
         .. code-block:: python
+
             import paddle
             import paddle.fluid as fluid
             x = fluid.data(name='x', shape=[2, 3],
