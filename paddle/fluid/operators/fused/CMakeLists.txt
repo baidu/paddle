@@ -5,6 +5,7 @@ register_operators(EXCLUDES
     fusion_transpose_flatten_concat_op
     fusion_conv_inception_op
     fused_fc_elementwise_layernorm_op
+    fused_fc_reshape_elementwise_layernorm_op
     multihead_matmul_op
     fused_embedding_eltwise_layernorm_op
     fusion_group_op
@@ -37,6 +38,9 @@ if (WITH_GPU)
     # fused_fc_elementwise_layernorm_op
     op_library(fused_fc_elementwise_layernorm_op)
     file(APPEND ${pybind_file} "USE_CUDA_ONLY_OP(fused_fc_elementwise_layernorm);\n")
+    # fused_fc_reshape_elementwise_layernorm_op
+    op_library(fused_fc_reshape_elementwise_layernorm_op)
+    file(APPEND ${pybind_file} "USE_CUDA_ONLY_OP(fused_fc_reshape_elementwise_layernorm);\n")
     # multihead_matmul_op
     op_library(multihead_matmul_op)
     file(APPEND ${pybind_file} "USE_CUDA_ONLY_OP(multihead_matmul);\n")
