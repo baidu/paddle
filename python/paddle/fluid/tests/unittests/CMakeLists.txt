@@ -212,7 +212,7 @@ function(py_test_modules TARGET_NAME)
         set_property(TEST ${TARGET_NAME} PROPERTY RUN_SERIAL 1)
     endif()
 
-    set_tests_properties(${TARGET_NAME} PROPERTIES TIMEOUT 350)
+    set_tests_properties(${TARGET_NAME} PROPERTIES TIMEOUT 15)
   endif()
 endfunction()
 
@@ -228,7 +228,7 @@ function(bash_test_modules TARGET_NAME)
     cmake_parse_arguments(bash_test_modules "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
 
-    set(timeout 350)
+    set(timeout 15)
     if(${bash_test_modules_TIMEOUT})
         set(timeout ${bash_test_modules_TIMEOUT})
     endif()
@@ -270,7 +270,7 @@ function(parallel_bash_test_modules TARGET_NAME)
     cmake_parse_arguments(parallel_bash_test_modules "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
 
-    set(timeout 120)
+    set(timeout 15)
     if(${parallel_bash_test_modules_TIMEOUT})
         set(timeout ${parallel_bash_test_modules_TIMEOUT})
     endif()

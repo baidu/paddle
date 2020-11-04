@@ -286,6 +286,7 @@ else()
 endif()
 
 add_subdirectory(paddle)
+add_subdirectory(tools)
 if(WITH_PYTHON)
     add_subdirectory(python)
 endif()
