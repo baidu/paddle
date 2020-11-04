@@ -297,6 +297,7 @@ def roll(x, shifts, axis=None, name=None):
 
     Examples:
         .. code-block:: python
+
             import paddle
 
             x = paddle.to_tensor([[1.0, 2.0, 3.0],
@@ -766,6 +767,7 @@ def gather(x, index, axis=None, name=None):
 
                 out = [[3, 4],
                        [5, 6]]
+
     Args:
         x (Tensor): The source input tensor with rank>=1. Supported data type is
             int32, int64, float32, float64 and uint8 (only for CPU),
@@ -882,6 +884,7 @@ def scatter(x, index, updates, overwrite=True, name=None):
     Output is obtained by updating the input on selected indices based on updates.
     
     .. code-block:: python
+
         import numpy as np
         #input:
         x = np.array([[1, 1], [2, 2], [3, 3]])

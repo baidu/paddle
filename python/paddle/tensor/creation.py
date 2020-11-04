@@ -773,10 +773,8 @@ def triu(x, diagonal=0, name=None):
 
 def meshgrid(*args, **kwargs):
     """
-	:alias_main: paddle.meshgrid
-	:alias: paddle.meshgrid,paddle.tensor.meshgrid,paddle.tensor.creation.meshgrid
 
-    This op takes a list of N tensors as input *args, each of which is 1-dimensional 
+    This op takes a list of N tensors as input \*args, each of which is 1-dimensional 
     vector, and creates N-dimensional grids.
     
     Args:

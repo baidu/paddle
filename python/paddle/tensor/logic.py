@@ -234,11 +234,13 @@ def greater_equal(x, y, name=None):
         y(Tensor): Second input to compare which is N-D tensor. The input data type should be float32, float64, int32, int64.
         name(str, optional): The default value is None.  Normally there is no need for
             user to set this property.  For more information, please refer to :ref:`api_guide_Name`.
+
     Returns:
         Tensor, the output data type is bool: The tensor storing the output, the output shape is same as input :attr:`x`.
 
     Examples:
         .. code-block:: python
+
             import paddle
 
             paddle.disable_static()
@@ -270,6 +272,7 @@ def greater_than(x, y, name=None):
 
     Examples:
         .. code-block:: python
+
             import paddle
 
             paddle.disable_static()
@@ -302,6 +305,7 @@ def less_equal(x, y, name=None):
 
     Examples:
         .. code-block:: python
+
             import paddle
 
             paddle.disable_static()
@@ -334,6 +338,7 @@ def less_than(x, y, name=None):
 
     Examples:
         .. code-block:: python
+
             import paddle
 
             paddle.disable_static()

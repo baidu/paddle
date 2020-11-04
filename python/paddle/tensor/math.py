@@ -1283,6 +1283,7 @@ def log1p(x, name=None):
     """
     Calculates the natural log of the given input tensor, element-wise.
     .. math::
+
         Out = \\ln(x+1)
 
     Args:
@@ -1324,6 +1325,7 @@ def addcmul(input, tensor1, tensor2, value=1.0, name=None):
     ..  math::
 
         out = input + value * tensor1 * tensor2
+
     Args:
         input(Tensor): The input to be added. A Tensor with type float32, float64, int32, int64.
         tensor1(Tensor): The tensor to be multiplied. A Tensor with type float32, float64, int32, int64.
@@ -1331,8 +1333,10 @@ def addcmul(input, tensor1, tensor2, value=1.0, name=None):
         value(int|float): The multiplier for tensor1*tensor2. For float32 and float64 type input, value must be float, otherwise an integer.
         name(str, Optional): For details, please refer to :ref:`api_guide_Name`.
                         Generally, no setting is required. Default: None.
+
     Returns:
         out(Tensor): The output result. A Tensor with the same data type as input's.
+
     Examples:
         .. code-block:: python
           
