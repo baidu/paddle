@@ -825,25 +825,26 @@ def unbind(input, axis=0):
 	:alias: paddle.tensor.unbind,paddle.tensor.manipulation.unbind
 
     Removes a tensor dimension, then split the input tensor into multiple sub-Tensors.
+
     Args:
-        input (Variable): The input variable which is an N-D Tensor, data type being float32, float64, int32 or int64.
-       
+        input (Variable): The input variable which is an N-D Tensor, data type being float32, float64, int32 , int64.       
         axis (int32|int64, optional): A scalar with type ``int32|int64`` shape [1]. The dimension along which to unbind. If :math:`axis < 0`, the
             dimension to unbind along is :math:`rank(input) + axis`. Default is 0.
+
     Returns:
         list(Variable): The list of segmented Tensor variables.
 
     Example:
         .. code-block:: python
+
             import paddle
             # input is a variable which shape is [3, 4, 5]
-            input = paddle.fluid.data(
-                 name="input", shape=[3, 4, 5], dtype="float32")
-            [x0, x1, x2] = paddle.tensor.unbind(input, axis=0)
+            x = paddle.randn([3, 4, 5])
+            [x0, x1, x2] = paddle.tensor.unbind(x, axis=0)
             # x0.shape [4, 5]
             # x1.shape [4, 5]
             # x2.shape [4, 5]
-            [x0, x1, x2, x3] = paddle.tensor.unbind(input, axis=1)
+            [x0, x1, x2, x3] = paddle.tensor.unbind(x, axis=1)
             # x0.shape [3, 5]
             # x1.shape [3, 5]
             # x2.shape [3, 5]

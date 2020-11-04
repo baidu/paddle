@@ -723,6 +723,7 @@ def add_n(inputs, name=None):
 
     Case 1:
     ::
+
         Input:
             Input. Shape = [2, 3]
             Input = [[1, 2, 3],
@@ -735,6 +736,7 @@ def add_n(inputs, name=None):
 
     Case 2:
     ::
+
         Input:
             First input:
             Input1. Shape = [2, 3]
@@ -1283,6 +1285,7 @@ def log1p(x, name=None):
     """
     Calculates the natural log of the given input tensor, element-wise.
     .. math::
+
         Out = \\ln(x+1)
 
     Args:
