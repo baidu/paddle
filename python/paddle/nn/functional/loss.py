@@ -124,11 +124,10 @@ def binary_cross_entropy(input, label, weight=None, reduction='mean',
 
             import paddle
 
-            paddle.disable_static()
             input = paddle.to_tensor([0.5, 0.6, 0.7], 'float32')
             label = paddle.to_tensor([1.0, 0.0, 1.0], 'float32')
             output = paddle.nn.functional.binary_cross_entropy(input, label)
-            print(output.numpy())  # [0.65537095]
+            print(output)  # [0.65537095]
 
     """
     if reduction not in ['sum', 'mean', 'none']:
@@ -258,11 +257,11 @@ def binary_cross_entropy_with_logits(logit,
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
+
             logit = paddle.to_tensor([5.0, 1.0, 3.0])
             label = paddle.to_tensor([1.0, 0.0, 1.0])
             output = paddle.nn.functional.binary_cross_entropy_with_logits(logit, label)
-            print(output.numpy())  # [0.45618808]
+            print(output)  # [0.45618808]
 
     """
     if reduction not in ['sum', 'mean', 'none']:
@@ -582,13 +581,12 @@ def margin_ranking_loss(input,
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
 
             input = paddle.to_tensor([[1, 2], [3, 4]], dtype='float32')
             other = paddle.to_tensor([[2, 1], [2, 4]], dtype='float32')
             label = paddle.to_tensor([[1, -1], [-1, -1]], dtype='float32')
             loss = paddle.nn.functional.margin_ranking_loss(input, other, label)
-            print(loss.numpy()) # [0.75]
+            print(loss) # [0.75]
     """
     if reduction not in ['sum', 'mean', 'none']:
         raise ValueError(

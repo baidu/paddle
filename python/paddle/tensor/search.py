@@ -419,8 +419,6 @@ def nonzero(x, as_tuple=False):
 
 def sort(x, axis=-1, descending=False, name=None):
     """
-	:alias_main: paddle.sort
-	:alias: paddle.sort,paddle.tensor.sort,paddle.tensor.search.sort
 
     This OP sorts the input along the given axis, and returns the sorted output tensor. The default sort algorithm is ascending, if you want the sort algorithm to be descending, you must set the :attr:`descending` as True.
 
@@ -440,9 +438,9 @@ def sort(x, axis=-1, descending=False, name=None):
         Tensor: sorted tensor(with the same shape and data type as ``x``).
     Examples:
         .. code-block:: python
+
             import paddle
             
-            paddle.disable_static()
             x = paddle.to_tensor([[[5,8,9,5],
                                    [0,0,1,7],
                                    [6,9,2,4]],
@@ -453,21 +451,21 @@ def sort(x, axis=-1, descending=False, name=None):
             out1 = paddle.sort(x=x, axis=-1)
             out2 = paddle.sort(x=x, axis=0)
             out3 = paddle.sort(x=x, axis=1)
-            print(out1.numpy())
+            print(out1)
             #[[[5. 5. 8. 9.]
             #  [0. 0. 1. 7.]
             #  [2. 4. 6. 9.]]
             # [[2. 2. 4. 5.]
             #  [4. 7. 7. 9.]
             #  [0. 1. 6. 7.]]]
-            print(out2.numpy())
+            print(out2)
             #[[[5. 2. 4. 2.]
             #  [0. 0. 1. 7.]
             #  [1. 7. 0. 4.]]
             # [[5. 8. 9. 5.]
             #  [4. 7. 7. 9.]
             #  [6. 9. 2. 6.]]]
-            print(out3.numpy())
+            print(out3)
             #[[[0. 0. 1. 4.]
             #  [5. 8. 2. 5.]
             #  [6. 9. 9. 7.]]
@@ -730,33 +728,32 @@ def topk(x, k, axis=None, largest=True, sorted=True, name=None):
 
            import paddle
 
-           paddle.disable_static()
 
            tensor_1 = paddle.to_tensor([1, 4, 5, 7])
            value_1, indices_1 = paddle.topk(tensor_1, k=1)
-           print(value_1.numpy())
+           print(value_1)
            # [7]
-           print(indices_1.numpy())
+           print(indices_1)
            # [3] 
            tensor_2 = paddle.to_tensor([[1, 4, 5, 7], [2, 6, 2, 5]])
            value_2, indices_2 = paddle.topk(tensor_2, k=1)
-           print(value_2.numpy())
+           print(value_2)
            # [[7]
            #  [6]]
-           print(indices_2.numpy())
+           print(indices_2)
            # [[3]
            #  [1]]
            value_3, indices_3 = paddle.topk(tensor_2, k=1, axis=-1)
-           print(value_3.numpy())
+           print(value_3)
            # [[7]
            #  [6]]
-           print(indices_3.numpy())
+           print(indices_3)
            # [[3]
            #  [1]]
            value_4, indices_4 = paddle.topk(tensor_2, k=1, axis=0)
-           print(value_4.numpy())
+           print(value_4)
            # [[2 6 5 7]]
-           print(indices_4.numpy())
+           print(indices_4)
            # [[1 1 0 0]]
 
     """

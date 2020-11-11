@@ -842,10 +842,10 @@ class MarginRankingLoss(fluid.dygraph.Layer):
         name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`.
 
     Shape:
-        input: N-D Tensor, the shape is [N, *], N is batch size and `*` means any number of additional dimensions., available dtype is float32, float64.
-        other: N-D Tensor, `other` have the same shape and dtype as `input`.
-        label: N-D Tensor, label have the same shape and dtype as `input`.
-        output: If :attr:`reduction` is ``'mean'`` or ``'sum'`` , the out shape is :math:`[1]`, otherwise the shape is the same as `input` .The same dtype as input tensor.
+        - input: N-D Tensor, the shape is [N, *], N is batch size and `*` means any number of additional dimensions, available dtype is float32, float64.
+        - other: N-D Tensor, `other` have the same shape and dtype as `input`.
+        - label: N-D Tensor, label have the same shape and dtype as `input`.
+        - output: If :attr:`reduction` is ``'mean'`` or ``'sum'`` , the out shape is :math:`[1]`, otherwise the shape is the same as `input` .The same dtype as input tensor.
 
     Returns:
         A callable object of MarginRankingLoss.
@@ -855,14 +855,13 @@ class MarginRankingLoss(fluid.dygraph.Layer):
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
 
             input = paddle.to_tensor([[1, 2], [3, 4]]), dtype="float32")
             other = paddle.to_tensor([[2, 1], [2, 4]]), dtype="float32")
             label = paddle.to_tensor([[1, -1], [-1, -1]], dtype="float32")
             margin_rank_loss = paddle.nn.MarginRankingLoss()
             loss = margin_rank_loss(input, other, label)
-            print(loss.numpy()) # [0.75]
+            print(loss) # [0.75]
     """
 
     def __init__(self, margin=0.0, reduction='mean', name=None):
