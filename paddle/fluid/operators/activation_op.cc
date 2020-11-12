@@ -301,6 +301,15 @@ Natural logarithm of x.
 
 )DOC";
 
+UNUSED constexpr char Log2Doc[] = R"DOC(
+Log2 Activation Operator.
+
+$$out = \ln(x)$$
+
+logarithm of x base to 2.
+
+)DOC";
+
 UNUSED constexpr char Log1pDoc[] = R"DOC(
 Log Activation Operator.
 
@@ -697,6 +706,7 @@ REGISTER_ACTIVATION_OP_MAKER(Cosh, CoshDoc);
 REGISTER_ACTIVATION_OP_MAKER(Round, RoundDoc);
 REGISTER_ACTIVATION_OP_MAKER(Reciprocal, ReciprocalDoc);
 REGISTER_ACTIVATION_OP_MAKER(Log, LogDoc);
+REGISTER_ACTIVATION_OP_MAKER(Log2, Log2Doc);
 REGISTER_ACTIVATION_OP_MAKER(Log1p, Log1pDoc);
 REGISTER_ACTIVATION_OP_MAKER(Square, SquareDoc);
 REGISTER_ACTIVATION_OP_MAKER(Softsign, SoftsignDoc);
@@ -1322,6 +1332,25 @@ REGISTER_OP_CPU_KERNEL(
     ops::LogDoubleGradKernel<plat::CPUDeviceContext,
                              ops::LogGradGradFunctor<plat::float16>>);
 /* ========================================================================== */
+
+/* ==========================  Log2 register ==================================*/
+REGISTER_OPERATOR(
+    log2, ops::ActivationOp, ops::Log2OpMaker, ops::ActivationOpInferVarType,
+    ops::ActivationGradOpMaker<ops::Log2GradFunctor<float>::FwdDeps(),
+                               paddle::framework::OpDesc>,
+    ops::ActivationGradOpMaker<ops::Log2GradFunctor<float>::FwdDeps(),
+                               paddle::imperative::OpBase>,
+    ops::ActFwdInplaceInferer);
+
+REGISTER_OPERATOR(log2_grad, ops::ActivationOpGrad,
+                  ops::ActivationGradOpInplaceInferer,
+                  ops::LogDoubleGradMaker<paddle::framework::OpDesc>,
+                  ops::LogDoubleGradMaker<paddle::imperative::OpBase>);
+
+
+REGISTER_ACTIVATION_CPU_KERNEL(log2, Log2, Log2Functor, Log2GradFunctor);
+/* ========================================================================== */
+
 
 /* ==========================  register checkpoint ===========================*/
 REGISTER_OP_VERSION(leaky_relu)

@@ -45,6 +45,7 @@ from ..fluid.layers import cosh    #DEFINE_ALIAS
 from ..fluid.layers import exp    #DEFINE_ALIAS
 from ..fluid.layers import floor    #DEFINE_ALIAS
 from ..fluid.layers import log    #DEFINE_ALIAS
+from ..fluid.layers import log2   #DEFINE_ALIAS
 from ..fluid.layers import reciprocal    #DEFINE_ALIAS
 from ..fluid.layers import reduce_all    #DEFINE_ALIAS
 from ..fluid.layers import reduce_any    #DEFINE_ALIAS
@@ -79,6 +80,7 @@ __all__ = [
         'floor',
         'increment',
         'log',
+        'log2',
         'logsumexp',
         'mul',
         'multiplex',

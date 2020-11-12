@@ -1624,6 +1624,32 @@ class TestLog(TestActivation):
         self.assertRaises(TypeError, fluid.layers.log, in2)
 
 
+class TestLog2(TestActivation):
+    def setUp(self):
+        self.op_type = "log2"
+        self.init_dtype()
+
+        x = np.random.uniform(0.1, 1, [11, 17]).astype(self.dtype)
+        out = np.log2(x)
+
+        self.inputs = {'X': OpTest.np_dtype_to_fluid_dtype(x)}
+        self.outputs = {'Out': out}
+
+    def test_check_grad(self):
+        if self.dtype == np.float16:
+            return
+        self.check_grad(['X'], 'Out')
+
+    def test_error(self):
+        in1 = fluid.layers.data(
+            name="in1", shape=[11, 17], append_batch_size=False, dtype="int32")
+        in2 = fluid.layers.data(
+            name="in2", shape=[11, 17], append_batch_size=False, dtype="int64")
+
+        self.assertRaises(TypeError, fluid.layers.log2, in1)
+        self.assertRaises(TypeError, fluid.layers.log2, in2)
+
+
 class TestLog1p(TestActivation):
     def setUp(self):
         self.op_type = "log1p"

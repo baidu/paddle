@@ -111,6 +111,7 @@ __all__ = [
     'relu',
     'selu',
     'log',
+    'log2',
     'crop',
     'crop_tensor',
     'elu',
@@ -8728,6 +8729,57 @@ def log(x, name=None):
     dtype = helper.input_dtype(input_param_name='x')
     out = helper.create_variable_for_type_inference(dtype)
     helper.append_op(type="log", inputs={"X": x}, outputs={"Out": out})
+    return out
+
+
+def log2(x, name=None):
+    """
+    :alias_main: paddle.log2
+	:alias: paddle.log2,paddle.tensor.log2,paddle.tensor.math.log2
+	:old_api: paddle.fluid.layers.log2
+
+    Calculates the log to the base 2 of the given input tensor, element-wise.
+
+    .. math::
+
+        Out = \\ln(x)/ln2
+
+    Args:
+        x (Variable): Input LoDTensor or Tensor. Must be one of the following types: float32, float64.
+        name (str|None): The default value is None. Normally there is no need for user to set this property. For more information, please refer to :ref:`api_guide_Name`
+
+
+    Returns:
+        Variable: The log to the base 2 of the input LoDTensor or Tensor computed element-wise.
+
+    Examples:
+
+        .. code-block:: python
+
+            import paddle.fluid as fluid
+            import numpy as np
+
+            # Graph Organizing
+            x = fluid.layers.data(name="x", shape=[1], dtype="float32")
+            res = fluid.layers.log2(x)
+
+            # Create an executor using CPU as an example
+            exe = fluid.Executor(fluid.CPUPlace())
+
+            # Execute
+            x_i = np.array([[1], [2]]).astype(np.float32)
+            res_val, = exe.run(fluid.default_main_program(), feed={'x':x_i}, fetch_list=[res])
+            print(res_val) # [[0.], [0.6931472]]
+    """
+    if in_dygraph_mode():
+        return core.ops.log2(x)
+
+    check_variable_and_dtype(x, 'x', ['float32', 'float64'], "log")
+    inputs = {'X': [x]}
+    helper = LayerHelper('log2', **locals())
+    dtype = helper.input_dtype(input_param_name='x')
+    out = helper.create_variable_for_type_inference(dtype)
+    helper.append_op(type="log2", inputs={"X": x}, outputs={"Out": out})
     return out
 
 
