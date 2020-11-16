@@ -102,9 +102,10 @@ python setup.py install
         self.python35 = r"    - python>=3.5, <3.6"
         self.python36 = r"    - python>=3.6, <3.7"
         self.python37 = r"    - python>=3.7, <3.8"
+        self.python38 = r"    - python>=3.8"
 
         self.python_version = [
-            self.python27, self.python35, self.python36, self.python37
+            self.python27, self.python35, self.python36, self.python37, self.python38
         ]
 
         self.cuda90 = r"""
@@ -117,7 +118,7 @@ python setup.py install
     """
         self.cuda_info = [(self.cuda90, "cuda9.0", ".post97"),
                           (self.cuda100, "cuda10.0", ".post107")]
-        self.py_str = ["py27", "py35", "py36", "py37"]
+        self.py_str = ["py27", "py35", "py36", "py37", "py38"]
         self.pip_end = ".whl --no-deps"
         self.pip_prefix_linux = "pip install /package/paddlepaddle"
         self.pip_prefix_windows = "pip install C:\package\paddlepaddle"
@@ -125,15 +126,18 @@ python setup.py install
         self.pip_cpu = "-"
         self.mac_pip = [
             "-cp27-cp27m-macosx_10_6_intel", "-cp35-cp35m-macosx_10_6_intel",
-            "-cp36-cp36m-macosx_10_6_intel", "-cp37-cp37m-macosx_10_6_intel"
+            "-cp36-cp36m-macosx_10_6_intel", "-cp37-cp37m-macosx_10_6_intel",
+            "-cp38-cp38-macosx_10_14_x86_64"
         ]
         self.linux_pip = [
             "-cp27-cp27mu-manylinux1_x86_64", "-cp35-cp35m-manylinux1_x86_64",
-            "-cp36-cp36m-manylinux1_x86_64", "-cp37-cp37m-manylinux1_x86_64"
+            "-cp36-cp36m-manylinux1_x86_64", "-cp37-cp37m-manylinux1_x86_64",
+            "-cp38-cp38-manylinux1_x86_64"
         ]
         self.windows_pip = [
             "-cp27-cp27m-win_amd64", "-cp35-cp35m-win_amd64",
-            "-cp36-cp36m-win_amd64", "-cp37-cp37m-win_amd64"
+            "-cp36-cp36m-win_amd64", "-cp37-cp37m-win_amd64",
+            "-cp38-cp38-win_amd64"
         ]
 
 
