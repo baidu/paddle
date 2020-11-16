@@ -39,9 +39,6 @@ from paddle.common_ops_import import *
 
 def argsort(x, axis=-1, descending=False, name=None):
     """
-	:alias_main: paddle.argsort
-	:alias: paddle.argsort,paddle.tensor.argsort,paddle.tensor.search.argsort
-
     This OP sorts the input along the given axis, and returns the corresponding index tensor for the sorted output values. The default sort algorithm is ascending, if you want the sort algorithm to be descending, you must set the :attr:`descending` as True.
 
     Args:
@@ -67,7 +64,6 @@ def argsort(x, axis=-1, descending=False, name=None):
 
             import paddle
             
-            paddle.disable_static()
             x = paddle.to_tensor([[[5,8,9,5],
                                    [0,0,1,7],
                                    [6,9,2,4]],
@@ -78,21 +74,21 @@ def argsort(x, axis=-1, descending=False, name=None):
             out1 = paddle.argsort(x=x, axis=-1)
             out2 = paddle.argsort(x=x, axis=0)
             out3 = paddle.argsort(x=x, axis=1)
-            print(out1.numpy())
+            print(out1)
             #[[[0 3 1 2]
             #  [0 1 2 3]
             #  [2 3 0 1]]
             # [[1 3 2 0]
             #  [0 1 2 3]
             #  [2 0 3 1]]]
-            print(out2.numpy())
+            print(out2)
             #[[[0 1 1 1]
             #  [0 0 0 0]
             #  [1 1 1 0]]
             # [[1 0 0 0]
             #  [1 1 1 1]
             #  [0 0 0 1]]]
-            print(out3.numpy())
+            print(out3)
             #[[[1 1 1 2]
             #  [0 0 2 0]
             #  [2 2 0 1]]
@@ -149,17 +145,16 @@ def argmax(x, axis=None, keepdim=False, dtype="int64", name=None):
 
             import paddle
 
-            paddle.disable_static()
             x =  paddle.to_tensor([[5,8,9,5],
                                      [0,0,1,7],
                                      [6,9,2,4]])
             out1 = paddle.argmax(x)
-            print(out1.numpy()) # 2
+            print(out1) # 2
             out2 = paddle.argmax(x, axis=1)
-            print(out2.numpy()) 
+            print(out2) 
             # [2 3 1]
             out3 = paddle.argmax(x, axis=-1)
-            print(out3.numpy()) 
+            print(out3) 
             # [2 3 1]
     """
     if axis is not None and not isinstance(axis, int):
@@ -227,17 +222,16 @@ def argmin(x, axis=None, keepdim=False, dtype="int64", name=None):
 
             import paddle
 
-            paddle.disable_static()
             x =  paddle.to_tensor([[5,8,9,5],
                                      [0,0,1,7],
                                      [6,9,2,4]])
             out1 = paddle.argmin(x)
-            print(out1.numpy()) # 4
+            print(out1) # 4
             out2 = paddle.argmin(x, axis=1)
-            print(out2.numpy()) 
+            print(out2) 
             # [0 0 2]
             out3 = paddle.argmin(x, axis=-1)
-            print(out3.numpy()) 
+            print(out3) 
             # [0 0 2]
     """
     if axis is not None and not isinstance(axis, int):

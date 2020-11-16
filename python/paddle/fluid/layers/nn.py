@@ -12194,11 +12194,10 @@ def logical_and(x, y, out=None, name=None):
 
             import paddle
 
-            paddle.disable_static()
             x = paddle.to_tensor([True])
             y = paddle.to_tensor([True, False, True, False])
             res = paddle.logical_and(x, y)
-            print(res.numpy()) # [True False True False]
+            print(res) # [True False True False]
     """
     return _logical_op(
         op_name="logical_and", x=x, y=y, name=name, out=out, binary_op=True)
@@ -12220,7 +12219,7 @@ def logical_or(x, y, out=None, name=None):
     Args:
         x (Tensor): the input tensor, it's data type should be bool.
         y (Tensor): the input tensor, it's data type should be bool.
-        out(Tensor): The ``Variable`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor`` will be created to save the output.
+        out(Tensor): The ``Tensor`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor`` will be created to save the output.
         name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
@@ -12232,13 +12231,12 @@ def logical_or(x, y, out=None, name=None):
             import paddle
             import numpy as np
 
-            paddle.disable_static()
             x_data = np.array([True, False], dtype=np.bool).reshape(2, 1)
             y_data = np.array([True, False, True, False], dtype=np.bool).reshape(2, 2)
             x = paddle.to_tensor(x_data)
             y = paddle.to_tensor(y_data)
             res = paddle.logical_or(x, y)
-            print(res.numpy()) # [[ True  True] [ True False]]
+            print(res) # [[ True  True] [ True False]]
     """
     return _logical_op(
         op_name="logical_or", x=x, y=y, name=name, out=out, binary_op=True)
@@ -12272,13 +12270,12 @@ def logical_xor(x, y, out=None, name=None):
             import paddle
             import numpy as np
 
-            paddle.disable_static()
             x_data = np.array([True, False], dtype=np.bool).reshape([2, 1])
             y_data = np.array([True, False, True, False], dtype=np.bool).reshape([2, 2])
             x = paddle.to_tensor(x_data)
             y = paddle.to_tensor(y_data)
             res = paddle.logical_xor(x, y)
-            print(res.numpy()) # [[False,  True], [ True, False]]
+            print(res) # [[False,  True], [ True, False]]
     """
     return _logical_op(
         op_name="logical_xor", x=x, y=y, name=name, out=out, binary_op=True)
@@ -12287,11 +12284,7 @@ def logical_xor(x, y, out=None, name=None):
 @templatedoc()
 def logical_not(x, out=None, name=None):
     """
-    :alias_main: paddle.logical_not
-    :alias: paddle.logical_not, paddle.tensor.logical_not, paddle.tensor.logic.logical_not
-    :old_api: paddle.fluid.layers.logical_not
-
-    ``logical_not`` operator computes element-wise logical NOT on ``x``, and returns ``out``. ``x`` and ``out`` are N-dim boolean ``Variable``.
+    ``logical_not`` operator computes element-wise logical NOT on ``x``, and returns ``out``. ``x`` and ``out`` are N-dim boolean ``Tensor``.
     Each element of ``out`` is calculated by
 
     .. math::
@@ -12300,7 +12293,7 @@ def logical_not(x, out=None, name=None):
 
     Args:
         x(${x_type}): ${x_comment}.
-        out(Variable): The ``Variable`` that specifies the output of the operator, which can be any ``Variable`` that has been created in the program. The default value is None, and a new ``Variable` will be created to save the output.
+        out(Tensor): The ``Tensor`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor` will be created to save the output.
         name(str|None): The default value is None. Normally there is no need for users to set this property. For more information, please refer to :ref:`api_guide_Name`.
 
     Returns:
@@ -12308,12 +12301,12 @@ def logical_not(x, out=None, name=None):
 
     Examples:
         .. code-block:: python
+
             import paddle
 
-            paddle.disable_static()
             x = paddle.to_tensor([True, False, True, False])
             res = paddle.logical_not(x)
-            print(res.numpy()) # [False  True False  True]
+            print(res) # [False  True False  True]
     """
 
     return _logical_op(

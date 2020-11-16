@@ -40,9 +40,7 @@ class ElementwiseMinOpMaker : public ElementwiseOpMaker {
   std::string GetEquation() const override { return "Out = min(X, Y)"; }
 
   void AddInputX() override {
-    AddInput(
-        "X",
-        "(Variable), The first tensor holding the elements to be compared.");
+    AddInput("X", "The first tensor holding the elements to be compared.");
   }
 
   void AddInputY() override {

@@ -490,32 +490,31 @@ Examples:
         import paddle
         import numpy as np
 
-        paddle.disable_static()
   
         x = paddle.to_tensor([[1, 2], [3, 4]])
         y = paddle.to_tensor([[5, 6], [7, 8]])
         res = paddle.maximum(x, y)
-        print(res.numpy())
+        print(res)
         #[[5. 6.]
         # [7. 8.]]
 
         x = paddle.to_tensor([[[1, 2, 3], [1, 2, 3]]])
         y = paddle.to_tensor([1, 2])
         res = paddle.maximum(x, y, axis=1)
-        print(res.numpy())
+        print(res)
         #[[[1. 2. 3.]
         #  [2. 2. 3.]]]
 
         x = paddle.to_tensor([2, 3, 5], dtype='float32')
         y = paddle.to_tensor([1, 4, np.nan], dtype='float32')
         res = paddle.maximum(x, y)
-        print(res.numpy())
+        print(res)
         #[ 2.  4. nan]
 
         x = paddle.to_tensor([5, 3, np.inf], dtype='float32')
         y = paddle.to_tensor([1, 4, 5], dtype='float32')
         res = paddle.maximum(x, y)
-        print(res.numpy())
+        print(res)
         #[ 5.  4. inf]
     """
     op_type = 'elementwise_max'
@@ -534,32 +533,30 @@ Examples:
         import paddle
         import numpy as np
 
-        paddle.disable_static()
-  
         x = paddle.to_tensor([[1, 2], [3, 4]], dtype='float32')
         y = paddle.to_tensor([[5, 6], [7, 8]], dtype='float32')
         res = paddle.minimum(x, y)
-        print(res.numpy())
+        print(res)
         #[[1. 2.]
         # [3. 4.]]
 
         x = paddle.to_tensor([[[1, 2, 3], [1, 2, 3]]], dtype='float32')
         y = paddle.to_tensor([1, 2], dtype='float32')
         res = paddle.minimum(x, y, axis=1)
-        print(res.numpy())
+        print(res)
         #[[[1. 1. 1.]
         #  [2. 2. 2.]]]
 
         x = paddle.to_tensor([2, 3, 5], dtype='float32')
         y = paddle.to_tensor([1, 4, np.nan], dtype='float32')
         res = paddle.minimum(x, y)
-        print(res.numpy())
+        print(res))
         #[ 1.  3. nan]
 
         x = paddle.to_tensor([5, 3, np.inf], dtype='float32')
         y = paddle.to_tensor([1, 4, 5], dtype='float32')
         res = paddle.minimum(x, y)
-        print(res.numpy())
+        print(res)
         #[1. 3. 5.]
     """
     op_type = 'elementwise_min'
@@ -1121,24 +1118,22 @@ def max(x, axis=None, keepdim=False, name=None):
 
             import paddle
 
-            paddle.disable_static()
-
             # data_x is a variable with shape [2, 4]
             # the axis is a int element
 
             x = paddle.to_tensor([[0.2, 0.3, 0.5, 0.9],
                                   [0.1, 0.2, 0.6, 0.7]])
             result1 = paddle.max(x)
-            print(result1.numpy())
+            print(result1)
             #[0.9]
             result2 = paddle.max(x, axis=0)
-            print(result2.numpy()) 
+            print(result2) 
             #[0.2 0.3 0.6 0.9]
             result3 = paddle.max(x, axis=-1)
-            print(result3.numpy())
+            print(result3)
             #[0.9 0.7]
             result4 = paddle.max(x, axis=1, keepdim=True)
-            print(result4.numpy())
+            print(result4)
             #[[0.9]
             # [0.7]]
 
@@ -1148,10 +1143,10 @@ def max(x, axis=None, keepdim=False, name=None):
             y = paddle.to_tensor([[[1.0, 2.0], [3.0, 4.0]],
                                   [[5.0, 6.0], [7.0, 8.0]]])
             result5 = paddle.max(y, axis=[1, 2])
-            print(result5.numpy())
+            print(result5)
             #[4. 8.]
             result6 = paddle.max(y, axis=[0, 1])
-            print(result6.numpy())
+            print(result6)
             #[7. 8.]
     """
 
@@ -1215,23 +1210,21 @@ def min(x, axis=None, keepdim=False, name=None):
 
             import paddle
 
-            paddle.disable_static()
-
             # x is a tensor with shape [2, 4]
             # the axis is a int element
             x = paddle.to_tensor([[0.2, 0.3, 0.5, 0.9],
                                   [0.1, 0.2, 0.6, 0.7]])
             result1 = paddle.min(x)
-            print(result1.numpy())
+            print(result1)
             #[0.1]
             result2 = paddle.min(x, axis=0)
-            print(result2.numpy())
+            print(result2)
             #[0.1 0.2 0.5 0.7]
             result3 = paddle.min(x, axis=-1)
-            print(result3.numpy()) 
+            print(result3) 
             #[0.2 0.1]
             result4 = paddle.min(x, axis=1, keepdim=True)
-            print(result4.numpy())
+            print(result4))
             #[[0.2]
             # [0.1]]
 
@@ -1240,10 +1233,10 @@ def min(x, axis=None, keepdim=False, name=None):
             y = paddle.to_tensor([[[1.0, 2.0], [3.0, 4.0]],
                                   [[5.0, 6.0], [7.0, 8.0]]])
             result5 = paddle.min(y, axis=[1, 2])
-            print(result5.numpy()) 
+            print(result5) 
             #[1. 5.]
             result6 = paddle.min(y, axis=[0, 1])
-            print(result6.numpy())
+            print(result6)
             #[1. 2.]
     """
 
@@ -1721,10 +1714,10 @@ def isfinite(x, name=None):
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
+
             x = paddle.to_tensor([float('-inf'), -2, 3.6, float('inf'), 0, float('-nan'), float('nan')])
             out = paddle.tensor.isfinite(x)
-            print(out.numpy())  # [False  True  True False  True False False]
+            print(out)  # [False  True  True False  True False False]
     """
     if in_dygraph_mode():
         return core.ops.isfinite_v2(x)
@@ -1750,10 +1743,10 @@ def isinf(x, name=None):
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
+
             x = paddle.to_tensor([float('-inf'), -2, 3.6, float('inf'), 0, float('-nan'), float('nan')])
             out = paddle.tensor.isinf(x)
-            print(out.numpy())  # [ True False False  True False False False]
+            print(out)  # [ True False False  True False False False]
     """
     if in_dygraph_mode():
         return core.ops.isinf_v2(x)
@@ -1779,10 +1772,10 @@ def isnan(x, name=None):
         .. code-block:: python
 
             import paddle
-            paddle.disable_static()
+
             x = paddle.to_tensor([float('-inf'), -2, 3.6, float('inf'), 0, float('-nan'), float('nan')])
             out = paddle.tensor.isnan(x)
-            print(out.numpy())  # [False False False False False  True  True]
+            print(out)  # [False False False False False  True  True]
     """
     if in_dygraph_mode():
         return core.ops.isnan_v2(x)
