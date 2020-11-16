@@ -19,6 +19,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/bernoulli_op.h"
+#include "paddle/fluid/platform/cuda_enforce.cuh"
 #include "paddle/fluid/platform/transform.h"
 
 namespace paddle {
@@ -32,8 +33,10 @@ struct BernoulliCudaFunctor {
   __host__ __device__ T operator()(const unsigned int n, const T p) const {
     // NOTE(zhiqiu): currently, PADDLE_ENFORCE in cuda kernel may print several
     // lines of error messages if, and it should be refined.
-    PADDLE_ENFORCE(p >= 0.0 && p <= 1.0,
-                   "The probability should be >=0 and <= 1, but got %f", p);
+    PADDLE_ENFORCE_CUDA_KERNEL(p >= 0.0 && p <= 1.0,
+                               "The probability should be >=0 and <= 1");
+    // PADDLE_ENFORCE(p >= 0.0 && p <= 1.0,
+    //                "The probability should be >=0 and <= 1, but got %f", p);
     thrust::minstd_rand rng;
     rng.seed(seed_);
     thrust::uniform_real_distribution<T> dist(0.0, 1.0);
@@ -61,6 +64,7 @@ class BernoulliOpKernel<platform::CUDADeviceContext, T>
         static_cast<const platform::CUDADeviceContext*>(&ctx.device_context());
     trans(*context, index_sequence_begin, index_sequence_begin + size, in_data,
           out_data, BernoulliCudaFunctor<T>(seed));
+    PADDLE_ENFORCE_CHECK_CUDA_KERNEL();
   }
 };
 

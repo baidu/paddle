@@ -66,7 +66,11 @@ endif()
 
 register_operators(EXCLUDES py_func_op warpctc_op dgc_op
     sync_batch_norm_op ${OP_MKL_DEPS} DEPS ${OP_HEADER_DEPS} ${OP_PREFETCH_DEPS})
-
+if (WITH_GPU AND USE_PADDLE_CUDA_KERNEL_CHECK)
+    register_cuda_check(TARGETS nll_loss_op bernoulli_op lookup_table_v2_op DEPS cuda_enforce)
+    # register_cuda_check_all(EXCLUDES py_func_op warpctc_op dgc_op
+    # sync_batch_norm_op ${OP_MKL_DEPS} DEPS ${OP_HEADER_DEPS} ${OP_PREFETCH_DEPS})
+endif()
 if (WITH_GPU)
     # warpctc_op needs cudnn 7 above
     if (${CUDNN_MAJOR_VERSION} VERSION_LESS 7)

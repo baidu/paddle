@@ -21,7 +21,7 @@ endif()
 cc_library(paddle_fluid_api
     SRCS io.cc
     DEPS paddle_framework ${GLOB_OP_LIB} ${GLOB_OPERATOR_DEPS})
-
+    set_target_properties(paddle_fluid_api PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 # analysis and tensorrt must be added before creating static library,
 # otherwise, there would be undefined reference to them in static library.
 add_subdirectory(analysis)
@@ -45,7 +45,7 @@ set(STATIC_INFERENCE_API paddle_inference_api analysis_predictor
      zero_copy_tensor reset_tensor_array 
         analysis_config paddle_pass_builder activation_functions ${mkldnn_quantizer_cfg})
 create_static_lib(paddle_fluid ${fluid_modules} ${STATIC_INFERENCE_API})
-
+# set_target_properties(paddle_fluid PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 if(NOT APPLE)
   # TODO(liuyiqu: Temporarily disable the link flag because it is not support on Mac.
   set(LINK_FLAGS "-Wl,--retain-symbols-file ${CMAKE_CURRENT_SOURCE_DIR}/paddle_fluid.sym")
@@ -74,7 +74,7 @@ set(SHARED_INFERENCE_SRCS
 # Create shared inference library defaultly
 cc_library(paddle_fluid_shared SHARED SRCS ${SHARED_INFERENCE_SRCS}
       DEPS ${fluid_modules} analysis_predictor)
-
+# set_target_properties(paddle_fluid_shared PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 get_property(os_dependency_modules GLOBAL PROPERTY OS_DEPENDENCY_MODULES)
 target_link_libraries(paddle_fluid_shared ${os_dependency_modules})
 if(WIN32)

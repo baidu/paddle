@@ -58,7 +58,6 @@ if(WITH_TESTING)
       ARGS --word2vec_dirname=${WORD2VEC_MODEL_DIR} --book_dirname=${IMG_CLS_RESNET_INSTALL_DIR})
     set_tests_properties(test_api_impl PROPERTIES DEPENDS test_image_classification)
   endif()
-
 endif()
 
 if (NOT APPLE AND NOT WIN32)

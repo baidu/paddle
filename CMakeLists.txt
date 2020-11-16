@@ -299,6 +299,13 @@ else()
     message(WARNING "On inference mode, will take place some specific optimization. Turn on the ON_INFER flag when building inference_lib only.")
 endif()
 
+# if(NOT WIN32 AND NOT WITH_LITE AND WITH_GPU)
+    add_definitions(-DPADDLE_CUDA_KERNEL_CHECK)
+    set(USE_PADDLE_CUDA_KERNEL_CHECK ON CACHE BOOL "Enable the new method of reporting cuda errors" FORCE)
+# else()
+#     set(USE_PADDLE_CUDA_KERNEL_CHECK ON CACHE BOOL "Disable the new method of reporting cuda errors" FORCE)
+# endif()
+
 add_subdirectory(paddle)
 if(WITH_PYTHON)
     add_subdirectory(python)
