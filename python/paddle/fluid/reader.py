@@ -467,9 +467,9 @@ class DataLoader(object):
             return_list (bool): whether the return value on each device is 
                 presented as a list. It is only valid when iterable=True. 
                 If return_list=False, the return value on each device would 
-                be a dict of str -> LoDTensor, where the key of the dict is 
+                be a dict of str -> Tensor, where the key of the dict is 
                 the name of each fed variables. If return_list=True, the 
-                return value on each device would be a list(LoDTensor). It is
+                return value on each device would be a list(Tensor). It is
                 recommended to use return_list=False in static graph mode and
                 use return_list=True in dygraph mode.  
             use_multiprocess (bool): whether to use multi-process to speed up
