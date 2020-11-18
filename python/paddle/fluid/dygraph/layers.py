@@ -987,11 +987,12 @@ class Layer(core.Layer):
             _remove_if_exist(self.__dict__, self._buffers, self._sub_layers)
             params[name] = value
         elif params is not None and name in params:
-            if value is not None:
+            if value is not None and not isinstance(value, (
+                    core.VarBase, framework.Variable)):
                 raise TypeError(
-                    "assignment to parameter '{}' should be of type Parameter or None, but got '{}'"
+                    "assignment to parameter '{}' should be of type Parameter, Tensor or None, but got '{}'"
                     .format(name, type(value).__name__))
-            params[name] = None
+            params[name] = value
         else:
             layers = self.__dict__.get('_sub_layers', None)
             if isinstance(value, core.Layer):

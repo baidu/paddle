@@ -142,6 +142,7 @@ class ImperativeQuantAware(object):
             self._quant_layers_map[layer]
             if layer in self._quant_layers_map else layer
             for layer in quantizable_layer_type)
+        self._quant_axis_map = {Conv2D: 0, Linear: 1}
         for layer in self._quantizable_layer_type:
             assert not isinstance(
                 layer, str), "{} is unspported to be quantized.".format(layer)
@@ -167,30 +168,16 @@ class ImperativeQuantAware(object):
             for i in range(len(scopes) - 1):
                 obj = getattr(parent, scopes[i])
                 parent = obj
+            quant_axis = 0
+            for layer_class, axis_value in self._quant_axis_map.items():
+                if isinstance(layer, layer_class):
+                    quant_axis = axis_value
 
-            quant_layer = self._get_quantized_counterpart(layer)
+            quant_layer = quant_nn.QuantizedWeightedLayer(
+                layer, self._weight_bits, self._activation_bits,
+                self._moving_rate, self._weight_quantize_type,
+                self._activation_quantize_type, quant_axis)
             setattr(obj, target, quant_layer)
-
-    def _get_quantized_counterpart(self, layer):
-        quant_layers = tuple(self._quant_layers_map.values())
-        quantized_counterpart = tuple('Quantized' + k
-                                      for k in self._quant_layers_map.keys())
-
-        predicate = lambda value: isinstance(layer, value)
-        index_generator = (i for i, v in enumerate(quant_layers)
-                           if predicate(v))
-
-        try:
-            index = next(index_generator)
-        except StopIteration:
-            _logger.fatal("The layer {} is unsupported to be quantized.".format(
-                layer.full_name()))
-            sys.exit(-1)
-
-        quantized_layer = quant_nn.__dict__[quantized_counterpart[index]](
-            layer, self._weight_bits, self._activation_bits, self._moving_rate,
-            self._weight_quantize_type, self._activation_quantize_type)
-        return quantized_layer
 
 
 class ImperativeCalcOutScale(object):

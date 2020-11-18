@@ -339,13 +339,13 @@ class TestImperativeQat(unittest.TestCase):
                 if batch_id % 100 == 0:
                     _logger.info('{}: {}'.format('loss', avg_loss.numpy()))
 
-        paddle.jit.save(
-            layer=lenet,
-            path="./dynamic_mnist/model",
-            input_spec=[
-                paddle.static.InputSpec(
-                    shape=[None, 1, 28, 28], dtype='float32')
-            ])
+        # paddle.jit.save(
+        #     layer=lenet,
+        #     path="./dynamic_mnist/model",
+        #     input_spec=[
+        #         paddle.static.InputSpec(
+        #             shape=[None, 1, 28, 28], dtype='float32')
+        #     ])
 
         # static graph train
         _logger.info(
