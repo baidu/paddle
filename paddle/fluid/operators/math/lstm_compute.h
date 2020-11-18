@@ -25,7 +25,7 @@ namespace math {
 template <class T>
 struct LstmMetaValue {
   T *gate_value;
-  T *prev_state_value;
+  const T *prev_state_value;
   T *state_value;
   T *state_active_value;
   T *output_value;
@@ -53,7 +53,8 @@ class LstmUnitFunctor {
                       int frame_size, int batch_size, T cell_clip,
                       const detail::ActivationType &gate_act,
                       const detail::ActivationType &cell_act,
-                      const detail::ActivationType &cand_act);
+                      const detail::ActivationType &cand_act,
+                      bool old_api_version = true);
 };
 
 template <typename DeviceContext, typename T>
@@ -63,7 +64,8 @@ class LstmUnitGradFunctor {
                       LstmMetaGrad<T> grad, int frame_size, int batch_size,
                       T cell_clip, const detail::ActivationType &gate_act,
                       const detail::ActivationType &cell_act,
-                      const detail::ActivationType &cand_act);
+                      const detail::ActivationType &cand_act,
+                      bool old_api_version = true);
 };
 
 }  // namespace math

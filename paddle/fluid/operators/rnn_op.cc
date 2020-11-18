@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/operators/rnn_op.h"
 #include <memory>
 #include <string>
 #include "paddle/fluid/framework/op_registry.h"
@@ -251,5 +252,10 @@ REGISTER_OPERATOR(rnn, ops::RNNOp, ops::RNNOpMaker,
                   ops::RNNGradOpMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(rnn_grad, ops::RNNGradOp);
 
-REGISTER_OP_CPU_KERNEL(rnn, ops::NotImpleKernel<float>);
-REGISTER_OP_CPU_KERNEL(rnn_grad, ops::NotImpleKernel<float>);
+REGISTER_OP_CPU_KERNEL(
+    rnn, ops::RNNCPUKernel<paddle::platform::CPUDeviceContext, float>,
+    ops::RNNCPUKernel<paddle::platform::CPUDeviceContext, double>);
+
+REGISTER_OP_CPU_KERNEL(
+    rnn_grad, ops::RNNCPUGradKernel<paddle::platform::CPUDeviceContext, float>,
+    ops::RNNCPUGradKernel<paddle::platform::CPUDeviceContext, double>);

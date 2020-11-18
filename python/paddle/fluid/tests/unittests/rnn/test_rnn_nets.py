@@ -345,3 +345,7 @@ def load_tests(loader, tests, pattern):
                 for test_class in [TestSimpleRNN, TestLSTM, TestGRU]:
                     suite.addTest(test_class(time_major, direction, device))
     return suite
+
+
+if __name__ == '__main__':
+    unittest.main()

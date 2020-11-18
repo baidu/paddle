@@ -56,6 +56,7 @@ NO_FP64_CHECK_GRAD_OP_LIST = [
     'reshape2', \
     'roi_perspective_transform', \
     'row_conv', \
+    'rnn', \
     'scatter', \
     'sequence_conv', \
     'sequence_pool', \

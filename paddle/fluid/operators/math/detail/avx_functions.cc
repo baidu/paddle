@@ -43,6 +43,13 @@ __m256 Sigmoid(const __m256 a) {
   return tmp;
 }
 
+__m256 SigmoidV2(const __m256 a) {
+  __m256 tmp = _mm256_sub_ps(_mm256_set1_ps(0.0f), a);
+  tmp = _mm256_add_ps(_mm256_set1_ps(1.0f), exp256_ps(tmp));
+  tmp = _mm256_div_ps(_mm256_set1_ps(1.0f), tmp);
+  return tmp;
+}
+
 __m256 Tanh(const __m256 a) {
   __m256 max = _mm256_set1_ps(EXP_MAX_INPUT);
   __m256 tmp = _mm256_mul_ps(_mm256_set1_ps(-2.0f), a);
@@ -51,6 +58,14 @@ __m256 Tanh(const __m256 a) {
   return _mm256_sub_ps(_mm256_div_ps(_mm256_set1_ps(2.0f),
                                      _mm256_add_ps(_mm256_set1_ps(1.0f), tmp)),
                        _mm256_set1_ps(1.0f));
+}
+
+__m256 TanhV2(const __m256 a) {
+  __m256 tmp = _mm256_mul_ps(_mm256_set1_ps(-2.0f), a);
+  return _mm256_sub_ps(
+      _mm256_div_ps(_mm256_set1_ps(2.0f),
+                    _mm256_add_ps(_mm256_set1_ps(1.0f), exp256_ps(tmp))),
+      _mm256_set1_ps(1.0f));
 }
 
 __m256 Identity(const __m256 a) { return a; }

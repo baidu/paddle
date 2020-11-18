@@ -33,10 +33,12 @@ struct LstmUnitFunctor<platform::CPUDeviceContext, T> {
                       LstmMetaValue<T> value, int frame_size, int batch_size,
                       T cell_clip, const detail::ActivationType& gate_act,
                       const detail::ActivationType& cell_act,
-                      const detail::ActivationType& cand_act) {
+                      const detail::ActivationType& cand_act,
+                      bool old_api_version = true) {
     for (int b = 0; b < batch_size; b++) {
       detail::cpu_lstm_forward(detail::forward::lstm<T>(), value, frame_size,
-                               cell_clip, cand_act, gate_act, cell_act);
+                               cell_clip, cand_act, gate_act, cell_act,
+                               old_api_version);
       value.gate_value += frame_size * 4;
       value.state_value += frame_size;
       value.state_active_value += frame_size;
@@ -55,11 +57,12 @@ struct LstmUnitGradFunctor<platform::CPUDeviceContext, T> {
                       int frame_size, int batch_size, T cell_clip,
                       const detail::ActivationType& gate_act,
                       const detail::ActivationType& cell_act,
-                      const detail::ActivationType& cand_act) {
+                      const detail::ActivationType& cand_act,
+                      bool old_api_version = true) {
     for (int b = 0; b < batch_size; b++) {
       detail::cpu_lstm_backward(detail::backward::lstm<T>(), value, grad,
                                 frame_size, cell_clip, cand_act, gate_act,
-                                cell_act);
+                                cell_act, old_api_version);
 
       value.gate_value += frame_size * 4;
       value.state_value += frame_size;

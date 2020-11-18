@@ -30,18 +30,24 @@ namespace detail {
 
 enum ActivationType {
   kSigmoid,
+  KSigmoidV2,
   kReLU,
   kTanh,
+  kTanhV2,
   kIdentity,
 };
 
 inline ActivationType GetActivationType(const std::string &type) {
   if (type == "sigmoid") {
     return ActivationType::kSigmoid;
+  } else if (type == "sigmoid_v2") {
+    return ActivationType::KSigmoidV2;
   } else if (type == "relu") {
     return ActivationType::kReLU;
   } else if (type == "tanh") {
     return ActivationType::kTanh;
+  } else if (type == "tanh_v2") {
+    return ActivationType::kTanhV2;
   } else if (type == "identity" || type == "") {
     return ActivationType::kIdentity;
   }
@@ -69,9 +75,20 @@ DEVICE T Sigmoid(const T a) {
 }
 
 template <typename T>
+DEVICE T SigmoidV2(const T a) {
+  return static_cast<T>(1.0) / (static_cast<T>(1.0) + exp(-a));
+}
+
+template <typename T>
 DEVICE T Tanh(const T a) {
   T tmp = -2.0 * a;
   tmp = (tmp > EXP_MAX_INPUT) ? EXP_MAX_INPUT : tmp;
+  return (2.0 / (1.0 + exp(tmp))) - 1.0;
+}
+
+template <typename T>
+DEVICE T TanhV2(const T a) {
+  T tmp = -2.0 * a;
   return (2.0 / (1.0 + exp(tmp))) - 1.0;
 }
 
@@ -108,20 +125,24 @@ struct Active {
 };
 
 static DEVICE Active<float>::Act kActFloat[] = {
-    &forward::Sigmoid<float>, &forward::Relu<float>, &forward::Tanh<float>,
-    &forward::Identity<float>};
+    &forward::Sigmoid<float>, &forward::SigmoidV2<float>,
+    &forward::Relu<float>,    &forward::Tanh<float>,
+    &forward::TanhV2<float>,  &forward::Identity<float>};
 
 static DEVICE Active<float>::ActGrad kActGradFloat[] = {
-    &backward::Sigmoid<float>, &backward::Relu<float>, &backward::Tanh<float>,
-    &backward::Identity<float>};
+    &backward::Sigmoid<float>, &backward::Sigmoid<float>,
+    &backward::Relu<float>,    &backward::Tanh<float>,
+    &backward::Tanh<float>,    &backward::Identity<float>};
 
 static DEVICE Active<double>::Act kActDouble[] = {
-    &forward::Sigmoid<double>, &forward::Relu<double>, &forward::Tanh<double>,
-    &forward::Identity<double>};
+    &forward::Sigmoid<double>, &forward::SigmoidV2<double>,
+    &forward::Relu<double>,    &forward::Tanh<double>,
+    &forward::TanhV2<double>,  &forward::Identity<double>};
 
 static DEVICE Active<double>::ActGrad kActGradDouble[] = {
-    &backward::Sigmoid<double>, &backward::Relu<double>,
-    &backward::Tanh<double>, &backward::Identity<double>};
+    &backward::Sigmoid<double>, &backward::Sigmoid<double>,
+    &backward::Relu<double>,    &backward::Tanh<double>,
+    &backward::Tanh<double>,    &backward::Identity<double>};
 
 namespace forward {
 inline DEVICE float activation(float a, int index) {
@@ -149,7 +170,9 @@ namespace forward {
 namespace avx {
 __m256 Relu(const __m256 a);
 __m256 Sigmoid(const __m256 a);
+__m256 SigmoidV2(const __m256 a);
 __m256 Tanh(const __m256 a);
+__m256 TanhV2(const __m256 a);
 __m256 Identity(const __m256 a);
 }  // namespace avx
 }  // namespace forward
@@ -164,12 +187,12 @@ __m256 Identity(const __m256 a, const __m256 b);
 }  // namespace backward
 
 static Active<__m256>::Act kActAvx[] = {
-    &forward::avx::Sigmoid, &forward::avx::Relu, &forward::avx::Tanh,
-    &forward::avx::Identity};
+    &forward::avx::Sigmoid, &forward::avx::SigmoidV2, &forward::avx::Relu,
+    &forward::avx::Tanh,    &forward::avx::TanhV2,    &forward::avx::Identity};
 
 static Active<__m256>::ActGrad kActGradAvx[] = {
-    &backward::avx::Sigmoid, &backward::avx::Relu, &backward::avx::Tanh,
-    &backward::avx::Identity};
+    &backward::avx::Sigmoid, &backward::avx::Sigmoid, &backward::avx::Relu,
+    &backward::avx::Tanh,    &backward::avx::Tanh,    &backward::avx::Identity};
 
 namespace forward {
 inline __m256 activation(__m256 a, int index) { return kActAvx[index](a); }

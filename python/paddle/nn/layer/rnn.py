@@ -987,6 +987,8 @@ class RNNBase(LayerList):
 
         self.could_use_cudnn = get_device().startswith(
             "gpu:") and get_cudnn_version()
+        if self.mode == "LSTM":
+            self.could_use_cudnn = True
         self.could_use_cudnn &= direction != "backward"
         self.could_use_cudnn &= len(self.parameters()) == num_layers * 4 * (
             2 if direction == "bidirectional" else 1)

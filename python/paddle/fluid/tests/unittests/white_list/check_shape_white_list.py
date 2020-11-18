@@ -27,4 +27,5 @@ NEED_TO_FIX_OP_LIST = [
     'tree_conv',
     'cvm',
     'cudnn_lstm',
+    'rnn',
 ]

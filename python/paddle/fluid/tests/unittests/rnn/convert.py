@@ -49,3 +49,34 @@ def convert_params_for_net_static(np_net, paddle_net, place):
                                            paddle_layer.cell_fw, place)
             convert_params_for_cell_static(np_layer.cell_bw,
                                            paddle_layer.cell_bw, place)
+
+
+def get_params_for_cell(np_cell, num_layers, idx):
+    state = np_cell.parameters
+    weight_list = [
+        ('{}.weight_{}'.format(num_layers, idx), state['weight_ih']),
+        ('{}.weight_{}'.format(num_layers, idx + 1), state['weight_hh'])
+    ]
+    bias_list = [('{}.bias_{}'.format(num_layers, idx), state['bias_ih']),
+                 ('{}.bias_{}'.format(num_layers, idx + 1), state['bias_hh'])]
+    return weight_list, bias_list
+
+
+def get_params_for_net(np_net):
+    weight_list = []
+    bias_list = []
+    for layer_idx, np_layer in enumerate(np_net):
+        if hasattr(np_layer, "cell"):
+            weight, bias = get_params_for_cell(np_layer.cell, layer_idx, 0)
+            for w, b in zip(weight, bias):
+                weight_list.append(w)
+                bias_list.append(b)
+        else:
+            for count, cell in enumerate([np_layer.cell_fw, np_layer.cell_bw]):
+                weight, bias = get_params_for_cell(cell, layer_idx, count * 2)
+                for w, b in zip(weight, bias):
+                    weight_list.append(w)
+                    bias_list.append(b)
+
+    weight_list.extend(bias_list)
+    return weight_list

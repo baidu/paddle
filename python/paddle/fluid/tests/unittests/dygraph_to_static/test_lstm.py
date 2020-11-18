@@ -104,9 +104,11 @@ class LinearNet(nn.Layer):
 
 class TestSaveInEvalMode(unittest.TestCase):
     def test_save_in_eval(self):
+        x = paddle.randn((2, 10))
         paddle.jit.ProgramTranslator().enable(True)
         net = LinearNet()
         # switch eval mode firstly
+        eval_out = net(x)
         net.eval()
         # save directly
         net = paddle.jit.to_static(
@@ -115,7 +117,6 @@ class TestSaveInEvalMode(unittest.TestCase):
         # load saved model
         load_net = paddle.jit.load('linear_net')
 
-        x = paddle.randn((2, 10))
         eval_out = net(x)
 
         infer_out = load_net(x)
