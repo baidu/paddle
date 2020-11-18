@@ -887,8 +887,6 @@ def dropout(x,
         mode = 'downgrade_in_infer' if mode == 'downscale_in_infer' else mode  #semantic transfer
 
         def get_attrs(prog, dropout_prob, is_test, seed):
-            if (seed is None or seed == 0) and prog.random_seed != 0:
-                seed = prog.random_seed
             attrs = {
                 'dropout_prob': dropout_prob,
                 'is_test': is_test,
@@ -899,8 +897,6 @@ def dropout(x,
             return attrs
 
         if in_dygraph_mode():
-            if default_main_program().random_seed != 0:
-                seed = default_main_program().random_seed
             out, mask = core.ops.dropout(
                 x, 'dropout_prob', p, 'is_test', not training, 'fix_seed',
                 seed is not None, 'seed', seed

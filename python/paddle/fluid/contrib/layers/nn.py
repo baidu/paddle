@@ -824,8 +824,7 @@ def shuffle_batch(x, seed=None):
 
     out = helper.create_variable_for_type_inference(dtype=x.dtype)
     shuffle_idx = helper.create_variable_for_type_inference(dtype=np.int64)
-    if seed is None and helper.main_program.random_seed != 0:
-        seed = helper.main_program.random_seed
+
     if seed is None:
         seed = np.random.randint(-65536, 65535)
     op_attrs = {}

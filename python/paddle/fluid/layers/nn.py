@@ -1002,8 +1002,6 @@ def dropout(x,
     """
 
     def get_attrs(prog, dropout_prob, is_test, seed):
-        if (seed is None or seed == 0) and prog.random_seed != 0:
-            seed = prog.random_seed
         attrs = {
             'dropout_prob': dropout_prob,
             'is_test': is_test,
@@ -1014,9 +1012,6 @@ def dropout(x,
         return attrs
 
     if in_dygraph_mode():
-        if (seed is None or
-                seed == 0) and default_main_program().random_seed != 0:
-            seed = default_main_program().random_seed
         _is_test = not _dygraph_tracer()._train_mode
         out, mask = core.ops.dropout(
             x, 'dropout_prob', dropout_prob, 'is_test', _is_test, 'fix_seed',
