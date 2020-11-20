@@ -50,7 +50,6 @@ requirements:
     - astor
     - gast>=0.3.3
     - matplotlib
-    - opencv>=3.4.2
 """
 
         self.requirement_run_windows = r"""
@@ -102,22 +101,33 @@ python setup.py install
         self.python35 = r"    - python>=3.5, <3.6"
         self.python36 = r"    - python>=3.6, <3.7"
         self.python37 = r"    - python>=3.7, <3.8"
+        self.python38 = r"    - python>=3.8, <3.9"
 
         self.python_version = [
-            self.python27, self.python35, self.python36, self.python37
+            self.python27, self.python35, self.python36, self.python37, self.python38
         ]
 
         self.cuda90 = r"""
     - cudatoolkit>=9.0, <9.1
-    - cudnn>=7.3, <7.4
+    - cudnn>=7.6, <7.7
     """
         self.cuda100 = r"""
     - cudatoolkit>=10.0, <10.1
     - cudnn>=7.6, <7.7
     """
-        self.cuda_info = [(self.cuda90, "cuda9.0", ".post97"),
-                          (self.cuda100, "cuda10.0", ".post107")]
-        self.py_str = ["py27", "py35", "py36", "py37"]
+        self.cuda101 = r"""
+    - cudatoolkit>=10.1, <10.2
+    - cudnn>=7.6, <7.7
+    """
+        self.cuda102 = r"""
+    - cudatoolkit>=10.2, <10.3
+    - cudnn>=7.6, <7.7
+    """
+        self.cuda_info = [(self.cuda90, "cuda9.0", ".post90"),
+                          (self.cuda100, "cuda10.0", ".post100"),
+                          (self.cuda101, "cuda10.1", ".post101"),
+                          (self.cuda102, "cuda10.2", "")]
+        self.py_str = ["py27", "py35", "py36", "py37","py38"]
         self.pip_end = ".whl --no-deps"
         self.pip_prefix_linux = "pip install /package/paddlepaddle"
         self.pip_prefix_windows = "pip install C:\package\paddlepaddle"
@@ -125,15 +135,18 @@ python setup.py install
         self.pip_cpu = "-"
         self.mac_pip = [
             "-cp27-cp27m-macosx_10_6_intel", "-cp35-cp35m-macosx_10_6_intel",
-            "-cp36-cp36m-macosx_10_6_intel", "-cp37-cp37m-macosx_10_6_intel"
+            "-cp36-cp36m-macosx_10_6_intel", "-cp37-cp37m-macosx_10_6_intel",
+            "-cp38-cp38-macosx_10_14_x86_64"
         ]
         self.linux_pip = [
             "-cp27-cp27mu-manylinux1_x86_64", "-cp35-cp35m-manylinux1_x86_64",
-            "-cp36-cp36m-manylinux1_x86_64", "-cp37-cp37m-manylinux1_x86_64"
+            "-cp36-cp36m-manylinux1_x86_64", "-cp37-cp37m-manylinux1_x86_64",
+            "-cp38-cp38-manylinux1_x86_64"
         ]
         self.windows_pip = [
             "-cp27-cp27m-win_amd64", "-cp35-cp35m-win_amd64",
-            "-cp36-cp36m-win_amd64", "-cp37-cp37m-win_amd64"
+            "-cp36-cp36m-win_amd64", "-cp37-cp37m-win_amd64",
+            "-cp38-cp38-win_amd64"
         ]
 
 
@@ -218,12 +231,6 @@ package:
         meta_str = meta_str + cuda_str
     
     blt_str = var.blt_const + blt_var
-    if (python_str == var.python27):
-        blt_str = blt_str + """
-    pip install C:\package\opencv_python-4.2.0.32-cp27-cp27m-win_amd64.whl"""
-    else:
-        meta_str = meta_str + """
-    - opencv>=3.4.2"""
     
     meta_str = meta_str + var.test + var.about
     meta_filename = "meta.yaml"
