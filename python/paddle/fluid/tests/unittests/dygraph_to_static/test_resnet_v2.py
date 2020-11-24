@@ -238,7 +238,8 @@ def train(to_static):
             img, label = data
 
             pred = resnet(img)
-            loss = paddle.nn.functional.cross_entropy(input=pred, label=label)
+            loss = paddle.nn.functional.cross_entropy(
+                input=pred, label=paddle.to_tensor(np.squeeze(label.numpy())))
             avg_loss = paddle.mean(x=loss)
             acc_top1 = paddle.metric.accuracy(input=pred, label=label, k=1)
             acc_top5 = paddle.metric.accuracy(input=pred, label=label, k=5)
