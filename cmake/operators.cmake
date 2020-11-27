@@ -263,3 +263,17 @@ function(register_operators)
         endif()
     endforeach()
 endfunction()
+
+function(register_cuda_check)
+    set(options "")
+    set(oneValueArgs "")
+    set(multiValueArgs TARGETS DEPS)
+    cmake_parse_arguments(register_cuda_check "${options}" "${oneValueArgs}"
+            "${multiValueArgs}" ${ARGN})
+
+    foreach(cuop ${register_cuda_check_TARGETS})
+            set_target_properties(${cuop} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+            target_compile_options(${cuop} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--relocatable-device-code=true -dc>)           
+            target_link_libraries(${cuop}  ${register_cuda_check_DEPS})
+    endforeach()
+endfunction(register_cuda_check)
