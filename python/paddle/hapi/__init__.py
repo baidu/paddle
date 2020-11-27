@@ -19,7 +19,7 @@ from . import model_summary
 from . import model
 from .model import *
 from .model_summary import summary
-
+from .model_profile import flops
 logger.setup_logger()
 
-__all__ = ['callbacks'] + model.__all__ + ['summary']
+__all__ = ['callbacks'] + model.__all__ + ['summary'] + ['flops']
