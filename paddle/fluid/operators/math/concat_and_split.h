@@ -65,14 +65,16 @@ class SplitFunctor {
 }  // namespace operators
 }  // namespace paddle
 
-#define FOR_ALL_TYPES(macro)          \
-  macro(int);                         \
-  macro(float);                       \
-  macro(double);                      \
-  macro(bool);                        \
-  macro(int64_t);                     \
-  macro(int16_t);                     \
-  macro(uint8_t);                     \
-  macro(int8_t);                      \
-  macro(::paddle::platform::float16); \
-  macro(::paddle::platform::bfloat16)
+#define FOR_ALL_TYPES(macro)            \
+  macro(int);                           \
+  macro(float);                         \
+  macro(double);                        \
+  macro(bool);                          \
+  macro(int64_t);                       \
+  macro(int16_t);                       \
+  macro(uint8_t);                       \
+  macro(int8_t);                        \
+  macro(::paddle::platform::float16);   \
+  macro(::paddle::platform::bfloat16);  \
+  macro(::paddle::platform::complex64); \
+  macro(::paddle::platform::complex128)

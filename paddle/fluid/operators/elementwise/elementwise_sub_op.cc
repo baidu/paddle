@@ -17,6 +17,8 @@ limitations under the License. */
 #include <string>
 
 #include "paddle/fluid/operators/elementwise/elementwise_op.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 
 namespace paddle {
 namespace framework {
@@ -122,18 +124,30 @@ REGISTER_OPERATOR(elementwise_sub_grad_grad,
 
 REGISTER_OP_CPU_KERNEL(
     elementwise_sub,
+    ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext,
+                              paddle::platform::complex64>,
+    ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext,
+                              paddle::platform::complex128>,
     ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext, float>,
     ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext, double>,
     ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext, int>,
     ops::ElementwiseSubKernel<paddle::platform::CPUDeviceContext, int64_t>);
 REGISTER_OP_CPU_KERNEL(
     elementwise_sub_grad,
+    ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext,
+                                  paddle::platform::complex64>,
+    ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext,
+                                  paddle::platform::complex128>,
     ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext, float>,
     ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext, double>,
     ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext, int>,
     ops::ElementwiseSubGradKernel<paddle::platform::CPUDeviceContext, int64_t>);
 REGISTER_OP_CPU_KERNEL(
     elementwise_sub_grad_grad,
+    ops::ElementwiseSubDoubleGradKernel<paddle::platform::CPUDeviceContext,
+                                        paddle::platform::complex64>,
+    ops::ElementwiseSubDoubleGradKernel<paddle::platform::CPUDeviceContext,
+                                        paddle::platform::complex128>,
     ops::ElementwiseSubDoubleGradKernel<paddle::platform::CPUDeviceContext,
                                         float>,
     ops::ElementwiseSubDoubleGradKernel<paddle::platform::CPUDeviceContext,

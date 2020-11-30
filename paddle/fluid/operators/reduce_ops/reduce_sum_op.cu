@@ -14,6 +14,8 @@
 
 #include "paddle/fluid/operators/reduce_ops/cub_reduce.h"
 #include "paddle/fluid/operators/reduce_ops/reduce_sum_op.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 
 namespace paddle {
 namespace operators {
@@ -72,4 +74,6 @@ class ReduceSumKernel : public framework::OpKernel<T> {
 
 REGISTER_OP_CUDA_KERNEL(reduce_sum, ops::ReduceSumKernel<float>,
                         ops::ReduceSumKernel<double>, ops::ReduceSumKernel<int>,
+                        ops::ReduceSumKernel<paddle::platform::complex64>,
+                        ops::ReduceSumKernel<paddle::platform::complex128>,
                         ops::ReduceSumKernel<int64_t>);

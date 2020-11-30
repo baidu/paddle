@@ -50,6 +50,8 @@ def load_tests(loader, standard_tests, pattern):
         ComplexKronTestCase(
             x=np.random.randn(2, 2) + 1j * np.random.randn(2, 2),
             y=np.random.randn(3, 3) + 1j * np.random.randn(3, 3)))
+    # Todo: not support now
+    '''
     suite.addTest(
         ComplexKronTestCase(
             x=np.random.randn(2, 2),
@@ -63,6 +65,7 @@ def load_tests(loader, standard_tests, pattern):
         ComplexKronTestCase(
             x=np.random.randn(2, 2) + 1j * np.random.randn(2, 2),
             y=np.random.randn(2, 2, 3)))
+            '''
     return suite
 
 

@@ -12,64 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..helper import is_complex, is_real, complex_variable_exists
-from ....fluid.framework import ComplexVariable
 from ....fluid import layers
 
 __all__ = ['matmul', ]
 
-
-def matmul(x, y, transpose_x=False, transpose_y=False, alpha=1.0, name=None):
-    """
-    Applies matrix multiplication to two complex number tensors. See the 
-    detailed description in :ref:`api_fluid_layers_matmul`.
-
-    Args:
-        x (ComplexVariable|Variable): The first input, can be a ComplexVariable 
-            with data type complex64 or complex128, or a Variable with data type 
-            float32 or float64.
-        y (ComplexVariable|Variable): The second input, can be a ComplexVariable 
-            with data type complex64 or complex128, or a Variable with data type 
-            float32 or float64.
-        transpose_x (bool): Whether to transpose :math:`x` before multiplication.
-        transpose_y (bool): Whether to transpose :math:`y` before multiplication.
-        alpha (float): The scale of output. Default 1.0.
-        name(str|None): A name for this layer(optional). If set None, the layer
-            will be named automatically.
-   
-    Returns:
-        ComplexVariable: The product result, with the same data type as inputs.
-
-    Examples:
-        .. code-block:: python
-
-            import numpy as np
-            import paddle
-            import paddle.fluid.dygraph as dg
-            with dg.guard():
-                x = np.array([[1.0 + 1j, 2.0 + 1j], [3.0+1j, 4.0+1j]])
-                y = np.array([1.0 + 1j, 1.0 + 1j])
-                x_var = dg.to_variable(x)
-                y_var = dg.to_variable(y)
-                result = paddle.complex.matmul(x_var, y_var)
-                print(result.numpy())
-                # [1.+5.j 5.+9.j]         
-    """
-    # x = a + bi, y = c + di
-    # P1 = ac; P2 = (a + b)(c + d); P3 = bd; then mm(x, y) = (P1-P3) + (P2-P1-P3)j
-    complex_variable_exists([x, y], "matmul")
-    a, b = (x.real, x.imag) if is_complex(x) else (x, None)
-    c, d = (y.real, y.imag) if is_complex(y) else (y, None)
-    P1 = layers.matmul(a, c, transpose_x, transpose_y, alpha, name)
-    if is_real(b) and is_real(d):
-        P2 = layers.matmul(a + b, c + d, transpose_x, transpose_y, alpha, name)
-        P3 = layers.matmul(b, d, transpose_x, transpose_y, alpha, name)
-        real = P1 - P3
-        imag = P2 - P1 - P3
-    elif is_real(b):
-        real = P1
-        imag = layers.matmul(b, c, transpose_x, transpose_y, alpha, name)
-    else:
-        real = P1
-        imag = layers.matmul(a, d, transpose_x, transpose_y, alpha, name)
-    return ComplexVariable(real, imag)
+from ....tensor.linalg import matmul  #DEFINE_ALIAS

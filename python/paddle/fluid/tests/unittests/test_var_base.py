@@ -80,7 +80,7 @@ class TestVarBase(unittest.TestCase):
                 # set_default_dtype take effect on complex
                 x = paddle.to_tensor(1 + 2j, place=place, stop_gradient=False)
                 self.assertTrue(np.array_equal(x.numpy(), [1 + 2j]))
-                self.assertEqual(x.dtype, 'complex64')
+                self.assertEqual(x.dtype, core.VarDesc.VarType.COMPLEX64)
 
                 paddle.set_default_dtype('float64')
                 x = paddle.to_tensor(1.2, place=place, stop_gradient=False)
@@ -89,7 +89,7 @@ class TestVarBase(unittest.TestCase):
 
                 x = paddle.to_tensor(1 + 2j, place=place, stop_gradient=False)
                 self.assertTrue(np.array_equal(x.numpy(), [1 + 2j]))
-                self.assertEqual(x.dtype, 'complex128')
+                self.assertEqual(x.dtype, core.VarDesc.VarType.COMPLEX128)
 
                 x = paddle.to_tensor(
                     1, dtype='float32', place=place, stop_gradient=False)
@@ -135,10 +135,8 @@ class TestVarBase(unittest.TestCase):
                     [1 + 2j, 1 - 2j], dtype='complex64', place=place)
                 y = paddle.to_tensor(x)
                 self.assertTrue(np.array_equal(x.numpy(), [1 + 2j, 1 - 2j]))
-                self.assertEqual(y.dtype, 'complex64')
+                self.assertEqual(y.type, core.VarDesc.VarType.LOD_TENSOR)
                 self.assertEqual(y.shape, [2])
-                self.assertEqual(y.real.stop_gradient, True)
-                self.assertEqual(y.real.type, core.VarDesc.VarType.LOD_TENSOR)
 
                 with self.assertRaises(TypeError):
                     paddle.to_tensor('test')

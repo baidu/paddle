@@ -28,15 +28,6 @@ class TestIsTensorApi(unittest.TestCase):
         x = paddle.rand([3, 2, 4], dtype=dtype)
         self.assertTrue(paddle.is_tensor(x))
 
-    def test_is_tensor_complex(self, dtype="float32"):
-        """Test is_tensor api with a complex tensor
-        """
-        paddle.disable_static()
-        r = paddle.to_tensor(1)
-        i = paddle.to_tensor(2)
-        x = paddle.ComplexTensor(r, i)
-        self.assertTrue(paddle.is_tensor(x))
-
     def test_is_tensor_list(self, dtype="float32"):
         """Test is_tensor api with a list
         """

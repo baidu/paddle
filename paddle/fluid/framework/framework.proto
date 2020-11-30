@@ -116,6 +116,8 @@ message VarType {
     UINT8 = 20;
     INT8 = 21;
     BF16 = 22;
+    COMPLEX64 = 23;
+    COMPLEX128 = 24;
 
     // Other types that may need additional descriptions
     LOD_TENSOR = 7;

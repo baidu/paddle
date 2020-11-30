@@ -55,32 +55,29 @@ __all__ = [
 @dygraph_only
 def to_tensor(data, dtype=None, place=None, stop_gradient=True):
     r"""
-    Constructs a ``paddle.Tensor`` or ``paddle.ComplexTensor`` from ``data`` , 
-    which can be scalar, tuple, list, numpy\.ndarray, paddle\.Tensor, paddle\.ComplexTensor.
+    Constructs a ``paddle.Tensor`` from ``data`` , 
+    which can be scalar, tuple, list, numpy\.ndarray, paddle\.Tensor.
 
     If the ``data`` is already a tensor, and ``dtype`` or ``place`` does't change, no copy 
     will be performed and return origin tensor, otherwise a new tensor will be constructed
     and returned. 
 
-    The ``ComplexTensor`` is a unique type of paddle. If x is ``ComplexTensor``, then 
-    ``x.real`` is the real part, and ``x.imag`` is the imaginary part.
-
     Args:
-        data(scalar|tuple|list|ndarray|Tensor|ComplexTensor): Initial data for the tensor.
-            Can be a scalar, list, tuple, numpy\.ndarray, paddle\.Tensor, paddle\.ComplexTensor.
+        data(scalar|tuple|list|ndarray|Tensor): Initial data for the tensor.
+            Can be a scalar, list, tuple, numpy\.ndarray, paddle\.Tensor.
         dtype(str|np.dtype, optional): The desired data type of returned tensor. Can be 'bool' , 'float16' , 
-            'float32' , 'float64' , 'int8' , 'int16' , 'int32' , 'int64' , 'uint8'. And
-            'complex64' , 'complex128' only for ComplexTensor. Default: None, infers dtype from ``data`` 
+            'float32' , 'float64' , 'int8' , 'int16' , 'int32' , 'int64' , 'uint8',
+            'complex64' , 'complex128'. Default: None, infers dtype from ``data`` 
             except for python float number which gets dtype from ``get_default_type`` .
         place(CPUPlace|CUDAPinnedPlace|CUDAPlace, optional): The place to allocate Tensor. Can be  
             CPUPlace, CUDAPinnedPlace, CUDAPlace. Default: None, means global place.
         stop_gradient(bool, optional): Whether to block the gradient propagation of Autograd. Default: True.
 
     Returns:
-        Tensor: A Tensor or ComplexTensor constructed from ``data`` .
+        Tensor: A Tensor constructed from ``data`` .
 
     Raises:
-        TypeError: If the data type of ``data`` is not scalar, list, tuple, numpy.ndarray, paddle.Tensor, paddle.ComplexTensor
+        TypeError: If the data type of ``data`` is not scalar, list, tuple, numpy.ndarray, paddle.Tensor.
         ValueError: If ``data`` is tuple|list, it can't contain nested tuple|list with different lengths , such as: [[1, 2], [3, 4, 5]]
         TypeError: If ``dtype`` is not bool, float16, float32, float64, int8, int16, int32, int64, uint8, complex64, complex128
         ValueError: If ``place`` is not paddle.CPUPlace, paddle.CUDAPinnedPlace, paddle.CUDAPlace
@@ -112,16 +109,13 @@ def to_tensor(data, dtype=None, place=None, stop_gradient=True):
         #        [[0.10000000, 0.20000000],
         #         [0.30000001, 0.40000001]])
 
-        type(paddle.to_tensor([[1+1j, 2], [3+2j, 4]]), dtype='complex64')
-        # <class 'paddle.ComplexTensor'>
+        type(paddle.to_tensor([[1+1j, 2], [3+2j, 4]], dtype='complex64'))
+        # <class 'paddle.VarBase'>
 
         paddle.to_tensor([[1+1j, 2], [3+2j, 4]], dtype='complex64')
-        # ComplexTensor[real](shape=[2, 2], dtype=float32, place=CUDAPlace(0), stop_gradient=True,
-        #                     [[1., 2.],
-        #                      [3., 4.]])
-        # ComplexTensor[imag](shape=[2, 2], dtype=float32, place=CUDAPlace(0), stop_gradient=True,
-        #                     [[1., 0.],
-        #                      [2., 0.]])
+        #Tensor(shape=[2, 2], dtype=complex64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[(1+1j), (2+0j)],
+        #        [(3+2j), (4+0j)]])
     """
 
     if place is None:
@@ -156,11 +150,9 @@ def to_tensor(data, dtype=None, place=None, stop_gradient=True):
                 if convert_dtype(dtype) != convert_dtype(data.dtype):
                     return data.astype(convert_dtype(dtype))
             return data
-        elif isinstance(data, paddle.ComplexTensor):
-            return data
         else:
             raise TypeError(
-                "Can't constructs a 'paddle.Tensor' with data type {}, data type must be scalar|list|tuple|numpy.ndarray|paddle.Tensor|paddle.ComplexTensor".
+                "Can't constructs a 'paddle.Tensor' with data type {}, data type must be scalar|list|tuple|numpy.ndarray|paddle.Tensor".
                 format(type(data)))
         if not dtype and data.dtype in [
                 'float16', 'float32', 'float64', 'complex64', 'complex128'
@@ -186,19 +178,14 @@ def to_tensor(data, dtype=None, place=None, stop_gradient=True):
             stop_gradient=stop_gradient)
     else:
         name = unique_name.generate('generated_tensor')
-        real_tensor = paddle.Tensor(
-            value=data.real,
+        tensor = paddle.Tensor(
+            value=data,
             place=place,
             zero_copy=False,
-            name=name + ".real",
+            name=name,
             stop_gradient=stop_gradient)
-        imag_tensor = paddle.Tensor(
-            value=data.imag,
-            place=place,
-            zero_copy=False,
-            name=name + ".imag",
-            stop_gradient=stop_gradient)
-        return paddle.ComplexTensor(real_tensor, imag_tensor)
+
+        return tensor
 
 
 def full_like(x, fill_value, dtype=None, name=None):

@@ -22,6 +22,8 @@ limitations under the License. */
 #include <vector>
 
 #include "paddle/fluid/framework/data_type.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/profiler.h"
 
 namespace paddle {
@@ -984,6 +986,40 @@ std::ostream& print_tensor(std::ostream& os, const framework::Tensor& tensor) {
       for (int j = 1; j < element_num; ++j) {
         os << " " << inspect[j];
       }
+    }
+  }
+  os << "]";
+  return os;
+}
+
+template <>
+std::ostream& print_tensor<paddle::platform::complex64>(
+    std::ostream& os, const framework::Tensor& tensor) {
+  auto inspect = tensor.data<paddle::platform::complex64>();
+  auto element_num = tensor.numel();
+
+  os << "  - data: [";
+  if (element_num > 0) {
+    os << signed(inspect[0].real) << signed(inspect[0].imag) << "j";
+    for (int j = 1; j < element_num; ++j) {
+      os << signed(inspect[j].real) << signed(inspect[j].imag) << "j";
+    }
+  }
+  os << "]";
+  return os;
+}
+
+template <>
+std::ostream& print_tensor<paddle::platform::complex128>(
+    std::ostream& os, const framework::Tensor& tensor) {
+  auto inspect = tensor.data<paddle::platform::complex128>();
+  auto element_num = tensor.numel();
+
+  os << "  - data: [";
+  if (element_num > 0) {
+    os << signed(inspect[0].real) << signed(inspect[0].imag) << "j";
+    for (int j = 1; j < element_num; ++j) {
+      os << signed(inspect[j].real) << signed(inspect[j].imag) << "j";
     }
   }
   os << "]";

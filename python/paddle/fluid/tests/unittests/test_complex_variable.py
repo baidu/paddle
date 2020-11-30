@@ -31,10 +31,7 @@ class TestComplexVariable(unittest.TestCase):
             self.assertIsNotNone("{}".format(out))
 
         self.assertTrue(np.allclose(out.numpy(), a + b))
-        self.assertEqual(x.name, {'real': 'x.real', 'imag': 'x.imag'})
-        x.name = "new_x"
-        self.assertEqual(x.name, {'real': 'new_x.real', 'imag': 'new_x.imag'})
-        self.assertEqual(out.dtype, self._dtype)
+        self.assertEqual(out.numpy().dtype, self._dtype)
         self.assertEqual(out.shape, x.shape)
 
     def test_attrs(self):

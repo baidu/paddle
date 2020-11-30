@@ -51,7 +51,6 @@ __all__ = [
     'is_compiled_with_cuda',
     'is_compiled_with_xpu',
     'Variable',
-    'ComplexVariable',
     'load_op_library',
     'require_version',
     'device_guard',
@@ -643,6 +642,10 @@ def convert_np_dtype_to_dtype_(np_dtype):
         return core.VarDesc.VarType.UINT8
     elif dtype == np.int8:
         return core.VarDesc.VarType.INT8
+    elif dtype == np.complex64:
+        return core.VarDesc.VarType.COMPLEX64
+    elif dtype == np.complex128:
+        return core.VarDesc.VarType.COMPLEX128
     else:
         raise ValueError("Not supported numpy dtype %s" % dtype)
 
@@ -1777,97 +1780,6 @@ def get_all_op_protos():
         op_proto = framework_pb2.OpProto.FromString(six.binary_type(pbstr))
         ret_values.append(op_proto)
     return ret_values
-
-
-class ComplexVariable(object):
-    """
-    The ComplexTensor defined on the complex number domain. It contains two common 
-    real number Tensor as its members, :attr:`real` and :attr:`imag` 
-    holding the real part and imaginary part of complex numbers respectively.
-    
-    **Notes**:
-        **The constructor of ComplexTensor should not be invoked directly.**
-
-    Args:
-        real (Tensor): The Tensor holding real-part data.
-        imag (Tensor): The Tensor holding imaginery-part data.
-    
-    Examples:
-        .. code-block:: python
-
-            import paddle
-            x = paddle.to_tensor([1.0+2.0j, 0.2])
-            print(x.name, x.dtype, x.shape)
-            # ({'real': 'generated_tensor_0.real', 'imag': 'generated_tensor_0.imag'}, complex64, [2])
-            print(x)
-            # ComplexTensor[real](shape=[2], dtype=float32, place=CUDAPlace(0), stop_gradient=True,
-            #                     [        1., 0.20000000])
-            # ComplexTensor[imag](shape=[2], dtype=float32, place=CUDAPlace(0), stop_gradient=True,
-            #                     [2., 0.])
-            print(type(x))
-            # <class 'paddle.ComplexTensor'>
-    """
-
-    def __new__(cls, *arg, **kwargs):
-        cls.__module__ = "paddle"
-        cls.__name__ = "ComplexTensor"
-        return super(ComplexVariable, cls).__new__(cls)
-
-    def __init__(self, real, imag):
-        assert real.shape == imag.shape, "The real part and imaginary part " \
-            "of a ComplexVariable should have the same shape!"
-        assert real.dtype == imag.dtype, "The real part and imaginary part " \
-            "of a ComplexVariable should have the same data type!"
-
-        self.real = real
-        self.imag = imag
-        if self.real.dtype in [
-                core.VarDesc.VarType.FP16, core.VarDesc.VarType.FP32
-        ]:
-            self._dtype = "complex64"
-        else:
-            self._dtype = "complex128"
-        self._shape = self.real.shape
-
-    def __getitem__(self, idx):
-        return ComplexVariable(self.real[idx], self.imag[idx])
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    @property
-    def shape(self):
-        return self._shape
-
-    @property
-    def name(self):
-        return {"real": self.real.name, "imag": self.imag.name}
-
-    @name.setter
-    def name(self, name):
-        # rename
-        if isinstance(name, str):
-            self.real.name = name + ".real"
-            self.imag.name = name + ".imag"
-        elif (isinstance(name, tuple) or isinstance(name,
-                                                    list)) and len(name) == 2:
-            self.real.name, self.imag.name = name[0], name[1]
-        else:
-            raise ValueError(
-                "An invalid name assigned to the ComplexVariable, "
-                "which must be a string, or a tuple or a list with length 2!")
-
-    def numpy(self):
-        return self.real.numpy() + 1j * self.imag.numpy()
-
-    def __str__(self):
-        from paddle.tensor.to_string import to_string
-        return "ComplexTensor containing:\n{real}\n{imag}".format(
-            real=to_string(self.real, "[real part]Tensor"),
-            imag=to_string(self.imag, "[imag part]Tensor"))
-
-    __repr__ = __str__
 
 
 class OpProtoHolder(object):

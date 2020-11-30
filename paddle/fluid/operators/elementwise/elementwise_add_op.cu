@@ -13,6 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 #include "paddle/fluid/operators/elementwise/elementwise_add_op.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.cu.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/float16.h"
 
 namespace ops = paddle::operators;
@@ -92,12 +94,20 @@ elementwise_add_grad(const framework::ExecutionContext& ctx,
 }  // namespace paddle
 REGISTER_OP_CUDA_KERNEL(
     elementwise_add, ops::ElementwiseAddKernel<plat::CUDADeviceContext, float>,
+    ops::ElementwiseAddKernel<plat::CUDADeviceContext,
+                              paddle::platform::complex64>,
+    ops::ElementwiseAddKernel<plat::CUDADeviceContext,
+                              paddle::platform::complex128>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, double>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, int>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, int64_t>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::float16>);
 REGISTER_OP_CUDA_KERNEL(
     elementwise_add_grad,
+    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext,
+                                  paddle::platform::complex64>,
+    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext,
+                                  paddle::platform::complex128>,
     ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, float>,
     ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, double>,
     ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, int>,
@@ -106,6 +116,10 @@ REGISTER_OP_CUDA_KERNEL(
 REGISTER_OP_CUDA_KERNEL(
     elementwise_add_grad_grad,
     ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, float>,
+    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext,
+                                        paddle::platform::complex64>,
+    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext,
+                                        paddle::platform::complex128>,
     ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, double>,
     ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, int>,
     ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, int64_t>,
@@ -114,6 +128,10 @@ REGISTER_OP_CUDA_KERNEL(
 
 REGISTER_OP_CUDA_KERNEL(
     grad_add, ops::ElementwiseAddKernel<plat::CUDADeviceContext, float>,
+    ops::ElementwiseAddKernel<plat::CUDADeviceContext,
+                              paddle::platform::complex64>,
+    ops::ElementwiseAddKernel<plat::CUDADeviceContext,
+                              paddle::platform::complex128>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, double>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, int>,
     ops::ElementwiseAddKernel<plat::CUDADeviceContext, int64_t>,

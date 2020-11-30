@@ -13,6 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/kron_op.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/float16.h"
 
 namespace ops = paddle::operators;
@@ -21,6 +23,10 @@ REGISTER_OP_CUDA_KERNEL(
     ops::KronKernel<paddle::platform::CUDADeviceContext, double>,
     ops::KronKernel<paddle::platform::CUDADeviceContext,
                     paddle::platform::float16>,
+    ops::KronKernel<paddle::platform::CUDADeviceContext,
+                    paddle::platform::complex64>,
+    ops::KronKernel<paddle::platform::CUDADeviceContext,
+                    paddle::platform::complex128>,
     ops::KronKernel<paddle::platform::CUDADeviceContext, int>,
     ops::KronKernel<paddle::platform::CUDADeviceContext, int64_t>);
 
@@ -29,5 +35,9 @@ REGISTER_OP_CUDA_KERNEL(
     ops::KronGradKernel<paddle::platform::CUDADeviceContext, double>,
     ops::KronGradKernel<paddle::platform::CUDADeviceContext,
                         paddle::platform::float16>,
+    ops::KronGradKernel<paddle::platform::CUDADeviceContext,
+                        paddle::platform::complex64>,
+    ops::KronGradKernel<paddle::platform::CUDADeviceContext,
+                        paddle::platform::complex128>,
     ops::KronGradKernel<paddle::platform::CUDADeviceContext, int>,
     ops::KronGradKernel<paddle::platform::CUDADeviceContext, int64_t>);

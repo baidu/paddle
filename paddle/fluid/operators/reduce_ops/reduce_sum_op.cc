@@ -14,6 +14,9 @@
 
 #include "paddle/fluid/operators/reduce_ops/reduce_sum_op.h"
 
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
+
 #include <string>
 
 namespace paddle {
@@ -114,6 +117,10 @@ REGISTER_OP_CPU_KERNEL(
     ops::ReduceKernel<paddle::platform::CPUDeviceContext, double,
                       ops::SumFunctor>,
     ops::ReduceKernel<paddle::platform::CPUDeviceContext, int, ops::SumFunctor>,
+    ops::ReduceKernel<paddle::platform::CPUDeviceContext,
+                      paddle::platform::complex64, ops::SumFunctor>,
+    ops::ReduceKernel<paddle::platform::CPUDeviceContext,
+                      paddle::platform::complex128, ops::SumFunctor>,
     ops::ReduceKernel<paddle::platform::CPUDeviceContext, int64_t,
                       ops::SumFunctor>);
 
@@ -124,5 +131,7 @@ using CPUReduceSumGradKernel =
 
 REGISTER_OP_CPU_KERNEL(reduce_sum_grad, CPUReduceSumGradKernel<float>,
                        CPUReduceSumGradKernel<double>,
+                       CPUReduceSumGradKernel<paddle::platform::complex64>,
+                       CPUReduceSumGradKernel<paddle::platform::complex128>,
                        CPUReduceSumGradKernel<int>,
                        CPUReduceSumGradKernel<int64_t>);

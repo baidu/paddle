@@ -13,9 +13,6 @@
 # limitations under the License.
 
 from . import tensor
-from .tensor_op_patch import monkey_patch_math_complex
 from .tensor import *
 
 __all__ = tensor.__all__ + []
-
-monkey_patch_math_complex()

@@ -29,7 +29,7 @@ layers = {
 
 class TestComplexElementwiseLayers(unittest.TestCase):
     def setUp(self):
-        self._dtype = "float64"
+        self._dtype = "complex128"
         self._places = [fluid.CPUPlace()]
         if fluid.core.is_compiled_with_cuda():
             self._places.append(fluid.CUDAPlace(0))
@@ -52,10 +52,10 @@ class TestComplexElementwiseLayers(unittest.TestCase):
             with dg.guard(place):
                 var_x = dg.to_variable(x)
                 var_y = dg.to_variable(y)
-                self.assertTrue(var_x + var_y, x + y)
-                self.assertTrue(var_x - var_y, x - y)
-                self.assertTrue(var_x * var_y, x * y)
-                self.assertTrue(var_x / var_y, x / y)
+                self.assertTrue(np.allclose((var_x + var_y).numpy(), x + y))
+                self.assertTrue(np.allclose((var_x - var_y).numpy(), x - y))
+                self.assertTrue(np.allclose((var_x * var_y).numpy(), x * y))
+                self.assertTrue(np.allclose((var_x / var_y).numpy(), x / y))
 
     def test_complex_xy(self):
         x = rand([2, 3, 4, 5]).astype(self._dtype) + 1j * rand(

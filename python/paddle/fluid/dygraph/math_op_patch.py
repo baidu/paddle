@@ -15,7 +15,7 @@
 from __future__ import print_function
 
 from .. import core
-from ..framework import Variable, convert_np_dtype_to_dtype_, _varbase_creator, ComplexVariable
+from ..framework import Variable, convert_np_dtype_to_dtype_, _varbase_creator
 from ..layers.layer_function_generator import OpProtoHolder
 from . import no_grad
 
@@ -149,13 +149,6 @@ def monkey_patch_math_varbase():
                          reverse=False,
                          scalar_method=None):
         def __impl__(self, other_var):
-            # 0. check tensor and ComplexVariable opetator
-            if isinstance(other_var, ComplexVariable):
-                # need import paddle in closure
-                import paddle
-                math_op = getattr(paddle.incubate.complex.tensor, op_type)
-                return math_op(self, other_var)
-
             # 1. scalar exists cases
             # we need combine the tensor.dtype and scalar.dtype, cast correct object
             if isinstance(other_var, float):

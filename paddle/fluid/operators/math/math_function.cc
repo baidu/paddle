@@ -38,6 +38,8 @@ using float16 = paddle::platform::float16;
 
 template struct SetConstant<platform::CPUDeviceContext, platform::float16>;
 template struct SetConstant<platform::CPUDeviceContext, platform::bfloat16>;
+template struct SetConstant<platform::CPUDeviceContext, platform::complex64>;
+template struct SetConstant<platform::CPUDeviceContext, platform::complex128>;
 template struct SetConstant<platform::CPUDeviceContext, float>;
 template struct SetConstant<platform::CPUDeviceContext, double>;
 template struct SetConstant<platform::CPUDeviceContext, int>;
@@ -54,18 +56,22 @@ template struct SetConstant<platform::XPUDeviceContext, int64_t>;
 template struct SetConstant<platform::XPUDeviceContext, bool>;
 #endif
 
-#define DEFINE_CPU_TRANS(RANK)                                              \
-  template struct Transpose<platform::CPUDeviceContext, platform::float16,  \
-                            RANK>;                                          \
-  template struct Transpose<platform::CPUDeviceContext, platform::bfloat16, \
-                            RANK>;                                          \
-  template struct Transpose<platform::CPUDeviceContext, float, RANK>;       \
-  template struct Transpose<platform::CPUDeviceContext, double, RANK>;      \
-  template struct Transpose<platform::CPUDeviceContext, int, RANK>;         \
-  template struct Transpose<platform::CPUDeviceContext, int64_t, RANK>;     \
-  template struct Transpose<platform::CPUDeviceContext, bool, RANK>;        \
-  template struct Transpose<platform::CPUDeviceContext, int16_t, RANK>;     \
-  template struct Transpose<platform::CPUDeviceContext, uint8_t, RANK>;     \
+#define DEFINE_CPU_TRANS(RANK)                                                \
+  template struct Transpose<platform::CPUDeviceContext, platform::float16,    \
+                            RANK>;                                            \
+  template struct Transpose<platform::CPUDeviceContext, platform::bfloat16,   \
+                            RANK>;                                            \
+  template struct Transpose<platform::CPUDeviceContext, platform::complex64,  \
+                            RANK>;                                            \
+  template struct Transpose<platform::CPUDeviceContext, platform::complex128, \
+                            RANK>;                                            \
+  template struct Transpose<platform::CPUDeviceContext, float, RANK>;         \
+  template struct Transpose<platform::CPUDeviceContext, double, RANK>;        \
+  template struct Transpose<platform::CPUDeviceContext, int, RANK>;           \
+  template struct Transpose<platform::CPUDeviceContext, int64_t, RANK>;       \
+  template struct Transpose<platform::CPUDeviceContext, bool, RANK>;          \
+  template struct Transpose<platform::CPUDeviceContext, int16_t, RANK>;       \
+  template struct Transpose<platform::CPUDeviceContext, uint8_t, RANK>;       \
   template struct Transpose<platform::CPUDeviceContext, int8_t, RANK>;
 
 DEFINE_CPU_TRANS(1);
@@ -109,6 +115,8 @@ struct TransposeNormal<platform::CPUDeviceContext, T> {
 
 DEFINE_CPU_TRANS_NORMAL(platform::float16);
 DEFINE_CPU_TRANS_NORMAL(platform::bfloat16);
+DEFINE_CPU_TRANS_NORMAL(platform::complex64);
+DEFINE_CPU_TRANS_NORMAL(platform::complex128);
 DEFINE_CPU_TRANS_NORMAL(float);
 DEFINE_CPU_TRANS_NORMAL(double);
 DEFINE_CPU_TRANS_NORMAL(int);
