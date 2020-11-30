@@ -152,7 +152,7 @@ class OptimizerWithMixedPrecision(object):
                 callbacks)
             # Change the op_role_var attr for some ops, so that gradients
             # transferred across GPUs can be FP16.
-            update_role_var_grad(train_program, params_grads)
+            params_grads = update_role_var_grad(train_program, params_grads)
         return params_grads
 
     def apply_gradients(self, params_grads):
@@ -167,16 +167,22 @@ class OptimizerWithMixedPrecision(object):
             A list of optimize operators.
         """
 
-        grads = [g for _, g in params_grads]
-        with self._train_program._optimized_guard(grads):
-            grads, found_inf = check_finite_and_unscale(
-                grads, self._loss_scaling, name="find_infinite_scale")
+        found_infs = []
+        for p, g in params_grads:
+            with self._train_program._optimized_guard([p, g]):
+                # if found inf, grad will be set to zero
+                grads, found_inf = check_finite_and_unscale(
+                    [g, ], self._loss_scaling, name="find_infinite_scale")
+                found_infs.append(found_inf)
+
+        with self._train_program._optimized_guard([]):
+            all_infs = layers.concat(found_infs)
+            has_inf = layers.reduce_any(all_infs)
 
         if self._use_dynamic_loss_scaling:
-            with self._train_program._optimized_guard(grads):
-                grads = update_loss_scaling(
-                    grads,
-                    found_inf,
+            with self._train_program._optimized_guard([]):
+                update_loss_scaling(
+                    has_inf,
                     self._loss_scaling,
                     self._num_good_steps,
                     self._num_bad_steps,
@@ -186,13 +192,7 @@ class OptimizerWithMixedPrecision(object):
                     self._decr_ratio,
                     name="update_loss_scaling")
 
-        params_unscaled_grads = []
-        for pg, new_g in zip(params_grads, grads):
-            params_unscaled_grads.append((pg[0], new_g))
-        # apply_gradient append all ops in global block, thus we shouldn't
-        # apply gradient in the switch branch.
-        optimize_ops = self._optimizer.apply_gradients(params_unscaled_grads)
-
+        optimize_ops = self._optimizer.apply_gradients(params_grads)
         return optimize_ops
 
     def apply_optimize(self, loss, startup_program, params_grads):

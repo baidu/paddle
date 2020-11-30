@@ -293,17 +293,27 @@ def update_role_var_grad(main_prog, params_grads):
     2. If op is cast and gradient is FP32, remove the op_role_var
        and find the prev op which outputs FP16 gradient
     3. Update the op_role_var of the prev op.
+    4. If op is not cast but gradient is FP32, cast gradient to
+       FP16, must sure gradients communication with fp16 allreduce.
 
     Args:
         main_prog (Program): The main program for training.
         params_grads (list): A list of params and grads.
     """
     block = main_prog.global_block()
+    new_params_grads = []
+
     BACKWARD = core.op_proto_and_checker_maker.OpRole.Backward
     OPTIMIZE = core.op_proto_and_checker_maker.OpRole.Optimize
+    op_role_var_attr_name = \
+        core.op_proto_and_checker_maker.kOpRoleVarAttrName()
+
     for p, g in params_grads:
         op = g.op
+        new_g = g
         if g.dtype == core.VarDesc.VarType.FP32 and op.type == 'cast':
+            # Find the prev op which outputs FP16 gradient
+            # Update the op_role_var of the prev op
             role = op.attr('op_role')
             if role & int(BACKWARD) and op.has_attr('op_role_var'):
                 op.desc.remove_attr("op_role_var")
@@ -313,8 +323,6 @@ def update_role_var_grad(main_prog, params_grads):
 
             fp16_grad_name = op.input(op.input_names[0])[0]
             op_for_fp16_grad = find_true_prev_op(block.ops, op, fp16_grad_name)
-            op_role_var_attr_name = \
-                core.op_proto_and_checker_maker.kOpRoleVarAttrName()
             attr_val = [p.name, fp16_grad_name]
             if op_for_fp16_grad.has_attr(op_role_var_attr_name):
                 attr_val.extend(op_for_fp16_grad.attr(op_role_var_attr_name))
@@ -338,4 +346,73 @@ def update_role_var_grad(main_prog, params_grads):
             if op_idx == -1:
                 raise ValueError("The op {0} is not in program".format(op))
             block.desc._remove_op(op_idx, op_idx + 1)
+        elif g.dtype == core.VarDesc.VarType.FP32:
+            # Find the op which outputs FP32 gradient
+            # Cast to FP16 to use fp16_allreduce
+            is_grad_op = op.attr('op_role') & int(BACKWARD) and op.has_attr(
+                'op_role_var')
+            assert is_grad_op, 'The op {0} which generate {1} must be in BACKWARD ' \
+                               'role and have op_role_var attr'.format(op, g.name)
+
+            # remove [p, g] from op's op_role_var
+            var_attr = op.attr(op_role_var_attr_name)
+            assert p.name in var_attr and g.name in var_attr,\
+                'The p={} and g={} must be in var_attr={}'\
+                    .format(p.name, g.name, var_attr)
+            var_attr.remove(p.name)
+            var_attr.remove(g.name)
+            if len(var_attr) > 1:
+                op._set_attr(op_role_var_attr_name, var_attr)
+            else:
+                op._remove_attr(op_role_var_attr_name)
+
+            # cast fp32 grad to fp16 grad before allreduce
+            dest_dtype = core.VarDesc.VarType.FP16
+            cast_name = g.name + '.cast_' + _dtype_to_str(dest_dtype)
+            fp16_g = block.vars.get(cast_name)
+            if fp16_g is None or fp16_g.dtype != dest_dtype:
+                fp16_g = block.create_var(
+                    name=cast_name,
+                    dtype=dest_dtype,
+                    persistable=False,
+                    stop_gradient=True)
+
+            op_idx = find_op_index(block.desc, op.desc)
+            assert op_idx != -1, "The op {0} is not in program".format(op)
+
+            cast_op = block._insert_op(
+                op_idx + 1,
+                type="cast",
+                inputs={"X": g},
+                outputs={"Out": fp16_g},
+                attrs={"in_dtype": g.dtype,
+                       "out_dtype": fp16_g.dtype})
+
+            # allreduce
+            cast_op._set_attr('op_role', BACKWARD)
+            cast_op._set_attr(op_role_var_attr_name, [p.name, fp16_g.name])
+
+            # cast fp16 grad to fp32 grad after allreduce
+            dest_dtype = core.VarDesc.VarType.FP32
+            cast_name = fp16_g.name + '.cast_' + _dtype_to_str(dest_dtype)
+            fp32_g = block.vars.get(cast_name)
+            if fp32_g is None or fp32_g.dtype != dest_dtype:
+                fp32_g = block.create_var(
+                    name=cast_name,
+                    dtype=dest_dtype,
+                    persistable=False,
+                    stop_gradient=True)
+
+            cast_fp32_op = block.append_op(
+                type="cast",
+                inputs={"X": fp16_g},
+                outputs={"Out": fp32_g},
+                attrs={"in_dtype": fp16_g.dtype,
+                       "out_dtype": fp32_g.dtype},
+                stop_gradient=True)
+            cast_fp32_op._set_attr('op_role', OPTIMIZE)
+            new_g = fp32_g
+
         block._sync_with_cpp()
+        new_params_grads.append((p, new_g))
+    return new_params_grads
