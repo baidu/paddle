@@ -54,6 +54,7 @@ std::map<std::string, std::set<std::string>> op_ins_map = {
     {"moving_average_abs_max_scale", {"X", "InAccum", "InState"}},
     {"multiclass_nms3", {"BBoxes", "Scores", "RoisNum"}},
     {"box_coder", {"PriorBox", "PriorBoxVar", "TargetBox"}},
+    {"momentum", {"Param", "Grad", "Velocity", "LearningRate"}},
 };
 
 // NOTE(zhiqiu): Like op_ins_map.
@@ -82,6 +83,7 @@ std::map<std::string, std::set<std::string>> op_outs_map = {
     {"moving_average_abs_max_scale", {"OutScale", "OutAccum", "OutState"}},
     {"multiclass_nms3", {"Out", "NmsRoisNum"}},
     {"generate_proposals_v2", {"RpnRois", "RpnRoiProbs", "RpnRoisNum"}},
+    {"momentum", {"ParamOut", "VelocityOut"}},
 };
 
 // NOTE(zhiqiu): Commonly, the outputs in auto-generated OP function are

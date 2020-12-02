@@ -246,7 +246,8 @@ def _append_pserver_ops(optimize_block, opt_op, endpoint, grad_to_block_id,
     for key in opt_op.input_names:
         new_shape = None
         if key in [
-                "Param", "Grad", "LearningRate", "Beta1Tensor", "Beta2Tensor"
+                "Param", "Grad", "LearningRate", "MasterParam", "Beta1Tensor",
+                "Beta2Tensor"
         ]:
             continue
         var = origin_program.global_block().vars[opt_op.input(key)[0]]

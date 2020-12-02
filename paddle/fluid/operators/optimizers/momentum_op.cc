@@ -49,13 +49,17 @@ void MomentumOpMaker::Make() {
   AddInput("LearningRate",
            "(Tensor, default Tensor<float>) "
            "Input learning rate");
-
+  AddInput("MasterParam", "FP32 master weight for AMP.").AsDispensable();
   AddOutput("ParamOut",
             "(Tensor) This output is updated parameter. "
             "It shared memory with Input(Param).");
   AddOutput("VelocityOut",
             "(Tensor) This output is updated velocity. "
             "It shared memory with Input(Velocity).");
+  AddOutput("MasterParamOut",
+            "The updated FP32 master weight for AMP. "
+            "It shared memory with Input(MasterParam).")
+      .AsDispensable();
 
   AddAttr<float>("mu", "(float) Momentum coefficient");
   AddAttr<bool>("use_nesterov",
@@ -67,7 +71,17 @@ void MomentumOpMaker::Make() {
       "(string) regularization_method, right now only support l2decay or none")
       .SetDefault("");
   AddAttr<float>("regularization_coeff", "(float) regularization_coeff")
-      .SetDefault(0);
+      .SetDefault(0.0f);
+  AddAttr<bool>("multi_precision",
+                "(bool, default false) "
+                "Whether to use multi-precision during weight updating.")
+      .SetDefault(false);
+  AddAttr<float>(
+      "rescale_grad",
+      "(float, default 1.0) Multiply the gradient with `rescale_grad`"
+      "before updating. Often choose to be `1.0/batch_size`.")
+      .SetDefault(1.0f);
+
   AddComment(R"DOC(
 Momentum Optimizer.
 
@@ -109,4 +123,12 @@ REGISTER_OP_VERSION(momentum)
                      "l2decay or none",
                      std::string(""))
             .NewAttr("regularization_coeff", "(float) regularization_coeff",
-                     0.0f));
+                     0.0f)
+            .NewAttr(
+                "multi_precision",
+                "(bool) Whether to use multi-precision during weight updating.",
+                false)
+            .NewAttr("rescale_grad",
+                     "(float) Multiply the gradient with `rescale_grad`"
+                     "before updating. Often choose to be `1.0/batch_size`.",
+                     1.0f));

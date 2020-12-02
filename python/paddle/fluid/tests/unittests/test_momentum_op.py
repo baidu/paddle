@@ -59,7 +59,7 @@ class TestMomentumOp1(OpTest):
         param = np.random.random((123, 321)).astype(self.dtype)
         grad = np.random.random((123, 321)).astype(self.dtype)
         velocity = np.zeros((123, 321)).astype(self.dtype)
-        learning_rate = np.array([0.001]).astype(self.dtype)
+        learning_rate = np.array([0.001]).astype(np.float32)
         mu = 0.0001
         use_nesterov = False
 
@@ -217,7 +217,7 @@ class TestSparseMomentumOp(unittest.TestCase):
                                         0.0).astype("float32")
         velocity_out.set(velocity_out_np_array, place)
 
-        # create and initialize LeraningRate Variable
+        # create and initialize LearningRate Variable
         lr = scope.var('LearningRate').get_tensor()
         lr_array = np.full((1), 2.0).astype("float32")
         lr.set(lr_array, place)
@@ -278,6 +278,115 @@ class TestSparseMomentumOp2(TestSparseMomentumOp):
         self.use_nesterov = True
 
 
+class TestSparseMomentumOpWithMultiPrecision(unittest.TestCase):
+    def setUp(self):
+        self.init_args()
+        self.regularization_method = ""
+        self.regularization_coeff = 1.0
+
+    def check_with_place(self, place):
+        scope = core.Scope()
+        # create and initialize Grad Variable
+        height = 10
+        rows = [0, 4, 7]
+        row_numel = 12
+        mu = 1.0
+        use_nesterov = self.use_nesterov
+        regularization_method = self.regularization_method
+        regularization_coeff = self.regularization_coeff
+
+        # create and initialize Param Variable
+        param_array = np.full((height, row_numel), 5.0).astype("float32")
+        param_out_array = np.full((height, row_numel), 0.0).astype("float32")
+
+        param = scope.var('Param').get_tensor()
+        param.set(param_array.astype("float16"), place)
+        param_out = scope.var("ParamOut").get_tensor()
+        param_out.set(param_out_array.astype("float16"), place)
+
+        master_param = scope.var('MasterParam').get_tensor()
+        master_param.set(param_array, place)
+        master_param_out = scope.var("MasterParamOut").get_tensor()
+        master_param_out.set(param_out_array, place)
+
+        grad_selected_rows = scope.var('Grad').get_selected_rows()
+        grad_selected_rows.set_height(height)
+        grad_selected_rows.set_rows(rows)
+        grad_np_array = np.ones((len(rows), row_numel)).astype("float32")
+        grad_np_array[0, 0] = 2.0
+        grad_np_array[2, 8] = 4.0
+        grad_tensor = grad_selected_rows.get_tensor()
+        grad_tensor.set(grad_np_array.astype("float16"), place)
+
+        velocity = scope.var('Velocity').get_tensor()
+        velocity_np_array = np.ones((height, row_numel)).astype("float32")
+        velocity.set(velocity_np_array, place)
+        velocity_out = scope.var('VelocityOut').get_tensor()
+        velocity_out_np_array = np.full((height, row_numel),
+                                        0.0).astype("float32")
+        velocity_out.set(velocity_out_np_array, place)
+
+        # create and initialize LearningRate Variable
+        lr = scope.var('LearningRate').get_tensor()
+        lr_array = np.full((1), 2.0).astype("float32")
+        lr.set(lr_array, place)
+
+        # create and run operator
+        op = Operator(
+            "momentum",
+            Param='Param',
+            Grad='Grad',
+            Velocity='Velocity',
+            MasterParam='MasterParam',
+            ParamOut='ParamOut',
+            VelocityOut='VelocityOut',
+            MasterParamOut='MasterParamOut',
+            LearningRate='LearningRate',
+            mu=mu,
+            use_nesterov=use_nesterov,
+            regularization_method=regularization_method,
+            regularization_coeff=regularization_coeff,
+            multi_precision=True,
+            rescale_grad=1.0)
+        op.run(scope, place)
+
+        # get and compare result
+        param_out_np_array = np.array(param_out)
+        velocity_out_np_array = np.array(velocity_out)
+
+        _grad_np_array = np.full((height, row_numel), 0.0).astype("float32")
+        for i in range(len(rows)):
+            _grad_np_array[rows[i]] = grad_np_array[i]
+
+        _param = param_array
+
+        _param_out, _velocity_out = calculate_momentum_by_numpy(
+            param=_param,
+            grad=_grad_np_array,
+            mu=mu,
+            velocity=velocity_np_array,
+            use_nesterov=use_nesterov,
+            learning_rate=lr_array,
+            regularization_method=regularization_method,
+            regularization_coeff=regularization_coeff)
+
+        self.assertTrue((_velocity_out == velocity_out_np_array).all())
+        self.assertTrue((_param_out == param_out_np_array).all())
+
+    def init_args(self):
+        self.use_nesterov = False
+
+    def test_sparse_momentum(self):
+        if core.is_compiled_with_cuda():
+            self.check_with_place(fluid.CUDAPlace(0))
+
+
+class TestSparseMomentumOpWithMultiPrecision2(
+        TestSparseMomentumOpWithMultiPrecision):
+    def init_args(self):
+        self.use_nesterov = True
+
+
 class TestMomentumV2(unittest.TestCase):
     def test_momentum_dygraph(self):
         paddle.disable_static()
@@ -334,7 +443,7 @@ class TestMomentumOpWithDecay(OpTest):
         param = np.random.random((123, 321)).astype(self.dtype)
         grad = np.random.random((123, 321)).astype(self.dtype)
         velocity = np.zeros((123, 321)).astype(self.dtype)
-        learning_rate = np.array([0.001]).astype(self.dtype)
+        learning_rate = np.array([0.001]).astype(np.float32)
         mu = 0.0001
         use_nesterov = self.use_nesterov
         regularization_method = self.regularization_method
