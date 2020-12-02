@@ -17,6 +17,7 @@ limitations under the License. */
 #include <vector>
 #include "paddle/fluid/framework/ddim.h"
 #include "paddle/fluid/operators/layer_norm_op.h"
+#include "paddle/fluid/platform/float16.h"
 
 namespace paddle {
 namespace operators {
@@ -111,7 +112,7 @@ __global__ void LayerNormForward(const T *x, const T *scale, const T *bias,
   double mean_val = 0;
   double var_val = 0;
   for (int i = beg_idx; i < end_idx; i += BlockDim) {
-    T tmp = x[i];
+    float tmp = static_cast<float>(x[i]);
     mean_val += tmp;
     var_val += (tmp * tmp);
   }
@@ -124,32 +125,37 @@ __global__ void LayerNormForward(const T *x, const T *scale, const T *bias,
     var[blockIdx.x] = static_cast<T>(pair.second_ / feature_size - tmp * tmp);
   }
   __syncthreads();
-  mean_val = mean[blockIdx.x];
-  var_val = static_cast<T>(real_sqrt(var[blockIdx.x] + epsilon));
+  mean_val = static_cast<float>(mean[blockIdx.x]);
+  var_val = static_cast<float>(
+      static_cast<T>(real_sqrt(static_cast<float>(var[blockIdx.x]) + epsilon)));
 
   // Step 2: Calculate y
   if (scale != nullptr) {
     if (bias != nullptr) {
       for (int i = beg_idx, j = threadIdx.x; i < end_idx;
            i += BlockDim, j += BlockDim) {
-        y[i] = scale[j] * (x[i] - mean_val) / var_val + bias[j];
+        y[i] = static_cast<float>(scale[j]) *
+                   (static_cast<float>(x[i]) - mean_val) / var_val +
+               static_cast<float>(bias[j]);
       }
     } else {
       for (int i = beg_idx, j = threadIdx.x; i < end_idx;
            i += BlockDim, j += BlockDim) {
-        y[i] = scale[j] * (x[i] - mean_val) / var_val;
+        y[i] = static_cast<float>(scale[j]) *
+               (static_cast<float>(x[i]) - mean_val) / var_val;
       }
     }
   } else {  // scale == nullptr
     if (bias != nullptr) {
       for (int i = beg_idx, j = threadIdx.x; i < end_idx;
            i += BlockDim, j += BlockDim) {
-        y[i] = (x[i] - mean_val) / var_val + bias[j];
+        y[i] = (static_cast<float>(x[i]) - mean_val) / var_val +
+               static_cast<float>(bias[j]);
       }
     } else {
       for (int i = beg_idx, j = threadIdx.x; i < end_idx;
            i += BlockDim, j += BlockDim) {
-        y[i] = (x[i] - mean_val) / var_val;
+        y[i] = (static_cast<float>(x[i]) - mean_val) / var_val;
       }
     }
   }
@@ -171,11 +177,12 @@ __global__ void LayerNormBackwardGradientAll(const T *x, const T *d_y,
   int end_idx = batch_size * feature_size + (blockIdx.x + col_offset);
   int stride = BlockDim * feature_size;
 
-  T d_scale_partial = 0, d_bias_partial = 0;
+  T d_scale_partial = static_cast<T>(0), d_bias_partial = static_cast<T>(0);
 
   for (int i = beg_idx; i < end_idx; i += stride) {
     int row_idx = i / feature_size;
-    auto var_val = static_cast<T>(real_sqrt(var[row_idx] + epsilon));
+    auto var_val =
+        static_cast<T>(real_sqrt(static_cast<float>(var[row_idx]) + epsilon));
     d_scale_partial += d_y[i] * (x[i] - mean[row_idx]) / var_val;
     d_bias_partial += d_y[i];
     if (HasDx) {
@@ -206,11 +213,12 @@ __global__ void LayerNormBackwardGradientScaleOrBias(
   int beg_idx = threadIdx.x * feature_size + blockIdx.x + col_offset;
   int end_idx = batch_size * feature_size + blockIdx.x + col_offset;
   int stride = BlockDim * feature_size;
-  T d_scale_or_d_bias_partial = 0;
+  T d_scale_or_d_bias_partial = static_cast<T>(0);
 
   for (int i = beg_idx; i < end_idx; i += stride) {
     int row_idx = i / feature_size;
-    auto var_val = static_cast<T>(real_sqrt(var[row_idx] + epsilon));
+    auto var_val =
+        static_cast<T>(real_sqrt(static_cast<float>(var[row_idx]) + epsilon));
     if (HasDScale) {
       d_scale_or_d_bias_partial += d_y[i] * (x[i] - mean[row_idx]) / var_val;
     } else {  // d_bias != nullptr
@@ -253,7 +261,7 @@ __global__ void LayerNormBackwardPostProcessToCalculateDX(const T *x, T *d_x,
 
   T block_mean = mean[blockIdx.x];
   T block_var = var[blockIdx.x];
-  T d_x_mean_partial = 0, d_x_var_partial = 0;
+  T d_x_mean_partial = static_cast<T>(0), d_x_var_partial = static_cast<T>(0);
   for (int i = beg_idx; i < end_idx; i += BlockDim) {
     d_x_mean_partial += d_x[i];
     d_x_var_partial += d_x[i] * (x[i] - block_mean);
@@ -265,8 +273,10 @@ __global__ void LayerNormBackwardPostProcessToCalculateDX(const T *x, T *d_x,
                   PairForLayerNormAddFunctor<T>());
 
   if (threadIdx.x == 0) {
-    d_x_reduce_tmp[0] = pair.first_ / feature_size;
-    d_x_reduce_tmp[1] = pair.second_ / (feature_size * (block_var + epsilon));
+    d_x_reduce_tmp[0] = static_cast<float>(pair.first_) / feature_size;
+    d_x_reduce_tmp[1] =
+        static_cast<float>(pair.second_) /
+        (feature_size * (static_cast<float>(block_var) + epsilon));
   }
   __syncthreads();
 
@@ -293,9 +303,10 @@ __global__ void LayerNormBackwardGradientOnlyDX(const T *x, const T *d_y,
   int end_idx = (blockIdx.x + 1) * feature_size;
 
   T block_mean = mean[blockIdx.x], block_var = var[blockIdx.x];
-  T d_x_mean_partial = 0, d_x_var_partial = 0;
+  T d_x_mean_partial = static_cast<T>(0), d_x_var_partial = static_cast<T>(0);
   for (int i = beg_idx; i < end_idx; i += BlockDim) {
-    auto var_val = static_cast<T>(real_sqrt(block_var + epsilon));
+    auto var_val =
+        static_cast<T>(real_sqrt(static_cast<float>(block_var) + epsilon));
     if (scale != nullptr) {
       int col_idx = i % feature_size;
       d_x[i] = d_y[i] * scale[col_idx] / var_val;
@@ -312,8 +323,10 @@ __global__ void LayerNormBackwardGradientOnlyDX(const T *x, const T *d_y,
                   PairForLayerNormAddFunctor<T>());
 
   if (threadIdx.x == 0) {
-    d_x_reduce_tmp[0] = pair.first_ / feature_size;
-    d_x_reduce_tmp[1] = pair.second_ / (feature_size * (block_var + epsilon));
+    d_x_reduce_tmp[0] = static_cast<float>(pair.first_) / feature_size;
+    d_x_reduce_tmp[1] =
+        static_cast<float>(pair.second_) /
+        (feature_size * (static_cast<float>(block_var) + epsilon));
   }
   __syncthreads();
 
@@ -331,7 +344,8 @@ __global__ void LayerNormBackwardWhenBatchSizeIsOne(
     const T *var, const T *scale, float epsilon, int feature_size) {
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < feature_size) {
-    auto var_val = static_cast<T>(real_sqrt(var[idx] + epsilon));
+    auto var_val =
+        static_cast<T>(real_sqrt(static_cast<float>(var[idx]) + epsilon));
     if (d_x != nullptr) {
       if (d_scale == nullptr) {
         d_x[idx] = d_y[idx] / var_val;
@@ -587,11 +601,15 @@ template class LayerNormDirectCUDAFunctor<float>;
 }  // namespace paddle
 
 namespace ops = paddle::operators;
+namespace plat = paddle::platform;
 REGISTER_OP_CUDA_KERNEL(
     layer_norm,
     ops::LayerNormKernel<paddle::platform::CUDADeviceContext, float>,
-    ops::LayerNormKernel<paddle::platform::CUDADeviceContext, double>);
+    ops::LayerNormKernel<paddle::platform::CUDADeviceContext, double>,
+    ops::LayerNormKernel<paddle::platform::CUDADeviceContext, plat::float16>);
 REGISTER_OP_CUDA_KERNEL(
     layer_norm_grad,
     ops::LayerNormGradKernel<paddle::platform::CUDADeviceContext, float>,
-    ops::LayerNormGradKernel<paddle::platform::CUDADeviceContext, double>);
+    ops::LayerNormGradKernel<paddle::platform::CUDADeviceContext, double>,
+    ops::LayerNormGradKernel<paddle::platform::CUDADeviceContext,
+                             plat::float16>);

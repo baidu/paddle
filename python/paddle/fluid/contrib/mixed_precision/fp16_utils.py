@@ -70,7 +70,7 @@ def _insert_cast_op(block, op, idx, src_dtype, dest_dtype):
 
     for in_name in op.input_names:
         if src_dtype == core.VarDesc.VarType.FP32 and op.type in [
-                'batch_norm', 'fused_bn_add_activation'
+                'batch_norm', 'fused_bn_add_activation', 'layer_norm'
         ]:
             if in_name not in {'X', 'Z'}:
                 continue
@@ -104,8 +104,9 @@ def _insert_cast_op(block, op, idx, src_dtype, dest_dtype):
                     op._set_attr('in_dtype', dest_dtype)
     if src_dtype == core.VarDesc.VarType.FP32 and dest_dtype == core.VarDesc.VarType.FP16:
         for out_name in op.output_names:
-            if op.type in ['batch_norm', 'fused_bn_add_activation'
-                           ] and out_name != 'Y':
+            if op.type in [
+                    'batch_norm', 'fused_bn_add_activation', 'layer_norm'
+            ] and out_name != 'Y':
                 continue
             for out_var_name in op.output(out_name):
                 out_var = block.var(out_var_name)

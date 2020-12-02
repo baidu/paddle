@@ -15,6 +15,7 @@
 from __future__ import print_function
 import unittest
 import numpy as np
+import paddle
 
 from operator import mul
 import paddle.fluid.core as core
@@ -310,6 +311,8 @@ class TestLayerNormAPI(unittest.TestCase):
 class TestDygraphLayerNormAPIError(unittest.TestCase):
     def test_errors(self):
         with program_guard(Program(), Program()):
+            paddle.enable_static()
+
             layer_norm = fluid.LayerNorm([32, 32])
             # the input of LayerNorm must be Variable.
             x1 = np.random.random((3, 32, 32)).astype('float32')
