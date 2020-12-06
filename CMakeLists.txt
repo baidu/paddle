@@ -146,6 +146,7 @@ option(WITH_CRYPTO   "Compile PaddlePaddle with crypto support"         ON)
 option(WITH_ARM   "Compile PaddlePaddle with arm support"         OFF)
 option(WITH_SW   "Compile PaddlePaddle with sw support"         OFF)
 option(WITH_MUSL        "Compile with musl libc instead of gblic"  OFF)
+option(WITH_RDTSC_PROFILER  "Compile PaddlePaddle with RdtscProfiler." OFF)
 
 # PY_VERSION
 if(NOT PY_VERSION)
@@ -294,4 +295,9 @@ endif()
 add_subdirectory(paddle)
 if(WITH_PYTHON)
     add_subdirectory(python)
+endif()
+
+if(WITH_RDTSC_PROFILER)
+    add_subdirectory(tools) # Compile RdtscProfiler
+    add_definitions(-DPADDLE_WITH_RDTSC_PROFILER)
 endif()
