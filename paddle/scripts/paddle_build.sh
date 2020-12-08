@@ -1310,15 +1310,15 @@ EOF
     case $LIB_TYPE in
       full)
         # Build full Paddle Python module. Will timeout without caching 'copy_paddle_pybind' first
-        make -j `nproc` framework_py_proto copy_paddle_pybind paddle_python
+        nice -n 19 make -j `nproc` framework_py_proto copy_paddle_pybind paddle_python
         ;;
       pybind)
         # Build paddle pybind library. Takes 49 minutes to build. Might timeout
-        make -j `nproc` copy_paddle_pybind
+        nice -n 19 make -j `nproc` copy_paddle_pybind
         ;;
       proto)
         # Even smaller library.
-        make -j `nproc` framework_py_proto
+        nice -n 19 make -j `nproc` framework_py_proto
         ;;
       *)
         exit 0
@@ -1547,8 +1547,8 @@ EOF
     startTime_s=`date +%s`
     set +e
     cmake .. -DWITH_DISTRIBUTE=OFF -DON_INFER=ON -DCUDA_ARCH_NAME=${CUDA_ARCH_NAME:-Auto};build_error=$?
-    make -j ${parallel_number} fluid_lib_dist;build_error=$?
-    make -j ${parallel_number} inference_lib_dist;build_error=$?
+    nice -n 19 make -j ${parallel_number} fluid_lib_dist;build_error=$?
+    nice -n 19 make -j ${parallel_number} inference_lib_dist;build_error=$?
     if [ "$build_error" != 0 ];then
         exit 7;
     fi
