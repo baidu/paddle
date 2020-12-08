@@ -12,3 +12,4 @@ cc_test(test_layer SRCS test_layer.cc DEPS layer proto_desc operator op_registry
 cc_test(test_prepare_op SRCS test_prepare_op.cc DEPS prepared_operator op_info split_op layer concat_and_split activation_op place)
 cc_test(test_tracer SRCS test_tracer.cc DEPS tracer layer proto_desc operator op_registry variable_helper mul_op reduce_sum_op elementwise_add_op memcpy)
 cc_test(test_hooks SRCS test_hooks.cc DEPS tracer basic_engine layer proto_desc operator op_registry variable_helper mul_op elementwise_add_op memcpy)
+cc_test(test_speed SRCS test_speed.cc DEPS tracer layer proto_desc operator op_registry variable_helper reshape_op mul_op memcpy)
