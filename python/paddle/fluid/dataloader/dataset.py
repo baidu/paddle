@@ -126,8 +126,8 @@ class IterableDataset(Dataset):
         .. code-block:: python
 
             import math
+            import paddle
             import numpy as np
-            import paddle.fluid as fluid
             from paddle.io import IterableDataset, DataLoader, get_worker_info
 
             class SplitedIterableDataset(IterableDataset):
@@ -151,17 +151,15 @@ class IterableDataset(Dataset):
                     for i in range(iter_start, iter_end):
                         yield np.array([i])
 
-            place = fluid.CPUPlace()
-            with fluid.dygraph.guard(place):
-                dataset = SplitedIterableDataset(start=2, end=9)
-                dataloader = DataLoader(
-                    dataset,
-                    places=place,
-                    num_workers=2,
-                    batch_size=1,
-                    drop_last=True)
+            dataset = SplitedIterableDataset(start=2, end=9)
+            dataloader = DataLoader(
+                dataset,
+                num_workers=2,
+                batch_size=1,
+                drop_last=True)
 
-                print(list(dataloader))
+            for data in dataloader:
+                print(data)
                 # outputs: [2, 5, 3, 6, 4, 7]
 
     Example 2: splitting data copy in each worker by :code:`worker_init_fn`
@@ -169,8 +167,8 @@ class IterableDataset(Dataset):
         .. code-block:: python
 
             import math
+            import paddle
             import numpy as np
-            import paddle.fluid as fluid
             from paddle.io import IterableDataset, DataLoader, get_worker_info
 
             class RangeIterableDataset(IterableDataset):
@@ -182,33 +180,31 @@ class IterableDataset(Dataset):
                     for i in range(self.start, self.end):
                         yield np.array([i])
 
-            place = fluid.CPUPlace()
-            with fluid.dygraph.guard(place):
-                dataset = RangeIterableDataset(start=2, end=9)
+            dataset = RangeIterableDataset(start=2, end=9)
 
-                def worker_init_fn(worker_id):
-                    worker_info = get_worker_info()
+            def worker_init_fn(worker_id):
+                worker_info = get_worker_info()
 
-                    dataset = worker_info.dataset
-                    start = dataset.start
-                    end = dataset.end
-                    num_per_worker = int(
-                        math.ceil((end - start) / float(worker_info.num_workers)))
+                dataset = worker_info.dataset
+                start = dataset.start
+                end = dataset.end
+                num_per_worker = int(
+                    math.ceil((end - start) / float(worker_info.num_workers)))
 
-                    worker_id = worker_info.id
-                    dataset.start = start + worker_id * num_per_worker
-                    dataset.end = min(dataset.start + num_per_worker, end)
+                worker_id = worker_info.id
+                dataset.start = start + worker_id * num_per_worker
+                dataset.end = min(dataset.start + num_per_worker, end)
 
-                dataloader = DataLoader(
-                    dataset,
-                    places=place,
-                    num_workers=2,
-                    batch_size=1,
-                    drop_last=True,
-                    worker_init_fn=worker_init_fn)
+            dataloader = DataLoader(
+                dataset,
+                num_workers=2,
+                batch_size=1,
+                drop_last=True,
+                worker_init_fn=worker_init_fn)
 
-                print(list(dataloader))
-                # outputs: [2, 5, 3, 6, 4, 7]
+            for data in dataloader:
+                print(data) 
+            # outputs: [2, 5, 3, 6, 4, 7]
 
     """
 
@@ -250,7 +246,6 @@ class TensorDataset(Dataset):
             import paddle
             from paddle.io import TensorDataset
 
-            paddle.disable_static()
 
             input_np = np.random.random([2, 3, 4]).astype('float32')
             input = paddle.to_tensor(input_np)

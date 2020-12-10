@@ -59,7 +59,6 @@ class Imikolov(Dataset):
                 def forward(self, src, trg):
                     return paddle.sum(src), paddle.sum(trg)
 
-            paddle.disable_static()
 
             imikolov = Imikolov(mode='train', data_type='SEQ', window_size=2)
 

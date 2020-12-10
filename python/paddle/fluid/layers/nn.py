@@ -1676,7 +1676,7 @@ def conv3d(input,
             W_{out}&= \\frac{(W_{in} + 2 * paddings[2] - (dilations[2] * (W_f - 1) + 1))}{strides[2]} + 1
 
     Args:
-        input (Variable): The input is 5-D Tensor with shape [N, C, D, H, W], the data
+        input (Tensor): The input is 5-D Tensor with shape [N, C, D, H, W], the data
             type of input is float16 or float32 or float64.
         num_filters(int): The number of filter. It is as same as the output
             image channel.
@@ -1750,11 +1750,19 @@ def conv3d(input,
     Examples:
         .. code-block:: python
 
-          import paddle.fluid as fluid
           import paddle
+          import numpy as np
+	  
           paddle.enable_static()
-          data = fluid.data(name='data', shape=[None, 3, 12, 32, 32], dtype='float32')
-          conv3d = fluid.layers.conv3d(input=data, num_filters=2, filter_size=3, act="relu")
+          data = paddle.static.data(name='data', shape=[None, 3, 12, 32, 32], dtype='float32')
+          param_attr = paddle.framework.ParamAttr(name='conv3d.weight', initializer=paddle.nn.initializer.XavierNormal(), learning_rate=0.001)
+          res = paddle.static.nn.conv3d(input=data, num_filters=2, filter_size=3, act="relu", param_attr=param_attr)
+          place = paddle.CPUPlace()
+          exe = paddle.static.Executor(place)
+          exe.run(paddle.static.default_startup_program())
+          x = np.random.rand(1, 3, 12, 32, 32).astype("float32")
+          output = exe.run(feed={"data": x}, fetch_list=[res])
+          print(output)
     """
 
     l_type = 'conv3d'
@@ -4094,7 +4102,7 @@ def conv3d_transpose(input,
           conv3d_transpose can compute the kernel size automatically.
 
     Args:
-        input(Variable): The input is 5-D Tensor with shape [N, C, D, H, W] or [N, D, H, W, C], the data type
+        input(Tensor): The input is 5-D Tensor with shape [N, C, D, H, W] or [N, D, H, W, C], the data type
             of input is float32 or float64.
         num_filters(int): The number of the filter. It is as same as the output
             image channel.
@@ -4177,11 +4185,19 @@ def conv3d_transpose(input,
     Examples:
        .. code-block:: python
 
-          import paddle.fluid as fluid
           import paddle
+          import numpy as np
+	    
           paddle.enable_static()
-          data = fluid.data(name='data', shape=[None, 3, 12, 32, 32], dtype='float32')
-          conv3d_transpose = fluid.layers.conv3d_transpose(input=data, num_filters=2, filter_size=3)
+          data = paddle.static.data(name='data', shape=[None, 3, 12, 32, 32], dtype='float32')
+          param_attr = paddle.framework.ParamAttr(name='conv3d.weight', initializer=paddle.nn.initializer.XavierNormal(), learning_rate=0.001)
+          res = paddle.static.nn.conv3d_transpose(input=data, num_filters=2, filter_size=3, act="relu", param_attr=param_attr)
+          place = paddle.CPUPlace()
+          exe = paddle.static.Executor(place)
+          exe.run(paddle.static.default_startup_program())
+          x = np.random.rand(1, 3, 12, 32, 32).astype("float32")
+          output = exe.run(feed={"data": x}, fetch_list=[res])
+          print(output)
     """
     assert param_attr is not False, "param_attr should not be False in conv3d_transpose."
     if data_format not in ['NCDHW', 'NDHWC']:

@@ -80,7 +80,6 @@ class Cifar10(Dataset):
                     image = paddle.reshape(image, (1, -1))
                     return self.fc(image), label
 
-            paddle.disable_static()
 
             normalize = Normalize(mean=[0.5, 0.5, 0.5],
                                   std=[0.5, 0.5, 0.5],
@@ -214,7 +213,6 @@ class Cifar100(Cifar10):
                     image = paddle.reshape(image, (1, -1))
                     return self.fc(image), label
 
-            paddle.disable_static()
 
             normalize = Normalize(mean=[0.5, 0.5, 0.5],
                                   std=[0.5, 0.5, 0.5],
