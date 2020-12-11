@@ -26,6 +26,8 @@ message RecomputeConfig { repeated string checkpoints = 1; }
 
 message ShardingConfig {
   optional float fuse_broadcast_MB = 1 [ default = 32.0 ];
+  optional bool hybrid_dp = 2 [ default = false ];
+  optional int32 sharding_group_size = 3 [ default = 8 ];
 }
 
 message AMPConfig {

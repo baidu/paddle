@@ -16,14 +16,19 @@ from paddle.distributed.fleet.meta_optimizers.common import OP_ROLE_KEY, OpRole
 
 
 class GradientClipHelper(object):
-    def __init__(self):
-        pass
+    def __init__(self, sharding_ring_id):
+        self.sharding_ring_id = sharding_ring_id
 
     def _is_gradient_clip_op(self, op):
         return op.desc.has_attr("op_namescope") \
             and op.desc.attr("op_namescope").startswith("/gradient_clip")
 
     def prune_gradient_clip(self, block, shard):
+        """
+        prune gradient_clip related ops for params that not belong to cur shard
+        prune: square, reduce_sum, elementwise_mul
+        keep: sum, sqrt, elementwise_max, elementwise_div
+        """
         deperated_vars = set()
         deperate_op_idx = set()
         for idx, op in enumerate(block.ops):
@@ -75,8 +80,10 @@ class GradientClipHelper(object):
                     type='c_allreduce_sum',
                     inputs={'X': sum_res},
                     outputs={'Out': sum_res},
-                    attrs={'ring_id': 0,
-                           OP_ROLE_KEY: OpRole.Optimize})
+                    attrs={
+                        'ring_id': self.sharding_ring_id,
+                        OP_ROLE_KEY: OpRole.Optimize
+                    })
                 block._insert_op_without_sync(
                     idx + 1,
                     type='c_sync_calc_stream',

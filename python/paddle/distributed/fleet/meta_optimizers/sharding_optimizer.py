@@ -24,7 +24,7 @@ from paddle.distributed.fleet.meta_optimizers.sharding.weight_decay_helper impor
 from paddle.distributed.fleet.meta_optimizers.sharding.gradient_clip_helper import GradientClipHelper
 from paddle.distributed.fleet.meta_optimizers.sharding.prune import ProgramDeps
 from paddle.distributed.fleet.meta_optimizers.sharding.utils import *
-
+import logging
 from functools import reduce
 
 __all__ = ["ShardingOptimizer"]
@@ -37,6 +37,8 @@ class ShardingOptimizer(MetaOptimizerBase):
         self.meta_optimizers_white_list = [
             "RecomputeOptimizer",
             "AMPOptimizer",
+            "LarsOptimizer",
+            "LambOptimizer",
         ]
         self.meta_optimizers_black_list = ["GraphExecutionOptimizer", ]
         self._main_program = None
@@ -69,9 +71,14 @@ class ShardingOptimizer(MetaOptimizerBase):
                       startup_program=None,
                       parameter_list=None,
                       no_grad_set=None):
-        self._nrings = self.user_defined_strategy.nccl_comm_num
+        # TODO: (JZ-LIANG) support multiple comm in future
+        # self._nrings = self.user_defined_strategy.nccl_comm_num
+        self._nrings_sharding = 1
+        self._nrings_dp = 1
         self._fuse_broadcast_MB = self.user_defined_strategy.sharding_configs[
             "fuse_broadcast_MB"]
+        self.hybrid_dp = self.user_defined_strategy.sharding_configs[
+            "hybrid_dp"]
 
         if self.inner_opt is None:
             raise ValueError(
@@ -108,28 +115,38 @@ class ShardingOptimizer(MetaOptimizerBase):
 
         # check op dependecy
         check_broadcast(main_block)
-        check_allreduce_sum(main_block)
+        check_allreduce_sum(main_block, self._shard, self.dp_ring_id)
         self._wait()
         return optimize_ops, params_grads
 
     def _set_up(self, params_grads):
         # step 1: initialize nccl
-        worker_idx = self.role_maker._worker_index()
-        endpoints = self.role_maker._get_trainer_endpoints()
-        current_endpoint = endpoints[worker_idx]
+        self.global_word_size = self.role_maker._worker_num()
+        self.global_rank = self.role_maker._worker_index()
+        self.endpoints = self.role_maker._get_trainer_endpoints()
+        self.current_endpoint = self.endpoints[self.global_rank]
         self._collective_helper = CollectiveHelper(self.role_maker,
-                                                   self._nrings)
-        for ring_id in range(self._nrings):
+                                                   self._nrings_sharding)
+        # config sharding & dp groups
+        self._init_comm()
+        # sharding
+        self._collective_helper._init_communicator(
+            self._startup_program, self.current_endpoint,
+            self.sharding_group_endpoints, self.sharding_rank,
+            self.sharding_ring_id, True)
+        # dp
+        if self.hybrid_dp:
             self._collective_helper._init_communicator(
-                self._startup_program, current_endpoint, endpoints, worker_idx,
-                ring_id, None)
+                self._startup_program, self.current_endpoint,
+                self.dp_group_endpoints, self.dp_rank, self.dp_ring_id, True)
+
         startup_block = self._startup_program.global_block()
         startup_block._sync_with_cpp()
 
         # step 2: split params
         self._params = set([x[0].name for x in params_grads])
-        self._shard.setup(params_grads, worker_idx,
-                          self.role_maker._worker_num())
+        self._shard.setup(params_grads, self.sharding_rank,
+                          self.sharding_group_size)
 
         # step 3: get broadcast vars
         self._broadcast_vars = self._shard.find_broadcast_params(
@@ -208,12 +225,18 @@ class ShardingOptimizer(MetaOptimizerBase):
         """
         calculate deps from allredce op to optimize op,
         remove ops and vars not needed in this worker
+
+        1. prune regularization (weight decay)
+        2. prune cast_fp32_to_fp16; update amp_infine_checking
+        3. prune gradient_clip related; update global_norm_sum
+        4. prune optimizer op + param + gradient
+            
         """
         weightdecay_helper = WeightDecayHelper()
         weightdecay_helper.prune_weight_decay(block, self._shard)
         FP16Utils.prune_fp16(block, self._shard, self._reduced_grads_to_param,
-                             self._nrings)
-        gradientclip_helper = GradientClipHelper()
+                             self.sharding_ring_id)
+        gradientclip_helper = GradientClipHelper(self.sharding_ring_id)
         gradientclip_helper.prune_gradient_clip(block, self._shard)
 
         # build prog deps
@@ -226,6 +249,7 @@ class ShardingOptimizer(MetaOptimizerBase):
                 output_name = output_names[0]
                 reduced_grads.append(output_name)
 
+        # prune optimizer state and param
         pruned_opti_vars = []
         for var_name in list(block.vars.keys()):
             if self._shard.is_opti_var(var_name) and \
@@ -273,6 +297,8 @@ class ShardingOptimizer(MetaOptimizerBase):
                 op.desc.set_input('Input', reversed_input_vars)
                 op.desc.set_output('Out', reversed_output_vars)
             else:
+                # if all outputs of this op are in _should_removed_var
+                # _should_removed_var: opt state not cur shard
                 if program_deps.should_remove_op(idx):
                     program_deps.remove_op(idx)
 
@@ -283,16 +309,22 @@ class ShardingOptimizer(MetaOptimizerBase):
         """
         _add_broadcast_allreduce
         """
-        ring_id = -1
         if len(self._segments) < 1:
             return
-
+        # sharding
         if self._segments[-1]._allreduce_vars:
+            shard_allredue_vars = self._shard.filter_grads(self._segments[-1]
+                                                           ._allreduce_vars)
+            if self.hybrid_dp and len(shard_allredue_vars) >= 1:
+                insert_sync_comm_ops(block, self._segments[-1]._end_idx,
+                                     self.dp_ring_id, shard_allredue_vars)
+                insert_allreduce_ops(block, self._segments[-1]._end_idx,
+                                     self.dp_ring_id, shard_allredue_vars)
             insert_sync_comm_ops(block, self._segments[-1]._end_idx,
-                                 self._nrings,
+                                 self.sharding_ring_id,
                                  self._segments[-1]._allreduce_vars)
             insert_allreduce_ops(block, self._segments[-1]._end_idx,
-                                 self._nrings,
+                                 self.sharding_ring_id,
                                  self._segments[-1]._allreduce_vars)
 
         for idx, segment in reversed(list(enumerate(self._segments))):
@@ -331,13 +363,21 @@ class ShardingOptimizer(MetaOptimizerBase):
                                                          segment, 0)
 
             # step2: add Sync ops
-            comm_dep_vars = allreduce_vars + [x[0] for x in broadcast_vars]
-            if len(comm_dep_vars) > 0:
-                insert_sync_comm_ops(
-                    block,
-                    segment._end_idx,
-                    self._nrings,
-                    comm_dep_vars, )
+            shard_allredue_vars = self._shard.filter_grads(allreduce_vars)
+            if self.hybrid_dp and len(shard_allredue_vars) >= 1:
+                insert_sync_comm_ops(block, segment._end_idx, self.dp_ring_id,
+                                     shard_allredue_vars)
+
+                broad_cast_vars = [x[0] for x in broadcast_vars]
+                if len(broad_cast_vars) > 0:
+                    insert_sync_comm_ops(block, segment._end_idx,
+                                         self.sharding_ring_id, broad_cast_vars)
+            else:
+                comm_dep_vars = allreduce_vars + [x[0] for x in broadcast_vars]
+                if len(comm_dep_vars) > 0:
+                    insert_sync_comm_ops(block, segment._end_idx,
+                                         self.sharding_ring_id, comm_dep_vars)
+
             calc_dep_vars = fill_constant_vars + [
                 k for k, v in cast_ops.items()
             ] + self._segments[idx]._allreduce_vars
@@ -354,21 +394,27 @@ class ShardingOptimizer(MetaOptimizerBase):
             insert_cast_ops(block, segment._end_idx, cast_ops)
 
             # step5: add broadcast ops
-            insert_broadcast_ops(block, segment._start_idx, self._nrings,
-                                 broadcast_vars)
-
+            insert_broadcast_ops(block, segment._start_idx,
+                                 self.sharding_ring_id, broadcast_vars)
             # step6: add all_reduce ops
-            insert_allreduce_ops(block, segment._start_idx, self._nrings,
-                                 allreduce_vars)
+            # dp
+            if self.hybrid_dp and len(shard_allredue_vars) >= 1:
+                insert_allreduce_ops(block, segment._start_idx, self.dp_ring_id,
+                                     shard_allredue_vars)
+                insert_sync_comm_ops(block, segment._start_idx,
+                                     self.sharding_ring_id, allreduce_vars)
+            # sharding
+            insert_allreduce_ops(block, segment._start_idx,
+                                 self.sharding_ring_id, allreduce_vars)
 
             block._sync_with_cpp()
 
         if self._segments[0]._broadcast_vars:
-            insert_sync_comm_ops(
-                block, self._segments[0]._start_idx, self._nrings,
-                [x[0] for x in self._segments[0]._broadcast_vars])
+            broadcast_vars = [x[0] for x in self._segments[0]._broadcast_vars]
+            insert_sync_comm_ops(block, self._segments[0]._start_idx,
+                                 self.sharding_ring_id, broadcast_vars)
             insert_broadcast_ops(block, self._segments[0]._start_idx,
-                                 self._nrings,
+                                 self.sharding_ring_id,
                                  self._segments[0]._broadcast_vars)
 
         fill_constant_vars = []
@@ -409,3 +455,60 @@ class ShardingOptimizer(MetaOptimizerBase):
                 continue
             block._remove_var(var_name, sync=False)
         block._sync_with_cpp()
+
+    def _init_comm(self):
+
+        if self.hybrid_dp:
+            self.sharding_group_size = self.user_defined_strategy.sharding_configs[
+                "sharding_group_size"]
+            self.sharding_ring_id = 0
+            self.sharding_rank = self.global_rank % self.sharding_group_size
+
+            self.dp_group_size = self.global_word_size // self.sharding_group_size
+            self.dp_rank = self.global_rank // self.sharding_group_size
+            self.dp_ring_id = self.sharding_rank + 1
+
+            self.sharding_group_endpoints = [
+                ep for idx, ep in enumerate(self.endpoints)
+                if (idx // self.sharding_group_size) == self.dp_rank
+            ]
+            self.dp_group_endpoints = [
+                ep for idx, ep in enumerate(self.endpoints)
+                if (idx % self.sharding_group_size) == self.sharding_rank
+            ]
+            assert self.global_word_size > self.sharding_group_size, \
+                "global_word_size: {} should be larger than sharding_group_size: {}".format(self.global_word_size, self.sharding_group_size)
+            assert self.global_word_size % self.sharding_group_size == 0, \
+                "global_word_size: {} should be divisible to the sharding_group_size: {}".format(self.global_word_size, self.sharding_group_size)
+            assert self.dp_group_size *  self.sharding_group_size == self.global_word_size, \
+                "global_word_size: {} should be equal to the product of sharding_group_size: {} and dp_group_size: {}".format(
+                self.global_word_size,
+                self.sharding_group_size,
+                self.dp_group_size)
+
+            logging.info("Using Sharing&DP mode !")
+        else:
+            self.sharding_ring_id = 0
+            self.sharding_rank = self.global_rank
+            self.sharding_group_size = self.role_maker._worker_num()
+            self.sharding_group_endpoints = self.endpoints
+            self.dp_ring_id = -1
+            self.dp_rank = -1
+            self.dp_group_size = None
+            self.dp_group_endpoints = None
+
+            logging.info("Using Sharing alone mode !")
+
+        logging.info("global word size: {}".format(self.global_word_size))
+        logging.info("global rank: {}".format(self.global_rank))
+        logging.info("sharding group_size: {}".format(self.sharding_group_size))
+        logging.info("sharding rank: {}".format(self.sharding_rank))
+        logging.info("dp group size: {}".format(self.dp_group_size))
+        logging.info("dp rank: {}".format(self.dp_rank))
+        logging.info("current endpoint: {}".format(self.current_endpoint))
+        logging.info("sharding group endpoints: {}".format(
+            self.sharding_group_endpoints))
+        logging.info("dp group endpoints: {}".format(self.dp_group_endpoints))
+        logging.info("global word endpoints: {}".format(self.endpoints))
+
+        return

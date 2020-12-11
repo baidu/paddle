@@ -124,6 +124,14 @@ class Shard(object):
                 return True
         return False
 
+    def filter_grads(self, grads):
+        grads_in_shard = []
+        for grad in grads:
+            param = grad.split("@")[0]
+            if self.has_param(param):
+                grads_in_shard.append(grad)
+        return grads_in_shard
+
 
 class ProgramSegment(object):
     def __init__(self, block):
