@@ -1045,6 +1045,17 @@ set +x
         if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
             precision_cases=`python $PADDLE_ROOT/tools/get_pr_ut.py`
         fi
+        bash $PADDLE_ROOT/tools/check_added_ut.sh
+        if [ -a "$PADDLE_ROOT/added_ut" ];then
+            added_uts=^$(awk BEGIN{RS=EOF}'{gsub(/\n/,"$^");print}' $PADDLE_ROOT/added_ut)$
+            ctest -R "(${added_uts})" --output-on-failure --repeat-until-fail 3 --timeout 15;added_ut_error=$?
+            if [ "$added_ut_error" != 0 ];then
+                echo "========================================"
+                echo "Added UT should not exceed 15 seconds"
+                echo "========================================"
+                exit 8;
+            fi
+        fi
         EXIT_CODE=0;
         test_cases=$(ctest -N -V) # get all test cases
         exclusive_tests=''        # cases list which would be run exclusively
