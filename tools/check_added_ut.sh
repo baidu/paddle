@@ -18,6 +18,7 @@ set -e
 if [ -z ${BRANCH} ]; then
     BRANCH="develop"
 fi
+export CI_SKIP_CPP_TEST=OFF
 
 PADDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
 CURDIR=`pwd`
@@ -40,3 +41,4 @@ rm /$PADDLE_ROOT/br-ut /$PADDLE_ROOT/pr-ut $PADDLE_ROOT/paddle/scripts/paddle_bu
 git checkout $CURBRANCH
 git branch -D prec_added_ut
 cd $CURDIR
+export CI_SKIP_CPP_TEST=

@@ -64,8 +64,12 @@ function init() {
     # set CI_SKIP_CPP_TEST if only *.py changed
     # In order to avoid using in some CI(such as daily performance), the current
     # branch must not be `${BRANCH}` which is usually develop.
-    if [ "$(git branch | grep "^\*" | awk '{print $2}')" != "${BRANCH}" ]; then
-        git diff --name-only ${BRANCH} | grep -v "\.py$" || export CI_SKIP_CPP_TEST=ON
+    if [ ${CI_SKIP_CPP_TEST:-ON} == "OFF"  ];then
+        echo "CI_SKIP_CPP_TEST=OFF"
+    else
+        if [ "$(git branch | grep "^\*" | awk '{print $2}')" != "${BRANCH}" ]; then
+            git diff --name-only ${BRANCH} | grep -v "\.py$" || export CI_SKIP_CPP_TEST=ON
+        fi
     fi
 }
 
@@ -1044,6 +1048,21 @@ set +x
         precison_cases=""
         if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
             precision_cases=`python $PADDLE_ROOT/tools/get_pr_ut.py`
+        fi
+        bash $PADDLE_ROOT/tools/check_added_ut.sh
+        if [ -a "$PADDLE_ROOT/added_ut" ];then
+            added_uts=^$(awk BEGIN{RS=EOF}'{gsub(/\n/,"$|^");print}' $PADDLE_ROOT/added_ut)$
+            echo "========================================"
+            echo ${added_uts}
+            echo "========================================"
+
+            ctest -R "(${added_uts})" --timeout 15 --test-timeout 20 --repeat-until-fail 3 --output-on-failure;added_ut_error=$?
+            if [ "$added_ut_error" != 0 ];then
+                echo "========================================"
+                echo "Added UT should not exceed 15 seconds"
+                echo "========================================"
+                exit 8;
+            fi
         fi
         EXIT_CODE=0;
         test_cases=$(ctest -N -V) # get all test cases
