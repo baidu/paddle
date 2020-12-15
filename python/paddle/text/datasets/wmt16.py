@@ -87,7 +87,6 @@ class WMT16(Dataset):
                 def forward(self, src_ids, trg_ids, trg_ids_next):
                     return paddle.sum(src_ids), paddle.sum(trg_ids), paddle.sum(trg_ids_next)
 
-            paddle.disable_static()
 
             wmt16 = WMT16(mode='train', src_dict_size=50, trg_dict_size=50)
 
