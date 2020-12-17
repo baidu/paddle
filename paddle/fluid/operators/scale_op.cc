@@ -133,4 +133,8 @@ REGISTER_OP_CPU_KERNEL(
     ops::ScaleKernel<paddle::platform::CPUDeviceContext, int8_t>,
     ops::ScaleKernel<paddle::platform::CPUDeviceContext, int16_t>,
     ops::ScaleKernel<paddle::platform::CPUDeviceContext, int>,
-    ops::ScaleKernel<paddle::platform::CPUDeviceContext, int64_t>);
+    ops::ScaleKernel<paddle::platform::CPUDeviceContext, int64_t>,
+    ops::ScaleKernel<paddle::platform::CPUDeviceContext,
+                     paddle::platform::complex64>,
+    ops::ScaleKernel<paddle::platform::CPUDeviceContext,
+                     paddle::platform::complex128>);

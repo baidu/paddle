@@ -113,6 +113,51 @@ class TestAdamOp2(OpTest):
         self.check_output()
 
 
+class TestAdamOpComplex(OpTest):
+    def setUp(self):
+        '''Test Adam Op with supplied attributes
+        '''
+        self.op_type = "adam"
+        param = np.random.uniform(-1, 1, (102, 105)).astype("complex64")
+        grad = np.random.uniform(-1, 1, (102, 105)).astype("complex64")
+        moment1 = np.random.uniform(-1, 1, (102, 105)).astype("complex64")
+        # The second moment is positive
+        moment2 = np.random.random((102, 105)).astype("complex64")
+
+        learning_rate = 0.004
+        beta1 = 0.78
+        beta2 = 0.836
+        epsilon = 1e-4
+        beta1_pow = beta1**10
+        beta2_pow = beta2**10
+
+        self.inputs = {
+            'Param': param,
+            'Grad': grad,
+            'Moment1': moment1,
+            'Moment2': moment2,
+            'LearningRate': np.array([learning_rate]).astype("complex64"),
+            'Beta1Pow': np.array([beta1_pow]).astype("complex64"),
+            'Beta2Pow': np.array([beta2_pow]).astype("complex64")
+        }
+
+        self.attrs = {'epsilon': epsilon, 'beta1': beta1, 'beta2': beta2}
+
+        param_out, moment1_out, \
+            moment2_out = adam_step(self.inputs, self.attrs)
+
+        self.outputs = {
+            'Moment1Out': moment1_out,
+            'Moment2Out': moment2_out,
+            'ParamOut': param_out,
+            'Beta1PowOut': np.array([beta1_pow]).astype("complex64") * beta1,
+            'Beta2PowOut': np.array([beta2_pow]).astype("complex64") * beta2
+        }
+
+    def test_check_output(self):
+        self.check_output()
+
+
 class TestAdamOpMultipleSteps(OpTest):
     def setUp(self):
         '''Test Adam Operator with supplied attributes
@@ -532,4 +577,5 @@ class TestAdamOpV2(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    paddle.enable_static()
     unittest.main()

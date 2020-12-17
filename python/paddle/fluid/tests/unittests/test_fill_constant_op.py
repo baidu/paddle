@@ -83,6 +83,20 @@ class TestFillConstantOp4(OpTest):
         self.check_output()
 
 
+class TestFillConstantOpComplex(OpTest):
+    def setUp(self):
+        '''Test fill_constant op with specified int value
+        '''
+        self.op_type = "fill_constant"
+
+        self.inputs = {}
+        self.attrs = {'shape': [123, 92], 'value': 3}
+        self.outputs = {'Out': np.full((123, 92), 3, np.complex64)}
+
+    def test_check_output(self):
+        self.check_output()
+
+
 class TestFillConstantOpWithSelectedRows(unittest.TestCase):
     def check_with_place(self, place):
         scope = core.Scope()
@@ -432,4 +446,5 @@ class TestFillConstantOpError(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    paddle.enable_static()
     unittest.main()

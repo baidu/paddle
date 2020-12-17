@@ -123,6 +123,10 @@ def get_numeric_gradient(place,
         tensor_to_check_dtype = np.float16
         # set delta as np.float16, will automatic convert to float32, float64
         delta = np.array(delta).astype(np.float16)
+    elif tensor_to_check_dtype == core.VarDesc.VarType.COMPLEX64:
+        tensor_to_check_dtype = np.complex64
+    elif tensor_to_check_dtype == core.VarDesc.VarType.COMPLEX128:
+        tensor_to_check_dtype = np.complex128
     else:
         raise ValueError("Not supported data type " + str(
             tensor_to_check_dtype))
@@ -145,8 +149,15 @@ def get_numeric_gradient(place,
             return numpy_tensor[i]
         elif tensor_to_check_dtype == np.float32:
             return tensor._get_float_element(i)
-        else:
+        elif tensor_to_check_dtype == np.float64:
             return tensor._get_double_element(i)
+        elif tensor_to_check_dtype == np.complex64:
+            return tensor._get_complex64_element(i)
+        elif tensor_to_check_dtype == np.complex128:
+            return tensor._get_complex128_element(i)
+        else:
+            raise TypeError("Unsupported test data type %s." %
+                            tensor_to_check_dtype)
 
     def __set_elem__(tensor, i, e):
         if tensor_to_check_dtype == np.float16:
@@ -158,8 +169,15 @@ def get_numeric_gradient(place,
             tensor.set(numpy_tensor, place)
         elif tensor_to_check_dtype == np.float32:
             tensor._set_float_element(i, e)
-        else:
+        elif tensor_to_check_dtype == np.float64:
             tensor._set_double_element(i, e)
+        elif tensor_to_check_dtype == np.complex64:
+            tensor._set_complex64_element(i, e)
+        elif tensor_to_check_dtype == np.complex128:
+            tensor._set_complex128_element(i, e)
+        else:
+            raise TypeError("Unsupported test data type %s." %
+                            tensor_to_check_dtype)
 
     # we only compute gradient of one element each time.
     # we use a for loop to compute the gradient of every element.

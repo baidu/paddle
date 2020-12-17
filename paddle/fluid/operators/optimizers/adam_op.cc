@@ -121,11 +121,17 @@ framework::OpKernelType AdamOp::GetExpectedKernelType(
 framework::OpKernelType AdamOp::GetKernelTypeForVar(
     const std::string &var_name, const framework::Tensor &tensor,
     const framework::OpKernelType &expected_kernel_type) const {
-  if (var_name == "Beta1Pow" || var_name == "Beta2Pow") {
-    return expected_kernel_type;
+  if (framework::IsComplexType(expected_kernel_type.data_type_)) {
+    // only promote inputs’s types when contains complex input
+    return framework::OpKernelType(tensor.type(), tensor.place(),
+                                   tensor.layout());
   } else {
-    return framework::OpKernelType(expected_kernel_type.data_type_,
-                                   tensor.place(), tensor.layout());
+    if (var_name == "Beta1Pow" || var_name == "Beta2Pow") {
+      return expected_kernel_type;
+    } else {
+      return framework::OpKernelType(expected_kernel_type.data_type_,
+                                     tensor.place(), tensor.layout());
+    }
   }
 }
 
@@ -212,4 +218,8 @@ namespace ops = paddle::operators;
 REGISTER_OP_WITHOUT_GRADIENT(adam, ops::AdamOp, ops::AdamOpMaker);
 REGISTER_OP_CPU_KERNEL(
     adam, ops::AdamOpKernel<paddle::platform::CPUDeviceContext, float>,
-    ops::AdamOpKernel<paddle::platform::CPUDeviceContext, double>);
+    ops::AdamOpKernel<paddle::platform::CPUDeviceContext, double>,
+    ops::AdamOpKernel<paddle::platform::CPUDeviceContext,
+                      paddle::platform::complex64>,
+    ops::AdamOpKernel<paddle::platform::CPUDeviceContext,
+                      paddle::platform::complex128>);

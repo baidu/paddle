@@ -665,6 +665,14 @@ PYBIND11_MODULE(core_noavx, m) {
       .def("_get_float_element", TensorGetElement<float>)
       .def("_set_double_element", TensorSetElement<double>)
       .def("_get_double_element", TensorGetElement<double>)
+      .def("_set_complex64_element",
+           TensorSetElement<paddle::platform::complex64>)
+      .def("_get_complex64_element",
+           TensorGetElement<paddle::platform::complex64>)
+      .def("_set_complex128_element",
+           TensorSetElement<paddle::platform::complex128>)
+      .def("_get_complex128_element",
+           TensorGetElement<paddle::platform::complex128>)
       .def("_place", [](Tensor &self) { return self.place(); })
       .def("_dtype", [](Tensor &self) { return self.type(); })
       .def("_layout",

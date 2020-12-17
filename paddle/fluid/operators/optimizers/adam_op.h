@@ -269,7 +269,8 @@ class SparseAdamFunctor<T, GPUAdam> {
     if (lazy_mode_ && row_idx < 0) {
       return;
     } else {
-      T g = row_idx >= 0 ? grad_[row_idx * row_numel_ + i % row_numel_] : 0;
+      T g = row_idx >= 0 ? grad_[row_idx * row_numel_ + i % row_numel_]
+                         : static_cast<T>(0);
       adam_update(i, g);
     }
   }

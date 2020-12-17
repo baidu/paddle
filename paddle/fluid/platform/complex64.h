@@ -224,6 +224,15 @@ HOSTDEVICE inline complex64 operator-(const complex64& a, const complex64& b) {
 #endif
 }
 
+HOSTDEVICE inline complex64 operator-(const int& a, const complex64& b) {
+#if defined(__CUDA_ARCH__)
+  return complex64(thrust::complex<float>(static_cast<float>(a), 0) -
+                   thrust::complex<float>(b.real, b.imag));
+#else
+  return complex64(a - b.real, -b.imag);
+#endif
+}
+
 HOSTDEVICE inline complex64 operator*(const complex64& a, const complex64& b) {
 #if defined(__CUDA_ARCH__)
   return complex64(thrust::complex<float>(a.real, a.imag) *

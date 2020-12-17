@@ -104,7 +104,8 @@ __global__ void SparseAdamCUDAKernelREG(
       T mom1 = mom1_[id];
       T mom2 = mom2_[id];
       T p = param_[id];
-      T g = row_idx >= 0 ? grad_[row_idx * row_numel + id % row_numel] : 0;
+      T g = row_idx >= 0 ? grad_[row_idx * row_numel + id % row_numel]
+                         : static_cast<T>(0);
       mom1 = beta1 * mom1 + (1 - beta1) * g;
       mom2 = beta2 * mom2 + (1 - beta2) * g * g;
       p -= lr * (mom1 / (sqrt(mom2) +
@@ -305,4 +306,6 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
 
 namespace ops = paddle::operators;
 REGISTER_OP_CUDA_KERNEL(adam, ops::AdamOpCUDAKernel<float>,
-                        ops::AdamOpCUDAKernel<double>);
+                        ops::AdamOpCUDAKernel<double>,
+                        ops::AdamOpCUDAKernel<paddle::platform::complex64>,
+                        ops::AdamOpCUDAKernel<paddle::platform::complex128>);

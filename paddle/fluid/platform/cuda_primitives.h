@@ -15,6 +15,8 @@ limitations under the License. */
 #pragma once
 #include <cuda.h>
 #include <stdio.h>
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/float16.h"
 
 namespace paddle {
@@ -126,8 +128,21 @@ CUDA_ATOMIC_WRAPPER(Add, float16) {
     return ret;
   }
 }
-
 #endif
+
+CUDA_ATOMIC_WRAPPER(Add, complex64) {
+  float *real = reinterpret_cast<float *>(address);
+  float *imag = real + 1;
+  return complex64(CudaAtomicAdd(real, val.real),
+                   CudaAtomicAdd(imag, val.imag));
+}
+
+CUDA_ATOMIC_WRAPPER(Add, complex128) {
+  double *real = reinterpret_cast<double *>(address);
+  double *imag = real + 1;
+  return complex128(CudaAtomicAdd(real, val.real),
+                    CudaAtomicAdd(imag, val.imag));
+}
 
 // For atomicMax
 USE_CUDA_ATOMIC(Max, int);

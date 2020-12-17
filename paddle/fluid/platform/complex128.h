@@ -220,6 +220,15 @@ HOSTDEVICE inline complex128 operator-(const complex128& a,
 #endif
 }
 
+HOSTDEVICE inline complex128 operator-(const int& a, const complex128& b) {
+#if defined(__CUDA_ARCH__)
+  return complex128(thrust::complex<double>(static_cast<double>(a), 0) -
+                    thrust::complex<double>(b.real, b.imag));
+#else
+  return complex128(a - b.real, -b.imag);
+#endif
+}
+
 HOSTDEVICE inline complex128 operator*(const complex128& a,
                                        const complex128& b) {
 #if defined(__CUDA_ARCH__)

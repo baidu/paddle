@@ -17,6 +17,7 @@ from __future__ import print_function
 import unittest
 import numpy as np
 from op_test import OpTest
+import paddle
 import paddle.fluid as fluid
 import paddle.fluid.core as core
 from paddle.fluid.op import Operator
@@ -26,6 +27,27 @@ class TestScaleOp(OpTest):
     def setUp(self):
         self.op_type = "scale"
         self.dtype = np.float64
+        self.init_dtype_type()
+        self.inputs = {'X': np.random.random((10, 10)).astype(self.dtype)}
+        self.attrs = {'scale': -2.3}
+        self.outputs = {
+            'Out': self.inputs['X'] * self.dtype(self.attrs['scale'])
+        }
+
+    def init_dtype_type(self):
+        pass
+
+    def test_check_output(self):
+        self.check_output()
+
+    def test_check_grad(self):
+        self.check_grad(['X'], 'Out')
+
+
+class TestScaleOpComplex(OpTest):
+    def setUp(self):
+        self.op_type = "scale"
+        self.dtype = np.complex64
         self.init_dtype_type()
         self.inputs = {'X': np.random.random((10, 10)).astype(self.dtype)}
         self.attrs = {'scale': -2.3}
@@ -169,4 +191,5 @@ class TestScaleFp16OpSelectedRows(TestScaleOpSelectedRows):
 
 
 if __name__ == "__main__":
+    paddle.enable_static()
     unittest.main()

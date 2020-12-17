@@ -296,6 +296,13 @@ struct CBlas<double> {
 template <>
 struct CBlas<platform::complex64> {
   template <typename... ARGS>
+  static void AXPY(int n, const paddle::platform::complex64 alpha,
+                   const paddle::platform::complex64 *X, const int incX,
+                   paddle::platform::complex64 *Y, const int incY) {
+    platform::dynload::cblas_caxpy(n, &alpha, X, incX, Y, incY);
+  }
+
+  template <typename... ARGS>
   static void VCOPY(ARGS... args) {
     platform::dynload::cblas_ccopy(args...);
   }
@@ -415,6 +422,13 @@ struct CBlas<platform::complex64> {
 
 template <>
 struct CBlas<platform::complex128> {
+  template <typename... ARGS>
+  static void AXPY(int n, const paddle::platform::complex128 alpha,
+                   const paddle::platform::complex128 *X, const int incX,
+                   paddle::platform::complex128 *Y, const int incY) {
+    platform::dynload::cblas_zaxpy(n, &alpha, X, incX, Y, incY);
+  }
+
   template <typename... ARGS>
   static void VCOPY(ARGS... args) {
     platform::dynload::cblas_zcopy(args...);
@@ -599,11 +613,6 @@ struct CBlas<platform::complex64> {
   }
 
   template <typename... ARGS>
-  static void VADD(ARGS... args) {
-    vcAdd(args...);
-  }
-
-  template <typename... ARGS>
   static void AXPY(int n, const paddle::platform::complex64 alpha,
                    const paddle::platform::complex64 *X, const int incX,
                    paddle::platform::complex64 *Y, const int incY) {
@@ -639,11 +648,6 @@ struct CBlas<platform::complex128> {
   template <typename... ARGS>
   static void VCOPY(ARGS... args) {
     cblas_zcopy(args...);
-  }
-
-  template <typename... ARGS>
-  static void VADD(ARGS... args) {
-    vzAdd(args...);
   }
 
   template <typename... ARGS>
