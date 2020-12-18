@@ -717,6 +717,7 @@ set_tests_properties(test_parallel_ssa_graph_inference_feed_partial_data PROPERT
 set_tests_properties(test_parallel_executor_crf PROPERTIES TIMEOUT 120)
 set_tests_properties(test_imperative_save_load PROPERTIES TIMEOUT 120)
 set_tests_properties(test_concat_op PROPERTIES TIMEOUT 120)
+set_tests_properties(test_concat_op_1 PROPERTIES TIMEOUT 120)
 set_tests_properties(test_partial_eager_deletion_transformer PROPERTIES TIMEOUT 120)
 set_tests_properties(test_parallel_executor_seresnext_with_reduce_gpu PROPERTIES TIMEOUT 120)
 set_tests_properties(test_dropout_op PROPERTIES TIMEOUT 120)
