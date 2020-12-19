@@ -863,7 +863,9 @@ function assert_file_diff_approvals() {
 
 
 function check_coverage() {
+    cat $PADDLE_ROOT/python/paddle/fluid/data_feeder.py
     /bin/bash ${PADDLE_ROOT}/tools/coverage/paddle_coverage.sh
+    cat $PADDLE_ROOT/python/paddle/fluid/data_feeder.py
 }
 
 
@@ -1049,6 +1051,7 @@ set +x
         if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
             precision_cases=`python $PADDLE_ROOT/tools/get_pr_ut.py`
         fi
+        cat $PADDLE_ROOT/python/paddle/fluid/data_feeder.py
         bash $PADDLE_ROOT/tools/check_added_ut.sh
         if [ -a "$PADDLE_ROOT/added_ut" ];then
             added_uts=^$(awk BEGIN{RS=EOF}'{gsub(/\n/,"$|^");print}' $PADDLE_ROOT/added_ut)$
@@ -1060,6 +1063,7 @@ set +x
                 exit 8;
             fi
         fi
+        
         EXIT_CODE=0;
         test_cases=$(ctest -N -V) # get all test cases
         exclusive_tests=''        # cases list which would be run exclusively

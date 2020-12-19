@@ -228,11 +228,18 @@ function(py_test_modules TARGET_NAME)
     cmake_parse_arguments(py_test_modules "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(WITH_COVERAGE)
-        add_test(NAME ${TARGET_NAME}
-            COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}
-            COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
-            ${PYTHON_EXECUTABLE} -m coverage run --branch -p ${PADDLE_SOURCE_DIR}/tools/test_runner.py ${py_test_modules_MODULES}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        if ("$ENV{PADDLE_GIT_DIFF_PY_FILE}" STREQUAL "")
+            add_test(NAME ${TARGET_NAME}
+                    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}
+                    ${PYTHON_EXECUTABLE} ${PADDLE_SOURCE_DIR}/tools/test_runner.py ${py_test_modules_MODULES}
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        else()
+            add_test(NAME ${TARGET_NAME}
+                    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}
+                    COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
+                    ${PYTHON_EXECUTABLE} -m coverage run --branch -p --include=$ENV{PADDLE_GIT_DIFF_PY_FILE} ${PADDLE_SOURCE_DIR}/tools/test_runner.py ${py_test_modules_MODULES}
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        endif()
     else()
         add_test(NAME ${TARGET_NAME}
                 COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}

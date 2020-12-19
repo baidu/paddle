@@ -844,13 +844,23 @@ function(py_test TARGET_NAME)
     cmake_parse_arguments(py_test "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(WITH_COVERAGE)
-      add_test(NAME ${TARGET_NAME}
-        COMMAND ${CMAKE_COMMAND} -E env FLAGS_init_allocated_mem=true FLAGS_cudnn_deterministic=true
-        FLAGS_cpu_deterministic=true
-        PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_ENVS}
-        COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
-        ${PYTHON_EXECUTABLE} -m coverage run --branch -p ${py_test_SRCS} ${py_test_ARGS}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+      if ("$ENV{PADDLE_GIT_DIFF_PY_FILE}" STREQUAL "")
+        add_test(NAME ${TARGET_NAME}
+                COMMAND ${CMAKE_COMMAND} -E env FLAGS_init_allocated_mem=true FLAGS_cudnn_deterministic=true
+                FLAGS_cpu_deterministic=true
+                PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_ENVS}
+                ${PYTHON_EXECUTABLE} -u ${py_test_SRCS} ${py_test_ARGS}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+      else()
+        add_test(NAME ${TARGET_NAME}
+                COMMAND ${CMAKE_COMMAND} -E env FLAGS_init_allocated_mem=true FLAGS_cudnn_deterministic=true
+                FLAGS_cpu_deterministic=true
+                PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_ENVS}
+                COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
+                ${PYTHON_EXECUTABLE} -m coverage run --branch -p --include=$ENV{PADDLE_GIT_DIFF_PY_FILE} ${py_test_SRCS} ${py_test_ARGS}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+      endif()
     else()
       add_test(NAME ${TARGET_NAME}
                COMMAND ${CMAKE_COMMAND} -E env FLAGS_init_allocated_mem=true FLAGS_cudnn_deterministic=true
