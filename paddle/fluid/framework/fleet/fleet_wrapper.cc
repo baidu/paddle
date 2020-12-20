@@ -198,6 +198,7 @@ void FleetWrapper::HeterPullSparseVars(
   for (auto& t : fea_values) {
     pull_result_ptr.push_back(t.data());
   }
+  /*
   auto status = pslib_ptr_->_worker_ptr->heter_pull_sparse(
       workerid, pull_result_ptr.data(), table_id, fea_keys.data(),
       fea_keys.size(), task->taskid_);
@@ -211,6 +212,7 @@ void FleetWrapper::HeterPullSparseVars(
       exit(-1);
     }
   }
+  */
 }
 
 void FleetWrapper::HeterPushSparseVars(
@@ -358,7 +360,8 @@ int FleetWrapper::RegisterHeterCallback(HeterCallBackFunc handler) {
   VLOG(3) << "calling FleetWrapper::RegisterHeterCallback";
   VLOG(3) << "pslib_ptr_=" << pslib_ptr_;
   VLOG(3) << "_worker_ptr=" << pslib_ptr_->_worker_ptr;
-  return pslib_ptr_->_worker_ptr->registe_heter_callback(handler);
+  //return pslib_ptr_->_worker_ptr->registe_heter_callback(handler);
+
 #else
   VLOG(0) << "FleetWrapper::RegisterHeterCallback"
           << " does nothing when no pslib";
@@ -701,7 +704,7 @@ void FleetWrapper::PushDenseVarsSync(
     Scope* scope, const uint64_t table_id,
     const std::vector<std::string>& var_names) {}
 
-#if (defined PADDLE_WITH_CUDA) && (defined PADDLE_WITH_PSLIB)
+#ifdef PADDLE_WITH_PSLIB
 void FleetWrapper::PushDenseVarsAsync(
     const Scope& scope, const uint64_t table_id,
     const std::vector<std::string>& var_names,
@@ -1222,6 +1225,7 @@ void FleetWrapper::LoadModelOneTable(const uint64_t table_id,
 void FleetWrapper::LoadWithWhitelist(const uint64_t table_id,
                                      const std::string& path, const int mode) {
 #ifdef PADDLE_WITH_PSLIB
+  /*
   auto ret = pslib_ptr_->_worker_ptr->load_with_whitelist(table_id, path,
                                                           std::to_string(mode));
   ret.wait();
@@ -1229,6 +1233,7 @@ void FleetWrapper::LoadWithWhitelist(const uint64_t table_id,
     LOG(ERROR) << "load model of table id: " << table_id
                << ", from path: " << path << " failed";
   }
+  */
 #else
   VLOG(0) << "FleetWrapper::LoadWhitelist does nothing when no pslib";
 #endif
@@ -1353,6 +1358,7 @@ int32_t FleetWrapper::SaveWithWhitelist(int table_id, const std::string& path,
                                         const int mode,
                                         const std::string& whitelist_path) {
 #ifdef PADDLE_WITH_PSLIB
+  /*
   auto ret = pslib_ptr_->_worker_ptr->save_with_whitelist(
       table_id, path, std::to_string(mode), whitelist_path);
   ret.wait();
@@ -1363,6 +1369,8 @@ int32_t FleetWrapper::SaveWithWhitelist(int table_id, const std::string& path,
     exit(-1);
   }
   return feasign_cnt;
+  */
+ return -1;
 #else
   VLOG(0) << "FleetWrapper::SaveCache does nothing when no pslib";
   return -1;

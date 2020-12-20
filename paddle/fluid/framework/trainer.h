@@ -277,6 +277,56 @@ class HeterBoxTrainer : public TrainerBase {
 };
 #endif
 
+#ifdef PADDLE_WITH_PSLIB
+class PSGPUTrainer : public TrainerBase {
+ public:
+  PSGPUTrainer() {}
+  virtual ~PSGPUTrainer() {}
+  virtual void Initialize(const TrainerDesc& trainer_desc, Dataset* data_set);
+  virtual void InitTrainerEnv(const ProgramDesc& main_program,
+                              const platform::Place& place);
+  virtual void InitOtherEnv(const ProgramDesc& main_program);
+  virtual void Run();
+  virtual void Finalize();
+  virtual void RegisterHeterCallback();
+  virtual void DumpWork(int tid);
+  virtual Scope* GetWorkerScope(int thread_id);
+  virtual void CacheProgram(const ProgramDesc& main_program) {
+    new (&program_) ProgramDesc(main_program);
+  }
+  virtual std::string GetDumpPath(int tid) { return ""; }
+  virtual void InitDumpEnv() {}
+  void BuildGPUPSTask(int table_id, int feadim);
+  /*
+  template <typename T>
+  void HeterMemCpy(LoDTensor* tensor, LoDTensor* root_tensor,
+                   const paddle::platform::Place& thread_place,
+                   cudaStream_t stream);
+  */
+  
+  template <typename T>
+  void MergeToRootScope(LoDTensor* root_tensor, LoDTensor* thread_tensor);
+  
+
+ protected:
+  Dataset* dataset_;
+  DownpourWorkerParameter param_;
+  std::map<uint64_t, std::vector<std::string>> dense_grad_names_;
+  std::vector<std::string> need_merge_var_names_;
+  float scale_datanorm_;
+  paddle::platform::Place place_;
+  ProgramDesc program_;
+  std::shared_ptr<paddle::framework::FleetWrapper> fleet_ptr_;
+  std::shared_ptr<paddle::framework::PullDenseWorker> pull_dense_worker_;
+  std::vector<std::shared_ptr<DeviceWorker>> workers_;
+  std::vector<platform::Place> places_;
+  // ps-gpu
+  std::vector<std::thread> threads_;
+  int use_ps_gpu_;
+  int thread_num_;
+};
+#endif
+
 #if defined(PADDLE_WITH_NCCL)
 class PipelineTrainer : public TrainerBase {
  public:

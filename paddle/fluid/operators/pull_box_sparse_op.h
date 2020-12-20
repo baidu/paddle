@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include "paddle/fluid/framework/fleet/box_wrapper.h"
+#include "paddle/fluid/framework/fleet/ps_gpu_wrapper.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/tensor.h"
 
@@ -45,6 +46,12 @@ static void PullBoxSparseFunctor(const framework::ExecutionContext &ctx) {
   auto box_ptr = paddle::framework::BoxWrapper::GetInstance();
   box_ptr->PullSparse(ctx.GetPlace(), all_keys, all_values, slot_lengths,
                       hidden_size, 0);
+#endif
+#ifdef PADDLE_WITH_PSLIB
+  auto hidden_size = ctx.Attr<int>("size");
+  auto gpu_ps_ptr = paddle::framework::PSGPUWrapper::GetInstance();
+  gpu_ps_ptr->PullSparse(ctx.GetPlace(), 0, all_keys, all_values, slot_lengths,
+                        hidden_size);
 #endif
 }
 
@@ -82,6 +89,12 @@ static void PushBoxSparseFunctor(const framework::ExecutionContext &ctx) {
   auto box_ptr = paddle::framework::BoxWrapper::GetInstance();
   box_ptr->PushSparseGrad(ctx.GetPlace(), all_keys, all_grad_values,
                           slot_lengths, hidden_size, 0, batch_size);
+#endif
+#ifdef PADDLE_WITH_PSLIB
+  auto hidden_size = ctx.Attr<int>("size");
+  auto gpu_ps_ptr = paddle::framework::PSGPUWrapper::GetInstance();
+  gpu_ps_ptr->PushSparseGrad(ctx.GetPlace(), 0, all_keys, all_grad_values, slot_lengths,
+                        hidden_size, batch_size);
 #endif
 }
 

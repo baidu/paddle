@@ -1375,8 +1375,8 @@ class Executor(object):
                 is_heter = 1
             if program._fleet_opt.get("trainer", "") == "HeterXpuTrainer":
                 is_heter = 1
-            if program._fleet_opt.get("use_ps_gpu", ""):
-                is_heter = 1
+        #    if program._fleet_opt.get("use_ps_gpu", ""):
+        #        is_heter = 1
         if scope is None:
             scope = global_scope()
         if fetch_list is None:
