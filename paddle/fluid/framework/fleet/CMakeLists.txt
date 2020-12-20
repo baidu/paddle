@@ -1,7 +1,10 @@
 if(WITH_PSLIB)
     cc_library(fleet_wrapper SRCS fleet_wrapper.cc DEPS framework_proto variable_helper scope pslib_brpc pslib)
+    nv_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cu ps_gpu_wrapper.cc DEPS heter_box)
+    add_subdirectory(heter_box)
 else()
     cc_library(fleet_wrapper SRCS fleet_wrapper.cc DEPS framework_proto variable_helper scope)
+    cc_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cc)
 endif(WITH_PSLIB)
 
 if(WITH_NCCL)
@@ -12,6 +15,7 @@ if(WITH_BOX_PS)
 else()
     cc_library(box_wrapper SRCS box_wrapper.cc DEPS framework_proto lod_tensor)
 endif(WITH_BOX_PS)
+
 
 if(WITH_GLOO)
     cc_library(gloo_wrapper SRCS gloo_wrapper.cc DEPS framework_proto variable_helper scope gloo)

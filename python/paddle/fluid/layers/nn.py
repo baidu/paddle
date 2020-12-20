@@ -701,11 +701,16 @@ def _pull_box_sparse(input, size, dtype='float32'):
         helper.create_variable_for_type_inference(dtype)
         for i in range(len(inputs))
     ]
+    w = helper.create_parameter(
+        attr=helper.param_attr, shape=[size], dtype=dtype, is_bias=False)
     helper.append_op(
         type='pull_box_sparse',
-        inputs={'Ids': inputs},
+        inputs={'Ids': inputs,
+                'W': w},
         outputs={'Out': outs},
-        attrs={'size': size})
+        attrs={'size': size,
+               'is_distributed': True,
+               'is_sparse': True})
     if len(outs) == 1:
         return outs[0]
     return outs

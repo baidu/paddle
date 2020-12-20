@@ -69,20 +69,23 @@ namespace framework {
 //   while (reader->Next()) {
 //      // trainer do something
 //   }
-union FeatureKey {
+union FeatureFeasign {
   uint64_t uint64_feasign_;
   float float_feasign_;
 };
 
 struct FeatureItem {
   FeatureItem() {}
-  FeatureItem(FeatureKey sign, uint16_t slot) {
+  FeatureItem(FeatureFeasign sign, uint16_t slot) {
     this->sign() = sign;
     this->slot() = slot;
   }
-  FeatureKey& sign() { return *(reinterpret_cast<FeatureKey*>(sign_buffer())); }
-  const FeatureKey& sign() const {
-    const FeatureKey* ret = reinterpret_cast<FeatureKey*>(sign_buffer());
+  FeatureFeasign& sign() {
+    return *(reinterpret_cast<FeatureFeasign*>(sign_buffer()));
+  }
+  const FeatureFeasign& sign() const {
+    const FeatureFeasign* ret =
+        reinterpret_cast<FeatureFeasign*>(sign_buffer());
     return *ret;
   }
   uint16_t& slot() { return slot_; }
@@ -90,7 +93,7 @@ struct FeatureItem {
 
  private:
   char* sign_buffer() const { return const_cast<char*>(sign_); }
-  char sign_[sizeof(FeatureKey)];
+  char sign_[sizeof(FeatureFeasign)];
   uint16_t slot_;
 };
 
@@ -514,7 +517,7 @@ paddle::framework::Archive<AR>& operator>>(paddle::framework::Archive<AR>& ar,
 
 struct RecordCandidate {
   std::string ins_id_;
-  std::unordered_multimap<uint16_t, FeatureKey> feas_;
+  std::unordered_multimap<uint16_t, FeatureFeasign> feas_;
   size_t shadow_index_ = -1;  // Optimization for Reservoir Sample
 
   RecordCandidate() {}
@@ -606,7 +609,7 @@ class RecordCandidateList {
 
 template <class AR>
 paddle::framework::Archive<AR>& operator<<(paddle::framework::Archive<AR>& ar,
-                                           const FeatureKey& fk) {
+                                           const FeatureFeasign& fk) {
   ar << fk.uint64_feasign_;
   ar << fk.float_feasign_;
   return ar;
@@ -614,7 +617,7 @@ paddle::framework::Archive<AR>& operator<<(paddle::framework::Archive<AR>& ar,
 
 template <class AR>
 paddle::framework::Archive<AR>& operator>>(paddle::framework::Archive<AR>& ar,
-                                           FeatureKey& fk) {
+                                           FeatureFeasign& fk) {
   ar >> fk.uint64_feasign_;
   ar >> fk.float_feasign_;
   return ar;

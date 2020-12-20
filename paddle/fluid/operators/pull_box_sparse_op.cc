@@ -64,12 +64,22 @@ class PullBoxSparseOp : public framework::OperatorWithKernel {
 class PullBoxSparseOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
+    AddInput("W",
+             "(Tensor) The input represents embedding tensors, "
+             "which is a learnable parameter.");
     AddInput("Ids",
              "Input tensors with type int32 or int64 "
              "contains the ids to be looked up in BoxPS. "
              "The last dimension size must be 1.")
         .AsDuplicable();
     AddOutput("Out", "The lookup results tensors.").AsDuplicable();
+    AddAttr<bool>("is_sparse",
+                  "(boolean, default false) "
+                  "Sparse update.")
+        .SetDefault(false);
+    AddAttr<bool>("is_distributed",
+                  "(boolean, default false) distributed lookup table.")
+        .SetDefault(false);
     AddAttr<int>("size", "(int, the embedding hidden size").SetDefault(1);
     AddComment(R"DOC(
 Pull Box Sparse Operator.
