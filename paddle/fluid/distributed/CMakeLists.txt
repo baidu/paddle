@@ -1,3 +1,6 @@
+if (WITH_PSLIB)
+    return()
+endif()
 if(NOT WITH_DISTRIBUTE)
     return()
 endif()

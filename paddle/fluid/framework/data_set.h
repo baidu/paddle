@@ -229,6 +229,20 @@ class DatasetImpl : public Dataset {
   virtual void DynamicAdjustReadersNum(int thread_num);
   virtual void SetFleetSendSleepSeconds(int seconds);
 
+  std::vector<paddle::framework::Channel<T>>& GetMultiOutputChannel() {
+    return multi_output_channel_;
+  }
+
+  std::vector<paddle::framework::Channel<T>>& GetCurOutputChannel() {
+    if (cur_channel_ == 0) {
+      return multi_output_channel_;
+    } else {
+      return multi_consume_channel_;
+    }
+  }
+
+  Channel<T>& GetInputChannelRef() { return input_channel_; }
+
  protected:
   virtual int ReceiveFromClient(int msg_type, int client_id,
                                 const std::string& msg);
