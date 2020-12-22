@@ -33,7 +33,7 @@ TEST(TestGroup, TestPrintGroupMessage) {
   std::stringstream stream1, stream2;
   stream1 << group;
   ASSERT_STREQ(stream1.str().c_str(),
-               "numul: 0 ;is_sparse: 0 ;var number: 0\n[]\n");
+               "numel: 0 ;is_sparse: 0 ;var number: 0\n[]\n");
 
   std::vector<size_t> vars;
   size_t vars_num = 102;
@@ -44,7 +44,7 @@ TEST(TestGroup, TestPrintGroupMessage) {
   group.all_length_ = 102;
   group.is_sparse_ = false;
 
-  std::string head = "numul: 102 ;is_sparse: 0 ;var number: 102\n";
+  std::string head = "numel: 102 ;is_sparse: 0 ;var number: 102\n";
   head = head + "[";
   auto begin = vars.begin();
   auto end = vars.end();

@@ -73,6 +73,8 @@ class ParallelContext {
       int ring_id) = 0;
 #endif
 
+  inline int GetNRings() { return strategy_.nrings_; }
+
  protected:
   ParallelStrategy strategy_;
   platform::Place place_;
@@ -87,7 +89,7 @@ class NCCLParallelContext : public ParallelContext {
 
   ~NCCLParallelContext() {}
 
-  void BcastNCCLId(ncclUniqueId* nccl_id, int root);
+  void BcastNCCLId(std::vector<ncclUniqueId>& nccl_ids, int root);  // NOLINT
 
   void Init() override;
 
@@ -98,9 +100,11 @@ class NCCLParallelContext : public ParallelContext {
   paddle::platform::CUDADeviceContext* GetDeviceContext(int ring_id) override;
 
  protected:
-  void RecvNCCLID(const std::string& endpoint, ncclUniqueId* nccl_id);
+  void RecvNCCLID(const std::string& endpoint,
+                  std::vector<ncclUniqueId>& nccl_ids);  // NOLINT
 
-  void SendNCCLID(const std::string& endpoint, ncclUniqueId* nccl_id);
+  void SendNCCLID(const std::string& endpoint,
+                  const std::vector<ncclUniqueId>& nccl_ids);
 };
 #endif
 

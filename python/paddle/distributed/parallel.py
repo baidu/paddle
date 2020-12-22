@@ -166,6 +166,7 @@ def init_parallel_env():
     strategy.local_rank = parallel_env.rank
     strategy.trainer_endpoints = parallel_env.trainer_endpoints
     strategy.current_endpoint = parallel_env.current_endpoint
+    strategy.nrings = parallel_env.nrings
 
     # NOTE(chenweihang): [ why config global place here? ]
     # the dygraph mode will be set to default mode,

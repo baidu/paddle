@@ -19,6 +19,7 @@
 namespace imperative = paddle::imperative;
 namespace platform = paddle::platform;
 
+int nrings = 2;
 imperative::ParallelStrategy GetStrategy(int local_rank) {
   std::vector<std::string> eps = {"127.0.0.1:9866", "localhost:9867"};
   imperative::ParallelStrategy strategy;
@@ -26,27 +27,38 @@ imperative::ParallelStrategy GetStrategy(int local_rank) {
   strategy.current_endpoint_ = eps[local_rank];
   strategy.nranks_ = 2;
   strategy.local_rank_ = local_rank;
+  strategy.nrings_ = nrings;
   return strategy;
 }
 
 #if defined(PADDLE_WITH_NCCL)
-void BcastNCCLId(int local_rank, ncclUniqueId *nccl_id) {
+void BcastNCCLId(int local_rank, std::vector<ncclUniqueId>* nccl_ids) {
   auto strategy = GetStrategy(local_rank);
   platform::CUDAPlace gpu(local_rank);
   imperative::NCCLParallelContext ctx(strategy, gpu);
-  ctx.BcastNCCLId(nccl_id, 0);
+  ctx.BcastNCCLId(*nccl_ids, 0);
 }
 
 TEST(BcastNCCLId, Run) {
-  ncclUniqueId nccl_id;
-  platform::dynload::ncclGetUniqueId(&nccl_id);
-  std::thread t(BcastNCCLId, 0, &nccl_id);
+  std::vector<ncclUniqueId> nccl_ids;
+  nccl_ids.resize(nrings);
+  for (int i = 0; i < nrings; ++i) {
+    platform::dynload::ncclGetUniqueId(&nccl_ids[i]);
+  }
 
-  ncclUniqueId recv_nccl_id;
-  BcastNCCLId(1, &recv_nccl_id);
+  std::thread t(BcastNCCLId, 0, &nccl_ids);
+
+  std::vector<ncclUniqueId> recv_nccl_ids;
+  recv_nccl_ids.resize(nrings);
+  for (int i = 0; i < nrings; ++i) {
+    platform::dynload::ncclGetUniqueId(&recv_nccl_ids[i]);
+  }
+  BcastNCCLId(1, &recv_nccl_ids);
 
   t.join();
-  EXPECT_EQ(0, std::memcmp(nccl_id.internal, recv_nccl_id.internal,
-                           NCCL_UNIQUE_ID_BYTES));
+  for (int i = 0; i < nrings; ++i) {
+    EXPECT_EQ(0, std::memcmp(nccl_ids[i].internal, recv_nccl_ids[i].internal,
+                             NCCL_UNIQUE_ID_BYTES));
+  }
 }
 #endif

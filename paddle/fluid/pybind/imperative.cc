@@ -1261,7 +1261,13 @@ void BindImperative(py::module *m_ptr) {
                       return self.current_endpoint_;
                     },
                     [](imperative::ParallelStrategy &self,
-                       const std::string &ep) { self.current_endpoint_ = ep; });
+                       const std::string &ep) { self.current_endpoint_ = ep; })
+      .def_property(
+          "nrings",
+          [](const imperative::ParallelStrategy &self) { return self.nrings_; },
+          [](imperative::ParallelStrategy &self, int nrings) {
+            self.nrings_ = nrings;
+          });
 
   m.def(
       "dygraph_partial_grad",

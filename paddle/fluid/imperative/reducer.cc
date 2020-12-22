@@ -68,7 +68,7 @@ void Group::SplitTensors(const platform::CUDADeviceContext &context) {
 
 std::ostream &operator<<(std::ostream &out, const Group &group) {
   const auto &vars = group.variable_indices_;
-  out << "numul: " << group.all_length_ << " ;is_sparse: " << group.is_sparse_
+  out << "numel: " << group.all_length_ << " ;is_sparse: " << group.is_sparse_
       << " ;var number: " << vars.size() << "\n";
   auto begin = vars.begin();
   auto end = vars.end();
@@ -95,6 +95,7 @@ Reducer::Reducer(const std::vector<std::shared_ptr<imperative::VarBase>> &vars,
       parallel_ctx_(parallel_ctx),
       group_size_limits_(group_size_limits) {
   VLOG(3) << "Start construct the Reducer ...";
+  nrings_ = parallel_ctx->GetNRings();
   // initialize groups
   InitializeGroups(group_indices);
   for (size_t global_var_index = 0; global_var_index < vars_.size();
@@ -109,11 +110,13 @@ Reducer::Reducer(const std::vector<std::shared_ptr<imperative::VarBase>> &vars,
   compute_stream_ = static_cast<platform::CUDADeviceContext *>(
                         platform::DeviceContextPool::Instance().Get(place_))
                         ->stream();
-  comm_stream_ = platform::NCCLCommContext::Instance().Get(0, place_)->stream();
-  // create events
+  for (int i = 0; i < nrings_; ++i) {
+    comm_streams_.emplace_back(
+        platform::NCCLCommContext::Instance().Get(i, place_)->stream());
+    comm_events_.emplace_back(platform::CudaEventResourcePool::Instance().New(
+        BOOST_GET_CONST(platform::CUDAPlace, place_).device));
+  }
   CreateGroupEvents(group_indices.size());
-  comm_enent_ = platform::CudaEventResourcePool::Instance().New(
-      BOOST_GET_CONST(platform::CUDAPlace, place_).device);
 
   std::call_once(once_flag_, []() {
     std::atexit([]() { Reducer::GetInstance()->ReleaseReducer(); });
@@ -121,20 +124,22 @@ Reducer::Reducer(const std::vector<std::shared_ptr<imperative::VarBase>> &vars,
 }
 
 void Reducer::ReleaseReducer() {
-  for (auto &event : events_) {
+  for (auto &event : group_events_) {
     event.reset();
   }
-  comm_enent_.reset();
+  for (auto &event : comm_events_) {
+    event.reset();
+  }
 }
 
 void Reducer::CreateGroupEvents(int group_num) {
   // release old events
-  for (auto &event : events_) {
+  for (auto &event : group_events_) {
     event.reset();
   }
-  events_.clear();
-  events_.resize(group_num);
-  for (auto &event : events_) {
+  group_events_.clear();
+  group_events_.resize(group_num);
+  for (auto &event : group_events_) {
     event = platform::CudaEventResourcePool::Instance().New(
         BOOST_GET_CONST(platform::CUDAPlace, place_).device);
   }
@@ -194,7 +199,7 @@ void Reducer::InitializeDenseGroups(
 // Each parameter will be initialized according to the group information.
 // For the sparse parameter, sparse_contents_ in the group directly points
 // to the parameter. For dense parameters, first construct an empty Tensor().
-// Then specify the actual memory in MarkVariableReady.
+// Then specify the actual memory in MarkDenseVarReady.
 void Reducer::InitializeGroups(
     const std::vector<std::vector<size_t>> &group_indices) {
   VLOG(3) << "Start initialize groups ..";
@@ -218,7 +223,6 @@ void Reducer::InitializeGroups(
     if (variable_indices_.size() == 1 &&
         is_sparse_gradient_[variable_indices_.front()]) {
       // process the sparse gradient. one sparse, one group
-      group.sparse_contents_ = first_varbase->MutableGradVar();
       group.dtype_ = first_varbase->DataType();
       group.is_sparse_ = true;
     } else {
@@ -232,7 +236,7 @@ void Reducer::InitializeGroups(
 
     // map variables to this group by VariableLocator
     size_t inside_group_index = 0;
-    for (const auto var_index : group_indices[group_index]) {
+    for (const auto var_index : variable_indices_) {
       variable_locators_[var_index] = VariableLocator{
           .group_index = group_index,
           .inside_group_index = inside_group_index++,
@@ -260,7 +264,7 @@ void Reducer::PrepareForBackward() {
 // Add hook function to each leaf node. When the gradient of a leaf node is
 // generated, if it is the sparse parameter, it will directly execute allreduce,
 // if it is the dense parameter, it will execute three steps: 1,
-// MarkVariableReady. Find the position of the corresponding group
+// MarkDenseVarReady. Find the position of the corresponding group
 // through var_index, share the gradient memory and the group dense_tensors,
 // the group counter is reduced by 1. 2, MarkGroupReady: When the group
 // counter is 0, it means that allreduce can be emitted, and
@@ -278,8 +282,11 @@ void Reducer::AddDistHook(VariableWrapper *var_warpper, size_t var_index) {
 
   if (!group.is_sparse_) {
     // Only dense_contents_ need memory copy
-    MarkVariableReady(var_index, var_warpper);
+    MarkDenseVarReady(var_index, var_warpper);
+  } else {
+    MarkSparseVarReady(var_index, var_warpper);
   }
+
   if (--group.pending_ == 0) {
     // can start allreduce
     MarkGroupReady(group_index);
@@ -290,7 +297,7 @@ void Reducer::AddDistHook(VariableWrapper *var_warpper, size_t var_index) {
   }
 }
 
-void Reducer::MarkVariableReady(size_t var_index,
+void Reducer::MarkDenseVarReady(size_t var_index,
                                 VariableWrapper *var_warpper) {
   const auto &var_locator = variable_locators_[var_index];
   auto group_index = var_locator.group_index;
@@ -303,6 +310,14 @@ void Reducer::MarkVariableReady(size_t var_index,
       {static_cast<int64_t>(length)});
 }
 
+void Reducer::MarkSparseVarReady(size_t var_index,
+                                 VariableWrapper *var_warpper) {
+  const auto &var_locator = variable_locators_[var_index];
+  auto group_index = var_locator.group_index;
+  auto &group = groups_[group_index];
+  group.sparse_contents_ = var_warpper->MutableVar();
+}
+
 void Reducer::MarkGroupReady(size_t group_index) {
   if (group_index > next_group_) {
     VLOG(3) << "It will adjust the order of group in next batch automatically";
@@ -310,29 +325,35 @@ void Reducer::MarkGroupReady(size_t group_index) {
   }
 
   PADDLE_ENFORCE_CUDA_SUCCESS(
-      cudaEventRecord(events_[group_index].get(), compute_stream_));
-  PADDLE_ENFORCE_CUDA_SUCCESS(
-      cudaStreamWaitEvent(comm_stream_, events_[group_index].get(), 0));
+      cudaEventRecord(group_events_[group_index].get(), compute_stream_));
+  for (int i = 0; i < nrings_; ++i) {
+    PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamWaitEvent(
+        comm_streams_[i], group_events_[group_index].get(), 0));
+  }
 
   for (; next_group_ < groups_.size() && groups_[next_group_].pending_ == 0;
        ++next_group_) {
     auto &group = groups_[next_group_];
+    int run_order = next_group_ % nrings_;
     if (group.is_sparse_) {
-      VLOG(3) << "sparse group [" << next_group_ << "] start allreduce...";
-      parallel_ctx_->AllReduceByStream(*group.sparse_contents_,
-                                       group.sparse_contents_, 0, false);
+      VLOG(3) << "sparse group [" << next_group_ << "] start allreduce in ring["
+              << run_order << "]";
+      parallel_ctx_->AllReduceByStream(
+          *group.sparse_contents_, group.sparse_contents_, run_order, false);
     } else {
-      VLOG(3) << "dense group [" << next_group_ << "] start allreduce...";
+      VLOG(3) << "dense group [" << next_group_ << "] start allreduce in ring["
+              << run_order << "]";
       // Select common commstream to concat tensors
       // group.dense_tensors ---> group.dense_contents_
-      group.ConcatTensors(*parallel_ctx_->GetDeviceContext(0));
+      group.ConcatTensors(*parallel_ctx_->GetDeviceContext(run_order));
 
       // Start allreduce
-      parallel_ctx_->AllReduceByStream(group.dense_contents_,
-                                       &(group.dense_contents_), 0, false);
+      parallel_ctx_->AllReduceByStream(
+          group.dense_contents_, &(group.dense_contents_), run_order, false);
+
       // Select common commstream to split tensors
       // group.dense_contents_ ---> group.dense_tensors
-      group.SplitTensors(*parallel_ctx_->GetDeviceContext(0));
+      group.SplitTensors(*parallel_ctx_->GetDeviceContext(run_order));
     }
   }
 }
@@ -351,9 +372,16 @@ std::vector<std::vector<size_t>> Reducer::RebuildGruops() {
 }
 
 void Reducer::FinalizeBackward() {
-  PADDLE_ENFORCE_CUDA_SUCCESS(cudaEventRecord(comm_enent_.get(), comm_stream_));
-  PADDLE_ENFORCE_CUDA_SUCCESS(
-      cudaStreamWaitEvent(compute_stream_, comm_enent_.get(), 0));
+  // Must prevent compute_stream_ starting until all comm streams have finished
+  for (int i = 0; i < nrings_; ++i) {
+    PADDLE_ENFORCE_CUDA_SUCCESS(
+        cudaEventRecord(comm_events_[i].get(), comm_streams_[i]));
+  }
+  for (int i = 0; i < nrings_; ++i) {
+    PADDLE_ENFORCE_CUDA_SUCCESS(
+        cudaStreamWaitEvent(compute_stream_, comm_events_[i].get(), 0));
+  }
+
   if (!has_rebuilt_group_) {
     VLOG(3) << "Start rebuilding the groups";
     auto rebuild_group_indices = RebuildGruops();
@@ -362,6 +390,7 @@ void Reducer::FinalizeBackward() {
     CreateGroupEvents(rebuild_group_number);
     InitializeGroups(group_indices_);
   }
+
   VLOG(3) << "In the batch, Reducer is finished...";
 }
 
