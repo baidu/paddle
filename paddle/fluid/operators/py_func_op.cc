@@ -318,7 +318,7 @@ REGISTER_OPERATOR(
 
 REGISTER_OP_CPU_KERNEL(
     py_func, ops::PyFuncOpKernel<paddle::platform::CPUDeviceContext, float>);
-// #ifdef PADDLE_WITH_CUDA
+#ifdef PADDLE_WITH_CUDA
 REGISTER_OP_CUDA_KERNEL(
     py_func, ops::PyFuncOpKernel<paddle::platform::CUDADeviceContext, float>);
-// #endif  // PADDLE_WITH_CUDA
+#endif  // PADDLE_WITH_CUDA
