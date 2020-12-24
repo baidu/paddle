@@ -61,27 +61,6 @@ ThreadSafeNameSet VarBase::name_set_;
 
 std::vector<std::string> VarBase::AliveVarNames() { return name_set_.Names(); }
 
-static framework::RuntimeContext PrepareRuntimeContext(
-    const NameVarBaseMap& ins, const NameVarBaseMap& outs) {
-  framework::VariableValueMap inputs, outputs;
-  for (auto& in_pair : ins) {
-    auto& in_ctx = inputs[in_pair.first];
-    in_ctx.reserve(in_pair.second.size());
-    for (auto& in_var : in_pair.second) {
-      in_ctx.emplace_back(in_var->MutableVar());
-    }
-  }
-
-  for (auto& out_pair : outs) {
-    auto& out_ctx = outputs[out_pair.first];
-    out_ctx.reserve(out_pair.second.size());
-    for (auto& out_var : out_pair.second) {
-      out_ctx.emplace_back(out_var->MutableVar());
-    }
-  }
-  return framework::RuntimeContext(std::move(inputs), std::move(outputs));
-}
-
 template <typename VarType>
 static std::string DebugString(
     const std::string& name,
@@ -356,11 +335,32 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
   }
 
   VLOG(5) << LayerDebugString(op.Type(), ins, outs);
-  auto prepared_op = PreparedOp::Prepare(ins, outs, *op_kernel, place, attrs);
 
-  prepared_op.Run(ins, outs, attrs);
+  /**
+   * [ Why need temporary inputs here? ]
+   *
+   * PrepareData should not change original input attribute inplace,
+   * because the backward process may still use these attributes.
+   *
+   * In static graph mode, when op is executed, a temporary scope
+   * `transfer_scope` is created before PrepareData, the data after
+   * transform is stored in the temporary scope, and then discarded
+   * after the execution of op, but the original input is directly
+   * overwritten in the previous dynamic graph implemention.
+   *
+   * In a scenario with type promotion, the forward input may be
+   * promoted, but when the backward gradient is returned, the type
+   * needs to be downgraded according to the type of the forward input,
+   * which depends on the attributes of the forward input.
+   */
+  auto expected_kernel_key =
+      GetExpectedKernelKey<VarType>(ins, outs, *op_kernel, place, attrs);
+  auto prepared_op = PreparedOp::Prepare(*op_kernel, expected_kernel_key);
+  auto tmp_ins = PrepareData<VarType>(*op_kernel, ins, expected_kernel_key);
 
-  VLOG(4) << LayerDebugString(op.Type(), ins, outs);
+  prepared_op.Run(tmp_ins, outs, attrs);
+
+  VLOG(5) << LayerDebugString(op.Type(), ins, outs);
 }
 
 void OpBase::Run(const framework::OperatorBase& op,
@@ -410,6 +410,7 @@ static void ClearNoNeedBufferInputs(OpBase* op) {
       auto& old_tensor = var.Get<framework::LoDTensor>();
       new_tensor->Resize(old_tensor.dims());
       new_tensor->set_lod(old_tensor.lod());
+      new_tensor->set_type(old_tensor.type());
       each_var.reset(new_var);
     }
   }

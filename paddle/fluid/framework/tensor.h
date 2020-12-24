@@ -197,6 +197,8 @@ class Tensor {
     return type_;
   }
 
+  void set_type(const proto::VarType::Type type) { type_ = type; }
+
   // memory size returns the holding memory size in byte.
   size_t memory_size() const;
 
@@ -232,9 +234,28 @@ class Tensor {
 
   void ResetHolderWithType(std::shared_ptr<memory::Allocation> holder,
                            const proto::VarType::Type type);
+
   TensorInplaceVersion& InplaceVersionCounter() {
     return inplace_version_counter_;
   }
+
+  /**
+   * [Add method get the record type of tensor]
+   *
+   * After the introduction of complex number calculations, Ops that support
+   * complex number calculations generally support type promotion, such as
+   * x(float32) + y(complex64) = out(complex64), then the type of the grad
+   * tensor should be dout(complex64), dx(float32), dy (complex64), but the
+   * type of dx to be recognized to be float32 by the grad Op relay on the type
+   * of forward tensor x. But many of our ops have registered InplaceInferer,
+   * covering the tensor memory of x with out, so as to save storage.
+   *
+   * In this case, the dim and type information recorded by x still exist,
+   * but because x becomes an uninitialized tensor, The type of x record cannot
+   * be obtained with x.type(), but the type is still valid here, so we
+   * added RecoredType(), This method SHOULD NOT be called by general scenarios.
+   */
+  proto::VarType::Type RecordType() const { return type_; }
 
  private:
   /*! holds the memory block if allocated. */

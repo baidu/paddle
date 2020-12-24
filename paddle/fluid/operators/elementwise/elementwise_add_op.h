@@ -15,6 +15,8 @@ limitations under the License. */
 
 #include <algorithm>
 #include <utility>
+
+#include "paddle/fluid/framework/data_type_transform.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.cu.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.h"
@@ -424,6 +426,10 @@ class ElementwiseAddGradKernel : public ElemwiseGradKernel<T> {
       default_elementwise_add_grad<DeviceContext, T>(ctx, x, y, out, dout, dx,
                                                      dy);
     }
+
+    // handle complex gradient to real, if no complex dtype, do nothing
+    framework::HandleComplexToReal(x, dx);
+    framework::HandleComplexToReal(y, dy);
   }
 };
 

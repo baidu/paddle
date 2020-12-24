@@ -16,11 +16,8 @@
 
 #include <sstream>
 
-#include "paddle/fluid/imperative/execution_context.h"
 #include "paddle/fluid/imperative/infer_shape_context.h"
 #include "paddle/fluid/imperative/infer_var_type_context.h"
-
-DECLARE_bool(use_mkldnn);
 
 namespace paddle {
 namespace imperative {
@@ -35,31 +32,7 @@ const framework::Tensor* GetTensorFromVar(const framework::Variable& var) {
   }
 }
 
-template <typename VarType>
-static void PrepareData(const platform::Place& place,
-                        const NameVarMap<VarType>& ins,
-                        const framework::OperatorWithKernel& op,
-                        const framework::OpKernelType& expected_kernel_key) {
-  for (const auto& name_pair : ins) {
-    for (const auto& var_base : name_pair.second) {
-      const auto* tensor = GetTensorFromVar(var_base->Var());
-      if (tensor && tensor->IsInitialized()) {
-        auto kernel_type_for_var = op.GetKernelTypeForVar(
-            name_pair.first, *tensor, expected_kernel_key);
-        if (!NeedTransform(kernel_type_for_var, expected_kernel_key)) {
-          continue;
-        } else {
-          VLOG(3) << "Transform Variable " << var_base->Name() << " from "
-                  << kernel_type_for_var << " to " << expected_kernel_key;
-          framework::Tensor out;
-          TransformData(expected_kernel_key, kernel_type_for_var, *tensor,
-                        &out);
-          SetTensorToVariable(var_base->Var(), out, var_base->MutableVar());
-        }
-      }
-    }
-  }
-}
+/* PrepareOp class methods */
 
 PreparedOp::PreparedOp(const framework::OperatorBase& op,
                        const framework::RuntimeContext& ctx,
@@ -67,14 +40,11 @@ PreparedOp::PreparedOp(const framework::OperatorBase& op,
                        platform::DeviceContext* dev_ctx)
     : op_(op), ctx_(ctx), func_(func), dev_ctx_(dev_ctx) {}
 
-template <typename VarType>
-PreparedOp PrepareOpImpl(const NameVarMap<VarType>& ins,
-                         const NameVarMap<VarType>& outs,
-                         const framework::OperatorWithKernel& op,
-                         platform::Place place,
-                         const framework::AttributeMap& attrs) {
+PreparedOp PreparedOp::Prepare(
+    const framework::OperatorWithKernel& op,
+    const framework::OpKernelType& expected_kernel_key) {
   platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
-  auto* dev_ctx = pool.Get(place);
+  auto* dev_ctx = pool.Get(expected_kernel_key.place_);
 
   // check if op[type] has kernel registered.
   auto& all_op_kernels = op.AllOpKernels();
@@ -89,26 +59,15 @@ PreparedOp PrepareOpImpl(const NameVarMap<VarType>& ins,
   auto& kernels = kernels_iter->second;
 
   framework::RuntimeContext ctx({}, {});
-#ifdef PADDLE_WITH_MKLDNN
-  // MKLDNN variant of code reads attributes in some of GetKernelTypeForVar and
-  // GetKernelType functions, so we need to copy the attributes there.
-  // Const qualifier of Attrs had to be discarded to overwrite it.
-  if (FLAGS_use_mkldnn) {
-    auto& mutable_op_attrs = const_cast<framework::AttributeMap&>(op.Attrs());
-    mutable_op_attrs = attrs;
-  }
-#endif
-  auto expected_kernel_key =
-      op.GetExpectedKernelType(DygraphExecutionContext<VarType>(
-          op, framework::Scope(), *dev_ctx, ctx, ins, outs, attrs));
-  VLOG(3) << "expected_kernel_key:" << expected_kernel_key;
-
   auto kernel_iter = kernels.find(expected_kernel_key);
 #ifdef PADDLE_WITH_XPU
   if (kernel_iter == kernels.end() &&
       is_xpu_place(expected_kernel_key.place_)) {
-    expected_kernel_key.place_ = platform::CPUPlace();
-    kernel_iter = kernels.find(expected_kernel_key);
+    auto basic_kernel_key = framework::OpKernelType(
+        expected_kernel_key.data_type_, platform::CPUPlace(),
+        expected_kernel_key.data_layout_, expected_kernel_key.library_type_,
+        expected_kernel_key.customized_type_value_);
+    kernel_iter = kernels.find(basic_kernel_key);
   }
 #endif
   // TODO(jiabin): Add operator.cc's line 1000 part back when we need that case
@@ -117,29 +76,7 @@ PreparedOp PrepareOpImpl(const NameVarMap<VarType>& ins,
                         "Operator %s does not have kernel for %s.", op.Type(),
                         KernelTypeToString(expected_kernel_key)));
 
-  if (!(expected_kernel_key.place_ == place)) {
-    dev_ctx = pool.Get(expected_kernel_key.place_);
-    place = dev_ctx->GetPlace();
-  }
-
-  PrepareData<VarType>(place, ins, op, expected_kernel_key);
   return PreparedOp(op, ctx, kernel_iter->second, dev_ctx);
-}
-
-PreparedOp PreparedOp::Prepare(const NameVarMap<VarBase>& ins,
-                               const NameVarMap<VarBase>& outs,
-                               const framework::OperatorWithKernel& op,
-                               const platform::Place& place,
-                               const framework::AttributeMap& attrs) {
-  return PrepareOpImpl<VarBase>(ins, outs, op, place, attrs);
-}
-
-PreparedOp PreparedOp::Prepare(const NameVarMap<VariableWrapper>& ins,
-                               const NameVarMap<VariableWrapper>& outs,
-                               const framework::OperatorWithKernel& op,
-                               const platform::Place& place,
-                               const framework::AttributeMap& attrs) {
-  return PrepareOpImpl<VariableWrapper>(ins, outs, op, place, attrs);
 }
 
 template <typename VarType>

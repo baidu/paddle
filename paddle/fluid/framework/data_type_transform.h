@@ -33,5 +33,17 @@ void TransDataType(const OpKernelType& kernel_type_for_var,
                    const OpKernelType& expected_kernel_type, const Tensor& in,
                    Tensor* out);
 
+/**
+ * Handle complex gradient transform to real data type in grad op.
+ *
+ * If complex type promotion occurred in forward op, the grad output of
+ * this op is complex data type, but the input variable may be real type,
+ * in this case the grad input need to be cast to type same with input,
+ * this casting executed at the end of grad op.
+ *
+ * If the grad tensor is real type, this function do nothing.
+ */
+void HandleComplexToReal(const Tensor* tensor, Tensor* grad_tensor);
+
 }  // namespace framework
 }  // namespace paddle
