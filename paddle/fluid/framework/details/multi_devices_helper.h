@@ -55,6 +55,7 @@ constexpr char kPlaces[] = "places";
 constexpr char kGlobalScope[] = "global_scope";
 constexpr char kLocalScopes[] = "local_scopes";
 constexpr char kNCCLCtxs[] = "nccl_ctxs";
+constexpr char kBKCLCtxs[] = "bkcl_ctxs";
 constexpr char kUseHierarchicalAllReduce[] = "use_hierarchical_allreduce";
 
 // aux variables to represent dependency. Useful to resolve data hazard.

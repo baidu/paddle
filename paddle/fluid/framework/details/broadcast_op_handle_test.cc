@@ -18,10 +18,12 @@ namespace paddle {
 namespace framework {
 namespace details {
 
+using DeviceType = paddle::platform::DeviceType;
+
 TEST(BroadcastTester, TestCPUBroadcastTestLodTensor) {
   TestBroadcastOpHandle test_op;
   size_t input_scope_idx = 0;
-  test_op.InitCtxOnGpu(false);
+  test_op.InitCtxOnDevice(p::kCPU);
   test_op.InitBroadcastOp(input_scope_idx);
   test_op.TestBroadcastLodTensor(input_scope_idx);
 }
@@ -29,7 +31,7 @@ TEST(BroadcastTester, TestCPUBroadcastTestLodTensor) {
 TEST(BroadcastTester, TestCPUBroadcastTestSelectedRows) {
   TestBroadcastOpHandle test_op;
   size_t input_scope_idx = 0;
-  test_op.InitCtxOnGpu(false);
+  test_op.InitCtxOnDevice(p::kCPU);
   test_op.InitBroadcastOp(input_scope_idx);
   test_op.TestBroadcastSelectedRows(input_scope_idx);
 }
@@ -38,7 +40,7 @@ TEST(BroadcastTester, TestCPUBroadcastTestSelectedRows) {
 TEST(BroadcastTester, TestGPUBroadcastTestLodTensor) {
   TestBroadcastOpHandle test_op;
   size_t input_scope_idx = 0;
-  test_op.InitCtxOnGpu(true);
+  test_op.InitCtxOnDevice(p::kCUDA);
   test_op.InitBroadcastOp(input_scope_idx);
   test_op.TestBroadcastLodTensor(input_scope_idx);
 }
@@ -46,9 +48,19 @@ TEST(BroadcastTester, TestGPUBroadcastTestLodTensor) {
 TEST(BroadcastTester, TestGPUBroadcastTestSelectedRows) {
   TestBroadcastOpHandle test_op;
   size_t input_scope_idx = 0;
-  test_op.InitCtxOnGpu(true);
+  test_op.InitCtxOnDevice(p::kCUDA);
   test_op.InitBroadcastOp(input_scope_idx);
   test_op.TestBroadcastSelectedRows(input_scope_idx);
+}
+#endif
+
+#if defined(PADDLE_WITH_XPU_BKCL)
+TEST(BroadcastTester, TestXPUBroadcastTestLodTensor) {
+  TestBroadcastOpHandle test_op;
+  size_t input_scope_idx = 0;
+  test_op.InitCtxOnDevice(p::kXPU);
+  test_op.InitBroadcastOp(input_scope_idx);
+  test_op.TestBroadcastLodTensor(input_scope_idx);
 }
 #endif
 

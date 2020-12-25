@@ -14,22 +14,19 @@
 
 #pragma once
 #include <cstddef>  // for size_t
+#include "paddle/fluid/platform/device_context.h"
 
 namespace paddle {
 namespace framework {
 namespace details {
-
+using DeviceType = paddle::platform::DeviceType;
+namespace p = paddle::platform;
 struct ExecutionStrategy {
   enum ExecutorType { kDefault = 0, kExperimental = 1 };
-  enum UseDevice {
-    kCPU = 0,
-    kCUDA = 1,
-    kXPU = 2,
-  };
 
   // num_threads indicates the size of thread pool.
   size_t num_threads_{0};
-  UseDevice use_device_{kCUDA};
+  DeviceType use_device_ = p::kCUDA;
   // Note that allow_op_delay is invalid now.
   bool allow_op_delay_{false};
   // num_iteration_per_drop_scope indicates how many

@@ -60,7 +60,31 @@ function gen_full_html_report() {
     mv -f coverage-full.tmp coverage-full.info
 }
 
-gen_full_html_report || true
+function gen_full_html_report_xpu() {
+    lcov --extract coverage.info \
+        '/paddle/paddle/fluid/operators/*xpu*' \
+        -o coverage-full.tmp \
+        --rc lcov_branch_coverage=0
+
+    mv -f coverage-full.tmp coverage-full.info
+
+    lcov --remove coverage-full.info \
+        '/paddle/paddle/fluid/framework/*_test*' \
+        '/paddle/paddle/fluid/*/*test*' \
+        '/paddle/paddle/fluid/*/*/*test*' \
+        '/paddle/paddle/fluid/inference/tests/*' \
+        '/paddle/paddle/fluid/inference/api/demo_ci/*' \
+        -o coverage-full.tmp \
+        --rc lcov_branch_coverage=0
+
+    mv -f coverage-full.tmp coverage-full.info
+}
+
+if [ ${WITH_XPU:-OFF} == "ON" ]; then
+    gen_full_html_report_xpu || true
+else
+    gen_full_html_report || true
+fi
 
 # diff html report
 
@@ -154,7 +178,13 @@ python3.7 ${PADDLE_ROOT}/tools/coverage/coverage_lines.py coverage-diff.info 0.9
 
 echo "Assert Python Diff Coverage"
 
-python3.7 ${PADDLE_ROOT}/tools/coverage/coverage_lines.py python-coverage-diff.info 0.9 || PYTHON_COVERAGE_LINES_ASSERT=1
+
+if [ ${WITH_XPU:-OFF} == "ON" ]; then
+    echo "XPU has no python coverage!"
+else
+    python3.7 ${PADDLE_ROOT}/tools/coverage/coverage_lines.py python-coverage-diff.info 0.9 || PYTHON_COVERAGE_LINES_ASSERT=1
+fi
+
 
 if [ "$COVERAGE_LINES_ASSERT" = "1" ] || [ "$PYTHON_COVERAGE_LINES_ASSERT" = "1" ]; then
     echo "exit 9" > /tmp/paddle_coverage.result

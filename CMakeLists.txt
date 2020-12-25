@@ -29,7 +29,8 @@ include(generic)            # simplify cmake module
 find_package(CUDA QUIET)
 option(WITH_GPU         "Compile PaddlePaddle with NVIDIA GPU"          ${CUDA_FOUND})
 option(WITH_TENSORRT    "Compile PaddlePaddle with NVIDIA TensorRT"     OFF)
-option(WITH_XPU         "Compile PaddlePaddle with BAIDU KUNLUN"        OFF)
+option(WITH_XPU         "Compile PaddlePaddle with BAIDU KUNLUN XPU"    OFF)
+# add test
 option(WITH_WIN_DUMP_DBG "Compile with windows core dump debug mode"    OFF)
 if (WITH_GPU  AND WITH_XPU)
     message(FATAL_ERROR "Error when compile GPU and XPU at the same time")
@@ -166,6 +167,7 @@ option(WITH_DGC   "Use DGC(Deep Gradient Compression) or not" ${WITH_DISTRIBUTE}
 option(SANITIZER_TYPE "Choose the type of sanitizer, options are: Address, Leak, Memory, Thread, Undefined" OFF)
 option(WITH_LITE   "Compile Paddle Fluid with Lite Engine" OFF)
 option(WITH_NCCL   "Compile PaddlePaddle with NCCL support"             ON)
+option(WITH_XPU_BKCL    "Compile PaddlePaddle with BAIDU KUNLUN XPU BKCL"   OFF)
 option(WITH_CRYPTO   "Compile PaddlePaddle with crypto support"         ON)
 option(WITH_ARM   "Compile PaddlePaddle with arm support"         OFF)
 option(WITH_SW   "Compile PaddlePaddle with sw support"         OFF)
@@ -211,6 +213,13 @@ if (NOT WITH_GPU AND WITH_NCCL)
         "Disable NCCL when compiling without GPU. Force WITH_NCCL=OFF.")
     set(WITH_NCCL OFF CACHE STRING
         "Disable NCCL when compiling without GPU" FORCE)
+endif()
+
+if (NOT WITH_XPU AND WITH_XPU_BKCL)
+    MESSAGE(WARNING
+        "Disable BKCL when compiling without XPU. Force WITH_XPU_BKCL=OFF.")
+    set(WITH_XPU_BKCL OFF CACHE STRING
+        "Disable BKCL when compiling without XPU" FORCE)
 endif()
 
 if(WITH_NCCL)

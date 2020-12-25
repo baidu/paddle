@@ -41,11 +41,15 @@ class NCCLCommunicator;
 
 #if defined(PADDLE_WITH_NCCL)
 #include "paddle/fluid/platform/nccl_helper.h"
+#elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPU_BKCL)
+#include "paddle/fluid/platform/bkcl_helper.h"
 #endif
 
 namespace paddle {
 namespace framework {
 namespace details {
+using DeviceType = paddle::platform::DeviceType;
+namespace p = paddle::platform;
 
 struct BuildStrategy {
   // ParallelExecutor supports two modes of ReduceStrategy, kAllReduce and
@@ -147,6 +151,7 @@ struct BuildStrategy {
 
   // NCCL config
   size_t nccl_comm_num_{1};
+  size_t bkcl_comm_num_{1};
   // The picture is here:
   // https://github.com/PaddlePaddle/Paddle/pull/17263#discussion_r285411396
   bool use_hierarchical_allreduce_{false};
@@ -181,10 +186,13 @@ struct BuildStrategy {
                    const std::vector<Scope *> &local_scopes,
                    const size_t &nranks,
 #if defined(PADDLE_WITH_NCCL)
-                   const bool use_cuda,
+                   DeviceType use_device,
                    platform::NCCLCommunicator *nccl_ctxs) const;
+#elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPU_BKCL)
+                   DeviceType use_device,
+                   platform::BKCLCommunicator *bkcl_ctxs) const;
 #else
-                   const bool use_cuda) const;
+                   DeviceType use_device) const;
 #endif
 
   // If set true, ParallelExecutor would build the main_program into multiple

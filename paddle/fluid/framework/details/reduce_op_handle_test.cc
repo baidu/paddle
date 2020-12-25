@@ -25,7 +25,7 @@ namespace details {
 namespace f = paddle::framework;
 namespace p = paddle::platform;
 
-using UseDevice = paddle::framework::details::ExecutionStrategy::UseDevice;
+using DeviceType = paddle::platform::DeviceType;
 
 // test data amount
 const f::DDim kDims = {20, 20};
@@ -198,7 +198,7 @@ struct TestReduceOpHandle {
     out_selected_rows->mutable_value()->ShareDataWith(
         in_selected_rows->value());
 
-    UseDevice use_device = UseDevice::kCPU;
+    DeviceType use_device = p::kCPU;
     op_handle_->Run(use_device);
 
     WaitAll();
@@ -263,7 +263,7 @@ struct TestReduceOpHandle {
 
     out_lodtensor->ShareDataWith(in_lodtensor);
 
-    UseDevice use_device = UseDevice::kCPU;
+    DeviceType use_device = p::kCPU;
     op_handle_->Run(use_device);
 
     WaitAll();

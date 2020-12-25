@@ -30,6 +30,10 @@ limitations under the License. */
 #include "paddle/fluid/platform/gpu_info.h"
 #endif
 
+#if defined(PADDLE_WITH_XPU_BKCL)
+#include "xpu/bkcl.h"
+#endif
+
 #ifdef PADDLE_WITH_MKLDNN
 #include "mkldnn.hpp"
 #include "paddle/fluid/framework/data_layout.h"
@@ -52,6 +56,7 @@ struct GpuDevice;
 
 #ifdef PADDLE_WITH_XPU
 #include "paddle/fluid/platform/xpu_header.h"
+#include "paddle/fluid/platform/xpu_info.h"
 #endif
 
 namespace paddle {
@@ -63,6 +68,16 @@ void SetAllowTF32Cublas(bool active);
 /*Get the global variable allow_tf32_cublas value*/
 bool AllowTF32Cublas();
 #endif  // PADDLE_WITH_CUDA
+
+enum DeviceType {
+  CPU = 0,
+  CUDA = 1,
+  XPU = 2,
+};
+
+constexpr DeviceType kCPU = DeviceType::CPU;
+constexpr DeviceType kCUDA = DeviceType::CUDA;
+constexpr DeviceType kXPU = DeviceType::XPU;
 
 class DeviceContext {
  public:
@@ -107,9 +122,20 @@ class XPUDeviceContext : public DeviceContext {
   /*! \brief  Wait for all operations completion in the stream. */
   void Wait() const override;
 
+#ifdef PADDLE_WITH_XPU_BKCL
+  /*! \brief  Return nccl context. */
+  BKCLContext_t bkcl_context() const { return bkcl_context_; }
+
+  /*! \brief  Set bkcl context. */
+  void set_bkcl_context(BKCLContext_t context) { bkcl_context_ = context; }
+#endif
+
  private:
   XPUPlace place_;
   xpu::Context* context_;
+#ifdef PADDLE_WITH_XPU_BKCL
+  BKCLContext_t bkcl_context_;
+#endif
 
   // Need to be the same with other DeviceContext,
   // Eventhough eigen_device_ is not used in XPU
@@ -552,8 +578,8 @@ class MKLDNNDeviceContext : public CPUDeviceContext {
   const std::string& GetKeySuffix(void) const { return key_suffix_; }
 
   // Disable adding  thread ID to the key
-  void DisableThreadInfoInKey(void) { key_attach_thread_id_ = false; };
-  bool IsThreadIdUsedInKey(void) const { return key_attach_thread_id_; };
+  void DisableThreadInfoInKey(void) { key_attach_thread_id_ = false; }
+  bool IsThreadIdUsedInKey(void) const { return key_attach_thread_id_; }
 
   // Prevent next ResetBlobMap()
   void BlockNextCacheClearing();

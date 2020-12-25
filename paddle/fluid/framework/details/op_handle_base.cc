@@ -82,21 +82,74 @@ void OpHandleBase::InitCUDA() {
       }
     }
   }
+#else
+  PADDLE_THROW(platform::errors::PermissionDenied(
+      "Paddle can't use CUDA device since it's not compiled with CUDA,"
+      "Please recompile or reinstall Paddle with GPU support."));
 #endif
 }
 
-void OpHandleBase::Run(ExecutionStrategy::UseDevice use_device) {
+void OpHandleBase::InitXPU() {
+#ifdef PADDLE_WITH_XPU
+  if (IsMultiDeviceTransfer() && dev_ctxes_.size() > 0) {
+    for (auto &out_var : outputs_) {
+      auto *out_var_handle = dynamic_cast<VarHandle *>(out_var);
+      if (out_var_handle) {
+        // TODO(liuyuhui): XPU now don't support sync events, add later.
+      }
+    }
+  } else {
+    PADDLE_ENFORCE_EQ(dev_ctxes_.size(), 1UL,
+                      platform::errors::InvalidArgument(
+                          "%s should have only one dev_ctx.", Name()));
+    auto &place = dev_ctxes_.begin()->first;
+    int dev_id = BOOST_GET_CONST(platform::XPUPlace, place).device;
+    PADDLE_ENFORCE_EQ(
+        xpu_set_device(dev_id), XPU_SUCCESS,
+        platform::errors::PreconditionNotMet("xpu_set_device failed"));
+    for (auto &out_var : outputs_) {
+      auto *out_var_handle = dynamic_cast<VarHandle *>(out_var);
+      if (out_var_handle) {
+        PADDLE_ENFORCE_EQ(
+            platform::is_same_place(place, out_var_handle->place()), true,
+            platform::errors::InvalidArgument(
+                "The place of output(%s) is not consistent with the "
+                "place of current op(%s).",
+                out_var_handle->Name(), Name()));
+      }
+    }
+  }
+#else
+  PADDLE_THROW(platform::errors::PermissionDenied(
+      "Paddle can't use XPU device since it's not compiled with XPU,"
+      "Please recompile or reinstall Paddle with XPU support."));
+#endif
+}
+
+void OpHandleBase::Run(DeviceType use_device) {
 #ifdef PADDLE_WITH_CUDA
-  if (events_.empty() && use_device == ExecutionStrategy::UseDevice::kCUDA &&
-      dev_ctxes_.size() > 0) {
+  if (events_.empty() && use_device == p::kCUDA && dev_ctxes_.size() > 0) {
     InitCUDA();
   }
 #else
-  PADDLE_ENFORCE_NE(use_device, ExecutionStrategy::UseDevice::kCUDA,
-                    platform::errors::InvalidArgument(
-                        "Argument use_cuda should be false when Paddle is not "
-                        "compiled with CUDA."));
+  PADDLE_ENFORCE_NE(
+      use_device, p::kCUDA,
+      platform::errors::InvalidArgument(
+          "Argument use_device should not be kCUDA when Paddle is not "
+          "compiled with CUDA."));
 #endif
+
+  if (use_device == p::kXPU && dev_ctxes_.size() > 0) {
+#ifdef PADDLE_WITH_XPU
+    InitXPU();
+#else
+    PADDLE_ENFORCE_NE(
+        use_device, p::kXPU,
+        platform::errors::InvalidArgument(
+            "Argument use_device should not be kXPU when Paddle is not "
+            "compiled with XPU."));
+#endif
+  }
 
   // skip running current op, used with inplace_addto_op_pass
   if (skip_running_) {

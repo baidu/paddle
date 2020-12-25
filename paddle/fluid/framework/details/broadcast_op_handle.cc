@@ -80,7 +80,7 @@ void BroadcastOpHandle::BroadcastOneVar(
             &VariableVisitor::GetMutableTensor(out_var));
       });
     }
-  } else {
+  } else if (platform::is_gpu_place(in_tensor.place())) {
 #if defined(PADDLE_WITH_NCCL)
     VarHandle *out_handle = nullptr;
     int root_id =
@@ -141,6 +141,72 @@ void BroadcastOpHandle::BroadcastOneVar(
 #else
     PADDLE_THROW(
         platform::errors::PreconditionNotMet("Not compiled with NCLL."));
+#endif
+  } else {
+#if defined(PADDLE_WITH_XPU_BKCL)
+    VarHandle *out_handle = nullptr;
+    int root_id = BOOST_GET_CONST(platform::XPUPlace, in_tensor.place()).device;
+    std::vector<std::function<void()>> broadcast_calls;
+
+    int type = platform::ToBKCLDataType(in_tensor.type());
+    size_t numel = static_cast<size_t>(in_tensor.numel());
+
+    for (auto out_var_handle : out_var_handles) {
+      Variable *out_var = var_scopes.at(out_var_handle->scope_idx())
+                              ->FindVar(out_var_handle->name());
+
+      int dst_id =
+          BOOST_GET_CONST(platform::XPUPlace, out_var_handle->place()).device;
+
+      auto &bkcl_ctx = bkcl_ctxs_->at(dst_id);
+
+      void *send_recv_buffer = nullptr;
+      if (root_id == dst_id) {
+        send_recv_buffer = const_cast<void *>(in_tensor.data<void>());
+        out_handle = out_var_handle;
+      } else {
+        send_recv_buffer = VariableVisitor::GetMutableTensor(out_var)
+                               .Resize(in_tensor.dims())
+                               .mutable_data(out_var_handle->place());
+      }
+
+      broadcast_calls.emplace_back([send_recv_buffer, numel, type, root_id,
+                                    &bkcl_ctx] {
+        PADDLE_ENFORCE_EQ(
+            bkcl_broadcast(bkcl_ctx.comm(), send_recv_buffer, send_recv_buffer,
+                           numel, static_cast<BKCLDataType>(type), root_id,
+                           nullptr),
+            BKCL_SUCCESS,
+            platform::errors::Unavailable("bkcl_broadcast failed"));
+      });
+    }
+
+    WaitInputVarGenerated();
+    this->RunAndRecordEvent([&] {
+      {
+        PADDLE_ENFORCE_EQ(
+            bkcl_group_start(), BKCL_SUCCESS,
+            platform::errors::Unavailable("bkcl_group_start failed"));
+        for (auto &call : broadcast_calls) {
+          call();
+        }
+        PADDLE_ENFORCE_EQ(
+            bkcl_group_end(), BKCL_SUCCESS,
+            platform::errors::Unavailable("bkcl_group_end failed"));
+      }
+
+      if (!out_handle->IsTheSameVar(in_var_handle)) {
+        auto out_var = var_scopes.at(in_var_handle.scope_idx())
+                           ->FindVar(out_var_handles[0]->name());
+        paddle::framework::TensorCopy(
+            in_tensor, in_var_handle.place(),
+            *(dev_ctxes_.at(in_var_handle.place())),
+            &VariableVisitor::GetMutableTensor(out_var));
+      }
+    });
+#else
+    PADDLE_THROW(
+        platform::errors::PreconditionNotMet("Not compiled with BKCL."));
 #endif
   }
 }

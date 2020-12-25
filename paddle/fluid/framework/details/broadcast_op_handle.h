@@ -34,12 +34,19 @@ class Node;
 }  // namespace ir
 }  // namespace framework
 namespace platform {
+#if defined(PADDLE_WITH_NCCL)
 struct NCCLContextMap;
+#endif
+#if defined(PADDLE_WITH_XPU_BKCL)
+struct BKCLContextMap;
+#endif
 }  // namespace platform
 }  // namespace paddle
 
 #if defined(PADDLE_WITH_NCCL)
 #include "paddle/fluid/platform/nccl_helper.h"
+#elif defined(PADDLE_WITH_XPU_BKCL)
+#include "paddle/fluid/platform/bkcl_helper.h"
 #endif
 
 namespace paddle {
@@ -63,11 +70,26 @@ struct BroadcastOpHandle : public OpHandleBase {
       }
     }
   }
-#else
+#endif
+#if defined(PADDLE_WITH_XPU_BKCL)
+  BroadcastOpHandle(ir::Node *node, const std::vector<Scope *> &local_scopes,
+                    const std::vector<platform::Place> &places,
+                    const platform::BKCLContextMap *bkcl_ctxs)
+      : OpHandleBase(node),
+        local_scopes_(local_scopes),
+        places_(places),
+        bkcl_ctxs_(bkcl_ctxs) {
+    if (bkcl_ctxs_) {
+      for (auto &p_ctx : bkcl_ctxs_->contexts_) {
+        this->SetDeviceContext(platform::XPUPlace(p_ctx.first),
+                               p_ctx.second.ctx_.get());
+      }
+    }
+  }
+#endif
   BroadcastOpHandle(ir::Node *node, const std::vector<Scope *> &local_scopes,
                     const std::vector<platform::Place> &places)
       : OpHandleBase(node), local_scopes_(local_scopes), places_(places) {}
-#endif
 
   std::string Name() const override;
 
@@ -86,6 +108,8 @@ struct BroadcastOpHandle : public OpHandleBase {
   std::vector<platform::Place> places_;
 #if defined(PADDLE_WITH_NCCL)
   const platform::NCCLContextMap *nccl_ctxs_;
+#elif defined(PADDLE_WITH_XPU_BKCL)
+  const platform::BKCLContextMap *bkcl_ctxs_;
 #endif
 
   void InitOutputValue(const VarHandle &in_var_handle,

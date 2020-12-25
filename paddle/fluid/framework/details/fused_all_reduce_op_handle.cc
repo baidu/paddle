@@ -37,6 +37,13 @@ FusedAllReduceOpHandle::FusedAllReduceOpHandle(
     const platform::NCCLCommunicator *ctxs)
     : AllReduceOpHandle(node, local_scopes, places, ctxs),
       num_of_all_reduce_(num_of_all_reduce) {}
+#elif defined(PADDLE_WITH_XPU_BKCL)
+FusedAllReduceOpHandle::FusedAllReduceOpHandle(
+    ir::Node *node, const std::vector<Scope *> &local_scopes,
+    const std::vector<platform::Place> &places, const size_t num_of_all_reduce,
+    const platform::BKCLCommunicator *ctxs)
+    : AllReduceOpHandle(node, local_scopes, places, ctxs),
+      num_of_all_reduce_(num_of_all_reduce) {}
 #else
 FusedAllReduceOpHandle::FusedAllReduceOpHandle(
     ir::Node *node, const std::vector<Scope *> &local_scopes,
@@ -73,9 +80,14 @@ void FusedAllReduceOpHandle::RunImpl() {
           "handles is %d, and the number of  output variable handles is %d.",
           in_var_handles.size(), out_var_handles.size()));
 
-  // Note: some gradient op doesn't have CUDAKernel, so the gradients of
-  // those op are in CPUPlace, in this case, the all reduce should not be fused.
+// Note: some gradient op doesn't have CUDAKernel, so the gradients of
+// those op are in CPUPlace, in this case, the all reduce should not be fused.
+#if defined(PADDLE_WITH_XPU_BKCL)
+  // TODO(liuyuhui): XPU don't support fuse all reduce for now
+  if (InputIsInDifferentPlace(in_var_handles) || true) {
+#else
   if (InputIsInDifferentPlace(in_var_handles)) {
+#endif
     for (size_t j = 0; j < num_of_all_reduce_; ++j) {
       std::vector<VarHandle *> dev_inputs;
       std::vector<VarHandle *> dev_outputs;

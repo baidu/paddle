@@ -43,6 +43,8 @@ class ParallelExecutorPrivate;
 
 using details::BuildStrategy;
 using details::ExecutionStrategy;
+namespace p = paddle::platform;
+using DeviceType = paddle::platform::DeviceType;
 
 class ParallelExecutor {
   DISABLE_COPY_AND_ASSIGN(ParallelExecutor);

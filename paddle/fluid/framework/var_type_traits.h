@@ -31,6 +31,10 @@
 #endif
 #endif
 
+#if defined(PADDLE_WITH_XPU_BKCL)
+#include "xpu/bkcl.h"
+#endif
+
 // Users should add forward declarations here
 namespace paddle {
 
@@ -40,6 +44,10 @@ namespace platform {
 class Communicator;
 class NCCLCommunicator;
 #endif
+#endif
+
+#if defined(PADDLE_WITH_XPU_BKCL)
+class BKCLCommunicator;
 #endif
 }  // namespace platform
 
@@ -148,6 +156,9 @@ using VarTypeRegistry = detail::VarTypeRegistryImpl<
     ncclUniqueId, platform::Communicator, platform::NCCLCommunicator,
 #endif
     operators::CudnnRNNCache,
+#endif
+#if defined(PADDLE_WITH_XPU_BKCL)
+    BKCLUniqueId, platform::BKCLCommunicator,
 #endif
     int, float>;
 

@@ -28,6 +28,7 @@ ExecutionStrategy = core.ParallelExecutor.ExecutionStrategy
 BuildStrategy = core.ParallelExecutor.BuildStrategy
 InferNativeConfig = core.NativeConfig
 InferAnalysisConfig = core.AnalysisConfig
+DeviceType = core.DeviceType
 
 
 def _place_obj(place):
@@ -345,17 +346,17 @@ class CompiledProgram(object):
         self._exec_strategy._use_device = use_device
 
         if self._exec_strategy.num_threads == 0:
-            if self._exec_strategy._use_device == ExecutionStrategy.UseDevice.CUDA:
+            if self._exec_strategy._use_device == DeviceType.CUDA:
                 # Experiments on se-resnext shows that too many threads hurt
                 # performance. Worth tunning for other models in the future.
                 self._exec_strategy.num_threads = len(places) * 4
-            elif self._exec_strategy._use_device == ExecutionStrategy.UseDevice.XPU:
+            elif self._exec_strategy._use_device == DeviceType.XPU:
                 # Currently only single thread is supported in Kunlun XPU.
                 self._exec_strategy.num_threads = 1
             else:
                 self._exec_strategy.num_threads = len(places) * 2
 
-        if self._exec_strategy._use_device == ExecutionStrategy.UseDevice.XPU:
+        if self._exec_strategy._use_device == DeviceType.XPU:
             assert self._exec_strategy.num_threads == 1, \
                 "Currently only single thread is supported in Kunlun XPU."
 
@@ -384,7 +385,7 @@ class CompiledProgram(object):
             self._build_strategy.enable_sequential_execution = True
 
         if self._program is not None and self._program._enable_dgc:
-            assert self._exec_strategy._use_device == ExecutionStrategy.UseDevice.CUDA, "DGC only used under CUDA environment."
+            assert self._exec_strategy._use_device == DeviceType.CUDA, "DGC only used under CUDA environment."
             assert self._build_strategy.num_trainers * len(
                 places) > 1, "DGC is not avaliable for single card training."
             assert self._build_strategy.reduce_strategy == BuildStrategy.ReduceStrategy.AllReduce, "DGC \
@@ -455,11 +456,11 @@ class CompiledProgram(object):
                     "If optimizer is used in control flow, "
                     "training on multi-places is not supported now.")
             if isinstance(self._place, core.CUDAPlace):
-                use_device = ExecutionStrategy.UseDevice.CUDA
+                use_device = DeviceType.CUDA
             elif isinstance(self._place, core.XPUPlace):
-                use_device = ExecutionStrategy.UseDevice.XPU
+                use_device = DeviceType.XPU
             else:
-                use_device = ExecutionStrategy.UseDevice.CPU
+                use_device = DeviceType.CPU
             self._executor = self._compile_data_parallel(
                 use_device=use_device, scope=self._scope, places=self._places)
         return self

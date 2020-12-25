@@ -75,7 +75,7 @@ class TestIrMemoryOptimizeIfElseOp(unittest.TestCase):
             exe = Executor(place)
 
             exec_strategy = fluid.ExecutionStrategy()
-            exec_strategy._use_device = fluid.ExecutionStrategy.UseDevice.CUDA if use_cuda else fluid.ExecutionStrategy.UseDevice.CPU
+            exec_strategy._use_device = core.DeviceType.CUDA if use_cuda else core.DeviceType.CPU
 
             build_strategy = fluid.BuildStrategy()
             build_strategy.memory_optimize = use_mem_opt

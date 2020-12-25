@@ -41,6 +41,8 @@ namespace paddle {
 namespace platform {
 class NCCLContextMap;
 class NCCLCommunicator;
+class BKCLContextMap;
+class BKCLCommunicator;
 }
 
 namespace framework {
@@ -114,6 +116,9 @@ class MultiDevSSAGraphBuilderBase : public ir::Pass {
 #if defined(PADDLE_WITH_NCCL)
   mutable platform::NCCLContextMap *nccl_ctxs_{nullptr};
   mutable platform::NCCLCommunicator *multi_nccl_ctxs_{nullptr};
+#elif defined(PADDLE_WITH_XPU_BKCL)
+  mutable platform::BKCLContextMap *bkcl_ctxs_{nullptr};
+  mutable platform::BKCLCommunicator *multi_bkcl_ctxs_{nullptr};
 #endif
 
   mutable std::string loss_var_name_;

@@ -213,9 +213,63 @@ void ReduceOpHandle::RunImpl() {
       PADDLE_THROW(
           platform::errors::PreconditionNotMet("Not compiled with CUDA."));
 #endif
+    } else if (paddle::platform::is_xpu_place(lod_tensors[0]->place())) {
+#if defined(PADDLE_WITH_XPU_BKCL)
+      auto pre_in = pre_in_var->Get<framework::LoDTensor>();
+      VariableVisitor::ShareDimsAndLoD(*pre_in_var, out_var);
+      VariableVisitor::GetMutableTensor(out_var).mutable_data(
+          out_var_handle->place(), pre_in.type());
+
+      auto out_p = out_var_handle->place();
+      int root_id = BOOST_GET_CONST(platform::XPUPlace, out_p).device;
+      std::vector<std::function<void()>> all_reduce_calls;
+      for (size_t i = 0; i < var_scopes.size(); ++i) {
+        auto &p = in_places[i];
+        auto &lod_tensor = *lod_tensors[i];
+
+        int dev_id = BOOST_GET_CONST(platform::XPUPlace, p).device;
+        auto &bkcl_ctx = bkcl_ctxs_->at(dev_id);
+
+        void *buffer = const_cast<void *>(lod_tensor.data<void>());
+        void *recvbuffer = nullptr;
+        if (root_id == dev_id) {
+          recvbuffer =
+              out_var->GetMutable<framework::LoDTensor>()->mutable_data(
+                  out_var_handle->place());
+        }
+
+        int type = platform::ToBKCLDataType(lod_tensor.type());
+        size_t numel = static_cast<size_t>(lod_tensor.numel());
+        all_reduce_calls.emplace_back([buffer, recvbuffer, type, numel, root_id,
+                                       &bkcl_ctx] {
+          PADDLE_ENFORCE_EQ(bkcl_reduce(bkcl_ctx.comm(), buffer, recvbuffer,
+                                        numel, static_cast<BKCLDataType>(type),
+                                        BKCL_ADD, root_id, nullptr),
+                            BKCL_SUCCESS, platform::errors::Unavailable(
+                                              "bkcl_all_reduce failed"));
+        });
+      }
+
+      WaitInputVarGenerated();
+      this->RunAndRecordEvent([&] {
+        PADDLE_ENFORCE_EQ(
+            bkcl_group_start(), BKCL_SUCCESS,
+            platform::errors::Unavailable("bkcl_group_start failed"));
+        for (auto &call : all_reduce_calls) {
+          call();
+        }
+        PADDLE_ENFORCE_EQ(
+            bkcl_group_end(), BKCL_SUCCESS,
+            platform::errors::Unavailable("bkcl_group_end failed"));
+      });
+#else
+      PADDLE_THROW(
+          platform::errors::PreconditionNotMet("Not compiled with XPU."));
+#endif
     } else {
       PADDLE_THROW(platform::errors::InvalidArgument(
-          "The place of tensor should be CPUPlace or CUDAPlace, but got %s.",
+          "The place of tensor should be CPUPlace, CUDAPlace or XPUPlace, but "
+          "got %s.",
           lod_tensors[0]->place()));
     }
   }

@@ -36,6 +36,8 @@ class NCCLCommunicator;
 #if defined(PADDLE_WITH_NCCL)
 #include "paddle/fluid/framework/details/nccl_op_handle.h"
 #include "paddle/fluid/platform/nccl_helper.h"
+#elif defined(PADDLE_WITH_XPU_BKCL)
+#include "paddle/fluid/platform/bkcl_helper.h"
 #endif
 
 namespace paddle {
@@ -49,6 +51,13 @@ struct FusedAllReduceOpHandle : public AllReduceOpHandle {
                          const std::vector<platform::Place> &places,
                          const size_t num_of_all_reduce,
                          const platform::NCCLCommunicator *ctxs);
+#elif defined(PADDLE_WITH_XPU_BKCL)
+struct FusedAllReduceOpHandle : public AllReduceOpHandle {
+  FusedAllReduceOpHandle(ir::Node *node,
+                         const std::vector<Scope *> &local_scopes,
+                         const std::vector<platform::Place> &places,
+                         const size_t num_of_all_reduce,
+                         const platform::BKCLCommunicator *ctxs);
 #else
 struct FusedAllReduceOpHandle : public AllReduceOpHandle {
   FusedAllReduceOpHandle(ir::Node *node,

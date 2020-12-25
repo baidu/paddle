@@ -30,6 +30,10 @@
 #include "paddle/fluid/operators/cudnn_rnn_cache.h"
 #endif
 
+#if defined(PADDLE_WITH_XPU_BKCL)
+#include "paddle/fluid/platform/bkcl_helper.h"
+#endif
+
 namespace paddle {
 namespace framework {
 
