@@ -30,13 +30,21 @@
 #include <nccl.h>
 #endif
 #endif
-
+#ifdef PADDLE_WITH_HIP
+#include <miopen/miopen.h>
+#ifdef PADDLE_WITH_RCCL
+#include <rccl.h>
+#endif
+#endif
 // Users should add forward declarations here
 namespace paddle {
 
 namespace platform {
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
 #ifdef PADDLE_WITH_CUDA
 #if defined(PADDLE_WITH_NCCL)
+
 class Communicator;
 class NCCLCommunicator;
 #endif
@@ -145,6 +153,12 @@ using VarTypeRegistry = detail::VarTypeRegistryImpl<
     operators::reader::OrderedMultiDeviceLoDTensorBlockingQueueHolder,
 #ifdef PADDLE_WITH_CUDA
 #if defined(PADDLE_WITH_NCCL)
+    ncclUniqueId, platform::Communicator, platform::NCCLCommunicator,
+#endif
+    operators::CudnnRNNCache,
+#endif
+#ifdef PADDLE_WITH_HIP
+#if defined(PADDLE_WITH_RCCL)
     ncclUniqueId, platform::Communicator, platform::NCCLCommunicator,
 #endif
     operators::CudnnRNNCache,

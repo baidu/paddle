@@ -29,6 +29,15 @@
 #include "paddle/fluid/operators/conv_cudnn_op_cache.h"
 #include "paddle/fluid/operators/cudnn_rnn_cache.h"
 #endif
+#ifdef PADDLE_WITH_HIP
+#include <miopen/miopen.h>
+#include "paddle/fluid/operators/conv_miopen_op_cache.h"
+#include "paddle/fluid/operators/miopen_rnn_cache.h"
+#if defined(PADDLE_WITH_RCCL)
+#include "paddle/fluid/operators/rccl/rccl_gpu_common.h"
+#include "paddle/fluid/platform/rccl_helper.h"
+#endif
+#endif
 
 namespace paddle {
 namespace framework {
