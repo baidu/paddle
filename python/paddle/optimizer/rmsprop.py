@@ -62,6 +62,7 @@ class RMSProp(Optimizer):
 
         w & = w - v(w, t)
 
+
     where, :math:`\\rho` is a hyperparameter and typical values are 0.9, 0.95
     and so on. :math: `beta` is the momentum term. :math: `\\epsilon` is a
     smoothing term to avoid division by zero, usually set somewhere in range
@@ -72,7 +73,7 @@ class RMSProp(Optimizer):
         learning_rate (float|LRScheduler): The learning rate used to update ``Parameter``.
             It can be a float value or a LRScheduler.
         rho(float): rho is :math: `\\rho` in equation, default is 0.95.
-        epsilon(float): :math: `\\epsilon` in equation is smoothing term to
+        epsilon(float): :math: `\\epsilon` in equation is smoothing term to \
             avoid division by zero, default is 1e-6.
         momentum(float): :math:`\\beta` in equation is the momentum term,
             default is 0.0.
@@ -80,22 +81,22 @@ class RMSProp(Optimizer):
             the gradient; if False, by the uncentered second moment. Setting this to
             True may help with training, but is slightly more expensive in terms of
             computation and memory. Defaults to False.
-	parameters (list, optional): List of ``Tensor`` to update to minimize ``loss``. \
-	    This parameter is required in dygraph mode. \
-	    The default value is None in static mode, at this time all parameters will be updated.
-	weight_decay (float|WeightDecayRegularizer, optional): The strategy of regularization. \
-	    It canbe a float value as coeff of L2 regularization or \
-	    :ref:`api_fluid_regularizer_L1Decay`, :ref:`api_fluid_regularizer_L2Decay`.
-	    If a parameter has set regularizer using :ref:`api_fluid_ParamAttr` already, \
-	    the regularization setting here in optimizer will be ignored for this parameter. \
-	    Otherwise, the regularization setting here in optimizer will take effect. \
-	    Default None, meaning there is no regularization.
-        grad_clip (GradientClipBase, optional): Gradient cliping strategy, it's an instance of
-            some derived class of ``GradientClipBase`` . There are three cliping strategies
-            ( :ref:`api_fluid_clip_GradientClipByGlobalNorm` , :ref:`api_fluid_clip_GradientClipByNorm` ,
-            :ref:`api_fluid_clip_GradientClipByValue` ). Default None, meaning there is no gradient clipping.
-        name (str, optional): This parameter is used by developers to print debugging information. \
-            For details, please refer to :ref:`api_guide_Name`. Default is None.
+        parameters (list, optional): List of ``Tensor`` to update to minimize ``loss``. \
+            This parameter is required in dygraph mode. \
+            The default value is None in static mode, at this time all parameters will be updated.
+        weight_decay (float|WeightDecayRegularizer, optional): The strategy of regularization. \
+            It canbe a float value as coeff of L2 regularization or \
+            :ref:`api_fluid_regularizer_L1Decay`, :ref:`api_fluid_regularizer_L2Decay`.
+            If a parameter has set regularizer using :ref:`api_fluid_ParamAttr` already, \
+            the regularization setting here in optimizer will be ignored for this parameter. \
+            Otherwise, the regularization setting here in optimizer will take effect. \
+            Default None, meaning there is no regularization.
+            grad_clip (GradientClipBase, optional): Gradient cliping strategy, it's an instance of
+                some derived class of ``GradientClipBase`` . There are three cliping strategies
+                ( :ref:`api_fluid_clip_GradientClipByGlobalNorm` , :ref:`api_fluid_clip_GradientClipByNorm` ,
+                :ref:`api_fluid_clip_GradientClipByValue` ). Default None, meaning there is no gradient clipping.
+            name (str, optional): This parameter is used by developers to print debugging information. \
+                For details, please refer to :ref:`api_guide_Name`. Default is None.
 
     Raises:
         ValueError: If learning_rate, rho, epsilon, momentum are None.
