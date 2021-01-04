@@ -655,10 +655,14 @@ class Optimizer(object):
         target_block = global_block
         current_block = framework.default_main_program().current_block()
         if current_block.idx != global_block.idx:
-            assert current_block.backward_block_idx != -1, \
-                "current block is not global_block, but it doesn't have backward block."
-            target_block = framework.default_main_program().blocks[
-                current_block.backward_block_idx]
+            # NOTE(zhiqiu): In the case that calling optimize/backward inside control flow,
+            # current block will be a conditional block, and the optimization operators should
+            # be appended in the corresponding grad block of current conditional block.
+            if current_block.backward_block_idx != -1:
+                target_block = framework.default_main_program().blocks[
+                    current_block.backward_block_idx]
+            else:
+                target_block = current_block
 
         start = len(target_block.ops)
         self.helper = LayerHelper(self.__class__.__name__)
@@ -5187,7 +5191,6 @@ class GradientMergeOptimizer(object):
                 with switch.default():
                     # 1. update the graient_vars
                     #     gradient_vars += gradient_merge_vars
-                    cur_block_idx = main_block.program.current_block_idx
                     cur_block = main_block.program.current_block()
                     for param_name in param_names:
                         grad = param_to_grad[param_name]
@@ -5213,11 +5216,6 @@ class GradientMergeOptimizer(object):
                                        'use_mkldnn': False})
 
                     # 2. apply_optimize
-                    target_grad_block = main_block.program._create_block(
-                        parent_idx=cur_block.parent_idx)
-                    target_grad_block._set_forward_block_idx(cur_block_idx)
-                    main_block.program.current_block_idx = cur_block_idx
-
                     optimize_ops = self.inner_optimizer.apply_optimize(
                         loss,
                         startup_program=startup_program,

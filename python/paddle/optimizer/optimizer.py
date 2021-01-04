@@ -588,10 +588,14 @@ class Optimizer(object):
         target_block = global_block
         current_block = framework.default_main_program().current_block()
         if current_block.idx != global_block.idx:
-            assert current_block.backward_block_idx != -1, \
-                "current block is not global_block, but it doesn't have backward block."
-            target_block = framework.default_main_program().blocks[
-                current_block.backward_block_idx]
+            # NOTE(zhiqiu): In the case that calling optimize/backward inside control flow,
+            # current block will be a conditional block, and the optimization operators should
+            # be appended in the corresponding grad block of current conditional block.
+            if current_block.backward_block_idx != -1:
+                target_block = framework.default_main_program().blocks[
+                    current_block.backward_block_idx]
+            else:
+                target_block = current_block
 
         start = len(target_block.ops)
         self.helper = LayerHelper(self.__class__.__name__)

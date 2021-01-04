@@ -1011,16 +1011,27 @@ class TestGradientMergeOptimizer(unittest.TestCase):
         with framework.program_guard(main_program, init_program):
             ops, params_grads = opt.minimize(cost)
 
-        self.assertEqual(main_program.num_blocks, 4)
+        self.assertEqual(main_program.num_blocks, 3)
 
         # main block
-        self.assertEqual(len(cost.block.ops), 17)
+        self.assertEqual(len(cost.block.ops), 16)
         self.assertEqual([op.type for op in cost.block.ops], [
-            'mul', 'elementwise_add', 'mean', 'fill_constant', 'mean_grad',
-            'elementwise_add_grad', 'mul_grad', 'increment', 'fill_constant',
-            'fill_constant', 'elementwise_mod', 'cast', 'not_equal',
-            'logical_not', 'conditional_block', 'conditional_block',
-            'conditional_block_grad'
+            'mul',
+            'elementwise_add',
+            'mean',
+            'fill_constant',
+            'mean_grad',
+            'elementwise_add_grad',
+            'mul_grad',
+            'increment',
+            'fill_constant',
+            'fill_constant',
+            'elementwise_mod',
+            'cast',
+            'not_equal',
+            'logical_not',
+            'conditional_block',
+            'conditional_block',
         ])
 
         # merge block
@@ -1030,17 +1041,12 @@ class TestGradientMergeOptimizer(unittest.TestCase):
             'elementwise_add',
         ])
 
-        # reset block
-        self.assertEqual(len(main_program.block(2).ops), 6)
+        # optimize & reset block
+        self.assertEqual(len(main_program.block(2).ops), 8)
         self.assertEqual([op.type for op in main_program.block(2).ops], [
-            'elementwise_add', 'scale', 'elementwise_add', 'scale',
-            'fill_constant', 'fill_constant'
+            'elementwise_add', 'scale', 'elementwise_add', 'scale', 'sgd',
+            'sgd', 'fill_constant', 'fill_constant'
         ])
-
-        # optimize block
-        self.assertEqual(len(main_program.block(3).ops), 2)
-        self.assertEqual([op.type for op in main_program.block(3).ops],
-                         ['sgd', 'sgd'])
 
 
 class TestOptimizerDtype(unittest.TestCase):
