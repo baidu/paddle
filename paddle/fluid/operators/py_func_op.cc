@@ -117,71 +117,6 @@ static void CallPythonFunc(py::object *callable,
   }
 }
 
-class PyFuncOpVarTypeInference : public framework::StaticGraphVarTypeInference {
- public:
-  void operator()(framework::InferVarTypeContext *ctx) const override {
-    bool has_out = ctx->HasOutput("Out");
-    bool has_in = ctx->HasInput("X");
-
-    /**
-     * X or Out can be empty, so that py_func can be more flexible
-     * to support Python functions with no input or no output
-     */
-    PADDLE_ENFORCE_EQ(
-        has_in || has_out, true,
-        platform::errors::InvalidArgument("Input(X) or Output(Out) must exist, "
-                                          "but has_in is %d, has_out is %d.",
-                                          has_in, has_out));
-
-    PADDLE_ENFORCE_GE(
-        BOOST_GET_CONST(int, ctx->GetAttr(kForwardPythonCallableId)), 0,
-        platform::errors::InvalidArgument(
-            "Function id cannot be less than 0, but received value is %d.",
-            BOOST_GET_CONST(int, ctx->GetAttr(kForwardPythonCallableId))));
-
-    if (!has_out) return;
-
-    /**
-     * Traverse all outputs, check if name of any output ends with @GRAD.
-     * If found, set its shape, dtype, lod_level, type to be the same as
-     * the corresponding forward variable
-     */
-    const std::string kGradVarSuffix = framework::kGradVarSuffix;
-    auto &out_var_names = Output(ctx, "Out");
-    for (auto &out_var_name : out_var_names) {
-      if (out_var_name == framework::kEmptyVarName ||
-          out_var_name.size() < kGradVarSuffix.size()) {
-        continue;
-      }
-
-      size_t len = out_var_name.size() - kGradVarSuffix.size();
-      if (out_var_name.substr(len) == kGradVarSuffix) {
-        auto fwd_var_name = out_var_name.substr(0, len);
-        OP_INOUT_CHECK(HasVar(ctx, out_var_name), "Var", out_var_name,
-                       "py_func");
-        OP_INOUT_CHECK(HasVar(ctx, fwd_var_name), "Var", fwd_var_name,
-                       "py_func");
-        VLOG(10) << "Infer var_desc of Output(" << out_var_name << ") as Input("
-                 << fwd_var_name << ")";
-
-        SetShape(ctx, out_var_name, GetShape(ctx, fwd_var_name));
-        SetDataType(ctx, out_var_name, GetDataType(ctx, fwd_var_name));
-        SetLoDLevel(ctx, out_var_name, GetLoDLevel(ctx, fwd_var_name));
-        SetType(ctx, out_var_name, GetType(ctx, fwd_var_name));
-      }
-    }
-  }
-};
-
-class PyFuncOpShapeInference : public framework::InferShapeBase {
- public:
-  void operator()(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE_EQ(!ctx->IsRuntime(), true,
-                      platform::errors::InvalidArgument(
-                          "Infer shape cannot be called in runtime."));
-  }
-};
-
 class PyFuncOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
@@ -210,31 +145,62 @@ class PyFuncOpMaker : public framework::OpProtoAndCheckerMaker {
  *  - To support high order derivative, so that py_func is
  *    infinite-order differentiable
  */
-class PyFuncOpGradDescMaker : public framework::GradOpDescMakerBase {
- private:
-  static std::string DebugString(const std::vector<std::string> &strs) {
-    if (strs.empty()) return "";
-    std::string ret = strs[0];
-    for (size_t i = 1; i < strs.size(); ++i) {
-      ret += " ";
-      ret += strs[i];
-    }
-    return ret;
-  }
+// class PyFuncOpGradDescMaker : public framework::GradOpDescMakerBase {
+//  private:
+//   static std::string DebugString(const std::vector<std::string> &strs) {
+//     if (strs.empty()) return "";
+//     std::string ret = strs[0];
+//     for (size_t i = 1; i < strs.size(); ++i) {
+//       ret += " ";
+//       ret += strs[i];
+//     }
+//     return ret;
+//   }
+template <typename T>
+class SkipVar;
 
+// inline void set_skip_var(IOT dist_vector,IOT source_vector,SKIPT skip_set);
+template <>
+class SkipVar<paddle::framework::OpDesc> {
  public:
-  using framework::GradOpDescMakerBase::GradOpDescMakerBase;
+  template <typename TD, typename TS, typename TSKIP>
+  static void set_skip_var(TD *dist_vector, const TS &source_vector,
+                           const TSKIP &skip_set) {
+    for (auto &vector : source_vector) {
+      if (skip_set.count(vector) == 0) {
+        dist_vector->emplace_back(vector);
+      }
+    }
+  }
+};
 
-  std::vector<std::unique_ptr<framework::OpDesc>> operator()() const override {
-    auto &fwd_attrs = Attrs();
+template <>
+class SkipVar<paddle::imperative::OpBase> {
+ public:
+  template <typename TD, typename TS, typename TSKIP>
+  static void set_skip_var(TD *dist_vector, const TS &source_vector,
+                           const TSKIP &skip_set) {
+    for (auto &vector : source_vector) {
+      // if (skip_set.count(vector) == 0) {
+      dist_vector->emplace_back(vector);
+      // }
+    }
+  }
+};
+template <typename T>
+class PyFuncGradOpMaker : public framework::SingleGradOpMaker<T> {
+ public:
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
+
+ protected:
+  void Apply(GradOpPtr<T> grad_op) const override {
+    auto &fwd_attrs = this->Attrs();
     // no backward op when backward_id is less than 0
     if (BOOST_GET_CONST(int, fwd_attrs.at(kBackwardPythonCallableId)) < 0) {
-      return {};
+      // return {};
+      return;
     }
-
-    std::unique_ptr<framework::OpDesc> grad_op(new framework::OpDesc());
     grad_op->SetType("py_func");
-
     framework::AttributeMap bwd_attrs;
     bwd_attrs[kForwardPythonCallableId] =
         fwd_attrs.at(kBackwardPythonCallableId);
@@ -242,9 +208,9 @@ class PyFuncOpGradDescMaker : public framework::GradOpDescMakerBase {
     grad_op->SetAttrMap(bwd_attrs);
 
     // All forward inputs
-    auto fwd_ins = Input("X");
+    auto fwd_ins = this->Input("X");
     // All forward outputs
-    auto fwd_outs = Output("Out");
+    auto fwd_outs = this->Output("Out");
 
     // For memory reused, some inputs/output in forward part may be not needed
     // in backward part. Skipping these vars helps to save memory
@@ -252,55 +218,61 @@ class PyFuncOpGradDescMaker : public framework::GradOpDescMakerBase {
         std::vector<std::string>, fwd_attrs.at(kPyFuncBackwardSkipVars));
     std::unordered_set<std::string> backward_skip_var_set(
         backward_skip_var_list.begin(), backward_skip_var_list.end());
-    std::vector<std::string> bwd_ins;
-    bwd_ins.reserve(fwd_ins.size() + fwd_outs.size());
-    for (auto &fwd_in : fwd_ins) {
-      if (backward_skip_var_set.count(fwd_in) == 0) {
-        bwd_ins.emplace_back(fwd_in);
-      }
-    }
-
-    for (auto &fwd_out : fwd_outs) {
-      if (backward_skip_var_set.count(fwd_out) == 0) {
-        bwd_ins.emplace_back(fwd_out);
-      }
-    }
-
     // Backward OG cannot be skipped
     // But in Python side, if OG is kEmptyVarName, input tensor would be None
-    auto fwd_out_grads = OutputGrad("Out");
+    auto fwd_out_grads = this->OutputGrad("Out");
+    using return_type = decltype(fwd_out_grads);
+    return_type bwd_ins;
+    bwd_ins.reserve(fwd_ins.size() + fwd_outs.size());
+
+    SkipVar<T>::set_skip_var(&bwd_ins, fwd_ins, backward_skip_var_set);
+    SkipVar<T>::set_skip_var(&bwd_ins, fwd_outs, backward_skip_var_set);
+
     bwd_ins.reserve(bwd_ins.size() + fwd_out_grads.size());
     bwd_ins.insert(bwd_ins.end(), fwd_out_grads.begin(), fwd_out_grads.end());
 
     // Backward IG cannot be skipped
     // But in Python side, if IG is not needed, users can just return None
-    auto bwd_outs = InputGrad("X", false);
-
-    VLOG(10) << "PyFunc Grad Input: " << DebugString(bwd_ins);
-    VLOG(10) << "PyFunc Grad Output: " << DebugString(bwd_outs);
+    auto bwd_outs = this->InputGrad("X", false);
 
     grad_op->SetInput("X", bwd_ins);
     grad_op->SetOutput("Out", bwd_outs);
-
-    std::vector<std::unique_ptr<framework::OpDesc>> ret(1);
-    ret[0] = std::move(grad_op);
-    return ret;
   }
 };
 
-class PyFuncOp : public framework::OperatorBase {
+class PyFuncOp : public framework::OperatorWithKernel {
  public:
-  using framework::OperatorBase::OperatorBase;
+  using framework::OperatorWithKernel::OperatorWithKernel;
+  void InferShape(framework::InferShapeContext *ctx) const override {
+    // todo:check
+  }
 
  protected:
-  void RunImpl(const framework::Scope &scope,
-               const platform::Place &place) const override {
-    auto &in_arg_names = Inputs("X");
-    auto &out_arg_names = Outputs("Out");
+  /* see [Why use single type kernel] */
+  framework::OpKernelType GetExpectedKernelType(
+      const framework::ExecutionContext &ctx) const override {
+    // todo:float32 ?
+    return framework::OpKernelType(framework::proto::VarType::FP32,
+                                   ctx.GetPlace());
+  }
+};
 
-    std::vector<framework::LoDTensor> inputs(in_arg_names.size());
-    for (size_t i = 0; i < in_arg_names.size(); ++i) {
-      auto in_var = scope.FindVar(in_arg_names[i]);
+template <typename DeviceContext, typename T>
+class PyFuncOpKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext &ctx) const override {
+    auto &input_vars = ctx.MultiInputVar("X");
+
+    auto output_vars = ctx.MultiOutputVar("Out");
+
+    auto input_var_names = ctx.InputNames("X");
+    auto output_var_names = ctx.OutputNames("Out");
+    // auto &in_arg_names = Inputs("X");
+    // auto &out_arg_names = Outputs("Out");
+
+    std::vector<framework::LoDTensor> inputs(input_var_names.size());
+    for (size_t i = 0; i < input_var_names.size(); ++i) {
+      auto in_var = input_vars[i];
       // When py_func op is called in backward, in_var may be null
       if (in_var == nullptr) {
         continue;
@@ -317,14 +289,15 @@ class PyFuncOp : public framework::OperatorBase {
       inputs[i].set_lod(in_tensor.lod());
     }
 
-    std::vector<framework::LoDTensor *> outputs(out_arg_names.size());
-    for (size_t i = 0; i < out_arg_names.size(); ++i) {
-      auto *out_var = scope.FindVar(out_arg_names[i]);
+    std::vector<framework::LoDTensor *> outputs(output_var_names.size());
+    for (size_t i = 0; i < output_var_names.size(); ++i) {
+      auto *out_var = output_vars[i];
       outputs[i] =
           out_var ? out_var->GetMutable<framework::LoDTensor>() : nullptr;
     }
 
-    auto callable_id = static_cast<size_t>(Attr<int>(kForwardPythonCallableId));
+    auto callable_id =
+        static_cast<size_t>(ctx.Attr<int>(kForwardPythonCallableId));
     auto *py_callable = GetPythonCallableObject(callable_id);
     VLOG(10) << "Call Python function with id " << callable_id << ": "
              << PythonFuncDebugString(*py_callable);
@@ -337,6 +310,15 @@ class PyFuncOp : public framework::OperatorBase {
 
 namespace ops = paddle::operators;
 
-REGISTER_OPERATOR(py_func, ops::PyFuncOp, ops::PyFuncOpMaker,
-                  ops::PyFuncOpVarTypeInference, ops::PyFuncOpShapeInference,
-                  ops::PyFuncOpGradDescMaker);
+REGISTER_OPERATOR(
+    py_func, ops::PyFuncOp, ops::PyFuncOpMaker,
+    // ops::PyFuncOpVarTypeInference, //ops::PyFuncOpShapeInference,
+    ops::PyFuncGradOpMaker<paddle::framework::OpDesc>,
+    ops::PyFuncGradOpMaker<paddle::imperative::OpBase>);
+
+REGISTER_OP_CPU_KERNEL(
+    py_func, ops::PyFuncOpKernel<paddle::platform::CPUDeviceContext, float>);
+#ifdef PADDLE_WITH_CUDA
+REGISTER_OP_CUDA_KERNEL(
+    py_func, ops::PyFuncOpKernel<paddle::platform::CUDADeviceContext, float>);
+#endif  // PADDLE_WITH_CUDA

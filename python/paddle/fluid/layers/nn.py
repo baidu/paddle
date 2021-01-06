@@ -13698,6 +13698,76 @@ py_func.registered_func = PyFuncRegistry.registered_func
 py_func.registered_func_num = PyFuncRegistry.registered_func_num
 
 
+@dygraph_only
+def py_func_dygraph(func,
+                    x,
+                    out,
+                    backward_func=None,
+                    skip_vars_in_backward_input=None):
+    """
+    :api_attr: Dynamic Graph
+    """
+    if x is None:
+        x = []
+    elif isinstance(x, Variable):
+        x = [x]
+    elif isinstance(x, tuple):
+        x = list(x)
+    elif not isinstance(x, (list, tuple, Variable)):
+        raise TypeError('Input must be Variable/list(Variable)/tuple(Variable)')
+    check_type(out, 'Out', (list, tuple, Variable, type(None)), 'py_func')
+    if out is None:
+        out_list = []
+    elif isinstance(out, Variable):
+        out_list = [out]
+    elif isinstance(out, tuple):
+        out_list = list(out)
+    elif isinstance(out, list):
+        out_list = out
+    else:
+        raise TypeError(
+            'Output must be Variable/list(Variable)/tuple(Variable)')
+
+    fwd_func_id = PyFuncRegistry(func).id
+    bwd_func_id = PyFuncRegistry(
+        backward_func).id if backward_func is not None else -1
+
+    # for each_out in out_list:
+    #     if len(each_out.shape) == 0:
+    #         raise ValueError(
+    #             'Output shapes of py_func op should be provided by users manually'
+    #         )
+
+    backward_skip_vars = set()
+    if backward_func is not None and skip_vars_in_backward_input is not None:
+        if isinstance(skip_vars_in_backward_input, Variable):
+            skip_vars_in_backward_input = [skip_vars_in_backward_input]
+
+        fwd_in_out = [v.name for v in x]
+        fwd_in_out.extend([v.name for v in out_list])
+        fwd_in_out = set(fwd_in_out)
+        backward_skip_vars = set()
+        for v in skip_vars_in_backward_input:
+            if not v.name in fwd_in_out:
+                raise ValueError(
+                    'Variable {} is not found in forward inputs and outputs'
+                    .format(v.name))
+            backward_skip_vars.add(v.name)
+    #  'backward_skip_vars': list()
+    _dygraph_tracer().trace_op(
+        type='py_func',
+        inputs={"X": x},
+        outputs={"Out": out_list},
+        attrs={
+            'forward_callable_id': fwd_func_id,
+            'backward_callable_id': bwd_func_id,
+        })
+
+    if len(out_list) == 1:
+        return out_list[0]
+    return out_list
+
+
 @templatedoc()
 def psroi_pool(input,
                rois,
