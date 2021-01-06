@@ -1221,24 +1221,47 @@ def cross_entropy(input,
             label,
             soft_label=soft_label,
             ignore_index=ignore_index,
-            axis=axis)
+            axis=axis)  #N,1
         if weight is not None:
-            weight_gather = core.ops.gather_nd(weight, label)  #trans to sample
+            weight_gather = core.ops.gather_nd(
+                weight, label)  #trans weight from class to sample, shape:N
             input_shape = list(label.shape)
             weight_gather_reshape, _ = core.ops.reshape2(weight_gather, 'shape',
-                                                         input_shape)
+                                                         input_shape)  #N,1
             out = core.ops.elementwise_mul(out, weight_gather_reshape)
 
         if reduction == "sum":
+            #   because of softmax_with_cross_entropy op's inner logic, 
+            #   in the out tensor of this op, the loss of sample with class_index==ignore_index is 0
+            #   so, reduce_sum all directly is ok
             return core.ops.reduce_sum(out, 'reduce_all', True)
         elif reduction == "mean":
-            if weight is not None:
-                out_sum = core.ops.reduce_sum(out, 'reduce_all', True)
-                total_weight = core.ops.reduce_sum(weight_gather_reshape,
-                                                   'reduce_all', True)
-                return out_sum / total_weight
+            #1. if weight==none, 
+            #    numerator: reduce_sum all loss directly is ok causeof softmax_with_cross_entropy's inner logic
+            #    denominator: count sample num with class_index!=ignore_index
+            #2. else
+            #    numerator: loss's weighted sum 
+            #    denominator: cal the sum of weight where the sample's class_index!=ignore_index
+            out_sum = core.ops.reduce_sum(out, 'reduce_all', True)
+            #for each label[i],set 1 or 0, according to ignore_index
+            ones_t = paddle.ones_like(label)
+            zeros_t = paddle.zeros_like(label)
+            #mask[i]=0, if label[i]==ignore_index
+            #mask[i]=1, otherwise 
+            mask = paddle.where(label != ignore_index, ones_t, zeros_t)
+            if (weight is None):
+                count = core.ops.reduce_sum(mask, 'reduce_all', True)
+                ret = out_sum / count
             else:
-                return core.ops.mean(out)
+                mask = paddle.cast(mask, "float64")
+                weight_gather_reshape = paddle.cast(weight_gather_reshape,
+                                                    "float64")
+                weight_ignored = core.ops.elementwise_mul(mask,
+                                                          weight_gather_reshape)
+                weight_sum = core.ops.reduce_sum(weight_ignored, 'reduce_all',
+                                                 True)
+                ret = out_sum / weight_sum
+            return ret
         else:
             if input_dims - 1 == label_dims:
                 out = paddle.squeeze(out, axis=axis)
@@ -1258,7 +1281,8 @@ def cross_entropy(input,
         fluid.data_feeder.check_variable_and_dtype(
             weight, 'weight', ['float32', 'float64'], 'softmax_cross_entropy')
         weight_name = name if reduction == 'none' else None
-        weight_gather = paddle.gather_nd(weight, label)  #trans to sample
+        weight_gather = paddle.gather_nd(
+            weight, label)  #trans weight from class to sample, shape:N
         input_shape = list(label.shape)
         weight_gather_reshape = reshape(weight_gather, shape=input_shape)
         out = paddle.multiply(out, weight_gather_reshape, name=weight_name)
@@ -1266,12 +1290,24 @@ def cross_entropy(input,
     if reduction == "sum":
         return paddle.sum(out, name=name)
     elif reduction == "mean":
-        if weight is not None:
-            out_sum = paddle.sum(out, name=name)
-            total_weight = paddle.sum(weight_gather_reshape)
-            return out_sum / total_weight
+        out_sum = paddle.sum(out, name=name)
+        #for each label[i],set 1 or 0, according to ignore_index
+        ones_t = paddle.ones_like(label)
+        zeros_t = paddle.zeros_like(label)
+        #mask[i]=0, if label[i]==ignore_index
+        #mask[i]=1, otherwise 
+        mask = paddle.where(label != ignore_index, ones_t, zeros_t)
+        if (weight is None):
+            count = paddle.sum(mask, name=name)
+            ret = out_sum / count
         else:
-            return paddle.mean(out, name=name)
+            mask = paddle.cast(mask, "float64")
+            weight_gather_reshape = paddle.cast(weight_gather_reshape,
+                                                "float64")
+            weight_ignored = paddle.multiply(mask, weight_gather_reshape)
+            weight_sum = paddle.sum(weight_ignored, name=name)
+            ret = out_sum / weight_sum
+        return ret
     else:
         if input_dims - 1 == label_dims:
             out = paddle.squeeze(out, axis=axis)
