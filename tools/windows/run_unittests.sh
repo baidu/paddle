@@ -206,4 +206,4 @@ long_time_test="^best_fit_allocator_test$|\
 export FLAGS_call_stack_level=2
 export FLAGS_fraction_of_gpu_memory_to_use=0.92
 export CUDA_VISIBLE_DEVICES=0
-ctest -E "$disable_ut_quickly|$diable_wingpu_test|$long_time_test" -LE "${nightly_label}" --output-on-failure -C Release --repeat until-pass:4 after-timeout:4
+ctest -E "$disable_ut_quickly|$diable_wingpu_test|$long_time_test" -R test_kron_op -LE "${nightly_label}" --output-on-failure -C Release --repeat until-pass:4 after-timeout:4
