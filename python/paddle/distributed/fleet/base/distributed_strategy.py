@@ -632,8 +632,20 @@ class DistributedStrategy(object):
     @property
     def recompute_configs(self):
         """
-        Set recompute configurations. In general, the recompute strategy of current
-        implementation should have some manually assign checkpoints
+        Set recompute configurations. 
+        
+        **Note**:
+        checkpoints(list): list of string name of checkpoints. In general, the recompute
+        strategy of current implementation should have some manually assign checkpoints.
+
+        enable_offload(bool): enable recompute checkpoints offload feature. this feature 
+        will offload the checkpoint to host memory to allow even larger batch size. since
+        the memcpy from host to device takes time, it is a trade off between larger batch
+        size and training speed.
+
+        checkpoint_shape(list): list of int that specific the shape of checkpoint. so far
+        recompute-offload requires that all checkpoint to be same shape, and every dimension
+        specific here should be determined ("-1" is not allowed). 
 
         Examples:
 
@@ -642,7 +654,10 @@ class DistributedStrategy(object):
             import paddle.distributed.fleet as fleet
             strategy = fleet.DistributedStrategy()
             strategy.recompute = True
-            strategy.recompute_configs = {"checkpoints": ["x", "y"]}
+            strategy.recompute_configs = {
+                "checkpoints": ["x", "y"],
+                "enable_offload": False,
+                "checkpoint_shape": [100, 512, 1024] }
 
         """
         return get_msg_dict(self.strategy.recompute_configs)
@@ -692,6 +707,14 @@ class DistributedStrategy(object):
             This configuration will affect the communication speed in sharding training, 
             and should be an empirical value decided by your model size and network topology.
 
+            hybrid_dp(bool): enable hybrid data parallelism above the sharding parallelism. 
+            you are supposed to have at least double the number of gpu you have in normal sharding 
+            training to enable this feature.
+
+            sharding_group_size(int): attribute of hybrid_dp. specific the the number of gpus within
+            each sharding group; and therefore, the number of hybrid data parallelism ways will be equal
+            to (global_size / sharding_group_size).
+
         Examples:
 
           .. code-block:: python
@@ -699,7 +722,10 @@ class DistributedStrategy(object):
             import paddle.distributed.fleet as fleet
             strategy = fleet.DistributedStrategy()
             strategy.sharding = True
-            strategy.sharding_configs = {"fuse_broadcast_MB": 32}
+            strategy.sharding_configs = {
+                "fuse_broadcast_MB": 32,
+                "hybrid_dp": True,
+                "sharding_group_size": 8}
         """
         return get_msg_dict(self.strategy.sharding_configs)
 

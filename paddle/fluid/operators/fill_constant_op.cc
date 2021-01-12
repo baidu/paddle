@@ -116,6 +116,15 @@ class FillConstantOpMaker : public framework::OpProtoAndCheckerMaker {
                   "memory. Otherwise, fill output variable to the running "
                   "device")
         .SetDefault(false);
+    AddAttr<int>("place_type",
+                 "(int, default 0) allow mamually setting place where the "
+                 "variable should be hold. "
+                 "0: not set manually, determine the place by executor. "
+                 "1: CPUPlace. "
+                 "2: CUDAPlace. "
+                 "3: CUDAPinnedPlace. "
+                 "4: XPUPlace. ")
+        .SetDefault(0);
     AddOutput("Out",
               "(Tensor) Tensor of specified shape will be filled "
               "with the specified value");

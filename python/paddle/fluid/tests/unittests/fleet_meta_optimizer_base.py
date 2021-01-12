@@ -132,5 +132,12 @@ class TestFleetMetaOptimizer(unittest.TestCase):
         elif name == "sharding":
             strategy.sharding = True
             strategy.sharding_configs = {"fuse_broadcast_MB": 0.2}
+        elif name == "recompute-offload":
+            strategy.recompute = True
+            strategy.recompute_configs = {
+                "checkpoints": ["fc_0.tmp_2", "fc_1.tmp_2"],
+                "enable_offload": True,
+                "checkpoint_shape": [256]
+            }
         else:
             raise NotImplementedError()

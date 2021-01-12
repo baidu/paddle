@@ -124,6 +124,7 @@ class TestFleetShardingMetaOptimizer(TestFleetMetaOptimizer):
                 "fc_1.b_0", "fc_2.b_0", "fc_2.w_0", "fc_1.b_0_velocity_0",
                 "fc_2.b_0_velocity_0", "fc_2.w_0_velocity_0", "learning_rate_0"
             ]))
+
         self.assertEqual(ops, [
             'fill_constant', 'fill_constant', 'fill_constant',
             'c_sync_calc_stream', 'c_broadcast', 'c_broadcast', 'c_broadcast',
@@ -170,19 +171,19 @@ class TestFleetShardingMetaOptimizer(TestFleetMetaOptimizer):
 
         self.assertEqual(ops, [
             'cast', 'cast', 'cast', 'fill_constant', 'fill_constant',
-            'fill_constant', 'fill_constant', 'fill_constant',
+            'fill_constant', 'fill_constant', 'fill_constant', 'fill_constant',
             'c_sync_calc_stream', 'c_broadcast', 'c_broadcast', 'c_broadcast',
             'c_broadcast', 'c_broadcast', 'c_broadcast', 'c_broadcast',
-            'c_broadcast', 'c_broadcast', 'c_sync_comm_stream', 'cast', 'cast',
-            'mul', 'cast', 'elementwise_add', 'cast', 'tanh', 'cast', 'mul',
-            'elementwise_add', 'cast', 'tanh', 'cast', 'mul', 'elementwise_add',
-            'softmax', 'cast', 'cross_entropy2', 'mean', 'elementwise_mul',
-            'fill_constant', 'scale', 'elementwise_mul_grad', 'mean_grad',
-            'cross_entropy_grad2', 'cast', 'softmax_grad',
-            'elementwise_add_grad', 'mul_grad', 'cast', 'cast', 'mul', 'cast',
-            'elementwise_add', 'cast', 'tanh_grad', 'cast',
-            'elementwise_add_grad', 'mul_grad', 'cast', 'cast', 'mul', 'cast',
-            'elementwise_add', 'cast', 'tanh_grad', 'cast',
+            'c_broadcast', 'c_broadcast', 'c_broadcast', 'c_sync_comm_stream',
+            'cast', 'cast', 'mul', 'cast', 'elementwise_add', 'cast', 'tanh',
+            'cast', 'cast', 'mul', 'elementwise_add', 'cast', 'tanh', 'cast',
+            'mul', 'elementwise_add', 'softmax', 'cast', 'cross_entropy2',
+            'mean', 'elementwise_mul', 'fill_constant', 'scale',
+            'elementwise_mul_grad', 'mean_grad', 'cross_entropy_grad2', 'cast',
+            'softmax_grad', 'elementwise_add_grad', 'mul_grad', 'cast', 'cast',
+            'cast', 'mul', 'cast', 'elementwise_add', 'cast', 'tanh_grad',
+            'cast', 'elementwise_add_grad', 'mul_grad', 'cast', 'cast', 'mul',
+            'cast', 'elementwise_add', 'cast', 'tanh_grad', 'cast',
             'elementwise_add_grad', 'mul_grad', 'c_sync_calc_stream',
             'c_allreduce_sum', 'c_allreduce_sum', 'c_allreduce_sum',
             'c_allreduce_sum', 'c_allreduce_sum', 'c_allreduce_sum',

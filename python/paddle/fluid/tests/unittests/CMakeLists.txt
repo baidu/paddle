@@ -83,6 +83,7 @@ if(NOT WITH_GPU OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_collective_allreduce_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_broadcast_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_allgather_api)
+    LIST(REMOVE_ITEM TEST_OPS test_pinned_memcpy_op)
 endif()
 
 if(WIN32)
