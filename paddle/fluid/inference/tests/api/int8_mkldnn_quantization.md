@@ -4,7 +4,7 @@ This document describes how to use Paddle inference Engine to convert the FP32 m
 
 ## 0. Install PaddlePaddle
 
-Follow PaddlePaddle [installation instruction](https://github.com/PaddlePaddle/models/tree/develop/fluid/PaddleCV/image_classification#installation) to install PaddlePaddle. If you build PaddlePaddle yourself, please use the following cmake arguments.
+Follow PaddlePaddle [installation instruction](https://www.paddlepaddle.org.cn/documentation/docs/en/install/index_en.html) to install PaddlePaddle. If you build PaddlePaddle yourself, please use the following cmake arguments.
 
 ```bash
 cmake ..  -DWITH_TESTING=ON -WITH_FLUID_ONLY=ON -DWITH_GPU=OFF -DWITH_MKL=ON -DWITH_MKLDNN=ON -DWITH_INFERENCE_API_TEST=ON -DON_INFER=ON

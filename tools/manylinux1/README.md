@@ -62,4 +62,4 @@ cmake ..
   ...
 ```
 
-You can find more details about cmake flags at [here](http://www.paddlepaddle.org/docs/develop/documentation/fluid/en/build_and_install/build_from_source_en.html#appendix-build-options)
+You can find more details about cmake flags at [here](https://www.paddlepaddle.org.cn/documentation/docs/en/install/Tables_en.html)

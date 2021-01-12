@@ -62,7 +62,7 @@ PaddlePaddle uses this [Git branching model](http://nvie.com/posts/a-successful-
 
 1. Build and test
 
-   Users can build PaddlePaddle natively on Linux and Mac OS X.  But to unify the building environment and to make it easy for debugging, the recommended way is [using Docker](https://github.com/PaddlePaddle/Paddle/blob/develop/doc/howto/dev/build_en.md).
+   Users can build PaddlePaddle natively on Linux and Mac OS X.  But to unify the building environment and to make it easy for debugging, the recommended way is [using Docker](https://www.paddlepaddle.org.cn/documentation/docs/en/install/install_Docker_en.html).
 
 1. Keep pulling
 

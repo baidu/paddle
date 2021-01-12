@@ -143,7 +143,7 @@ docker image by your self.
 
 ### Run Distributed Applications
 
-In our [API design doc](https://github.com/PaddlePaddle/Paddle/blob/develop/doc/design/api.md#distributed-training), we proposed an API that starts a distributed training job on a cluster.  This API need to build a PaddlePaddle application into a Docker image as above and calls kubectl to run it on the cluster.  This API might need to generate a Dockerfile look like above and call `docker build`.
+In our [API design doc](https://www.paddlepaddle.org.cn/documentation/docs/en/advanced_guide/distributed_training/cluster_quick_start_en.html), we proposed an API that starts a distributed training job on a cluster.  This API need to build a PaddlePaddle application into a Docker image as above and calls kubectl to run it on the cluster.  This API might need to generate a Dockerfile look like above and call `docker build`.
 
 Of course, we can manually build an application image and launch the job using the kubectl tool:
 
