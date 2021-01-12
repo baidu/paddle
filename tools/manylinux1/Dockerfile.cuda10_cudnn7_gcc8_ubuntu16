@@ -110,6 +110,7 @@ RUN unzip setuptools-40.6.2.zip
 WORKDIR /home/setuptools-40.6.2
 RUN python setup.py build
 RUN python setup.py install
+RUN echo "1"
 WORKDIR /home
 
 RUN wget https://files.pythonhosted.org/packages/69/81/52b68d0a4de760a2f1979b0931ba7889202f302072cc7a0d614211bc7579/pip-18.0.tar.gz && tar -zxvf pip-18.0.tar.gz

@@ -35,6 +35,7 @@ if [ $numa_nodes -lt $sockets ]; then
  at least $sockets"
 fi
 
+echo 1
 echo "********** Software Information **********"
 echo "OS Version             : `uname -o`"
 echo "Kernel Release Version : `uname -r`"
