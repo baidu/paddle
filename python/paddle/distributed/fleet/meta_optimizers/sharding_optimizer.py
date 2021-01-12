@@ -50,6 +50,9 @@ class ShardingOptimizer(MetaOptimizerBase):
         # reduced grads to param name
         self._reduced_grads_to_param = {}
         self._shard = Shard()
+        # optimize_ops, params_grads in this shard
+        self.optimize_ops_shard = []
+        self.params_grads_shard = []
 
     def _can_apply(self):
         if not self.role_maker._is_collective:
@@ -117,7 +120,8 @@ class ShardingOptimizer(MetaOptimizerBase):
         check_broadcast(main_block)
         check_allreduce_sum(main_block, self._shard, self.dp_ring_id)
         self._wait()
-        return optimize_ops, params_grads
+
+        return self.optimize_ops_shard, self.params_grads_shard
 
     def _set_up(self, params_grads):
         # step 1: initialize nccl
@@ -159,6 +163,7 @@ class ShardingOptimizer(MetaOptimizerBase):
             self._collective_helper._wait(current_endpoint, endpoints)
 
     def _split_program(self, block):
+
         for op_idx, op in reversed(list(enumerate(block.ops))):
             if int(op.attr('op_role')) != int(OpRole.Optimize):
                 last_backward_op_idx = op_idx + 1
@@ -208,6 +213,14 @@ class ShardingOptimizer(MetaOptimizerBase):
                         assert (
                             reduced_grad not in self._reduced_grads_to_param)
                         self._reduced_grads_to_param[reduced_grad] = param
+
+                        if self._shard.has_param(param):
+                            param_var = self._main_program.global_block().var(
+                                param)
+                            grad_var = self._main_program.global_block().var(
+                                reduced_grad)
+                            self.params_grads_shard.append(
+                                (param_var, grad_var))
 
             # find cast op
             if FP16Utils.is_fp16_cast_op(block, op, self._params):
@@ -301,6 +314,9 @@ class ShardingOptimizer(MetaOptimizerBase):
                 # _should_removed_var: opt state not cur shard
                 if program_deps.should_remove_op(idx):
                     program_deps.remove_op(idx)
+                elif op.desc.has_attr("op_namescope") and op.desc.attr(
+                        "op_namescope").startswith("/optimizer"):
+                    self.optimize_ops_shard.insert(0, op)
 
         block._sync_with_cpp()
         return

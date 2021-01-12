@@ -114,7 +114,7 @@ void EagerDeletionOpHandle::RunImpl() {
       continue;
     }
 
-    VLOG(2) << "Erase variable " << var_info->Name() << " on " << place_;
+    VLOG(3) << "Erase variable " << var_info->Name() << " on " << place_;
 
     Variable *var = vars_[i];
 

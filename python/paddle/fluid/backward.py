@@ -99,7 +99,34 @@ class ProgramStats(object):
                 max_op_idx = max(max_op_idx, idx)
         if min_op_idx >= max_op_idx:
             return False, min_op_idx, max_op_idx
+
         return True, min_op_idx, max_op_idx
+
+    def _update_segment_start(self, min_idx, pre_segment_end_idx):
+        """
+        FIXME (JZ-LIANG): the amp-related cast ops for persist vars should be 
+        included into current recompute segment, even though those ops may precede 
+        to checkpoint-generating op. this function is temporary sulotion to ensure 
+        there just one var (checkpoint) being hold-in-gpu-mem for each segment.
+        """
+
+        def is_amp_cast(op):
+            return op.desc.type() == 'cast' and self.block.var(
+                op.desc.input_arg_names()[0]).persistable
+
+        idx_ = min_idx - 1
+        updated_min_idx = min_idx
+        while idx_ > pre_segment_end_idx:
+            if is_amp_cast(self.ops[idx_]):
+                print("found amp-cast op: {}, : {}".format(self.ops[
+                    idx_].desc.type(), self.ops[idx_].desc.input_arg_names()[
+                        0]))
+                updated_min_idx = idx_
+                idx_ -= 1
+            else:
+                break
+
+        return updated_min_idx
 
     def build_stats(self):
         for i, op in enumerate(self.ops):
@@ -736,10 +763,13 @@ def _append_backward_ops_with_checkpoints_(
     buffer_block = block.program._create_block()
     # 0) deal with forward recomputing program descs
     program_stat = ProgramStats(block, ops)
+    # dropout seed op
     program_stat.modify_forward_desc_for_recompute()
+    # dependency parse: var_op_deps, op_deps
     program_stat.build_stats()
 
     # 1) find ops between checkpoints, i.e. recompute_segments
+    # sort checkpoint_names by the idx of its last generate op
     checkpoints_name = program_stat.sort_checkpoints(checkpoints_name)
     segments = []
 
@@ -751,20 +781,29 @@ def _append_backward_ops_with_checkpoints_(
             if name not in program_stat.var_op_deps:
                 break
             op_idx = program_stat.var_op_deps[name]["var_as_output_ops"]
+            # only count the last generate op
             for idx in op_idx:
                 max_op_idx = max(max_op_idx, idx)
         if max_op_idx > 0:
             segments.append([0, max_op_idx + 1])
     else:
         start_idx = 0
+        pre_segment_end_idx = -1
         while True:
+            _logger.debug("FW op range[0] - [{}]".format(len(ops)))
             if start_idx >= len(checkpoints_name) - 1:
                 break
+            # min_idx: checkpoint_1' s input op
+            # max_idx: checkpoint_2' s output op
             flag, min_idx, max_idx = program_stat.is_subgraph(
                 [checkpoints_name[start_idx]],
                 [checkpoints_name[start_idx + 1]])
             if flag:
+                # max_idx + 1 since the exact and used segment end idx is max_idx
+                min_idx = program_stat._update_segment_start(
+                    min_idx, pre_segment_end_idx)
                 segments.append([min_idx, max_idx + 1])
+
             start_idx += 1
 
     if segments != [] and segments[0][0] != 0:
@@ -772,12 +811,31 @@ def _append_backward_ops_with_checkpoints_(
     else:
         recompute_segments = segments
 
+    for i, (idx1, idx2) in enumerate(recompute_segments):
+        print("recompute segment[{}]".format(i))
+        print("segment start op: [{}]: [{}]".format(ops[idx1].desc.type(), ops[
+            idx1].desc.input_arg_names()))
+        print("segment end op: [{}]: [{}]".format(ops[idx2 - 1].desc.type(
+        ), ops[idx2 - 1].desc.input_arg_names()))
+        _logger.debug("recompute segment[{}]".format(i))
+        _logger.debug("segment start op: [{}]: [{}]".format(ops[idx1].desc.type(
+        ), ops[idx1].desc.input_arg_names()))
+        _logger.debug("segment end op: [{}]: [{}]".format(ops[
+            idx2 - 1].desc.type(), ops[idx2 - 1].desc.input_arg_names()))
+
     # 2) go through all forward ops and induct all variables that will be hold in memory
     vars_should_be_hold = []
     # a. variables that are used across segments will be held in memory
     for segment in recompute_segments:
         vars_should_be_hold.extend(
             program_stat.get_out_of_subgraph_vars(segment[0], segment[1]))
+
+    cross_vars = set(vars_should_be_hold) - set(checkpoints_name)
+    print("found [{}] vars which cross recompute segment: [{}], better checkpoints might be set to reduce those vars".format( \
+    len(cross_vars), cross_vars))
+    _logger.debug("found [{}] vars which cross recompute segment: [{}], better checkpoints might be set to reduce those vars".format( \
+    len(cross_vars), cross_vars))
+
     # b. output of seed op should be kept in memory
     vars_should_be_hold.extend(program_stat.get_reserved_vars())
     # c. input variables are checkpoints
@@ -785,6 +843,14 @@ def _append_backward_ops_with_checkpoints_(
     vars_should_be_hold = list(set(vars_should_be_hold))
 
     # 3) go through each recompute_segments, add backward ops with forward recomputation
+    """
+    local_block: tmp block for generate grad ops, take grad_op, fw_op_to_generate_grad_op
+    buffer_block:  tmp block for recom-fw ops
+    grad_op_descs: (list) hold final recompute & grad ops
+    grad_to_var:  (list) hold final grad vars
+    added_descs: (list) return value by _add_descs_to_block
+    buffer_descs: (list) return value by _add_needed_descs_to_block
+    """
     grad_op_descs = []
     var_name_dict = {}
 
@@ -808,6 +874,8 @@ def _append_backward_ops_with_checkpoints_(
 
     for i, segment in enumerate(recompute_segments[::-1]):
         # add grad op for ops not in any segments
+        # those between two segment idx and at the end
+        # gap_ops include last fw ops and segment end + 1 op (checkpoint2's generate op)
         gap_ops = ops[segment[1]:max_calculated_op_position]
         max_calculated_op_position = segment[0]
         for op in reversed(gap_ops):
@@ -821,9 +889,14 @@ def _append_backward_ops_with_checkpoints_(
             grad_op_descs.extend(added_descs)
             grad_to_var.update(op_grad_to_var)
 
+        # create recompute ops
+        # ff_ops includes: checkpoint1 as_input op and checkpoint2 as_output op 
+        # checkpoint2 as_output op  could and should be reomve from recomputation
+        # checkpoint2 as_output op is not add to recompute since filtered by _add_needed_descs_to_block
         ff_ops = ops[segment[0]:segment[1]]
         var_suffix = ".subprog_%d" % i
 
+        # create rename_dict for not hold var
         for op in ff_ops:
             if op.has_attr("sub_block"):
                 raise Exception("Recompute don't support ops with sub_block"
@@ -833,13 +906,19 @@ def _append_backward_ops_with_checkpoints_(
             input_and_output_names.extend(op.desc.input_arg_names())
             input_and_output_names.extend(op.desc.output_arg_names())
             for name in input_and_output_names:
+                # only target on activations, so need to skip rename of persistable (param, opt_state)
                 if block.var(name).persistable or name in checkpoints_name:
                     continue
                 if name in vars_should_be_hold:
                     continue
+                # map origin fw var name to  recompute fw var name
                 if name not in var_name_dict:
                     var_name_dict[name] = name + var_suffix
         # 3.a. add ops in current recompute_segment as forward recomputation ops
+        # use a temp buffer block to get op_descs list
+        # op input/output vars have not rename yet
+        # buffer_descs/buffer_block: filter output need op: true recompute ops
+        # added_descs/local_block: all op: use to generate BW ops
         buffer_descs = _add_needed_descs_to_block(ff_ops, buffer_block, block,
                                                   vars_in_memory)
         added_descs = _add_descs_to_block(ff_ops, local_block)
@@ -851,7 +930,7 @@ def _append_backward_ops_with_checkpoints_(
         # added_descs should be in grad_op_descs because it is backward op desc
         grad_op_descs.extend(buffer_descs)
 
-        # 3.c. add backward ops of current recomputation ops
+        # 3.c. add backward ops for all ops in current segment 
         for op_desc in reversed(added_descs):
             grad_op_desc, op_grad_to_var = core.get_grad_op_desc(
                 op_desc, cpt.to_text(no_grad_dict[block.idx]), [])
@@ -1480,9 +1559,11 @@ def append_backward(loss,
 
         # TODO: support _append_backward_ops_with_checkpoints_ in
         #  sub-block (control flow)
+        is_recompute = False
         if checkpoints != None and \
                 isinstance(checkpoints, list) and \
                 len(checkpoints) > 0:
+            is_recompute = True
             program_stat, checkpoint_names, \
                 vars_should_be_hold, \
                 recompute_segments = \
@@ -1577,7 +1658,10 @@ def append_backward(loss,
             attr_val.extend(g.op.attr(op_role_var_attr_name))
         g.op._set_attr(op_role_var_attr_name, attr_val)
 
-    return params_and_grads
+    if is_recompute:
+        return params_and_grads, checkpoint_names
+    else:
+        return params_and_grads
 
 
 def _as_list(x):

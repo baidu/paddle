@@ -116,6 +116,11 @@ class FillConstantOpMaker : public framework::OpProtoAndCheckerMaker {
                   "memory. Otherwise, fill output variable to the running "
                   "device")
         .SetDefault(false);
+    AddAttr<bool>(
+        "pinned",
+        "(bool, default false) If the tensor is placed in CUDAPinnedPlace "
+        "host memory ")
+        .SetDefault(false);
     AddOutput("Out",
               "(Tensor) Tensor of specified shape will be filled "
               "with the specified value");

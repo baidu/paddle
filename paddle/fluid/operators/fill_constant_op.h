@@ -39,6 +39,7 @@ class FillConstantKernel : public framework::OpKernel<T> {
     auto str_value = ctx.Attr<std::string>("str_value");
     auto float_value = ctx.Attr<float>("value");
     auto force_cpu = ctx.Attr<bool>("force_cpu");
+    auto pinned = ctx.Attr<bool>("pinned");
     framework::Tensor *tensor = nullptr;
 
     framework::Variable *out_var = ctx.OutputVar("Out");
@@ -102,22 +103,28 @@ class FillConstantKernel : public framework::OpKernel<T> {
     platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
     auto &dev_ctx = *pool.Get(ctx.GetPlace());
     bool cpu_place = force_cpu || ctx.GetPlace() == platform::CPUPlace();
-    if (cpu_place) {
+    if (cpu_place && !pinned) {
       tensor->mutable_data(platform::CPUPlace(), data_type);
       math::SetConstant<platform::CPUDeviceContext, T> functor;
       functor(reinterpret_cast<const platform::CPUDeviceContext &>(dev_ctx),
               tensor, static_cast<T>(value));
     }
 #ifdef PADDLE_WITH_CUDA
-    if (!cpu_place) {
+    if (!cpu_place && !pinned) {
       tensor->mutable_data(ctx.GetPlace(), data_type);
       math::SetConstant<platform::CUDADeviceContext, T> functor;
       functor(reinterpret_cast<const platform::CUDADeviceContext &>(dev_ctx),
               tensor, static_cast<T>(value));
+    } else if (pinned) {
+      // TODO(JZ-LIANG): fill_constant in CUDAPinnedPlace
+      tensor->mutable_data(platform::CUDAPinnedPlace(), data_type);
+      math::SetConstant<platform::CPUDeviceContext, T> functor;
+      functor(reinterpret_cast<const platform::CPUDeviceContext &>(dev_ctx),
+              tensor, static_cast<T>(value));
     }
 #endif
 #ifdef PADDLE_WITH_XPU
-    if (!cpu_place) {
+    if (!cpu_place && !pinned) {
       tensor->mutable_data(ctx.GetPlace(), data_type);
       math::SetConstant<platform::XPUDeviceContext, T> functor;
       functor(reinterpret_cast<const platform::XPUDeviceContext &>(dev_ctx),

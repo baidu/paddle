@@ -20,11 +20,15 @@ namespace allocation {
 bool CPUPinnedAllocator::IsAllocThreadSafe() const { return true; }
 void CPUPinnedAllocator::FreeImpl(Allocation *allocation) {
   PADDLE_ENFORCE_CUDA_SUCCESS(cudaFreeHost(allocation->ptr()));
+  VLOG(0) << "pinned_allocator ALLOC " << allocation->size() / 1024.0 / 1024.0
+          << " MB pinned memory.";
   delete allocation;
 }
 Allocation *CPUPinnedAllocator::AllocateImpl(size_t size) {
   void *ptr;
   PADDLE_ENFORCE_CUDA_SUCCESS(cudaHostAlloc(&ptr, size, cudaHostAllocPortable));
+  VLOG(0) << "pinned_allocator ALLOC " << size / 1024.0 / 1024.0
+          << " MB pinned memory.";
   return new Allocation(ptr, size, platform::CUDAPinnedPlace());
 }
 }  // namespace allocation

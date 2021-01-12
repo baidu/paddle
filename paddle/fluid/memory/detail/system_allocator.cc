@@ -195,6 +195,8 @@ void* CUDAPinnedAllocator::Alloc(size_t* index, size_t size) {
   void* p;
   // PINNED memory is visible to all CUDA contexts.
   cudaError_t result = cudaHostAlloc(&p, size, cudaHostAllocPortable);
+  VLOG(0) << "system_allocator ALLOC " << size / 1024.0 / 1024.0
+          << " MB pinned memory.";
 
   if (result == cudaSuccess) {
     *index = 1;  // PINNED memory
@@ -220,6 +222,8 @@ void CUDAPinnedAllocator::Free(void* p, size_t size, size_t index) {
                         size, cuda_pinnd_alloc_size_));
   cuda_pinnd_alloc_size_ -= size;
   err = cudaFreeHost(p);
+  VLOG(0) << "system_allocator Free " << size / 1024.0 / 1024.0
+          << " MB pinned memory.";
 
   // Purposefully allow cudaErrorCudartUnloading, because
   // that is returned if you ever call cudaFreeHost after the

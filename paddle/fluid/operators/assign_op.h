@@ -31,12 +31,26 @@ namespace operators {
 class AssignFunctor {
  public:
   AssignFunctor(framework::Variable *out,
-                const platform::DeviceContext &dev_ctx)
-      : out_(out), dev_ctx_(dev_ctx) {}
+                const platform::DeviceContext &dev_ctx, const int kind = 0)
+      : out_(out), dev_ctx_(dev_ctx), kind_(kind) {}
 
   void operator()(const framework::LoDTensor &lod_tensor) const {
     auto &out_tensor = *out_->GetMutable<framework::LoDTensor>();
-    copy_tensor(lod_tensor, &out_tensor);
+
+    if (kind_ == 0) {
+      copy_tensor(lod_tensor, &out_tensor);
+    } else if (kind_ == 1) {
+      framework::TensorCopy(lod_tensor, platform::CUDAPinnedPlace(), dev_ctx_,
+                            &out_tensor);
+      out_tensor.set_lod(lod_tensor.lod());
+    } else if (kind_ == 2) {
+      framework::TensorCopy(lod_tensor, dev_ctx_.GetPlace(), dev_ctx_,
+                            &out_tensor);
+      out_tensor.set_lod(lod_tensor.lod());
+    } else {
+      PADDLE_THROW(platform::errors::Unimplemented(
+          "kind =  %d is not supported.", kind_));
+    }
   }
 
   void operator()(const framework::LoDTensorArray &array) const {
@@ -76,6 +90,7 @@ class AssignFunctor {
 
   framework::Variable *out_;
   const platform::DeviceContext &dev_ctx_;
+  const int kind_;
 };
 
 }  // namespace operators

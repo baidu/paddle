@@ -22,7 +22,11 @@ enum Mode {
   HETER = 4; // support XPU and GPU computing server
 }
 
-message RecomputeConfig { repeated string checkpoints = 1; }
+message RecomputeConfig {
+  repeated string checkpoints = 1;
+  optional bool enable_offload = 2 [ default = false ];
+  repeated int32 checkpoint_shape = 3;
+}
 
 message ShardingConfig {
   optional float fuse_broadcast_MB = 1 [ default = 32.0 ];
