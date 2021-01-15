@@ -103,6 +103,7 @@ int32_t BrpcPsService::initialize() {
   _service_handler_map[PS_BARRIER] = &BrpcPsService::barrier;
   _service_handler_map[PS_START_PROFILER] = &BrpcPsService::start_profiler;
   _service_handler_map[PS_STOP_PROFILER] = &BrpcPsService::stop_profiler;
+  _service_handler_map[PS_PUSH_GLOBAL_STEP] = &BrpcPsService::push_global_step;
 
   // shard初始化,server启动后才可从env获取到server_list的shard信息
   initialize_shard_info();

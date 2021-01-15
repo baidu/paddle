@@ -14,11 +14,104 @@
 """Parameter Server utils"""
 
 import numpy as np
+import os
+import paddle
 
 
-class Distributed:
-    @staticmethod
-    def estimate(main_program, varname2tables):
+class DistributedInfer:
+    """
+    Utility class for distributed infer of PaddlePaddle.
+    """
+
+    def __init__(self, main_program=None, startup_program=None):
+        if main_program:
+            self.origin_main_program = main_program.clone()
+        else:
+            self.origin_main_program = paddle.static.default_main_program(
+            ).clone()
+
+        if startup_program:
+            self.origin_startup_program = startup_program
+        else:
+            self.origin_startup_program = paddle.static.default_startup_program(
+            )
+        self.sparse_table_maps = None
+
+    def init_distributed_infer_env(self,
+                                   exe,
+                                   loss,
+                                   role_maker=None,
+                                   dirname=None):
+        import paddle.distributed.fleet as fleet
+
+        if fleet.fleet._runtime_handle is None:
+            fleet.init(role_maker=role_maker)
+
+            fake_optimizer = paddle.optimizer.SGD()
+            strategy = fleet.DistributedStrategy()
+            strategy.a_sync = True
+            optimizer = fleet.distributed_optimizer(
+                fake_optimizer, strategy=strategy)
+            optimizer.minimize(
+                loss, startup_program=self.origin_startup_program)
+
+            if fleet.is_server():
+                fleet.init_server(dirname=dirname)
+                fleet.run_server()
+            else:
+                exe.run(paddle.static.default_startup_program())
+                fleet.init_worker()
+                self._init_dense_params(exe, dirname)
+            global_startup_program = paddle.static.default_startup_program()
+            global_startup_program = self.origin_startup_program
+            global_main_program = paddle.static.default_main_program()
+            global_main_program = self.origin_main_program
+
+    def _get_sparse_table_map(self):
+        import paddle.distributed.fleet as fleet
+
+        if self.sparse_table_maps is None:
+            self.sparse_table_maps = {}
+            send_ctx = fleet.fleet._runtime_handle._communicator.send_ctx_
+            for gradname, ctx in send_ctx.items():
+                if ctx.is_sparse:
+                    param = gradname.strip("@GRAD")
+                    self.sparse_table_maps[param] = ctx.table_id()
+                else:
+                    continue
+        return self.sparse_table_maps
+
+    def _init_dense_params(self, exe=None, dirname=None):
+        import paddle.distributed.fleet as fleet
+
+        sparse_table_maps = self._get_sparse_table_map()
+
+        if dirname is not None and exe is not None:
+            all_persist_vars = [
+                v for v in self.origin_main_program.list_vars()
+                if paddle.static.io.is_persistable(v)
+            ]
+            dense_persist_vars = [(v.name, v) for v in all_persist_vars
+                                  if v.name not in sparse_table_maps]
+            need_load_vars = [
+                v[1] for v in dense_persist_vars
+                if os.path.isfile(os.path.join(dirname, v[0]))
+            ]
+            paddle.static.load_vars(
+                exe,
+                dirname,
+                main_program=self.origin_main_program,
+                vars=need_load_vars)
+
+    def get_dist_infer_program(self):
+        import paddle.distributed.fleet as fleet
+
+        varname2tables = self._get_sparse_table_map()
+        convert_program = self._convert_program(self.origin_main_program,
+                                                varname2tables)
+        return convert_program
+
+    def _convert_program(self, main_program, varname2tables):
         def distributed_ops_pass(program):
             SPARSE_OP_TYPE_DICT = {"lookup_table": "W", "lookup_table_v2": "W"}
 

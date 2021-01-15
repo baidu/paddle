@@ -26,6 +26,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/data_feed.h"
 #include "paddle/fluid/framework/data_set.h"
 #include "paddle/fluid/framework/device_worker.h"
+#include "paddle/fluid/framework/fleet/heter_context.h"
 #include "paddle/fluid/framework/fleet/heter_wrapper.h"
 #include "paddle/fluid/framework/heter_service.h"
 #include "paddle/fluid/framework/lod_tensor.h"
@@ -296,13 +297,6 @@ class PSGPUTrainer : public TrainerBase {
   }
   virtual std::string GetDumpPath(int tid) { return ""; }
   virtual void InitDumpEnv() {}
-  void BuildGPUPSTask(int table_id, int feadim);
-  /*
-  template <typename T>
-  void HeterMemCpy(LoDTensor* tensor, LoDTensor* root_tensor,
-                   const paddle::platform::Place& thread_place,
-                   cudaStream_t stream);
-  */
 
   template <typename T>
   void MergeToRootScope(LoDTensor* root_tensor, LoDTensor* thread_tensor);

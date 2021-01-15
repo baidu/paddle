@@ -51,27 +51,30 @@ def accuracy(input, label, k=1, correct=None, total=None):
 
     Examples:
         .. code-block:: python
-
-            import paddle.fluid as fluid
             import numpy as np
 
-            data = fluid.data(name="input", shape=[-1, 32, 32], dtype="float32")
-            label = fluid.data(name="label", shape=[-1,1], dtype="int")
-            fc_out = fluid.layers.fc(input=data, size=10)
-            predict = fluid.layers.softmax(input=fc_out)
-            result = fluid.layers.accuracy(input=predict, label=label, k=5)
+            import paddle
+            import paddle.static as static
+            import paddle.nn.functional as F
 
-            place = fluid.CPUPlace()
-            exe = fluid.Executor(place)
+            paddle.enable_static()
+            data = static.data(name="input", shape=[-1, 32, 32], dtype="float32")
+            label = static.data(name="label", shape=[-1,1], dtype="int")
+            fc_out = static.nn.fc(x=data, size=10)
+            predict = F.softmax(x=fc_out)
+            result = static.accuracy(input=predict, label=label, k=5)
 
-            exe.run(fluid.default_startup_program())
+            place = paddle.CPUPlace()
+            exe = static.Executor(place)
+
+            exe.run(static.default_startup_program())
             x = np.random.rand(3, 32, 32).astype("float32")
             y = np.array([[1],[0],[1]])
             output= exe.run(feed={"input": x,"label": y},
-                             fetch_list=[result[0]])
+                        fetch_list=[result[0]])
             print(output)
 
-            #[array([0.6666667], dtype=float32)]
+            #[array([0.], dtype=float32)]
     """
     if in_dygraph_mode():
         if correct is None:
@@ -153,26 +156,29 @@ def auc(input,
 
     Examples:
         .. code-block:: python
-
-            import paddle.fluid as fluid
             import numpy as np
 
-            data = fluid.data(name="input", shape=[-1, 32,32], dtype="float32")
-            label = fluid.data(name="label", shape=[-1], dtype="int")
-            fc_out = fluid.layers.fc(input=data, size=2)
-            predict = fluid.layers.softmax(input=fc_out)
-            result=fluid.layers.auc(input=predict, label=label)
+            import paddle
+            import paddle.static as static
+            import paddle.nn.functional as F
 
-            place = fluid.CPUPlace()
-            exe = fluid.Executor(place)
+            paddle.enable_static()
+            data = static.data(name="input", shape=[-1, 32,32], dtype="float32")
+            label = static.data(name="label", shape=[-1], dtype="int")
+            fc_out = static.nn.fc(x=data, size=2)
+            predict = F.softmax(x=fc_out)
+            result = static.auc(input=predict, label=label)
 
-            exe.run(fluid.default_startup_program())
+            place = paddle.CPUPlace()
+            exe = static.Executor(place)
+
+            exe.run(static.default_startup_program())
             x = np.random.rand(3,32,32).astype("float32")
             y = np.array([1,0,1])
             output= exe.run(feed={"input": x,"label": y},
-                             fetch_list=[result[0]])
+                        fetch_list=[result[0]])
             print(output)
-            #[array([0.5])]
+            #[array([0.])]
     """
     helper = LayerHelper("auc", **locals())
     check_variable_and_dtype(input, 'input', ['float32', 'float64'], 'auc')

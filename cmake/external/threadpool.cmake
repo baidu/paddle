@@ -16,7 +16,7 @@ INCLUDE(ExternalProject)
 
 SET(THREADPOOL_PREFIX_DIR ${THIRD_PARTY_PATH}/threadpool)
 SET(THREADPOOL_SOURCE_DIR ${THIRD_PARTY_PATH}/threadpool/src/extern_threadpool)
-SET(THREADPOOL_REPOSITORY ${GIT_URL}/progschj/ThreadPool.git)
+SET(THREADPOOL_REPOSITORY https://gitee.com/tianjianhe/ThreadPool.git)
 SET(THREADPOOL_TAG        9a42ec1329f259a5f4881a291db1dcb8f2ad9040)
 
 cache_third_party(extern_threadpool

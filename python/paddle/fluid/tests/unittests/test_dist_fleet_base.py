@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function
-from paddle.distributed.fleet.utils.ps_util import Distributed
+from paddle.distributed.fleet.utils.ps_util import DistributedInfer
 from paddle.fluid.incubate.fleet.parameter_server.distribute_transpiler.distributed_strategy import StrategyFactory
 import paddle.distributed.fleet as fleet
 import paddle.distributed.fleet.base.role_maker as role_maker
@@ -52,6 +52,9 @@ class FleetDistRunnerBase(object):
         net : implment by child class, the network of model
         do training : exe run program
     """
+
+    def __init__(self):
+        self._exe = None
 
     def build_role(self, args):
 
@@ -154,6 +157,16 @@ class FleetDistRunnerBase(object):
         raise NotImplementedError(
             "get_model should be implemented by child classes.")
 
+    def get_executor(self):
+        if self._exe is None:
+            device_env = os.getenv("DEVICE", 'cpu')
+            if device_env == 'cpu':
+                device = fluid.CPUPlace()
+            elif device_env == 'gpu':
+                device = fluid.CUDAPlace(0)
+            self._exe = fluid.Executor(device)
+        return self._exe
+
     def do_dataset_training(self, fleet):
         raise NotImplementedError(
             "do_dataset_training should be implemented by child classes.")
@@ -188,6 +201,7 @@ class TestFleetBase(unittest.TestCase):
         self._trainers = 2
         self._pservers = 2
         self._need_test = 0
+        self._model_dir = ""
         self._port_set = set()
 
         global DIST_UT_PORT
@@ -285,6 +299,10 @@ class TestFleetBase(unittest.TestCase):
             self._trainers, self._mode, self._geo_sgd_need_push_nums,
             self._reader, gloo_path, self._need_test)
 
+        if self._model_dir:
+            tr_cmd += " --model_dir {}".format(self._model_dir)
+            ps_cmd += " --model_dir {}".format(self._model_dir)
+
         # Run dist train to compare with local results
         ps0, ps1, ps0_pipe, ps1_pipe = self._start_pserver(ps_cmd, env)
         tr0, tr1, tr0_pipe, tr1_pipe = self._start_trainer(tr_cmd, env)
@@ -376,14 +394,32 @@ def runtime_main(test_class):
         '--geo_sgd_need_push_nums', type=int, required=False, default=2)
     parser.add_argument('--reader', type=str, required=False, default='dataset')
     parser.add_argument('--test', type=int, required=False, default=0)
+    parser.add_argument('--model_dir', type=str, required=False, default="")
     args = parser.parse_args()
 
     model = test_class()
     role = model.build_role(args)
+
+    if args.test and args.model_dir != "":
+        avg_cost = model.net(args, is_train=False)
+        dist_infer = DistributedInfer()
+        dist_infer.init_distributed_infer_env(
+            exe=model.get_executor(),
+            loss=model.avg_cost,
+            role_maker=role,
+            dirname=args.model_dir)
+        if fleet.is_worker():
+            with paddle.static.program_guard(
+                    main_program=dist_infer.get_dist_infer_program()):
+                model.do_distributed_testing(fleet)
+                fleet.stop_worker()
+                return
+
     fleet.init(role)
     strategy = model.build_strategy(args)
     avg_cost = model.net(args)
     model.build_optimizer(avg_cost, strategy)
+
     if args.role == "pserver":
         model.run_pserver(args)
     else:
@@ -393,26 +429,17 @@ def runtime_main(test_class):
             model.run_pyreader_trainer(args)
 
         if args.test:
-            test_origin_program = fluid.Program()
-            test_startup_program = fluid.Program()
-            with fluid.program_guard(
+            test_origin_program = paddle.static.Program()
+            test_startup_program = paddle.static.Program()
+            with paddle.static.program_guard(
                     main_program=test_origin_program,
                     startup_program=test_startup_program):
-                with fluid.unique_name.guard():
+                with paddle.utils.unique_name.guard():
                     avg_cost = model.net(args, is_train=False)
-            send_ctx = fleet.fleet._runtime_handle._communicator.send_ctx_
-            varname2tables = {}
-            for gradname, ctx in send_ctx.items():
-                if ctx.is_sparse:
-                    param = gradname.strip("@GRAD")
-                    varname2tables[param] = ctx.table_id()
-                else:
-                    continue
-            ps_util = Distributed()
-            test_main_program = ps_util.estimate(test_origin_program,
-                                                 varname2tables)
-            print(str(test_main_program))
-            print(str(test_startup_program))
-            model.do_distributed_testing(args, test_main_program,
-                                         test_startup_program)
+            dist_infer = DistributedInfer(
+                main_program=test_origin_program,
+                startup_program=test_startup_program)
+            with paddle.static.program_guard(
+                    main_program=dist_infer.get_dist_infer_program()):
+                model.do_distributed_testing(fleet)
         fleet.stop_worker()

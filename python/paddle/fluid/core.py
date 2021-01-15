@@ -283,16 +283,24 @@ if avx_supported():
             from .core_avx import _remove_tensor_list_mmap_fds
     except Exception as e:
         if has_avx_core:
+            sys.stderr.write(
+                'Error: Can not import avx core while this file exists: ' +
+                current_path + os.sep + 'core_avx.' + core_suffix + '\n')
             raise e
         else:
             from .. import compat as cpt
             sys.stderr.write(
-                'WARNING: Do not have avx core. You may not build with AVX, '
-                'but AVX is supported on local machine.\n You could build paddle '
-                'WITH_AVX=ON to get better performance.\n'
-                'The original error is: %s\n' % cpt.get_exception_message(e))
+                "WARNING: AVX is supported on local machine, but you have installed "
+                "paddlepaddle without avx core. Hence, no_avx core which has worse "
+                "preformance will be imported.\nYou could reinstall paddlepaddle by "
+                "'python -m pip install -U paddlepaddle-gpu[==version]' or rebuild "
+                "paddlepaddle WITH_AVX=ON to get better performance.\n"
+                "The original error is: %s\n" % cpt.get_exception_message(e))
             load_noavx = True
 else:
+    sys.stderr.write(
+        "WARNING: AVX is not support on your machine. Hence, no_avx core will be imported, "
+        "It has much worse preformance than avx core.\n")
     load_noavx = True
 
 if load_noavx:
@@ -330,8 +338,14 @@ if load_noavx:
     except Exception as e:
         if has_noavx_core:
             sys.stderr.write(
-                'Error: Can not import noavx core while this file exists ' +
+                'Error: Can not import noavx core while this file exists: ' +
                 current_path + os.sep + 'core_noavx.' + core_suffix + '\n')
+        else:
+            sys.stderr.write(
+                "Error: AVX is not support on your machine, but you have installed "
+                "paddlepaddle with avx core, you should reinstall paddlepaddle by "
+                "'python -m pip install -U paddlepaddle-gpu[==version] -f "
+                "https://paddlepaddle.org.cn/whl/stable_noavx.html'\n")
         raise e
 
 

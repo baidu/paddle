@@ -278,11 +278,12 @@ else:
         # copy the openblas.dll
         shutil.copy('${OPENBLAS_SHARED_LIB}', libs_path)
         package_data['paddle.libs'] += ['openblas' + ext_name]
-    elif os.name == 'posix' and platform.machine() == 'aarch64':
+    elif os.name == 'posix' and platform.machine() == 'aarch64' and '${OPENBLAS_LIB}'.endswith('so'):
         # copy the libopenblas.so on linux+aarch64
         # special: core_noavx.so depends on 'libopenblas.so.0', not 'libopenblas.so'
-        shutil.copy('${OPENBLAS_LIB}' + '.0', libs_path)
-        package_data['paddle.libs'] += ['libopenblas.so.0']
+        if os.path.exists('${OPENBLAS_LIB}' + '.0'):
+            shutil.copy('${OPENBLAS_LIB}' + '.0', libs_path)
+            package_data['paddle.libs'] += ['libopenblas.so.0']
 
 if '${WITH_LITE}' == 'ON':
     shutil.copy('${LITE_SHARED_LIB}', libs_path)

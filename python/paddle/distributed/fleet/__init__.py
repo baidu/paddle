@@ -19,7 +19,7 @@ from .base.fleet_base import Fleet
 from .base.util_factory import UtilBase
 from .dataset import *
 from .data_generator import MultiSlotDataGenerator, MultiSlotStringDataGenerator
-#from . import metrics
+from . import metrics
 
 __all__ = [
     "DistributedStrategy",

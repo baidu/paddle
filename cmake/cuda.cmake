@@ -15,7 +15,7 @@ else()
   set(paddle_known_gpu_archs7 "30 35 50 52")
   set(paddle_known_gpu_archs8 "30 35 50 52 60 61")
   set(paddle_known_gpu_archs9 "30 35 50 52 60 61 70")
-  set(paddle_known_gpu_archs10 "30 35 50 52 60 61 70 75")
+  set(paddle_known_gpu_archs10 "35 50 52 60 61 70 75")
   set(paddle_known_gpu_archs11 "52 60 61 70 75 80")
 endif()
 

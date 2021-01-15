@@ -28,7 +28,7 @@ import numpy as np
 
 import ctr_dataset_reader
 from test_dist_fleet_base import runtime_main, FleetDistRunnerBase
-from paddle.distributed.fleet.utils.ps_util import Distributed
+from paddle.distributed.fleet.utils.ps_util import DistributedInfer
 import paddle.distributed.fleet as fleet
 
 paddle.enable_static()
@@ -165,17 +165,11 @@ class TestDistCTR2x2(FleetDistRunnerBase):
         with open(os.path.join(dirname, "__model__.proto"), "w") as wn:
             wn.write(str(program))
 
-    def do_distributed_testing(self, args, test_main_program,
-                               test_startup_program):
+    def do_distributed_testing(self, fleet):
         """
         do distributed
         """
-        device_env = os.getenv("DEVICE", 'cpu')
-        if device_env == 'cpu':
-            device = fluid.CPUPlace()
-        elif device_env == 'gpu':
-            device = fluid.CUDAPlace(0)
-        exe = fluid.Executor(device)
+        exe = self.get_executor()
 
         batch_size = 4
         test_reader = paddle.batch(fake_ctr_reader(), batch_size=batch_size)
@@ -188,7 +182,7 @@ class TestDistCTR2x2(FleetDistRunnerBase):
         try:
             while True:
                 batch_idx += 1
-                loss_val = exe.run(program=test_main_program,
+                loss_val = exe.run(program=paddle.static.default_main_program(),
                                    fetch_list=[self.avg_cost.name])
                 loss_val = np.mean(loss_val)
                 message = "TEST ---> batch_idx: {} loss: {}\n".format(batch_idx,
@@ -207,12 +201,7 @@ class TestDistCTR2x2(FleetDistRunnerBase):
         Args:
             fleet(Fleet api): the fleet object of Parameter Server, define distribute training role
         """
-        device_env = os.getenv("DEVICE", 'cpu')
-        if device_env == 'cpu':
-            device = fluid.CPUPlace()
-        elif device_env == 'gpu':
-            device = fluid.CUDAPlace(0)
-        exe = fluid.Executor(device)
+        exe = self.get_executor()
         exe.run(fluid.default_startup_program())
         fleet.init_worker()
 
@@ -250,13 +239,7 @@ class TestDistCTR2x2(FleetDistRunnerBase):
     def do_dataset_training(self, fleet):
         train_file_list = ctr_dataset_reader.prepare_fake_data()
 
-        device_env = os.getenv("DEVICE", 'cpu')
-        if device_env == 'cpu':
-            device = fluid.CPUPlace()
-        elif device_env == 'gpu':
-            device = fluid.CUDAPlace(0)
-        exe = fluid.Executor(device)
-
+        exe = self.get_executor()
         exe.run(fluid.default_startup_program())
         fleet.init_worker()
 

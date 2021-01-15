@@ -30,6 +30,9 @@ def conv_indent(indent):
     return "".join([" "] * indent)
 
 
+PSERVER_SAVE_SUFFIX = "_txt"
+
+
 class Accessor:
     def __init__(self):
         self.accessor_class = ""
@@ -165,11 +168,7 @@ class CommonAccessor:
                     shape = self.get_shard(total_dims, pserver_num, pserver_id)
             dims.append(shape)
 
-            if formal_name == "Param":
-                initializer = "uniform_random&0&-1.0&1.0"
-            else:
-                initializer = self.get_initializer_attr(param.name,
-                                                        startup_program)
+            initializer = self.get_initializer_attr(param.name, startup_program)
             initializers.append(initializer)
 
         for (attr_varname, type_) in attr_varnames:
@@ -793,9 +792,9 @@ class TheOnePSRuntime(RuntimeBase):
         begin = time.time()
         for var_name in load_varnames:
             table_id = sparse_table_maps[var_name]
-            path = os.path.join(dirname, var_name,
+            path = os.path.join(dirname, var_name + PSERVER_SAVE_SUFFIX,
                                 "{}.block{}.txt".format(var_name, pserver_id))
-            meta = os.path.join(dirname, var_name,
+            meta = os.path.join(dirname, var_name + PSERVER_SAVE_SUFFIX,
                                 "{}.block{}.meta".format(var_name, pserver_id))
             self._server.load_sparse(path, meta, table_id)
         end = time.time()

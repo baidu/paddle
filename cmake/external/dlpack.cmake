@@ -17,7 +17,7 @@ include(ExternalProject)
 set(DLPACK_PREFIX_DIR ${THIRD_PARTY_PATH}/dlpack)
 set(DLPACK_SOURCE_DIR ${THIRD_PARTY_PATH}/dlpack/src/extern_dlpack)
 
-set(DLPACK_REPOSITORY ${GIT_URL}/dmlc/dlpack.git)
+set(DLPACK_REPOSITORY https://gitee.com/tianjianhe/dlpack.git)
 set(DLPACK_TAG        v0.2)
 
 cache_third_party(extern_dlpack

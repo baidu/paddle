@@ -19,7 +19,7 @@ SET(ZLIB_SOURCE_DIR ${THIRD_PARTY_PATH}/zlib/src/extern_zlib)
 SET(ZLIB_INSTALL_DIR ${THIRD_PARTY_PATH}/install/zlib)
 SET(ZLIB_ROOT ${ZLIB_INSTALL_DIR} CACHE FILEPATH "zlib root directory." FORCE)
 SET(ZLIB_INCLUDE_DIR "${ZLIB_INSTALL_DIR}/include" CACHE PATH "zlib include directory." FORCE)
-set(ZLIB_REPOSITORY ${GIT_URL}/madler/zlib.git)
+set(ZLIB_REPOSITORY https://gitee.com/tianjianhe/zlib.git)
 set(ZLIB_TAG        v1.2.8)
 
 INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR}) # For zlib code to include its own headers.
@@ -41,7 +41,7 @@ ExternalProject_Add(
     CMAKE_ARGS      -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
-                    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+		    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}  -D_GLIBCXX_USE_CXX11_ABI=0"
                     -DCMAKE_INSTALL_PREFIX=${ZLIB_INSTALL_DIR}
                     -DBUILD_SHARED_LIBS=OFF
                     -DCMAKE_POSITION_INDEPENDENT_CODE=ON

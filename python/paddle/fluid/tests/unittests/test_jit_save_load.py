@@ -95,6 +95,38 @@ class LinerNetWithLabel(paddle.nn.Layer):
         return out, avg_loss
 
 
+class LinerNetWithPruneInput(paddle.nn.Layer):
+    def __init__(self, in_size, out_size):
+        super(LinerNetWithPruneInput, self).__init__()
+        self._linear = Linear(in_size, out_size)
+
+    @declarative(input_spec=[
+        InputSpec(
+            shape=[None, 784], dtype='float32', name="image"), InputSpec(
+                shape=[None, 1], dtype='int64', name="label")
+    ])
+    def forward(self, x, label):
+        out = self._linear(x)
+        loss = fluid.layers.cross_entropy(out, label)
+        avg_loss = fluid.layers.mean(loss)
+        return out
+
+
+class LinerNetWithUselessInput(paddle.nn.Layer):
+    def __init__(self, in_size, out_size):
+        super(LinerNetWithUselessInput, self).__init__()
+        self._linear = Linear(in_size, out_size)
+
+    @declarative(input_spec=[
+        InputSpec(
+            shape=[None, 784], dtype='float32', name="image"), InputSpec(
+                shape=[None, 1], dtype='int64', name="label")
+    ])
+    def forward(self, x, label):
+        out = self._linear(x)
+        return out
+
+
 class LinearNetReturnLoss(fluid.dygraph.Layer):
     def __init__(self, in_size, out_size):
         super(LinearNetReturnLoss, self).__init__()
@@ -627,15 +659,23 @@ class TestJitSaveMultiCases(unittest.TestCase):
         paddle.seed(SEED)
         paddle.framework.random._manual_program_seed(SEED)
 
-    def verify_inference_correctness(self, layer, model_path, with_label=False):
+    def verify_inference_correctness(self,
+                                     layer,
+                                     model_path,
+                                     with_label_and_loss=False,
+                                     with_label=False):
         layer.eval()
         loaded_layer = paddle.jit.load(model_path)
         loaded_layer.eval()
         # inference & compare
         x = paddle.to_tensor(np.random.random((1, 784)).astype('float32'))
-        if with_label:
+        if with_label_and_loss:
             y = paddle.to_tensor(np.random.random((1, 1)).astype('int64'))
             pred, _ = layer(x, y)
+            pred = pred.numpy()
+        elif with_label:
+            y = paddle.to_tensor(np.random.random((1, 1)).astype('int64'))
+            pred = layer(x, y)
             pred = pred.numpy()
         else:
             pred = layer(x).numpy()
@@ -714,7 +754,8 @@ class TestJitSaveMultiCases(unittest.TestCase):
             ],
             output_spec=[out])
 
-        self.verify_inference_correctness(layer, model_path, True)
+        self.verify_inference_correctness(
+            layer, model_path, with_label_and_loss=True)
 
     def test_prune_to_static_no_train(self):
         layer = LinerNetWithLabel(784, 1)
@@ -732,7 +773,36 @@ class TestJitSaveMultiCases(unittest.TestCase):
             ],
             output_spec=output_spec)
 
-        self.verify_inference_correctness(layer, model_path, True)
+        self.verify_inference_correctness(
+            layer, model_path, with_label_and_loss=True)
+
+    def test_prune_input_to_static_no_train(self):
+        layer = LinerNetWithPruneInput(784, 1)
+
+        model_path = "test_prune_input_to_static_no_train/model"
+        paddle.jit.save(
+            layer,
+            model_path,
+            input_spec=[
+                InputSpec(
+                    shape=[None, 784], dtype='float32', name="image")
+            ])
+
+        self.verify_inference_correctness(layer, model_path, with_label=True)
+
+    def test_prune_useless_input_to_static_no_train(self):
+        layer = LinerNetWithUselessInput(784, 1)
+
+        model_path = "test_prune_useless_input_to_static_no_train/model"
+        paddle.jit.save(
+            layer,
+            model_path,
+            input_spec=[
+                InputSpec(
+                    shape=[None, 784], dtype='float32', name="image")
+            ])
+
+        self.verify_inference_correctness(layer, model_path, with_label=True)
 
     def test_no_prune_input_spec_name_warning(self):
         layer = LinearNetWithInputSpec(784, 1)

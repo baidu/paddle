@@ -17,6 +17,7 @@ limitations under the License. */
 #include <ctime>
 #include <memory>
 #include <numeric>
+#include "paddle/fluid/framework/fleet/heter_ps/optimizer_conf.h"
 #include "paddle/fluid/framework/fleet/ps_gpu_wrapper.h"
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/platform/gpu_info.h"
@@ -177,6 +178,42 @@ void PSGPUWrapper::CopyForPush(const paddle::platform::Place& place,
       slot_lengths.size(), total_length, batch_size, d_slot_vector);
   cudaStreamSynchronize(stream);
 }
+
+void PSGPUWrapper::SetSparseSGD(float nonclk_coeff, float clk_coeff,
+                                float min_bound, float max_bound,
+                                float learning_rate, float initial_g2sum,
+                                float initial_range) {
+  cudaMemcpyToSymbol(optimizer_config::nonclk_coeff, &nonclk_coeff,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::clk_coeff, &clk_coeff, sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::min_bound, &min_bound, sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::max_bound, &max_bound, sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::learning_rate, &learning_rate,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::initial_g2sum, &initial_g2sum,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::initial_range, &initial_range,
+                     sizeof(float));
+}
+
+void PSGPUWrapper::SetEmbedxSGD(float mf_create_thresholds,
+                                float mf_learning_rate, float mf_initial_g2sum,
+                                float mf_initial_range, float mf_min_bound,
+                                float mf_max_bound) {
+  cudaMemcpyToSymbol(optimizer_config::mf_create_thresholds,
+                     &mf_create_thresholds, sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::mf_learning_rate, &mf_learning_rate,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::mf_initial_g2sum, &mf_initial_g2sum,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::mf_initial_range, &mf_initial_range,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::mf_min_bound, &mf_min_bound,
+                     sizeof(float));
+  cudaMemcpyToSymbol(optimizer_config::mf_max_bound, &mf_max_bound,
+                     sizeof(float));
+}
+
 }  // end namespace framework
 }  // end namespace paddle
 #endif

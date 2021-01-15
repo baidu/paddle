@@ -18,7 +18,7 @@ SET(GLOG_PREFIX_DIR  ${THIRD_PARTY_PATH}/glog)
 SET(GLOG_SOURCE_DIR  ${THIRD_PARTY_PATH}/glog/src/extern_glog)
 SET(GLOG_INSTALL_DIR ${THIRD_PARTY_PATH}/install/glog)
 SET(GLOG_INCLUDE_DIR "${GLOG_INSTALL_DIR}/include" CACHE PATH "glog include directory." FORCE)
-SET(GLOG_REPOSITORY ${GIT_URL}/google/glog.git)
+SET(GLOG_REPOSITORY https://gitee.com/tianjianhe/glog.git)
 SET(GLOG_TAG        v0.3.5)
 
 IF(WIN32)
@@ -48,7 +48,7 @@ ExternalProject_Add(
     UPDATE_COMMAND  ""
     CMAKE_ARGS      -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-                    -DCMAKE_CXX_FLAGS=${GLOG_CMAKE_CXX_FLAGS}
+		    "-DCMAKE_CXX_FLAGS=${GLOG_CMAKE_CXX_FLAGS}  -D_GLIBCXX_USE_CXX11_ABI=0"
                     -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
                     -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
                     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}

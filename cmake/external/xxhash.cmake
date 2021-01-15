@@ -18,7 +18,7 @@ set(XXHASH_PREFIX_DIR ${THIRD_PARTY_PATH}/xxhash)
 set(XXHASH_SOURCE_DIR ${THIRD_PARTY_PATH}/xxhash/src/extern_xxhash)
 set(XXHASH_INSTALL_DIR ${THIRD_PARTY_PATH}/install/xxhash)
 set(XXHASH_INCLUDE_DIR "${XXHASH_INSTALL_DIR}/include")
-set(XXHASH_REPOSITORY  ${GIT_URL}/Cyan4973/xxHash.git)
+set(XXHASH_REPOSITORY  https://gitee.com/tianjianhe/xxHash.git)
 set(XXHASH_TAG         v0.6.5)
 
 cache_third_party(extern_xxhash

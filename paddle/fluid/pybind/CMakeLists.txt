@@ -39,6 +39,11 @@ set(PYBIND_SRCS
   compatible.cc
   generator_py.cc)
 
+if(WITH_ASCEND)
+  set(PYBIND_DEPS ${PYBIND_DEPS} ascend_wrapper)
+  set(PYBIND_SRCS ${PYBIND_SRCS} ascend_wrapper_py.cc)
+endif(WITH_ASCEND)
+
 if(WITH_GLOO)
   set(PYBIND_DEPS ${PYBIND_DEPS} gloo_context)
   set(PYBIND_SRCS ${PYBIND_SRCS} gloo_context_py.cc)

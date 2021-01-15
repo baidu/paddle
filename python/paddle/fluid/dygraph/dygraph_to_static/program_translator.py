@@ -470,19 +470,22 @@ class StaticFunction(object):
         cached_program_len = len(self._program_cache)
         # If specific `input_spec`, apply convertion from dygraph layers into static Program.
         if cached_program_len == 0:
-            if input_spec is None:
-                input_spec = self._function_spec.input_spec
-            elif self._function_spec.input_spec is not None:
-                if not input_specs_compatible(
+            desired_input_spec = input_spec
+            if self._function_spec.input_spec is not None:
+                if input_spec is not None and not input_specs_compatible(
                         flatten(input_spec),
                         flatten(self._function_spec.input_spec)):
                     raise ValueError(
                         "The `input_spec`: {} used to construct concrete_program is conflict with the `input_spec`: {} in `@paddle.jit.to_static`".
                         format(input_spec, self._function_spec.input_spec))
+                # NOTE(chenweihang): we should always translated program based on the `input_spec`
+                # decorated on forward if it is valid
+                desired_input_spec = self._function_spec.input_spec
 
-            has_input_spec = (input_spec is not None)
+            has_input_spec = (desired_input_spec is not None)
             if has_input_spec:
-                concrete_program, _ = self.get_concrete_program(*input_spec)
+                concrete_program, _ = self.get_concrete_program(
+                    *desired_input_spec)
                 return concrete_program
             else:
                 raise ValueError(

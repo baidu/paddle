@@ -13,4 +13,4 @@
 # limitations under the License.
 
 from .fs import LocalFS, HDFSClient
-from .ps_util import Distributed
+from .ps_util import DistributedInfer

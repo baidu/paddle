@@ -45,6 +45,8 @@ __all__ = [
     'Variable',
     'load_vars',
     'save_vars',
+    'auc',
+    'accuracy',
 ]
 
 from . import nn
@@ -92,3 +94,4 @@ from ..fluid.io import save_vars  #DEFINE_ALIAS
 from ..fluid.layers import create_parameter  #DEFINE_ALIAS
 from ..fluid.layers import create_global_var  #DEFINE_ALIAS
 from ..fluid.layers.metric_op import auc  #DEFINE_ALIAS
+from ..fluid.layers.metric_op import accuracy  #DEFINE_ALIAS

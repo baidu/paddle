@@ -21,6 +21,7 @@ limitations under the License. */
 #undef _XOPEN_SOURCE
 #endif
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,10 @@ void BindPSGPUWrapper(py::module* m) {
       *m, "PSGPU")
       .def(py::init([]() { return framework::PSGPUWrapper::GetInstance(); }))
       .def("set_slot_vector", &framework::PSGPUWrapper::SetSlotVector,
+           py::call_guard<py::gil_scoped_release>())
+      .def("init_GPU_server", &framework::PSGPUWrapper::InitializeGPUServer,
+           py::call_guard<py::gil_scoped_release>())
+      .def("build_gpu_ps", &framework::PSGPUWrapper::BuildGPUPS,
            py::call_guard<py::gil_scoped_release>());
 }  // end PSGPUWrapper
 #endif
