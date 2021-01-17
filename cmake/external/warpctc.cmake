@@ -17,8 +17,9 @@ INCLUDE(ExternalProject)
 SET(WARPCTC_PREFIX_DIR  ${THIRD_PARTY_PATH}/warpctc)
 SET(WARPCTC_SOURCE_DIR  ${THIRD_PARTY_PATH}/warpctc/src/extern_warpctc)
 SET(WARPCTC_INSTALL_DIR ${THIRD_PARTY_PATH}/install/warpctc)
-set(WARPCTC_REPOSITORY  ${GIT_URL}/baidu-research/warp-ctc.git)
+set(WARPCTC_REPOSITORY  https://gitee.com/tianjianhe/warp-ctc.git)
 set(WARPCTC_TAG         95a461eddeabd51099ef059dcfada1117eb1bfb8)
+# set(WARPCTC_TAG         bc29dcfff07ced1c7a19a4ecee48e5ad583cef8e)
 
 SET(WARPCTC_INCLUDE_DIR "${WARPCTC_INSTALL_DIR}/include"
     CACHE PATH "Warp-ctc Directory" FORCE)
@@ -52,7 +53,7 @@ ExternalProject_Add(
                     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
                     -DCMAKE_C_FLAGS_DEBUG=${CMAKE_C_FLAGS_DEBUG}
                     -DCMAKE_C_FLAGS_RELEASE=${CMAKE_C_FLAGS_RELEASE}
-                    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+		    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}  -D_GLIBCXX_USE_CXX11_ABI=0"
                     -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
                     -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
                     -DCMAKE_INSTALL_PREFIX=${WARPCTC_INSTALL_DIR}
