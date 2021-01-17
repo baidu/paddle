@@ -36,6 +36,8 @@ cd $PADDLE_ROOT/build
 ctest -N | awk -F ':' '{print $2}' | sed '/^$/d' | sed '$d' | sed 's/ //g' > /$PADDLE_ROOT/pr-ut
 cd $PADDLE_ROOT
 grep -F -x -v -f br-ut pr-ut > $PADDLE_ROOT/added_ut
+ls $PADDLE_ROOT/tools
+python $PADDLE_ROOT/tools/check_ut_duplicate_name.py br-ut pr-ut > $PADDLE_ROOT/duplicate_ut|| echo 'no duplicate name ut'
 echo "New-UT:"
 cat $PADDLE_ROOT/added_ut
 rm -rf prec_build
