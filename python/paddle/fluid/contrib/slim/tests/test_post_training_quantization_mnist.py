@@ -133,6 +133,10 @@ class TestPostTrainingQuantization(unittest.TestCase):
             is_full_quantize=is_full_quantize,
             optimize_model=is_optimize_model,
             is_use_cache_file=is_use_cache_file)
+        # In order to reduce the test time
+        if algo == 'EQ':
+            ptq._eq_act_scale_nums = 20
+            ptq._eq_weight_scale_nums = 20
         ptq.quantize()
         ptq.save_quantized_model(self.int8_model_path)
 
@@ -216,6 +220,26 @@ class TestPostTrainingAbsMaxForMnist(TestPostTrainingQuantization):
         is_optimize_model = True
         diff_threshold = 0.01
         batch_size = 10
+        infer_iterations = 50
+        quant_iterations = 10
+        self.run_test(model_name, data_url, data_md5, algo, quantizable_op_type,
+                      is_full_quantize, is_use_cache_file, is_optimize_model,
+                      diff_threshold, batch_size, infer_iterations,
+                      quant_iterations)
+
+
+class TestPostTrainingEQForMnist(TestPostTrainingQuantization):
+    def test_post_training_eq(self):
+        model_name = "mnist_model"
+        data_url = "http://paddle-inference-dist.bj.bcebos.com/int8/mnist_model.tar.gz"
+        data_md5 = "be71d3997ec35ac2a65ae8a145e2887c"
+        algo = "EQ"
+        quantizable_op_type = ["conv2d"]
+        is_full_quantize = False
+        is_use_cache_file = False
+        is_optimize_model = False
+        diff_threshold = 0.01
+        batch_size = 2
         infer_iterations = 50
         quant_iterations = 10
         self.run_test(model_name, data_url, data_md5, algo, quantizable_op_type,
