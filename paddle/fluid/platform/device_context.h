@@ -19,15 +19,24 @@ limitations under the License. */
 #include <vector>
 
 #include "paddle/fluid/memory/malloc.h"
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/platform/cuda_helper.h"
+#include "paddle/fluid/platform/gpu_info.h"
+#endif
+#ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/dynload/cublas.h"
 #include "paddle/fluid/platform/dynload/cudnn.h"
 #include "paddle/fluid/platform/dynload/cusolver.h"
 #if !defined(__APPLE__) && defined(PADDLE_WITH_NCCL)
 #include "paddle/fluid/platform/dynload/nccl.h"
 #endif
-#include "paddle/fluid/platform/gpu_info.h"
+#endif
+#ifdef PADDLE_WITH_HIP
+#include "paddle/fluid/platform/dynload/miopen.h"
+#include "paddle/fluid/platform/dynload/rocblas.h"
+#if !defined(__APPLE__) && defined(PADDLE_WITH_RCCL)
+#include "paddle/fluid/platform/dynload/rccl.h"
+#endif
 #endif
 
 #if defined(PADDLE_WITH_XPU_BKCL)
@@ -47,6 +56,10 @@ limitations under the License. */
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/stream/cuda_stream.h"
 #endif
+#ifdef PADDLE_WITH_HIP
+#include "paddle/fluid/platform/stream/hip_stream.h"
+#endif
+
 #include "unsupported/Eigen/CXX11/Tensor"
 
 namespace Eigen {
@@ -153,11 +166,12 @@ struct DefaultDeviceContextType<platform::XPUPlace> {
 };
 #endif
 
-#ifdef PADDLE_WITH_CUDA
+#if defined PADDLE_WITH_CUDA || defined PADDLE_WITH_HIP
 
 class CudnnWorkspaceHandle;
 class EigenCudaStreamDevice;
 
+#ifdef PADDLE_WITH_CUDA
 class CUDAContext {
  public:
   CUDAContext() = default;
@@ -298,6 +312,99 @@ class CUDAContext {
   DISABLE_COPY_AND_ASSIGN(CUDAContext);
 };
 
+#else
+
+class HIPContext {
+ public:
+  HIPContext() = default;
+  explicit HIPContext(const CUDAPlace& place, const stream::Priority& priority =
+                                                  stream::Priority::kNormal);
+
+  ~HIPContext();
+
+  const CUDAPlace& Place() const { return place_; }
+
+  const std::unique_ptr<Eigen::GpuDevice>& EigenDevice() const {
+    return eigen_device_;
+  }
+
+  const std::unique_ptr<EigenCudaStreamDevice>& EigenStream() const {
+    return eigen_stream_;
+  }
+
+  const std::unique_ptr<stream::CUDAStream>& Stream() const { return stream_; }
+
+  const hipStream_t& RawStream() { return stream_->raw_stream(); }
+
+  const miopenHandle_t& CudnnHandle() const { return cudnn_handle_; }
+
+  const std::unique_ptr<CublasHandleHolder>& CublasHandle() const {
+    return cublas_handle_;
+  }
+
+  const std::unique_ptr<CublasHandleHolder>& CublasTensorCoreHandle() const {
+    return cublas_tensor_core_handle_;
+  }
+  /*! \brief  Call cublas function safely. */
+  template <typename Callback>
+  inline void CublasCall(Callback&& callback) const {
+    cublas_handle_->Call(std::forward<Callback>(callback));
+  }
+
+  /*! \brief  Check whether tensor core is supported */
+  bool tensor_core_available() const;
+
+  /*! \brief  Call cublas function with Tensor Core safely. If
+ *       Tensor Core is not available, use DEFAULT_MATH instead. */
+  template <typename Callback>
+  inline void TensorCoreCublasCallIfAvailable(Callback&& callback) const {
+    if (cublas_tensor_core_handle_) {
+      cublas_tensor_core_handle_->Call(std::forward<Callback>(callback));
+    } else {
+      cublas_handle_->Call(std::forward<Callback>(callback));
+    }
+  }
+
+ private:
+  void InitEigenContext();
+
+  void InitCuBlasContext() {
+    cublas_handle_.reset(new CublasHandleHolder(RawStream()));
+  }
+
+  void InitCuDNNContext() {
+    if (dynload::HasCUDNN()) {
+      PADDLE_ENFORCE_CUDA_SUCCESS(dynload::miopenCreate(&cudnn_handle_));
+      PADDLE_ENFORCE_CUDA_SUCCESS(
+          dynload::miopenSetStream(cudnn_handle_, RawStream()));
+    } else {
+      cudnn_handle_ = nullptr;
+    }
+  }
+
+  void DestoryCuDNNContext() {
+    if (cudnn_handle_) {
+      PADDLE_ENFORCE_CUDA_SUCCESS(dynload::miopenDestroy(cudnn_handle_));
+    }
+    cudnn_handle_ = nullptr;
+  }
+
+  void DestoryCuBlasContext() {
+    cublas_handle_.reset();
+    cublas_tensor_core_handle_.reset();
+  }
+
+  CUDAPlace place_;
+  std::unique_ptr<Eigen::GpuDevice> eigen_device_;
+  std::unique_ptr<EigenCudaStreamDevice> eigen_stream_;
+  std::unique_ptr<stream::CUDAStream> stream_;
+  miopenHandle_t cudnn_handle_;
+  std::unique_ptr<CublasHandleHolder> cublas_handle_;
+  std::unique_ptr<CublasHandleHolder> cublas_tensor_core_handle_;
+  DISABLE_COPY_AND_ASSIGN(HIPContext);
+};
+#endif
+
 class CUDADeviceContext : public DeviceContext {
  public:
   explicit CUDADeviceContext(CUDAPlace place);
@@ -342,7 +449,7 @@ class CUDADeviceContext : public DeviceContext {
   inline void TensorCoreCublasCallIfAvailable(Callback&& callback) const {
     return context()->TensorCoreCublasCallIfAvailable(callback);
   }
-
+#ifdef PADDLE_WITH_CUDA
   /*! \brief  Return cudnn  handle in the device context. */
   cudnnHandle_t cudnn_handle() const;
 
@@ -397,9 +504,63 @@ class CUDADeviceContext : public DeviceContext {
     }
     return thread_ctx_.at(this);
   }
+#else
+  /*! \brief  Return cudnn  handle in the device context. */
+  miopenHandle_t cudnn_handle() const;
+
+  /*! \brief  Return a cudnn workspace handle to call multiple cudnn
+   *  functions without interrupting by other threads.
+   *  Once the first cudnn function is called by the handle, a lock
+   *  would be acquired to prevent other threads from accessing the
+   *  workspace. Once the handle is destructed, the lock would be released.
+   *  CudnnWorkspaceHandle is an RAII object to implement thread-safe
+   *  sequential cudnn function calls. */
+  CudnnWorkspaceHandle cudnn_workspace_handle() const;
+  /*! \brief  Return cuda stream in the device context. */
+  hipStream_t stream() const;
+
+#if defined(PADDLE_WITH_RCCL)
+  /*! \brief  Return nccl communicators. */
+  ncclComm_t nccl_comm() const { return nccl_comm_; }
+
+  /*! \brief  Set nccl communicators. */
+  void set_nccl_comm(ncclComm_t comm) { nccl_comm_ = comm; }
+#endif
+
+  template <typename Callback>
+  void RecordEvent(hipEvent_t ev, Callback callback) const {
+    return context()->Stream()->RecordEvent(ev, callback);
+  }
+
+  template <typename Callback>
+  void AddStreamCallback(Callback&& callback) const {
+    return context()->Stream()->AddCallback(callback);
+  }
+
+  void WaitStreamCallback() const {
+    return context()->Stream()->WaitCallback();
+  }
+
+  void ResetDefaultContext(const stream::Priority& priority) {
+    default_ctx_.reset(new HIPContext(place_, priority));
+  }
+
+  void ResetThreadContext(const stream::Priority& priority) {
+    std::lock_guard<std::mutex> guard(ctx_mtx_);
+    thread_ctx_[this].reset(new HIPContext(place_, priority));
+  }
+
+  std::shared_ptr<HIPContext> context() const {
+    if (!thread_ctx_.count(this)) {
+      return default_ctx_;
+    }
+    return thread_ctx_.at(this);
+  }
+#endif
 
  private:
   CUDAPlace place_;
+#ifdef PADDLE_WITH_CUDA
   std::shared_ptr<CUDAContext> default_ctx_;
 
   // The thread_local static variable will be released before the
@@ -407,11 +568,20 @@ class CUDADeviceContext : public DeviceContext {
   static thread_local std::unordered_map<const CUDADeviceContext*,
                                          std::shared_ptr<CUDAContext>>
       thread_ctx_;
+#else
+  std::shared_ptr<HIPContext> default_ctx_;
+
+  // The thread_local static variable will be released before the
+  // global static variable, so avoid using it in dtor.
+  static thread_local std::unordered_map<const CUDADeviceContext*,
+                                         std::shared_ptr<HIPContext>>
+      thread_ctx_;
+#endif
   static thread_local std::mutex ctx_mtx_;
 
   mutable std::mutex cudnn_handle_mtx_;
 
-#if defined(PADDLE_WITH_NCCL)
+#if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
   // NCCL communicator (single process version) for NCCL collective operations.
   // NCCL collective operations provides fast collectives over multiple GPUs
   // both within and across nodes.

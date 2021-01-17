@@ -14,7 +14,7 @@
 
 #pragma once
 
-#if defined(PADDLE_WITH_NCCL)
+#if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
 #include <map>
 #include <memory>
 #include <string>
@@ -54,7 +54,12 @@ class NCCLComm {
   virtual int rank() const = 0;
   virtual int device_id() const = 0;
   virtual ncclComm_t comm() const = 0;
+#ifdef PADDLE_WITH_CUDA
   virtual cudaStream_t stream() const = 0;
+#endif
+#ifdef PADDLE_WITH_HIP
+  virtual hipStream_t stream() const = 0;
+#endif
   virtual CUDADeviceContext* dev_context() const = 0;
   virtual ~NCCLComm() = default;
 };

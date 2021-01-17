@@ -4,15 +4,20 @@ cc_library(memory_block SRCS memory_block.cc memory_block_desc.cc meta_cache.cc 
 
 if(${WITH_GPU})
   nv_library(system_allocator SRCS system_allocator.cc DEPS gflags cpu_info gpu_info place)
-else(${WITH_GPU})
+elseif(${WITH_ROCM_PLATFORM})
+  hip_library(system_allocator SRCS system_allocator.cc DEPS gflags cpu_info gpu_info place)
+else()
   cc_library(system_allocator SRCS system_allocator.cc DEPS gflags cpu_info place)
-endif(${WITH_GPU})
+endif()
 
 cc_test(system_allocator_test SRCS system_allocator_test.cc DEPS system_allocator)
 
 cc_library(buddy_allocator SRCS buddy_allocator.cc DEPS memory_block system_allocator glog)
-
-cc_test(buddy_allocator_test SRCS buddy_allocator_test.cc DEPS buddy_allocator)
+if(WITH_ROCM_PLATFORM)
+  hip_test(buddy_allocator_test SRCS buddy_allocator_test.cc DEPS buddy_allocator)
+else(WITH_ROCM_PLATFORM)
+  cc_test(buddy_allocator_test SRCS buddy_allocator_test.cc DEPS buddy_allocator)
+endif(WITH_ROCM_PLATFORM)
 
 FUNCTION(file_download_and_uncompress URL NAME)
   MESSAGE(STATUS "Download dependence[${NAME}] from ${URL}")

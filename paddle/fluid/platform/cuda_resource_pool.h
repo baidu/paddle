@@ -14,9 +14,13 @@
 
 #pragma once
 
-#ifdef PADDLE_WITH_CUDA
+#if defined PADDLE_WITH_CUDA || defined PADDLE_WITH_HIP
+#if defined PADDLE_WITH_CUDA
 #include <cuda.h>
 #include <cuda_runtime.h>
+#elif defined PADDLE_WITH_HIP
+#include <hip/hip_runtime.h>
+#endif
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -26,8 +30,13 @@
 namespace paddle {
 namespace platform {
 
+#if defined PADDLE_WITH_CUDA
 using CudaStreamObject = std::remove_pointer<cudaStream_t>::type;
 using CudaEventObject = std::remove_pointer<cudaEvent_t>::type;
+#elif defined PADDLE_WITH_HIP
+using CudaStreamObject = std::remove_pointer<hipStream_t>::type;
+using CudaEventObject = std::remove_pointer<hipEvent_t>::type;
+#endif
 
 class CudaStreamResourcePool {
  public:

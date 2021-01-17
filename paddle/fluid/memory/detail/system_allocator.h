@@ -41,7 +41,7 @@ class CPUAllocator : public SystemAllocator {
   virtual bool UseGpu() const;
 };
 
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 class GPUAllocator : public SystemAllocator {
  public:
   explicit GPUAllocator(int gpu_id) : gpu_id_(gpu_id) {}

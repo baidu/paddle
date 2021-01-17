@@ -32,7 +32,7 @@ limitations under the License. */
 // BOOST_NO_CXX11_VARIADIC_TEMPLATES on gcc/clang to generate same
 // function symbols.  For details,
 // https://github.com/PaddlePaddle/Paddle/issues/3386
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
 #ifndef BOOST_NO_CXX11_VARIADIC_TEMPLATES
 #define BOOST_NO_CXX11_VARIADIC_TEMPLATES
 #endif

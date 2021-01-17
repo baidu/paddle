@@ -18,6 +18,9 @@ limitations under the License. */
 #ifdef PADDLE_WITH_CUDA
 #include <cuda_runtime.h>
 #endif
+#ifdef PADDLE_WITH_HIP
+#include <hip/hip_runtime.h>
+#endif
 #include "paddle/fluid/platform/place.h"
 
 namespace paddle {
@@ -54,7 +57,10 @@ class Event {
   int device() const { return device_; }
 #endif
 #endif
-
+#ifdef PADDLE_WITH_HIP
+  hipEvent_t event() const { return event_; }
+  int device() const { return device_; }
+#endif
   double CpuElapsedMs(const Event& e) const;
   double CudaElapsedMs(const Event& e) const;
 
@@ -80,6 +86,10 @@ class Event {
   cudaEvent_t event_ = nullptr;
   int device_ = -1;
 #endif
+#endif
+#ifdef PADDLE_WITH_HIP
+  hipEvent_t event_ = nullptr;
+  int device_ = -1;
 #endif
 };
 

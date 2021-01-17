@@ -13,7 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #pragma once
+#if defined PADDLE_WITH_CUDA
 #include <cuda.h>
+#elif defined PADDLE_WITH_HIP
+#include <hip/hip_runtime.h>
+#endif
 #include <stdio.h>
 #include "paddle/fluid/platform/complex128.h"
 #include "paddle/fluid/platform/complex64.h"
@@ -50,7 +54,8 @@ CUDA_ATOMIC_WRAPPER(Add, int64_t) {
       static_cast<unsigned long long int>(val));            // NOLINT
 }
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 600
+#if (defined(__HIP_DEVICE_COMPILE__)) || \
+    (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 600)
 USE_CUDA_ATOMIC(Add, double);
 #else
 CUDA_ATOMIC_WRAPPER(Add, double) {
@@ -149,7 +154,8 @@ USE_CUDA_ATOMIC(Max, int);
 USE_CUDA_ATOMIC(Max, unsigned int);
 // CUDA API uses unsigned long long int, we cannot use uint64_t here.
 // It because unsigned long long int is not necessarily uint64_t
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350
+#if (defined(__HIP_DEVICE_COMPILE__)) || \
+    (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350)
 USE_CUDA_ATOMIC(Max, unsigned long long int);  // NOLINT
 #else
 CUDA_ATOMIC_WRAPPER(Max, unsigned long long int) {  // NOLINT
@@ -221,7 +227,8 @@ USE_CUDA_ATOMIC(Min, int);
 USE_CUDA_ATOMIC(Min, unsigned int);
 // CUDA API uses unsigned long long int, we cannot use uint64_t here.
 // It because unsigned long long int is not necessarily uint64_t
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350
+#if (defined(__HIP_DEVICE_COMPILE__)) || \
+    (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350)
 USE_CUDA_ATOMIC(Min, unsigned long long int);  // NOLINT
 #else
 CUDA_ATOMIC_WRAPPER(Min, unsigned long long int) {  // NOLINT

@@ -14,9 +14,14 @@ limitations under the License. */
 
 #pragma once
 
+#if defined PADDLE_WITH_CUDA || defined PADDLE_WITH_HIP
 #ifdef PADDLE_WITH_CUDA
-
 #include <cuda_runtime.h>
+#endif
+#ifdef PADDLE_WITH_HIP
+#include <hip/hip_runtime.h>
+#endif
+
 #include <stddef.h>
 #include <string>
 #include <vector>
@@ -83,7 +88,7 @@ size_t GpuMinChunkSize();
 
 //! Get the maximum chunk size for GPU buddy allocator.
 size_t GpuMaxChunkSize();
-
+#ifdef PADDLE_WITH_CUDA
 //! Copy memory from address src to dst asynchronously.
 void GpuMemcpyAsync(void *dst, const void *src, size_t count,
                     enum cudaMemcpyKind kind, cudaStream_t stream);
@@ -120,8 +125,47 @@ bool RecordedCudaMemGetInfo(size_t *avail, size_t *total, size_t *actual_avail,
 uint64_t RecordedCudaMallocSize(int dev_id);
 
 bool IsCudaMallocRecorded(int dev_id);
+#endif  // PADDLE_WITH_CUDA
+
+#ifdef PADDLE_WITH_HIP
+//! Copy memory from address src to dst asynchronously.
+void GpuMemcpyAsync(void *dst, const void *src, size_t count,
+                    enum hipMemcpyKind kind, hipStream_t stream);
+
+//! Copy memory from address src to dst synchronously.
+void GpuMemcpySync(void *dst, const void *src, size_t count,
+                   enum hipMemcpyKind kind);
+
+//! Copy memory from one device to another device asynchronously.
+void GpuMemcpyPeerAsync(void *dst, int dst_device, const void *src,
+                        int src_device, size_t count, hipStream_t stream);
+
+//! Copy memory from one device to another device synchronously.
+void GpuMemcpyPeerSync(void *dst, int dst_device, const void *src,
+                       int src_device, size_t count);
+
+//! Set memory dst with value count size asynchronously
+void GpuMemsetAsync(void *dst, int value, size_t count, hipStream_t stream);
+
+//! Blocks until stream has completed all operations.
+void GpuStreamSync(hipStream_t stream);
+
+//! CudaMalloc with recorded info
+hipError_t RecordedCudaMalloc(void **ptr, size_t size, int dev_id);
+
+//! CudaFree with recorded info
+void RecordedCudaFree(void *p, size_t size, int dev_id);
+
+//! Get available and total gpu memory with considering limitation
+bool RecordedCudaMemGetInfo(size_t *avail, size_t *total, size_t *actual_avail,
+                            size_t *actual_total, int dev_id);
+
+//! Get recorded hipMalloc size. If record is disabled, return 0.
+uint64_t RecordedCudaMallocSize(int dev_id);
+
+bool IsCudaMallocRecorded(int dev_id);
+#endif  // PADDLE_WITH_HIP
 
 }  // namespace platform
 }  // namespace paddle
-
 #endif

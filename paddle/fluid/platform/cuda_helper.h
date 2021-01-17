@@ -16,14 +16,19 @@
 
 #include <mutex>  // NOLINT
 
+#if defined PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/dynload/cublas.h"
+#elif defined PADDLE_WITH_HIP
+#include "paddle/fluid/platform/dynload/rocblas.h"
+#endif
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/macros.h"
 
+#ifdef PADDLE_WITH_CUDA
 #if CUDA_VERSION < 9000
 enum cublasMath_t { CUBLAS_DEFAULT_MATH = 0 };
 #endif
-
+#endif
 namespace paddle {
 namespace platform {
 
@@ -77,6 +82,7 @@ namespace platform {
 
 class CublasHandleHolder {
  public:
+#if defined PADDLE_WITH_CUDA
   CublasHandleHolder(cudaStream_t stream, cublasMath_t math_type) {
     PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasCreate(&handle_));
     PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasSetStream(handle_, stream));
@@ -90,15 +96,25 @@ class CublasHandleHolder {
           dynload::cublasSetMathMode(handle_, CUBLAS_TF32_TENSOR_OP_MATH));
 #endif  // CUDA_VERSION >= 11000
     }
-#endif  // CUDA_VERSION >= 9000
   }
-
+#endif  // CUDA_VERSION >= 9000
+#elif defined PADDLE_WITH_HIP
+  explicit CublasHandleHolder(hipStream_t stream) {
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::rocblas_create_handle(&handle_));
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::rocblas_get_stream(handle_, &stream));
+    // cublasSetMathMode not have corresponding API on rocm platform
+  }
+#endif
   ~CublasHandleHolder() PADDLE_MAY_THROW {
-    PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasDestroy(handle_));
+#if defined PADDLE_WITH_CUDA
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::cublasDestroy(handle_));
+#elif defined PADDLE_WITH_HIP
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::rocblas_destroy_handle(handle_));
+#endif
   }
 
   template <typename Callback>
-  inline void Call(Callback &&callback) const {
+  inline void Call(Callback&& callback) const {
     std::lock_guard<std::mutex> guard(mtx_);
     callback(handle_);
   }
@@ -106,7 +122,11 @@ class CublasHandleHolder {
  private:
   DISABLE_COPY_AND_ASSIGN(CublasHandleHolder);
 
+#if defined PADDLE_WITH_CUDA
   cublasHandle_t handle_;
+#elif defined PADDLE_WITH_HIP
+  rocblas_handle handle_;
+#endif
   mutable std::mutex mtx_;
 };
 

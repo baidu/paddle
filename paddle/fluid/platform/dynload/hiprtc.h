@@ -45,6 +45,7 @@ extern bool HasNVRTC();
  * include all needed hiprtc functions
  **/
 #define HIPRTC_ROUTINE_EACH(__macro) \
+  __macro(hiprtcVersion);            \
   __macro(hiprtcGetErrorString);     \
   __macro(hiprtcCompileProgram);     \
   __macro(hiprtcCreateProgram);      \

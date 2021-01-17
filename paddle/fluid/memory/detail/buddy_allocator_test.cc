@@ -23,7 +23,7 @@ limitations under the License. */
 #include "gtest/gtest.h"
 #include "paddle/fluid/platform/gpu_info.h"
 
-#ifdef PADDLE_WITH_CUDA
+#if defined PADDLE_WITH_CUDA || defined PADDLE_WITH_HIP
 #include <fstream>
 #include <string>
 
@@ -76,7 +76,7 @@ int* TestBuddyAllocator(BuddyAllocator* allocator, size_t size_bytes,
   return nullptr;
 }
 
-#ifdef PADDLE_WITH_CUDA
+#if defined PADDLE_WITH_CUDA || defined PADDLE_WITH_HIP
 TEST(BuddyAllocator, GpuFraction) {
   // In a 16 GB machine, the pool size will be about 160 MB
   FLAGS_fraction_of_gpu_memory_to_use = 0.01;
@@ -195,9 +195,13 @@ TEST(BuddyAllocator, AllocFromAvailable) {
 
   // Take half of available GPU
   void* p;
+#ifdef PADDLE_WITH_CUDA
   cudaError_t result = cudaMalloc(&p, available >> 1);
   EXPECT_TRUE(result == cudaSuccess);
-
+#else
+  hipError_t result = hipMalloc(&p, available >> 1);
+  EXPECT_TRUE(result == hipSuccess);
+#endif
   // BuddyAllocator should be able to alloc the remaining GPU
   BuddyAllocator buddy_allocator(
       std::unique_ptr<SystemAllocator>(new GPUAllocator(TEST_GPU_ID)),
@@ -209,7 +213,11 @@ TEST(BuddyAllocator, AllocFromAvailable) {
   TestBuddyAllocator(&buddy_allocator, static_cast<size_t>(1 << 30));
 
   if (p) {
+#ifdef PADDLE_WITH_CUDA
     EXPECT_TRUE(cudaFree(p) == cudaSuccess);
+#else
+    EXPECT_TRUE(hipFree(p) == hipSuccess);
+#endif
   }
 }
 
@@ -219,8 +227,11 @@ TEST(BuddyAllocator, AllocFromAvailableWhenFractionIsOne) {
   FLAGS_reallocate_gpu_memory_in_mb = 0;
 
   void* p = nullptr;
+#ifdef PADDLE_WITH_CUDA
   EXPECT_TRUE(cudaMalloc(&p, static_cast<size_t>(1) << 30) == cudaSuccess);
-
+#else
+  EXPECT_TRUE(hipMalloc(&p, static_cast<size_t>(1) << 30) == hipSuccess);
+#endif
   // BuddyAllocator should be able to alloc the remaining GPU
   BuddyAllocator buddy_allocator(
       std::unique_ptr<SystemAllocator>(new GPUAllocator(TEST_GPU_ID)),
@@ -230,7 +241,11 @@ TEST(BuddyAllocator, AllocFromAvailableWhenFractionIsOne) {
   TestBuddyAllocator(&buddy_allocator, static_cast<size_t>(1) << 30);
 
   if (p) {
+#ifdef PADDLE_WITH_CUDA
     EXPECT_TRUE(cudaFree(p) == cudaSuccess);
+#else  // PADDLE_WITH_HIP
+    EXPECT_TRUE(hipFree(p) == hipSuccess);
+#endif
   }
 }
 

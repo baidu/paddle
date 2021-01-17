@@ -28,7 +28,7 @@ limitations under the License. */
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/event.h"
 #include "paddle/fluid/platform/place.h"
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/platform/gpu_info.h"
 #endif
 namespace paddle {
@@ -219,7 +219,7 @@ std::string OpName(const framework::VariableNameMap& name_map,
                    const std::string& type_name);
 void SetTracerOption(TracerOption option);
 platform::TracerOption GetTracerOption();
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 void DummyKernelAndEvent();
 #endif
 

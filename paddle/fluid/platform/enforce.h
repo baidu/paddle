@@ -33,10 +33,12 @@ limitations under the License. */
 #include <cudnn.h>
 #include <curand.h>
 #include <thrust/system/cuda/error.h>
-#include <thrust/system_error.h>
+#endif
 
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#include <thrust/system_error.h>
 #include "paddle/fluid/platform/cuda_error.pb.h"
-#endif  // PADDLE_WITH_CUDA
+#endif
 
 #include <fstream>
 #include <iomanip>
@@ -71,6 +73,23 @@ limitations under the License. */
 #include "paddle/fluid/platform/dynload/nccl.h"
 #endif  // __APPLE__
 #endif  // PADDLE_WITH_CUDA
+
+#ifdef PADDLE_WITH_HIP
+
+#include "paddle/fluid/platform/dynload/hiprand.h"
+#include "paddle/fluid/platform/dynload/miopen.h"
+#include "paddle/fluid/platform/dynload/rocblas.h"
+#ifdef PADDLE_WITH_RCCL
+#include <rccl.h>
+#include "paddle/fluid/platform/dynload/rccl.h"
+#endif
+#include <hip/hip_runtime.h>
+#include <hip/hip_runtime_api.h>
+#include <hiprand.h>
+#include <miopen/miopen.h>
+#include <rocblas.h>
+#include <thrust/system/hip/error.h>
+#endif
 
 // Note: these headers for simplify demangle type string
 #include "paddle/fluid/framework/type_defs.h"
@@ -995,6 +1014,249 @@ inline void retry_sleep(unsigned milliseconds) {
 
 #undef DEFINE_CUDA_STATUS_TYPE
 #endif  // PADDLE_WITH_CUDA
+
+#ifdef PADDLE_WITH_HIP
+/***** HIP ERROR *****/
+inline bool is_error(hipError_t e) { return e != hipSuccess; }
+
+inline std::string GetCudaErrorWebsite(int32_t cuda_version) {
+  std::ostringstream webstr;
+  webstr << "rocm not need web check";
+  return webstr.str();
+}
+
+inline std::string build_nvidia_error_msg(hipError_t e) {
+  int32_t cuda_version = 100;
+
+  std::ostringstream sout;
+  sout << " hip error(" << e << "), " << hipGetErrorString(e) << ".";
+  static platform::proto::cudaerrorDesc cudaerror;
+  static bool _initSucceed = false;
+  if (cudaerror.ByteSizeLong() == 0) {
+    std::string filePath;
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void*>(GetCudaErrorWebsite), &info)) {
+      std::string strModule(info.dli_fname);
+      const size_t last_slash_idx = strModule.find_last_of("/");
+      std::string compare_path = strModule.substr(strModule.length() - 6);
+      if (std::string::npos != last_slash_idx) {
+        strModule.erase(last_slash_idx, std::string::npos);
+      }
+      if (compare_path.compare("avx.so") == 0) {
+        filePath = strModule +
+                   "/../include/third_party/cudaerror/data/cudaErrorMessage.pb";
+      } else {
+        filePath =
+            strModule + "/../../thirl_party/cudaerror/data/cudaErrorMessage.pb";
+      }
+    }
+    std::ifstream fin(filePath, std::ios::in | std::ios::binary);
+    _initSucceed = cudaerror.ParseFromIstream(&fin);
+  }
+  if (_initSucceed) {
+    for (int i = 0; i < cudaerror.allmessages_size(); ++i) {
+      if (cuda_version == cudaerror.allmessages(i).version()) {
+        for (int j = 0; j < cudaerror.allmessages(i).messages_size(); ++j) {
+          if (e == cudaerror.allmessages(i).messages(j).errorcode()) {
+            sout << "\n  [Advise: "
+                 << cudaerror.allmessages(i).messages(j).errormessage() << "]";
+            return sout.str();
+          }
+        }
+      }
+    }
+  }
+  sout << "\n  [Advise: Please search for the error code(" << e
+       << ") on website( " << GetCudaErrorWebsite(cuda_version)
+       << " ) to get Nvidia's official solution about CUDA Error.]";
+  return sout.str();
+}
+
+inline void throw_on_error(hipError_t e, const std::string& msg) {
+#ifndef REPLACE_ENFORCE_GLOG
+  throw std::runtime_error(msg);
+#else
+  LOG(FATAL) << msg;
+#endif
+}
+
+/** hiprand ERROR **/
+inline bool is_error(hiprandStatus_t stat) {
+  return stat != HIPRAND_STATUS_SUCCESS;
+}
+
+inline const char* hiprandGetErrorString(hiprandStatus_t stat) {
+  switch (stat) {
+    case HIPRAND_STATUS_SUCCESS:
+      return "HIPRAND_STATUS_SUCCESS";
+    case HIPRAND_STATUS_VERSION_MISMATCH:
+      return "HIPRAND_STATUS_VERSION_MISMATCH";
+    case HIPRAND_STATUS_NOT_INITIALIZED:
+      return "HIPRAND_STATUS_NOT_INITIALIZED";
+    case HIPRAND_STATUS_ALLOCATION_FAILED:
+      return "HIPRAND_STATUS_ALLOCATION_FAILED";
+    case HIPRAND_STATUS_TYPE_ERROR:
+      return "HIPRAND_STATUS_TYPE_ERROR";
+    case HIPRAND_STATUS_OUT_OF_RANGE:
+      return "HIPRAND_STATUS_OUT_OF_RANGE";
+    case HIPRAND_STATUS_LENGTH_NOT_MULTIPLE:
+      return "HIPRAND_STATUS_LENGTH_NOT_MULTIPLE";
+    case HIPRAND_STATUS_DOUBLE_PRECISION_REQUIRED:
+      return "HIPRAND_STATUS_DOUBLE_PRECISION_REQUIRED";
+    case HIPRAND_STATUS_LAUNCH_FAILURE:
+      return "HIPRAND_STATUS_LAUNCH_FAILURE";
+    case HIPRAND_STATUS_PREEXISTING_FAILURE:
+      return "HIPRAND_STATUS_PREEXISTING_FAILURE";
+    case HIPRAND_STATUS_INITIALIZATION_FAILED:
+      return "HIPRAND_STATUS_INITIALIZATION_FAILED";
+    case HIPRAND_STATUS_ARCH_MISMATCH:
+      return "HIPRAND_STATUS_ARCH_MISMATCH";
+    case HIPRAND_STATUS_INTERNAL_ERROR:
+      return "HIPRAND_STATUS_INTERNAL_ERROR";
+    case HIPRAND_STATUS_NOT_IMPLEMENTED:
+      return "HIPRAND_STATUS_NOT_IMPLEMENTED";
+    default:
+      return "Unknown hiprand status";
+  }
+}
+
+inline std::string build_nvidia_error_msg(hiprandStatus_t stat) {
+  std::string msg(" Hiprand error, ");
+  return msg + hiprandGetErrorString(stat) + " ";
+}
+
+inline void throw_on_error(hiprandStatus_t stat, const std::string& msg) {
+#ifndef REPLACE_ENFORCE_GLOG
+  throw thrust::system_error(hipErrorLaunchFailure, thrust::hip_category(),
+                             msg);
+#else
+  LOG(FATAL) << msg;
+#endif
+}
+
+/***** MIOPEN ERROR *****/
+inline bool is_error(miopenStatus_t stat) {
+  return stat != miopenStatusSuccess;
+}
+
+inline std::string build_nvidia_error_msg(miopenStatus_t stat) {
+  std::string msg(" Miopen error, ");
+  return msg + platform::dynload::miopenGetErrorString(stat) + " ";
+}
+
+inline void throw_on_error(miopenStatus_t stat, const std::string& msg) {
+#ifndef REPLACE_ENFORCE_GLOG
+  throw std::runtime_error(msg);
+#else
+  LOG(FATAL) << msg;
+#endif
+}
+
+/***** ROCBLAS ERROR *****/
+inline bool is_error(rocblas_status stat) {
+  return stat != rocblas_status_success;
+}
+
+inline const char* rocblasGetErrorString(rocblas_status stat) {
+  switch (stat) {
+    case rocblas_status_invalid_handle:
+      return "rocblas_status_invalid_handle";
+    case rocblas_status_memory_error:
+      return "rocblas_status_memory_error";
+    case rocblas_status_invalid_value:
+      return "rocblas_status_invalid_value";
+    case rocblas_status_not_implemented:
+      return "rocblas_status_not_implemented";
+    case rocblas_status_invalid_pointer:
+      return "rocblas_status_invalid_pointer";
+    case rocblas_status_invalid_size:
+      return "rocblas_status_invalid_size";
+    case rocblas_status_internal_error:
+      return "rocblas_status_internal_error";
+    default:
+      return "Unknown rocblas status";
+  }
+}
+
+inline std::string build_nvidia_error_msg(rocblas_status stat) {
+  std::string msg(" Rocblas error, ");
+  return msg + rocblasGetErrorString(stat) + " ";
+}
+
+inline void throw_on_error(rocblas_status stat, const std::string& msg) {
+#ifndef REPLACE_ENFORCE_GLOG
+  throw std::runtime_error(msg);
+#else
+  LOG(FATAL) << msg;
+#endif
+}
+
+/****** RCCL ERROR ******/
+#if !defined(__APPLE__) && defined(PADDLE_WITH_RCCL)
+inline bool is_error(ncclResult_t nccl_result) {
+  return nccl_result != ncclSuccess;
+}
+
+inline std::string build_nvidia_error_msg(ncclResult_t nccl_result) {
+  std::string msg(" Rccl error, ");
+  return msg + platform::dynload::ncclGetErrorString(nccl_result) + " ";
+}
+
+inline void throw_on_error(ncclResult_t nccl_result, const std::string& msg) {
+#ifndef REPLACE_ENFORCE_GLOG
+  throw std::runtime_error(msg);
+#else
+  LOG(FATAL) << msg;
+#endif
+}
+#endif  // not(__APPLE__) and PADDLE_WITH_RCCL
+
+namespace details {
+
+template <typename T>
+struct CudaStatusType {};
+
+#define DEFINE_CUDA_STATUS_TYPE(type, success_value) \
+  template <>                                        \
+  struct CudaStatusType<type> {                      \
+    using Type = type;                               \
+    static constexpr Type kSuccess = success_value;  \
+  }
+
+DEFINE_CUDA_STATUS_TYPE(hipError_t, hipSuccess);
+DEFINE_CUDA_STATUS_TYPE(hiprandStatus_t, HIPRAND_STATUS_SUCCESS);
+DEFINE_CUDA_STATUS_TYPE(miopenStatus_t, miopenStatusSuccess);
+DEFINE_CUDA_STATUS_TYPE(rocblas_status, rocblas_status_success);
+
+#if !defined(__APPLE__) && defined(PADDLE_WITH_RCCL)
+DEFINE_CUDA_STATUS_TYPE(ncclResult_t, ncclSuccess);
+#endif
+
+}  // namespace details
+
+#define PADDLE_ENFORCE_CUDA_SUCCESS(COND)                        \
+  do {                                                           \
+    auto __cond__ = (COND);                                      \
+    using __CUDA_STATUS_TYPE__ = decltype(__cond__);             \
+    constexpr auto __success_type__ =                            \
+        ::paddle::platform::details::CudaStatusType<             \
+            __CUDA_STATUS_TYPE__>::kSuccess;                     \
+    if (UNLIKELY(__cond__ != __success_type__)) {                \
+      auto __summary__ = ::paddle::platform::errors::External(   \
+          ::paddle::platform::build_nvidia_error_msg(__cond__)); \
+      __THROW_ERROR_INTERNAL__(__summary__);                     \
+    }                                                            \
+  } while (0)
+
+inline void retry_sleep(unsigned millisecond) {
+#ifdef _WIN32
+  Sleep(millisecond);
+#else
+  sleep(millisecond);
+#endif
+}
+#undef DEFINE_CUDA_STATUS_TYPE
+#endif  // PADDLE_WITH_HIP
 
 }  // namespace platform
 }  // namespace paddle

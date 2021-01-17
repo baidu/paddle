@@ -16,7 +16,7 @@ limitations under the License. */
 #include <vector>
 
 #include "paddle/fluid/memory/memory.h"
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/framework/rw_lock.h"
 #include "paddle/fluid/memory/allocation/cuda_device_context_allocator.h"
 #include "paddle/fluid/platform/cuda_device_guard.h"
@@ -34,7 +34,7 @@ AllocationPtr Alloc(const platform::DeviceContext& dev_ctx, size_t size) {
   }
 
   if (platform::is_gpu_place(place)) {
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
     auto* default_dev_ctx = static_cast<platform::CUDADeviceContext*>(
         platform::DeviceContextPool::Instance().Get(place));
     auto& desired_dev_ctx =
@@ -127,7 +127,7 @@ DeviceContextPool::DeviceContextPool(
       EmplaceDeviceContext<CPUDeviceContext, CPUPlace>(&device_contexts_, p);
 #endif
     } else if (platform::is_gpu_place(p)) {
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
       EmplaceDeviceContext<CUDADeviceContext, CUDAPlace>(&device_contexts_, p);
 #else
       PADDLE_THROW(
@@ -135,7 +135,7 @@ DeviceContextPool::DeviceContextPool(
                                           "re-compile with WITH_GPU option."));
 #endif
     } else if (platform::is_cuda_pinned_place(p)) {
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
       EmplaceDeviceContext<CUDAPinnedDeviceContext, CUDAPinnedPlace>(
           &device_contexts_, p);
 #else
@@ -228,7 +228,8 @@ Place XPUDeviceContext::GetPlace() const { return place_; }
 xpu::Context* XPUDeviceContext::x_context() const { return context_; }
 #endif
 
-#ifdef PADDLE_WITH_CUDA
+#if (defined PADDLE_WITH_CUDA) || \
+    (defined(PADDLE_WITH_HIP) && defined(EIGEN_USE_HIP))
 
 class EigenCudaStreamDevice : public Eigen::StreamInterface {
  public:

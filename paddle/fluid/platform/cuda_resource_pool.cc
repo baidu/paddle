@@ -25,15 +25,26 @@ CudaStreamResourcePool::CudaStreamResourcePool() {
   for (int dev_idx = 0; dev_idx < dev_cnt; ++dev_idx) {
     auto creator = [dev_idx] {
       platform::SetDeviceId(dev_idx);
+#if defined PADDLE_WITH_CUDA
       cudaStream_t stream;
       PADDLE_ENFORCE_CUDA_SUCCESS(
           cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+#elif defined PADDLE_WITH_HIP
+      hipStream_t stream;
+      PADDLE_ENFORCE_CUDA_SUCCESS(
+          hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
+#endif
       return stream;
     };
-
+#if defined PADDLE_WITH_CUDA
     auto deleter = [dev_idx](cudaStream_t stream) {
       platform::SetDeviceId(dev_idx);
       PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamDestroy(stream));
+#elif defined PADDLE_WITH_HIP
+    auto deleter = [dev_idx](hipStream_t stream) {
+      platform::SetDeviceId(dev_idx);
+      PADDLE_ENFORCE_CUDA_SUCCESS(hipStreamDestroy(stream));
+#endif
     };
 
     pool_.emplace_back(
@@ -65,15 +76,26 @@ CudaEventResourcePool::CudaEventResourcePool() {
   for (int dev_idx = 0; dev_idx < dev_cnt; ++dev_idx) {
     auto creator = [dev_idx] {
       platform::SetDeviceId(dev_idx);
+#if defined PADDLE_WITH_CUDA
       cudaEvent_t event;
       PADDLE_ENFORCE_CUDA_SUCCESS(
           cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+#elif defined PADDLE_WITH_HIP
+      hipEvent_t event;
+      PADDLE_ENFORCE_CUDA_SUCCESS(
+          hipEventCreateWithFlags(&event, hipEventDisableTiming));
+#endif
       return event;
     };
-
+#if defined PADDLE_WITH_CUDA
     auto deleter = [dev_idx](cudaEvent_t event) {
       platform::SetDeviceId(dev_idx);
       PADDLE_ENFORCE_CUDA_SUCCESS(cudaEventDestroy(event));
+#elif defined PADDLE_WITH_HIP
+    auto deleter = [dev_idx](hipEvent_t event) {
+      platform::SetDeviceId(dev_idx);
+      PADDLE_ENFORCE_CUDA_SUCCESS(hipEventDestroy(event));
+#endif
     };
 
     pool_.emplace_back(ResourcePool<CudaEventObject>::Create(creator, deleter));

@@ -361,6 +361,138 @@ void Copy<platform::CUDAPlace, platform::CUDAPinnedPlace>(
 }
 
 #endif
+#ifdef PADDLE_WITH_HIP
+static constexpr size_t kMaxGpuAsyncCopyBytes = 64 * 1024;  // 64K
+
+template <>
+void Copy<platform::CPUPlace, platform::CUDAPlace>(
+    platform::CPUPlace dst_place, void* dst, platform::CUDAPlace src_place,
+    const void* src, size_t num, hipStream_t stream) {
+  if (UNLIKELY(num == 0)) return;
+
+  platform::SetDeviceId(src_place.device);
+  VLOG(4) << "memory::Copy " << num << " Bytes from " << src_place << " to "
+          << dst_place << " by thream(" << stream << ")";
+  if (stream) {
+    platform::RecordEvent record_event("GpuMemcpyAsync:GPU->CPU");
+    platform::GpuMemcpyAsync(dst, src, num, hipMemcpyDeviceToHost, stream);
+  } else {
+    platform::RecordEvent record_event("GpuMemcpySync:GPU->CPU");
+    platform::GpuMemcpySync(dst, src, num, hipMemcpyDeviceToHost);
+    // FIXME(zjl): do we really need it?
+    if (num <= kMaxGpuAsyncCopyBytes) {
+      hipStreamSynchronize(0);
+    }
+  }
+}
+
+template <>
+void Copy<platform::CUDAPlace, platform::CPUPlace>(
+    platform::CUDAPlace dst_place, void* dst, platform::CPUPlace src_place,
+    const void* src, size_t num, hipStream_t stream) {
+  if (UNLIKELY(num == 0)) return;
+
+  platform::SetDeviceId(dst_place.device);
+  VLOG(4) << "memory::Copy " << num << " Bytes from " << src_place << " to "
+          << dst_place << " by thream(" << stream << ")";
+  if (stream) {
+    platform::RecordEvent record_event("GpuMemcpyAsync:CPU->GPU");
+    platform::GpuMemcpyAsync(dst, src, num, hipMemcpyHostToDevice, stream);
+  } else {
+    platform::RecordEvent record_event("GpuMemcpySync:CPU->GPU");
+    platform::GpuMemcpySync(dst, src, num, hipMemcpyHostToDevice);
+    // FIXME(zjl): do we really need it?
+    if (num <= kMaxGpuAsyncCopyBytes) {
+      hipStreamSynchronize(0);
+    }
+  }
+}
+
+template <>
+void Copy<platform::CUDAPlace, platform::CUDAPlace>(
+    platform::CUDAPlace dst_place, void* dst, platform::CUDAPlace src_place,
+    const void* src, size_t num, hipStream_t stream) {
+  if (UNLIKELY(num == 0)) return;
+
+  if (dst_place == src_place) {
+    platform::SetDeviceId(src_place.device);
+    if (stream) {
+      platform::RecordEvent record_event("GpuMemcpyAsync(same_gpu):GPU->GPU");
+      platform::GpuMemcpyAsync(dst, src, num, hipMemcpyDeviceToDevice, stream);
+    } else {
+      platform::RecordEvent record_event("GpuMemcpySync(same_gpu):GPU->GPU");
+      platform::GpuMemcpySync(dst, src, num, hipMemcpyDeviceToDevice);
+    }
+  } else {
+    if (stream) {
+      platform::RecordEvent record_event("GpuMemcpyPeerAsync:GPU->GPU");
+      platform::GpuMemcpyPeerAsync(dst, dst_place.device, src, src_place.device,
+                                   num, stream);
+    } else {
+      platform::RecordEvent record_event("GpuMemcpyPeerSync:GPU->GPU");
+      platform::GpuMemcpyPeerSync(dst, dst_place.device, src, src_place.device,
+                                  num);
+    }
+  }
+}
+
+template <>
+void Copy<platform::CPUPlace, platform::CUDAPinnedPlace>(
+    platform::CPUPlace dst_place, void* dst,
+    platform::CUDAPinnedPlace src_place, const void* src, size_t num) {
+  if (UNLIKELY(num == 0)) return;
+  std::memcpy(dst, src, num);
+}
+
+template <>
+void Copy<platform::CUDAPinnedPlace, platform::CPUPlace>(
+    platform::CUDAPinnedPlace dst_place, void* dst,
+    platform::CPUPlace src_place, const void* src, size_t num) {
+  if (UNLIKELY(num == 0)) return;
+  std::memcpy(dst, src, num);
+}
+
+template <>
+void Copy<platform::CUDAPinnedPlace, platform::CUDAPinnedPlace>(
+    platform::CUDAPinnedPlace dst_place, void* dst,
+    platform::CUDAPinnedPlace src_place, const void* src, size_t num) {
+  if (UNLIKELY(num == 0)) return;
+  std::memcpy(dst, src, num);
+}
+
+template <>
+void Copy<platform::CUDAPinnedPlace, platform::CUDAPlace>(
+    platform::CUDAPinnedPlace dst_place, void* dst,
+    platform::CUDAPlace src_place, const void* src, size_t num,
+    hipStream_t stream) {
+  if (UNLIKELY(num == 0)) return;
+  platform::SetDeviceId(src_place.device);
+  if (stream) {
+    platform::RecordEvent record_event("GpuMemcpyAsync:GPU->CUDAPinned");
+    platform::GpuMemcpyAsync(dst, src, num, hipMemcpyDeviceToHost, stream);
+  } else {
+    platform::RecordEvent record_event("GpuMemcpySync:GPU->CUDAPinned");
+    platform::GpuMemcpySync(dst, src, num, hipMemcpyDeviceToHost);
+  }
+}
+
+template <>
+void Copy<platform::CUDAPlace, platform::CUDAPinnedPlace>(
+    platform::CUDAPlace dst_place, void* dst,
+    platform::CUDAPinnedPlace src_place, const void* src, size_t num,
+    hipStream_t stream) {
+  if (UNLIKELY(num == 0)) return;
+
+  platform::SetDeviceId(dst_place.device);
+  if (stream) {
+    platform::RecordEvent record_event("GpuMemcpyAsync:CUDAPinned->GPU");
+    platform::GpuMemcpyAsync(dst, src, num, hipMemcpyHostToDevice, stream);
+  } else {
+    platform::RecordEvent record_event("GpuMemcpySync:CUDAPinned->GPU");
+    platform::GpuMemcpySync(dst, src, num, hipMemcpyHostToDevice);
+  }
+}
+#endif
 
 }  // namespace memory
 }  // namespace paddle

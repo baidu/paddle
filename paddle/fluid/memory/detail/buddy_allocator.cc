@@ -18,7 +18,7 @@ limitations under the License. */
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
 DECLARE_uint64(reallocate_gpu_memory_in_mb);
 #endif
 
@@ -220,7 +220,7 @@ BuddyAllocator::PoolSet::iterator BuddyAllocator::RefillPool(
   size_t allocate_bytes = max_chunk_size_;
   size_t index = 0;
 
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
   if (system_allocator_->UseGpu()) {
     if ((total_used_ + total_free_) == 0) {
       // Compute the allocation size for gpu for the first allocation.

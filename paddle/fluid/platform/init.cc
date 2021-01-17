@@ -25,10 +25,13 @@ limitations under the License. */
 #include "paddle/fluid/platform/cpu_helper.h"
 #include "paddle/fluid/platform/cpu_info.h"
 #include "paddle/fluid/string/split.h"
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/platform/cuda_device_guard.h"
+#endif
+#ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/dynload/cupti.h"
 #endif
+
 #include "paddle/fluid/platform/device_context.h"
 #include "paddle/fluid/platform/init.h"
 #include "paddle/fluid/platform/place.h"
@@ -133,7 +136,7 @@ void InitDevices() {
   InitCupti();
   /*Init all available devices by default */
   std::vector<int> devices;
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
   try {
     // use user specified GPUs in single-node multi-process mode.
     devices = platform::GetSelectedDevices();
@@ -163,7 +166,7 @@ void InitDevices(const std::vector<int> devices) {
       continue;
     }
 
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
     places.emplace_back(platform::CUDAPlace(devices[i]));
 #endif
 #ifdef PADDLE_WITH_XPU
@@ -171,7 +174,7 @@ void InitDevices(const std::vector<int> devices) {
 #endif
   }
   places.emplace_back(platform::CPUPlace());
-#ifdef PADDLE_WITH_CUDA
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP))
   places.emplace_back(platform::CUDAPinnedPlace());
 #endif
   platform::DeviceContextPool::Init(places);

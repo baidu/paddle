@@ -16,9 +16,13 @@
 
 #pragma once
 
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 
+#ifdef PADDLE_WITH_CUDA
 #include <cuda_runtime.h>
+#else
+#include <hip/hip_runtime.h>
+#endif
 #include <stddef.h>
 #include <algorithm>
 #include <string>

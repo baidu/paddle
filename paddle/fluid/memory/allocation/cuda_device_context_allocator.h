@@ -14,7 +14,12 @@
 
 #pragma once
 
+#ifdef PADDLE_WITH_CUDA
 #include <cuda_runtime.h>
+#endif
+#ifdef PADDLE_WITH_HIP
+#include <hip/hip_runtime.h>
+#endif
 
 #include <map>
 #include <memory>
@@ -78,6 +83,7 @@ class CUDADeviceContextAllocation : public Allocation {
  */
 class CUDADeviceContextAllocator : public Allocator {
  public:
+#ifdef PADDLE_WITH_CUDA
   explicit CUDADeviceContextAllocator(platform::CUDAPlace place,
                                       cudaStream_t default_stream)
       : place_(place), default_stream_(default_stream) {
@@ -85,11 +91,25 @@ class CUDADeviceContextAllocator : public Allocator {
     PADDLE_ENFORCE_CUDA_SUCCESS(
         cudaEventCreate(&event_, cudaEventDisableTiming));
   }
-
+#endif
+#ifdef PADDLE_WITH_HIP
+  explicit CUDADeviceContextAllocator(platform::CUDAPlace place,
+                                      hipStream_t default_stream)
+      : place_(place), default_stream_(default_stream) {
+    platform::CUDADeviceGuard guard(place_.device);
+    PADDLE_ENFORCE_CUDA_SUCCESS(
+        hipEventCreateWithFlags(&event_, hipEventDisableTiming));
+  }
+#endif
   ~CUDADeviceContextAllocator() {
     if (event_) {
       platform::CUDADeviceGuard guard(place_.device);
+#ifdef PADDLE_WITH_CUDA
       PADDLE_ENFORCE_CUDA_SUCCESS(cudaEventDestroy(event_));
+#endif
+#ifdef PADDLE_WITH_HIP
+      PADDLE_ENFORCE_CUDA_SUCCESS(hipEventDestroy(event_));
+#endif
     }
   }
 
@@ -102,10 +122,16 @@ class CUDADeviceContextAllocator : public Allocator {
     platform::CUDADeviceGuard guard(place_.device);
     auto allocation =
         new CUDADeviceContextAllocation(memory::Alloc(place_, size));
-    // Wait for the event on stream
+// Wait for the event on stream
+#ifdef PADDLE_WITH_CUDA
     PADDLE_ENFORCE_CUDA_SUCCESS(cudaEventRecord(event_, default_stream_));
     PADDLE_ENFORCE_CUDA_SUCCESS(
         cudaStreamWaitEvent(default_stream_, event_, 0));
+#endif
+#ifdef PADDLE_WITH_HIP
+    PADDLE_ENFORCE_CUDA_SUCCESS(hipEventRecord(event_, default_stream_));
+    PADDLE_ENFORCE_CUDA_SUCCESS(hipStreamWaitEvent(default_stream_, event_, 0));
+#endif
     return allocation;
   }
 
@@ -113,8 +139,14 @@ class CUDADeviceContextAllocator : public Allocator {
 
  private:
   platform::CUDAPlace place_;
+#ifdef PADDLE_WITH_CUDA
   cudaEvent_t event_{nullptr};
   cudaStream_t default_stream_{nullptr};
+#endif
+#ifdef PADDLE_WITH_HIP
+  hipEvent_t event_{nullptr};
+  hipStream_t default_stream_{nullptr};
+#endif
 };
 
 /**

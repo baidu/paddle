@@ -19,6 +19,7 @@
 namespace paddle {
 namespace platform {
 
+#ifdef PADDLE_WITH_CUDA
 #if CUDA_VERSION >= 10000
 static void CUDART_CB StreamCallbackFunc(void *user_data)
 #else
@@ -61,6 +62,40 @@ void StreamCallbackManager::Wait() const {
     }
   }
 }
+#endif
+#ifdef PADDLE_WITH_HIP
+static void StreamCallbackFunc(hipStream_t stream, hipError_t status,
+                               void *user_data) {
+  std::unique_ptr<std::function<void()>> func(
+      reinterpret_cast<std::function<void()> *>(user_data));
+  (*func)();
+}
 
+StreamCallbackManager::StreamCallbackManager(const hipStream_t stream)
+    : stream_(stream), thread_pool_(1) {}
+
+void StreamCallbackManager::AddCallback(std::function<void()> callback) const {
+  auto *callback_func = new std::function<void()>(std::move(callback));
+  auto *func = new std::function<void()>([this, callback_func] {
+    std::lock_guard<std::mutex> lock(mtx_);
+    last_future_ = thread_pool_.enqueue([callback_func] {
+      std::unique_ptr<std::function<void()>> releaser(callback_func);
+      (*callback_func)();
+    });
+  });
+  PADDLE_ENFORCE_CUDA_SUCCESS(
+      hipStreamAddCallback(stream_, StreamCallbackFunc, func));
+}
+
+void StreamCallbackManager::Wait() const {
+  PADDLE_ENFORCE_CUDA_SUCCESS(hipStreamSynchronize(stream_));
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (last_future_.valid()) {
+      last_future_.wait();
+    }
+  }
+}
+#endif  // PADDLE_WITH_HIP
 }  // namespace platform
 }  // namespace paddle

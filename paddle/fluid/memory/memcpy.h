@@ -54,5 +54,27 @@ void Copy(DstPlace, void* dst, SrcPlace, const void* src, size_t num,
           cudaStream_t stream);
 
 #endif
+#ifdef PADDLE_WITH_HIP
+
+/**
+ * \brief   Copy memory from one place to another place.
+ *
+ * \param[in]  DstPlace Destination allocation place (CPU or GPU).
+ * \param[in]  dst      Destination memory address.
+ * \param[in]  SrcPlace Source allocation place (CPU or GPU).
+ * \param[in]  src      Source memory address.
+ * \param[in]  num      memory size in bytes to copy.
+ * \param[in]  stream   CUDA stream.
+ *
+ * \note    For GPU memory copy, CUDA stream need to be specified
+ *          for asynchronously memory copy.
+ *
+ */
+template <typename DstPlace, typename SrcPlace>
+void Copy(DstPlace, void* dst, SrcPlace, const void* src, size_t num,
+          hipStream_t stream);
+
+#endif
+
 }  // namespace memory
 }  // namespace paddle
