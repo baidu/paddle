@@ -526,7 +526,7 @@ if(WITH_DISTRIBUTE)
         # port range (20000, 23000) is reserved for dist-ops
         set(dist_ut_port 20001)
         foreach(TEST_OP ${DIST_TEST_OPS})
-            bash_test_modules(${TEST_OP} START_BASH dist_test.sh SERIAL LABELS "RUN_TYPE=EXCLUSIVE" ENVS "PADDLE_DIST_UT_PORT=${dist_ut_port}")
+            bash_test_modules(${TEST_OP} START_BASH dist_test.sh LABELS "RUN_TYPE=EXCLUSIVE" ENVS "PADDLE_DIST_UT_PORT=${dist_ut_port}")
             MATH(EXPR dist_ut_port "${dist_ut_port}+50")
         endforeach(TEST_OP)
     endif(NOT APPLE)
