@@ -1,4 +1,4 @@
-set(PYBIND_DEPS pybind python proto_desc memory executor fleet_wrapper box_wrapper prune
+set(PYBIND_DEPS pybind python proto_desc memory executor fleet_wrapper box_wrapper ascend_wrapper prune
   feed_fetch_method pass_builder parallel_executor profiler layer tracer engine scope_pool
   analysis_predictor imperative_profiler imperative_flag save_load_util dlpack_tensor device_context
   gloo_wrapper infer_io_utils heter_wrapper generator op_version_registry ps_gpu_wrapper)
@@ -31,6 +31,7 @@ set(PYBIND_SRCS
   heter_wrapper_py.cc
   ps_gpu_wrapper_py.cc
   gloo_wrapper_py.cc
+  ascend_wrapper_py.cc
   box_helper_py.cc
   data_set_py.cc
   imperative.cc
