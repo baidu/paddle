@@ -27,6 +27,9 @@ limitations under the License. */
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/math/blas.h"
+#include "paddle/fluid/operators/math/complex_functors.h"
+#include "paddle/fluid/platform/complex128.h"
+#include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/float16.h"
 
@@ -165,11 +168,11 @@ class ActivationKernel
     const framework::Tensor* X = nullptr;
     framework::Tensor* Out = nullptr;
     ExtractActivationTensor(context, &X, &Out);
-    Out->mutable_data<T>(context.GetPlace());
+    Out->mutable_data<math::Real<T>>(context.GetPlace());
 
     auto x = framework::EigenVector<T>::Flatten(
         GET_DATA_SAFELY(X, "Input", "X", "Activation"));
-    auto out = framework::EigenVector<T>::Flatten(
+    auto out = framework::EigenVector<math::Real<T>>::Flatten(
         GET_DATA_SAFELY(Out, "Output", "Out", "Activation"));
     auto* place =
         context.template device_context<DeviceContext>().eigen_device();
@@ -793,21 +796,63 @@ struct RoundFunctor : public BaseActivationFunctor<T> {
   }
 };
 
+template <typename T>
+struct Abs {
+  HOSTDEVICE T operator()(const T& val) const { return abs(val); }
+};
+
+template <>
+struct Abs<platform::float16> {
+  HOSTDEVICE platform::float16 operator()(const platform::float16& val) const {
+    return platform::float16(abs(static_cast<float>(val)));
+  }
+};
+
+template <>
+struct Abs<platform::complex64> {
+  HOSTDEVICE float operator()(const platform::complex64& val) const {
+    return platform::abs(val);
+  }
+};
+
+template <>
+struct Abs<platform::complex128> {
+  HOSTDEVICE double operator()(const platform::complex128& val) const {
+    return platform::abs(val);
+  }
+};
+
 // abs(x) = |x|
 template <typename T>
 struct AbsFunctor : public BaseActivationFunctor<T> {
   template <typename Device, typename X, typename Out>
   void operator()(Device d, X x, Out out) const {
-    out.device(d) = x.abs();
+    out.device(d) = x.unaryExpr(Abs<T>());
   }
 };
 
+template <typename T, typename Enable = void>
+struct AbsGradFunctor;
+
 template <typename T>
-struct AbsGradFunctor : public BaseActivationFunctor<T> {
+struct AbsGradFunctor<T, math::DisableComplex<T>>
+    : public BaseActivationFunctor<T> {
   template <typename Device, typename X, typename Out, typename dOut,
             typename dX>
   void operator()(Device d, X x, Out out, dOut dout, dX dx) const {
     dx.device(d) = dout * x.sign();
+  }
+
+  static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepX; }
+};
+
+template <typename T>
+struct AbsGradFunctor<T, math::EnableComplex<T>>
+    : public BaseActivationFunctor<T> {
+  template <typename Device, typename X, typename Out, typename dOut,
+            typename dX>
+  void operator()(Device d, X x, Out out, dOut dout, dX dx) const {
+    dx.device(d) = dout * (x / x.abs());
   }
 
   static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepX; }
@@ -1505,8 +1550,12 @@ class ActivationDoubleGradKernel
   }
 };
 
+template <typename T, typename Enable = void>
+struct AbsGradGradFunctor;
+
 template <typename T>
-struct AbsGradGradFunctor : public BaseActivationFunctor<T> {
+struct AbsGradGradFunctor<T, math::DisableComplex<T>>
+    : public BaseActivationFunctor<T> {
   template <typename Device>
   void operator()(const Device& dev, const framework::Tensor* X,
                   const framework::Tensor* Out, const framework::Tensor* ddX,
@@ -1521,6 +1570,28 @@ struct AbsGradGradFunctor : public BaseActivationFunctor<T> {
       auto ddout = framework::EigenVector<T>::Flatten(
           GET_DATA_SAFELY(ddOut, "Output", "DDOut", "AbsGradGrad"));
       ddout.device(*d) = ddx * x.sign();
+    }
+  }
+  static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepX; }
+};
+
+template <typename T>
+struct AbsGradGradFunctor<T, math::EnableComplex<T>>
+    : public BaseActivationFunctor<T> {
+  template <typename Device>
+  void operator()(const Device& dev, const framework::Tensor* X,
+                  const framework::Tensor* Out, const framework::Tensor* ddX,
+                  framework::Tensor* ddOut, framework::Tensor* dOut,
+                  framework::Tensor* dX) const {
+    auto* d = dev.eigen_device();
+    auto ddx = framework::EigenVector<T>::Flatten(
+        GET_DATA_SAFELY(ddX, "Input", "DDX", "AbsGradGrad"));
+    auto x = framework::EigenVector<T>::Flatten(
+        GET_DATA_SAFELY(X, "Input", "X", "AbsGradGrad"));
+    if (ddOut) {
+      auto ddout = framework::EigenVector<T>::Flatten(
+          GET_DATA_SAFELY(ddOut, "Output", "DDOut", "AbsGradGrad"));
+      ddout.device(*d) = ddx * (x / x.abs());
     }
   }
   static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepX; }

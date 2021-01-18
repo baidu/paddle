@@ -15,7 +15,10 @@
 #pragma once
 
 #include <stdint.h>
+
+#include <complex>
 #include <limits>
+
 #if !defined(_WIN32)
 #define PADDLE_ALIGN(x) __attribute__((aligned(x)))
 #else
@@ -82,7 +85,7 @@ struct PADDLE_ALIGN(8) complex64 {
         imag(static_cast<float>(val.imag)) {}
 
   HOSTDEVICE inline explicit operator std::complex<float>() {
-    return static_cast<std::complex<float>>(std::complex<float>(real, imag));
+    return std::complex<float>(real, imag);
   }
 
   template <class T>
@@ -361,9 +364,9 @@ HOSTDEVICE inline bool(isfinite)(const complex64& a) {
 
 HOSTDEVICE inline float(abs)(const complex64& a) {
 #if defined(__CUDA_ARCH__)
-  return complex64(thrust::abs(thrust::complex<float>(a.real, a.imag)));
+  return thrust::abs(thrust::complex<float>(a.real, a.imag));
 #else
-  return std::abs(std::complex<float>(a));
+  return std::abs(std::complex<float>(a.real, a.imag));
 #endif
 }
 
@@ -586,6 +589,16 @@ HOSTDEVICE inline complex64 pow(const complex64& a, const complex64& b) {
 template <>
 HOSTDEVICE inline float abs(const complex64& a) {
   return paddle::platform::abs(a);
+}
+
+template <>
+HOSTDEVICE inline float real(const complex64& a) {
+  return a.real;
+}
+
+template <>
+HOSTDEVICE inline float imag(const complex64& a) {
+  return a.imag;
 }
 
 }  // namespace numext

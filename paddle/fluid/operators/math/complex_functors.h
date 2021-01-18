@@ -48,6 +48,18 @@ struct select {
   using type = eval_if_t<Head::value, Head, select<Tail...>>;
 };
 
+template <typename T>
+struct select<T> {
+  using type = T;
+};
+
+template <bool B, typename T>
+struct select<cond<B, T>> {
+  // last one had better be true!
+  static_assert(B, "No match select type!");
+  using type = T;
+};
+
 template <typename Head, typename... Tail>
 using select_t = typename select<Head, Tail...>::type;
 
@@ -62,6 +74,16 @@ using Complex = typename std::enable_if<!std::is_same<T, RealT>::value>::type;
 // There are no NoComplex cases now, implement later if needed
 template <typename T, typename RealT>
 using NoComplex = typename std::enable_if<std::is_same<T, RealT>::value>::type;
+
+template <typename T>
+using EnableComplex =
+    typename std::enable_if<std::is_same<T, platform::complex64>::value ||
+                            std::is_same<T, platform::complex128>::value>::type;
+
+template <typename T>
+using DisableComplex = typename std::enable_if<
+    !std::is_same<T, platform::complex64>::value &&
+    !std::is_same<T, platform::complex128>::value>::type;
 
 template <typename T, typename Enable = void>
 struct RealFunctor;
@@ -134,16 +156,6 @@ struct ImagToComplexFunctor<T, Complex<T, Real<T>>> {
   T* output_;
   int64_t numel_;
 };
-
-template <typename T>
-using EnableComplex =
-    typename std::enable_if<std::is_same<T, platform::complex64>::value ||
-                            std::is_same<T, platform::complex128>::value>::type;
-
-template <typename T>
-using DisableComplex = typename std::enable_if<
-    !std::is_same<T, platform::complex64>::value &&
-    !std::is_same<T, platform::complex128>::value>::type;
 
 template <typename T, typename Enable = void>
 struct ConjFunctor;
