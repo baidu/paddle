@@ -1210,7 +1210,7 @@ class TestStaticSaveLoadLargeParameters(unittest.TestCase):
                 name="static_save_load_large_x",
                 shape=[None, 10],
                 dtype='float32')
-            z = paddle.static.nn.fc(x, LARGE_PARAM)
+            z = paddle.static.nn.fc(x, LARGE_PARAM, bias_attr=False)
             place = paddle.CPUPlace()
             exe = paddle.static.Executor(place)
             exe.run(paddle.static.default_startup_program())
@@ -1220,16 +1220,36 @@ class TestStaticSaveLoadLargeParameters(unittest.TestCase):
             result_z = exe.run(program=prog,
                                feed={"static_save_load_large_x": inputs},
                                fetch_list=[z.name])
-            path = "test_static_save_load_large_param/static_save"
+            base_map = {}
+            for var in prog.list_vars():
+                if isinstance(var, framework.Parameter) or var.persistable:
+                    t = np.array(fluid.global_scope().find_var(var.name)
+                                 .get_tensor())
+                    # make sure all the paramerter or optimizer var have been update
+                    self.assertTrue(np.sum(np.abs(t)) != 0)
+                    base_map[var.name] = t
+
+            path = os.path.join("test_static_save_load_large_param",
+                                "static_save")
             paddle.fluid.save(prog, path)
+            # set var to zero
+            for var in prog.list_vars():
+                if isinstance(var, framework.Parameter) or var.persistable:
+                    ten = fluid.global_scope().find_var(var.name).get_tensor()
+                    ten.set(np.zeros_like(np.array(ten)), place)
+
+                    new_t = np.array(fluid.global_scope().find_var(var.name)
+                                     .get_tensor())
+                    self.assertTrue(np.sum(np.abs(new_t)) == 0)
 
             paddle.fluid.load(prog, path)
-            result_load = exe.run(program=prog,
-                                  feed={"static_save_load_large_x": inputs},
-                                  fetch_list=[z.name])
-            # compare results before and after saving
-            self.assertTrue(
-                np.sum(np.abs(result_z[0] - result_load[0])) < 1e-15)
+
+            for var in prog.list_vars():
+                if isinstance(var, framework.Parameter) or var.persistable:
+                    new_t = np.array(fluid.global_scope().find_var(var.name)
+                                     .get_tensor())
+                    base_t = base_map[var.name]
+                    self.assertTrue(np.array_equal(new_t, base_t))
 
 
 class TestProgramStateOldSaveSingleModel(unittest.TestCase):

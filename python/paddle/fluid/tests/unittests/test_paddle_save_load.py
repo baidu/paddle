@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import unittest
 import numpy as np
+import os
 import paddle
 import paddle.nn as nn
 import paddle.optimizer as opt
@@ -90,13 +91,13 @@ class TestSaveLoadLargeParameters(unittest.TestCase):
         layer = LayerWithLargeParameters()
         save_dict = layer.state_dict()
 
-        path = "test_paddle_save_load_large_param_save/layer" + ".pdparams"
+        path = os.path.join("test_paddle_save_load_large_param_save",
+                            "layer.pdparams")
         paddle.save(layer.state_dict(), path)
         dict_load = paddle.load(path)
         # compare results before and after saving
         for key, value in save_dict.items():
-            self.assertTrue(
-                np.sum(np.abs(dict_load[key] - value.numpy())) < 1e-15)
+            self.assertTrue(np.array_equal(dict_load[key], value.numpy()))
 
 
 class TestSaveLoad(unittest.TestCase):
