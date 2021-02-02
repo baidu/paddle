@@ -63,7 +63,7 @@ class ThreadSafeNameSet {
 };
 
 class VarBase {
-  DISABLE_COPY_AND_ASSIGN(VarBase);
+  // DISABLE_COPY_AND_ASSIGN(VarBase);
 
  public:
   static std::vector<std::string> AliveVarNames();

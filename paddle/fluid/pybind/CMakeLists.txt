@@ -22,6 +22,7 @@ endif(NOT WIN32)
 
 if(WITH_PYTHON)
   list(APPEND PYBIND_DEPS py_func_op)
+  list(APPEND PYBIND_DEPS cus_py_func)
 endif()
 
 set(PYBIND_SRCS

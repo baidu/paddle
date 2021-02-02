@@ -32,6 +32,7 @@ limitations under the License. */
 #include "paddle/fluid/imperative/all_reduce.h"
 #include "paddle/fluid/imperative/amp_auto_cast.h"
 #include "paddle/fluid/imperative/basic_engine.h"
+#include "paddle/fluid/imperative/cus_py_func.h"
 #include "paddle/fluid/imperative/data_loader.h"
 #include "paddle/fluid/imperative/layer.h"
 #include "paddle/fluid/imperative/nccl_context.h"
@@ -1186,6 +1187,16 @@ void BindImperative(py::module *m_ptr) {
            &imperative::jit::ProgramDescTracer::CreateProgramDesc)
       .def("reset", &imperative::jit::ProgramDescTracer::Reset);
 
+  // custom op
+  m.def("CusPyFunc_apply", &imperative::CusPyFunc_apply);
+  m.def("CusPyFunc_AppendPythonContext2Op",
+        &imperative::_AppendPythonContext2Op);
+
+  py::class_<imperative::CusPyFunc_Context,
+             std::shared_ptr<imperative::CusPyFunc_Context>>(
+      m, "CusPyFunc_Context", "custom python function")
+      .def(py::init<>());
+  /// cutom op
   py::class_<imperative::Tracer, std::shared_ptr<imperative::Tracer>>(
       m, "Tracer", R"DOC()DOC")
       .def("__init__",

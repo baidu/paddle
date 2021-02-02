@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #pragma once
+
 #include "paddle/fluid/framework/python_headers.h"
 
 namespace paddle {
 namespace operators {
-
-size_t AppendPythonCallableObjectAndReturnId(const ::pybind11::object &py_obj);
+size_t CusPyFunc_AppendPythonContext(const ::pybind11::object &py_obj);
 
 }  // namespace operators
 }  // namespace paddle
