@@ -372,7 +372,8 @@ CUDADeviceContext::CUDADeviceContext(CUDAPlace place) : place_(place) {
   size_t cudnn_dso_ver = dynload::cudnnGetVersion();
   LOG_FIRST_N(WARNING, 1) << "device: " << place_.device
                           << ", cuDNN Version: " << cudnn_dso_ver / 1000 << "."
-                          << (cudnn_dso_ver % 1000) / 100 << ".";
+                          << (cudnn_dso_ver % 1000) / 100 << "."
+                          << cudnn_dso_ver % 10 << ".";
 
   {
     // Check CUDA/CUDNN version compatiblity

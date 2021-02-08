@@ -21,7 +21,14 @@ limitations under the License. */
 namespace paddle {
 namespace framework {
 
-using framework::AlgorithmsCache;
+template <typename AlgoT>
+struct CudnnConvAlgorithm {
+  AlgoT algo;
+  size_t workspace_size;
+
+  CudnnConvAlgorithm() { workspace_size = 0; }
+  CudnnConvAlgorithm(AlgoT a, size_t w) : algo(a), workspace_size(w) {}
+};
 
 // ConvSearchCache using framework::AlgorithmsCache to search
 // cudnnConvolutionFwdAlgo_t, cudnnConvolutionBwdDataAlgo_t or
@@ -33,13 +40,15 @@ class ConvSearchCache {
     return instance;
   }
 
-  AlgorithmsCache<cudnnConvolutionFwdAlgo_t>* GetForward() {
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionFwdAlgo_t>>* GetForward() {
     return &forward_cache_;
   }
-  AlgorithmsCache<cudnnConvolutionBwdDataAlgo_t>* GetBackwardData() {
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionBwdDataAlgo_t>>*
+  GetBackwardData() {
     return &backward_data_cache_;
   }
-  AlgorithmsCache<cudnnConvolutionBwdFilterAlgo_t>* GetBackwardFilter() {
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionBwdFilterAlgo_t>>*
+  GetBackwardFilter() {
     return &backward_filter_cache_;
   }
   AlgorithmsCache<cudnnConvolutionFwdAlgo_t>* GetConvFusion() {
@@ -52,9 +61,11 @@ class ConvSearchCache {
   ConvSearchCache(const ConvSearchCache&) {}
   ConvSearchCache& operator=(const ConvSearchCache&) {}
 
-  AlgorithmsCache<cudnnConvolutionFwdAlgo_t> forward_cache_;
-  AlgorithmsCache<cudnnConvolutionBwdDataAlgo_t> backward_data_cache_;
-  AlgorithmsCache<cudnnConvolutionBwdFilterAlgo_t> backward_filter_cache_;
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionFwdAlgo_t>> forward_cache_;
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionBwdDataAlgo_t>>
+      backward_data_cache_;
+  AlgorithmsCache<CudnnConvAlgorithm<cudnnConvolutionBwdFilterAlgo_t>>
+      backward_filter_cache_;
   AlgorithmsCache<cudnnConvolutionFwdAlgo_t> fusion_forward_cache_;
 };
 

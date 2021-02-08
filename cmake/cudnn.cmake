@@ -94,7 +94,7 @@ macro(find_cudnn_version cudnn_header_file)
                 "${CUDNN_MAJOR_VERSION} * 1000 +
                  ${CUDNN_MINOR_VERSION} * 100 + ${CUDNN_PATCHLEVEL_VERSION}")
             message(STATUS "Current cuDNN header is ${cudnn_header_file} "
-              "Current cuDNN version is v${CUDNN_MAJOR_VERSION}.${CUDNN_MINOR_VERSION}. ")
+              "Current cuDNN version is v${CUDNN_MAJOR_VERSION}.${CUDNN_MINOR_VERSION}.${CUDNN_PATCHLEVEL_VERSION}. ")
         endif()
     endif()
 endmacro()

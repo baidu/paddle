@@ -26,7 +26,6 @@ limitations under the License. */
 #include "paddle/fluid/platform/cudnn_helper.h"
 #include "paddle/fluid/platform/cudnn_workspace_helper.h"
 #include "paddle/fluid/platform/float16.h"
-#include "paddle/fluid/platform/profiler.h"
 
 DECLARE_bool(cudnn_deterministic);
 DECLARE_uint64(conv_workspace_size_limit);
@@ -65,8 +64,7 @@ class CUDNNConvOpKernel : public framework::OpKernel<T> {
     bool exhaustive_search =
         FLAGS_cudnn_exhaustive_search || ctx.Attr<bool>("exhaustive_search");
     bool deterministic = FLAGS_cudnn_deterministic;
-    auto exhaustive_deterministic = exhaustive_search && deterministic;
-    PADDLE_ENFORCE_EQ(exhaustive_deterministic, false,
+    PADDLE_ENFORCE_EQ(exhaustive_search && deterministic, false,
                       platform::errors::InvalidArgument(
                           "Cann't set exhaustive_search True and "
                           "FLAGS_cudnn_deterministic True at same time."));
@@ -273,14 +271,12 @@ class CUDNNConvOpKernel : public framework::OpKernel<T> {
     int group_offset_in = i_c / groups * i_h * i_w * i_d;
     int group_offset_out = o_c / groups * o_h * o_w * o_d;
     int group_offset_filter = transformed_filter_channel.numel() / groups;
-    // ------------------- cudnn conv workspace ---------------------
-    size_t workspace_size = 0;  // final workspace to allocate.
-    // ------------------- cudnn conv algorithm ---------------------
-    cudnnConvolutionFwdAlgo_t algo{};
 
+    // ------------------- cudnn conv algorithm ---------------------
     using search = SearchAlgorithm<cudnnConvolutionFwdAlgoPerf_t>;
-    algo = search::Find<T>(args, exhaustive_search, false, ctx);
-    workspace_size = search::GetWorkspaceSize(args, algo);
+    auto algo_with_ws = search::Find<T>(args, exhaustive_search, false, ctx);
+    cudnnConvolutionFwdAlgo_t algo = algo_with_ws.algo;
+    size_t workspace_size = algo_with_ws.workspace_size;
 
 #if CUDNN_VERSION_MIN(7, 0, 1)
     // when groups > 1, SearchAlgorithm find algo is CUDNN_CONVOLUTION_\
@@ -351,8 +347,7 @@ class CUDNNConvGradOpKernel : public framework::OpKernel<T> {
     bool exhaustive_search =
         FLAGS_cudnn_exhaustive_search || ctx.Attr<bool>("exhaustive_search");
     bool deterministic = FLAGS_cudnn_deterministic;
-    auto exhaustive_deterministic = exhaustive_search && deterministic;
-    PADDLE_ENFORCE_EQ(exhaustive_deterministic, false,
+    PADDLE_ENFORCE_EQ(exhaustive_search && deterministic, false,
                       platform::errors::InvalidArgument(
                           "Cann't set exhaustive_search True and "
                           "FLAGS_cudnn_deterministic True at same time."));
@@ -608,10 +603,10 @@ class CUDNNConvGradOpKernel : public framework::OpKernel<T> {
                       platform::AllowTF32Cudnn(), c_groups);
 
       using search1 = SearchAlgorithm<cudnnConvolutionBwdDataAlgoPerf_t>;
-      data_algo =
+      auto algo_with_ws =
           search1::Find<T>(args1, exhaustive_search, deterministic, ctx);
-      workspace_size =
-          std::max(workspace_size, search1::GetWorkspaceSize(args1, data_algo));
+      data_algo = algo_with_ws.algo;
+      workspace_size = std::max(workspace_size, algo_with_ws.workspace_size);
     }
 
     if (filter_grad) {
@@ -626,10 +621,10 @@ class CUDNNConvGradOpKernel : public framework::OpKernel<T> {
                       platform::AllowTF32Cudnn(), c_groups);
 
       using search2 = SearchAlgorithm<cudnnConvolutionBwdFilterAlgoPerf_t>;
-      filter_algo =
+      auto algo_with_ws =
           search2::Find<T>(args2, exhaustive_search, deterministic, ctx);
-      workspace_size = std::max(workspace_size,
-                                search2::GetWorkspaceSize(args2, filter_algo));
+      filter_algo = algo_with_ws.algo;
+      workspace_size = std::max(workspace_size, algo_with_ws.workspace_size);
     }
 
     // ------------------- cudnn conv backward data ---------------------
@@ -762,8 +757,7 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
     bool exhaustive_search =
         FLAGS_cudnn_exhaustive_search || ctx.Attr<bool>("exhaustive_search");
     bool deterministic = FLAGS_cudnn_deterministic;
-    auto exhaustive_deterministic = exhaustive_search && deterministic;
-    PADDLE_ENFORCE_EQ(exhaustive_deterministic, false,
+    PADDLE_ENFORCE_EQ(exhaustive_search && deterministic, false,
                       platform::errors::InvalidArgument(
                           "Cann't set exhaustive_search True and "
                           "FLAGS_cudnn_deterministic True at same time."));
@@ -987,8 +981,10 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
                         platform::AllowTF32Cudnn(), c_group);
 
         using search1 = SearchAlgorithm<cudnnConvolutionFwdAlgoPerf_t>;
-        fwd_algo1 = search1::Find<T>(args1, exhaustive_search, false, ctx);
-        workspace_size = search1::GetWorkspaceSize(args1, fwd_algo1);
+        auto algo_with_ws =
+            search1::Find<T>(args1, exhaustive_search, false, ctx);
+        fwd_algo1 = algo_with_ws.algo;
+        workspace_size = algo_with_ws.workspace_size;
       }
 
       if (ddW) {
@@ -1003,9 +999,10 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
                         platform::AllowTF32Cudnn(), c_group);
 
         using search2 = SearchAlgorithm<cudnnConvolutionFwdAlgoPerf_t>;
-        fwd_algo2 = search2::Find<T>(args2, exhaustive_search, false, ctx);
-        workspace_size = std::max(workspace_size,
-                                  search2::GetWorkspaceSize(args2, fwd_algo2));
+        auto algo_with_ws =
+            search2::Find<T>(args2, exhaustive_search, false, ctx);
+        fwd_algo2 = algo_with_ws.algo;
+        workspace_size = std::max(workspace_size, algo_with_ws.workspace_size);
       }
     }
 
@@ -1021,10 +1018,10 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
                       platform::AllowTF32Cudnn(), c_group);
 
       using search3 = SearchAlgorithm<cudnnConvolutionBwdFilterAlgoPerf_t>;
-      filter_algo =
+      auto algo_with_ws =
           search3::Find<T>(args3, exhaustive_search, deterministic, ctx);
-      workspace_size = std::max(workspace_size,
-                                search3::GetWorkspaceSize(args3, filter_algo));
+      filter_algo = algo_with_ws.algo;
+      workspace_size = std::max(workspace_size, algo_with_ws.workspace_size);
     }
 
     if (ddW && dX) {
@@ -1038,10 +1035,10 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
                       platform::AllowTF32Cudnn(), c_group);
 
       using search4 = SearchAlgorithm<cudnnConvolutionBwdDataAlgoPerf_t>;
-      data_algo =
+      auto algo_with_ws =
           search4::Find<T>(args4, exhaustive_search, deterministic, ctx);
-      workspace_size =
-          std::max(workspace_size, search4::GetWorkspaceSize(args4, data_algo));
+      data_algo = algo_with_ws.algo;
+      workspace_size = std::max(workspace_size, algo_with_ws.workspace_size);
     }
 
     int i_n, i_c, i_d, i_h, i_w;
