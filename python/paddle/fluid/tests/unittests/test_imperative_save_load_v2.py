@@ -752,6 +752,8 @@ class TestDygraphPtbRnn(unittest.TestCase):
             state_dict, opti_dict = fluid.load_dygraph("./test_dy_v2")
             adam.set_state_dict(opti_dict)
             ptb_model.set_dict(state_dict)
+            import pdb
+            pdb.set_trace()
 
             for i in range(1):
                 x_data = np.arange(12).reshape(4, 3).astype('int64')

@@ -18,6 +18,7 @@ import os
 import collections
 import functools
 from ..framework import Variable, default_main_program, in_dygraph_mode, dygraph_only, Parameter, ParamBase, _varbase_creator, _dygraph_tracer
+
 import pickle
 import six
 from . import learning_rate_scheduler
@@ -190,6 +191,7 @@ def load_dygraph(model_path, **configs):
     config = _parse_load_config(configs)
 
     if os.path.exists(params_file_path) or os.path.exists(opti_file_path):
+        # import pdb; pdb.set_trace()
         # Load state dict by `save_dygraph` save format
         para_dict = {}
         if os.path.exists(params_file_path):

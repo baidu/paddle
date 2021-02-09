@@ -25,6 +25,22 @@
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/imperative/type_defs.h"
 
+#ifdef _WIN32
+#define LSEEK _lseeki64
+#else
+#define LSEEK lseek
+#endif
+
+#define PADDLE_ENFORCE_WR(STATE, INFO)                                  \
+  do {                                                                  \
+    auto state = STATE;                                                 \
+    PADDLE_ENFORCE_EQ(                                                  \
+        -1 != state, true,                                              \
+        platform::errors::PreconditionNotMet(                           \
+            "An error occurred when trying to %s to the file.", INFO)); \
+    VLOG(3) << INFO << ":" << state << " Bytes.";                       \
+  } while (0);
+
 namespace paddle {
 namespace framework {
 
@@ -52,5 +68,25 @@ bool LoadTensorFromDisk(
     const std::string& file_name,
     std::map<std::string, std::shared_ptr<Tensor>>* map_tensor);
 
+// size_t ReadTensorNumber(std::istream& istre);
+// std::string ReadTensorName(std::istream& istre);
+// void CheckInStreamState(std::istream& istre, size_t length);
+
+bool SaveDygraphVarBaseListToDiskkWithFD(
+    int fd, const std::vector<std::shared_ptr<imperative::VarBase>>& var_list);
+
+size_t ReadTensorNumberWithFD(int fd);
+
+std::string ReadTensorNameWithFD(int fd);
+
+void ReadReserveBufferWithFD(int fd);
+
+void ReadNBufferWithFD(int fd, int nsize);
+
+bool SaveStaticNameListToDiskWithFD(
+    const int fd, const std::vector<std::string>& vec_tensor_name_list,
+    const Scope& scope);
+int SaveNumberToDiskWithFD(const int fd, const size_t number);
+std::vector<int> ReadNumberWithFD(int fd);
 }  // namespace framework
 }  // namespace paddle

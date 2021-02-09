@@ -92,3 +92,7 @@ class TestStaticSaveLoadLargeParameters(unittest.TestCase):
                                      .get_tensor())
                     base_t = base_map[var.name]
                     self.assertTrue(np.array_equal(new_t, base_t))
+
+
+if __name__ == '__main__':
+    unittest.main()

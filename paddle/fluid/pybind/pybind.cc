@@ -451,6 +451,156 @@ PYBIND11_MODULE(core_noavx, m) {
     return map_output;
   });
 
+  m.def("_save_VarBase_list",
+        [](const py::handle file,
+           const std::vector<py::handle> vec_var_base_list) {
+          int fd = PyObject_AsFileDescriptor(file.ptr());
+
+          // The given object cannot be converted to a file descriptor
+          PADDLE_ENFORCE_EQ(
+              fd != -1, true,
+              platform::errors::InvalidArgument(
+                  "The given object cannot be converted to a file descriptor"));
+          std::vector<std::shared_ptr<imperative::VarBase>> vec_res;
+          vec_res.reserve(vec_var_base_list.size());
+
+          for (auto &para : vec_var_base_list) {
+            PyObject *py_obj = para.ptr();
+            if (!py_obj || py_obj == Py_None) {
+              PADDLE_THROW(platform::errors::InvalidArgument(
+                  "The Variable/VarBase to save is None."));
+            }
+            vec_res.emplace_back(
+                PyObjectCast<std::shared_ptr<imperative::VarBase>>(py_obj));
+          }
+          SaveDygraphVarBaseListToDiskkWithFD(fd, vec_res);
+        });
+  m.def("_load_numpy_array_from_var_list", [](const py::handle file,
+                                              const int offset) {
+    int fd = PyObject_AsFileDescriptor(file.ptr());
+    PADDLE_ENFORCE_EQ(
+        fd != -1, true,
+        platform::errors::InvalidArgument(
+            "The given object cannot be converted to a file descriptor"));
+    // map or unordered map ?
+    std::unordered_map<std::string, py::array> map_output;
+    // const int model_file_reserve_size = 256;
+    // LoadPyArrayFromDisk(str_file_name,&map_output);
+    // ReadNBufferWithFD(fd, nseek);
+    LSEEK(fd, offset, SEEK_SET);
+    ReadReserveBufferWithFD(fd);
+    // fin.seekg(sizeof(char) * model_file_reserve_size, std::ios::cur);
+
+    size_t tensor_number = ReadTensorNumberWithFD(fd);
+
+    for (size_t i = 0; i < tensor_number; ++i) {
+      std::string str_tensor_name = ReadTensorNameWithFD(fd);
+
+      // std::shared_ptr<Tensor> tensor_temp(new Tensor());
+
+      uint32_t version;
+      PADDLE_ENFORCE_WR(
+          read(fd, reinterpret_cast<char *>(&version), sizeof(version)),
+          "read version of tensor");
+      PADDLE_ENFORCE_EQ(version, 0U,
+                        platform::errors::InvalidArgument(
+                            "Only version 0 tensor is supported."));
+      proto::VarType::TensorDesc desc;
+      {
+        // int32_t size
+        // proto buffer
+        int32_t size;
+        PADDLE_ENFORCE_WR(
+            read(fd, reinterpret_cast<char *>(&size), sizeof(size)),
+            "read size of tensor desc");
+        // CheckInStreamState(fin, sizeof(size));
+        std::unique_ptr<char[]> buf(new char[size]);
+        PADDLE_ENFORCE_WR(read(fd, reinterpret_cast<char *>(buf.get()), size),
+                          "read tensor desc");
+        // CheckInStreamState(fin, sizeof(size));
+        PADDLE_ENFORCE_EQ(
+            desc.ParseFromArray(buf.get(), size), true,
+            platform::errors::InvalidArgument("Parse tensor desc failed."));
+      }
+      namespace details = pybind::details;
+      std::string py_dtype_str =
+          details::TensorDTypeToPyDTypeStr(desc.data_type());
+
+      const auto &tensor_dims = desc.dims();
+      auto tensor_dtype = desc.data_type();
+      size_t sizeof_dtype = framework::SizeOfType(tensor_dtype);
+
+      std::vector<size_t> py_dims(tensor_dims.size());
+      std::vector<size_t> py_strides(tensor_dims.size());
+
+      size_t numel = 1;
+      for (int i = tensor_dims.size() - 1; i >= 0; --i) {
+        py_dims[i] = (size_t)tensor_dims[i];
+        py_strides[i] = sizeof_dtype * numel;
+        numel *= py_dims[i];
+      }
+
+      py::array py_array(py::dtype(py_dtype_str.c_str()), py_dims, py_strides);
+
+      {
+        size_t size = numel * framework::SizeOfType(desc.data_type());
+        char *data_ptr = reinterpret_cast<char *>(py_array.mutable_data());
+        while (size > 0) {
+          auto read_size =
+              read(fd, data_ptr, std::min<size_t>(1073741824, size));
+          PADDLE_ENFORCE_WR(read_size, "read data of tensor");
+          data_ptr += read_size;
+          size -= read_size;
+        }
+      }
+
+      map_output[str_tensor_name] = py_array;
+    }
+
+    return map_output;
+  });
+
+  m.def("_save_static_var_list",
+        [](const py::handle file, const py::handle &vec_var_list,
+           const Scope &scope) {
+          int fd = PyObject_AsFileDescriptor(file.ptr());
+
+          PADDLE_ENFORCE_EQ(
+              fd != -1, true,
+              platform::errors::InvalidArgument(
+                  "The given object cannot be converted to a file descriptor"));
+
+          std::vector<std::string> vec_name_list = GetNameList(vec_var_list);
+          SaveStaticNameListToDiskWithFD(fd, vec_name_list, scope);
+        });
+
+  m.def("_save_number", [](const py::handle file, const int number) {
+    int fd = PyObject_AsFileDescriptor(file.ptr());
+    PADDLE_ENFORCE_EQ(
+        fd != -1, true,
+        platform::errors::InvalidArgument(
+            "The given object cannot be converted to a file descriptor"));
+
+    PADDLE_ENFORCE_GE(
+        number, 0,
+        platform::errors::InvalidArgument(
+            "Expected the given number greater than 0, but reveived %ld",
+            number));
+
+    // lseek(fd, offset, SEEK_SET);
+    // return number of bytes saved
+    return SaveNumberToDiskWithFD(fd, static_cast<size_t>(number));
+  });
+  m.def("_read_number", [](const py::handle file, const int offset) {
+    int fd = PyObject_AsFileDescriptor(file.ptr());
+    PADDLE_ENFORCE_EQ(
+        fd != -1, true,
+        platform::errors::InvalidArgument(
+            "The given object cannot be converted to a file descriptor"));
+    LSEEK(fd, offset, SEEK_SET);
+    return ReadNumberWithFD(fd);
+  });
+
   m.def("save_op_version_info", [](framework::ProgramDesc &desc) {
     framework::compatible::pb::OpVersionMap pb_vmap{desc.OpVersionMap()};
     framework::compatible::SaveOpVersions(

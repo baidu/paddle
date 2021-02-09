@@ -382,5 +382,250 @@ bool LoadTensorFromDisk(
   return true;
 }
 
+bool SaveTensorToDiskWithFD(int fd,
+                            const std::map<std::string, Tensor*>& map_tensor) {
+  {
+    char kReserveBuffer[model_file_reserve_size] = {0};
+    // std::memset(kReserveBuffer,0,model_file_reserve_size);
+
+    // seek is different on Linux and Windows.
+    // first 256 byte for reserve for fulture upgrade
+    PADDLE_ENFORCE_WR(write(fd, kReserveBuffer, model_file_reserve_size),
+                      "write `ReserveBuffer`");
+  }
+  // tensor number
+  PADDLE_ENFORCE_WR(write(fd, tensor_number_mark.c_str(),
+                          sizeof(char) * tensor_number_mark.size()),
+                    "write mark of tensor number");
+  size_t tensor_number = map_tensor.size();
+  PADDLE_ENFORCE_WR(write(fd, reinterpret_cast<const char*>(&tensor_number),
+                          sizeof(tensor_number)),
+                    "write number of tensor");
+
+  // std::cout<<"\ntensor number:"<<tensor_number<<"\n";
+
+  for (auto& itera : map_tensor) {
+    // first save tensor name
+    PADDLE_ENFORCE_WR(write(fd, tensor_name_mark.c_str(),
+                            sizeof(char) * tensor_name_mark.size()),
+                      "write mark of tensor name");
+    size_t name_length = itera.first.size();
+    PADDLE_ENFORCE_WR(write(fd, reinterpret_cast<const char*>(&name_length),
+                            sizeof(name_length)),
+                      "write length of name");
+    PADDLE_ENFORCE_WR(
+        write(fd, itera.first.c_str(), sizeof(char) * name_length),
+        "write name of tensor");
+    // write tensor version
+    constexpr uint32_t version = 0;
+    PADDLE_ENFORCE_WR(
+        write(fd, reinterpret_cast<const char*>(&version), sizeof(version)),
+        "write version of tensor");
+
+    // the 2nd field, tensor description
+    // int32_t  size
+    // void*    protobuf message
+    auto tensor = itera.second;
+
+    proto::VarType::TensorDesc desc;
+    desc.set_data_type(tensor->type());
+    auto dims = framework::vectorize(tensor->dims());
+    auto* pb_dims = desc.mutable_dims();
+    pb_dims->Resize(static_cast<int>(dims.size()), 0);
+    std::copy(dims.begin(), dims.end(), pb_dims->begin());
+    int32_t size = desc.ByteSize();
+    PADDLE_ENFORCE_WR(
+        write(fd, reinterpret_cast<const char*>(&size), sizeof(size)),
+        "write size of tensor desc");
+    auto out = desc.SerializeAsString();
+    PADDLE_ENFORCE_WR(write(fd, out.data(), size), "write tensor desc");
+
+    // save tensor
+    uint64_t data_size =
+        tensor->numel() * framework::SizeOfType(tensor->type());
+    auto* data_ptr = tensor->data<void>();
+    if (platform::is_gpu_place(tensor->place())) {
+#ifdef PADDLE_WITH_CUDA
+      framework::Tensor temp;
+      TensorCopySync(*tensor, platform::CPUPlace(), &temp);
+      data_ptr = temp.data<void>();
+#else
+      PADDLE_THROW(platform::errors::Unavailable(
+          "Tensor is in CUDA device, but paddle not compiled with CUDA."));
+#endif
+    }
+    const char* data_char_ptr = static_cast<const char*>(data_ptr);
+    while (data_size > 0) {
+      auto wtite_size =
+          write(fd, data_char_ptr, std::min<uint64_t>(1073741824, data_size));
+      PADDLE_ENFORCE_WR(wtite_size, "write data of tensor");
+      data_char_ptr += wtite_size;
+      // wtite_size<data_size
+      data_size -= wtite_size;
+    }
+  }
+
+  return true;
+}
+
+bool SaveDygraphVarBaseListToDiskkWithFD(
+    int fd, const std::vector<std::shared_ptr<imperative::VarBase>>& var_list) {
+  std::map<std::string, Tensor*> map_tensor;
+
+  for (auto varbase : var_list) {
+    auto var_ptr = varbase->MutableVar();
+
+    Tensor* tensor = var_ptr->GetMutable<LoDTensor>();
+
+    PADDLE_ENFORCE_EQ(tensor->IsInitialized(), true,
+                      platform::errors::PreconditionNotMet(
+                          "Paramter [%s] is not initialzed, please make sure "
+                          "that exe.run(startup_program) has been executed.",
+                          varbase->Name()));
+
+    map_tensor[varbase->Name()] = tensor;
+  }
+  return SaveTensorToDiskWithFD(fd, map_tensor);
+}
+
+size_t ReadTensorNumberWithFD(int fd) {
+  char* tensor_number_mark_buffer = new char[tensor_number_mark.size()];
+  // char tensor_number_mark_buffer[tensor_number_mark.size()]={0};
+  PADDLE_ENFORCE_WR(read(fd, tensor_number_mark_buffer,
+                         sizeof(char) * tensor_number_mark.size()),
+                    "read mark of tensor number");
+  std::string str_read_tensor_number_mark(tensor_number_mark_buffer,
+                                          tensor_number_mark.size());
+  PADDLE_ENFORCE_EQ(tensor_number_mark, str_read_tensor_number_mark,
+                    platform::errors::InvalidArgument(
+                        "Tensor number mark does not match, expect mark is "
+                        "[%s], but the mark read from file is [%s].",
+                        tensor_number_mark, str_read_tensor_number_mark));
+
+  size_t tensor_number = 0;
+  PADDLE_ENFORCE_WR(
+      read(fd, reinterpret_cast<char*>(&tensor_number), sizeof(tensor_number)),
+      "read number of tensor");
+
+  delete[] tensor_number_mark_buffer;
+  return tensor_number;
+}
+
+std::string ReadTensorNameWithFD(int fd) {
+  char* name_mark_buffer = new char[tensor_name_mark.size()];
+
+  PADDLE_ENFORCE_WR(
+      read(fd, name_mark_buffer, sizeof(char) * tensor_name_mark.size()),
+      "read mark of name");
+
+  std::string str_read_tensor_name_mark(name_mark_buffer,
+                                        tensor_name_mark.size());
+  PADDLE_ENFORCE_EQ(tensor_name_mark, str_read_tensor_name_mark,
+                    platform::errors::InvalidArgument(
+                        "Tensor name mark does not match, expect mark is [%s], "
+                        "but the mark read from file is [%s].",
+                        tensor_name_mark, str_read_tensor_name_mark));
+
+  size_t tensor_name_length = 0;
+  PADDLE_ENFORCE_WR(read(fd, reinterpret_cast<char*>(&tensor_name_length),
+                         sizeof(tensor_name_length)),
+                    "read length of tensor name");
+
+  // CheckInStreamState(istre, sizeof(tensor_name_length));
+
+  char* tensor_name_buffer = new char[tensor_name_length];
+  PADDLE_ENFORCE_WR(
+      read(fd, tensor_name_buffer, sizeof(char) * tensor_name_length),
+      "read tensor name");
+  // CheckInStreamState(istre, sizeof(char) * tensor_name_length);
+
+  std::string str_tensor_name(tensor_name_buffer, tensor_name_length);
+
+  delete[] name_mark_buffer;
+  delete[] tensor_name_buffer;
+
+  return str_tensor_name;
+}
+
+void ReadReserveBufferWithFD(int fd) {
+  // seek
+  char* reserve_buffer = new char[model_file_reserve_size];
+  PADDLE_ENFORCE_WR(
+      read(fd, reserve_buffer, sizeof(char) * model_file_reserve_size),
+      "read `reserve buffer`");
+  // CheckInStreamState(istre, model_file_reserve_size);
+
+  delete[] reserve_buffer;
+}
+void ReadNBufferWithFD(int fd, int nsize) {
+  char* reserve_buffer = new char[nsize];
+  PADDLE_ENFORCE_WR(read(fd, reserve_buffer, sizeof(char) * nsize),
+                    "read `reserve buffer`");
+  // CheckInStreamState(istre, model_file_reserve_size);
+
+  delete[] reserve_buffer;
+}
+
+bool SaveStaticNameListToDiskWithFD(
+    const int fd, const std::vector<std::string>& vec_tensor_name_list,
+    const Scope& scope) {
+  std::map<std::string, Tensor*> map_tensor;
+
+  for (size_t i = 0; i < vec_tensor_name_list.size(); ++i) {
+    auto var_ptr = scope.FindVar(vec_tensor_name_list[i]);
+    PADDLE_ENFORCE_NOT_NULL(
+        var_ptr, platform::errors::NotFound("Variable (%s) is not found when "
+                                            "saving model, please make sure "
+                                            "that exe.run(startup_program) has "
+                                            "been executed.",
+                                            vec_tensor_name_list[i]));
+    Tensor* tensor = var_ptr->GetMutable<LoDTensor>();
+    PADDLE_ENFORCE_EQ(tensor->IsInitialized(), true,
+                      platform::errors::PreconditionNotMet(
+                          "Paramter [%s] is not initialzed, please make sure "
+                          "that exe.run(startup_program) has been executed.",
+                          vec_tensor_name_list[i]));
+
+    map_tensor[vec_tensor_name_list[i]] = tensor;
+  }
+
+  return SaveTensorToDiskWithFD(fd, map_tensor);
+}
+
+int SaveNumberToDiskWithFD(const int fd, const size_t number) {
+  auto size_mark = write(fd, tensor_number_mark.c_str(),
+                         sizeof(char) * tensor_number_mark.size());
+  PADDLE_ENFORCE_WR(size_mark, "write mark of `number`");
+  auto size_number =
+      write(fd, reinterpret_cast<const char*>(&number), sizeof(number));
+  PADDLE_ENFORCE_WR(size_number, "write number");
+  return static_cast<int>(size_mark + size_number);
+}
+
+std::vector<int> ReadNumberWithFD(int fd) {
+  char* tensor_number_mark_buffer = new char[tensor_number_mark.size()];
+  // char tensor_number_mark_buffer[tensor_number_mark.size()]={0};
+  auto size_mark = read(fd, tensor_number_mark_buffer,
+                        sizeof(char) * tensor_number_mark.size());
+  PADDLE_ENFORCE_WR(size_mark, "read mark of tensor number");
+  std::string str_read_tensor_number_mark(tensor_number_mark_buffer,
+                                          tensor_number_mark.size());
+  PADDLE_ENFORCE_EQ(tensor_number_mark, str_read_tensor_number_mark,
+                    platform::errors::InvalidArgument(
+                        "Tensor number mark does not match, expect mark is "
+                        "[%s], but the mark read from file is [%s].",
+                        tensor_number_mark, str_read_tensor_number_mark));
+
+  size_t tensor_number = 0;
+  auto size_tensor =
+      read(fd, reinterpret_cast<char*>(&tensor_number), sizeof(tensor_number));
+  PADDLE_ENFORCE_WR(size_tensor, "read number of tensor");
+
+  delete[] tensor_number_mark_buffer;
+  std::vector<int> re = {static_cast<int>(tensor_number),
+                         static_cast<int>(size_tensor + size_mark)};
+  return re;
+}
+
 }  // namespace framework
 }  // namespace paddle

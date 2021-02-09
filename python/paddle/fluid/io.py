@@ -26,6 +26,7 @@ import sys
 
 import numpy as np
 import math
+import collections
 import paddle
 from paddle.fluid import layers
 from paddle.fluid.executor import Executor, global_scope
@@ -1757,6 +1758,149 @@ def _pack_loaded_dict(load_obj):
     return load_obj
 
 
+def _load_numpy_array_from_var_list(path):
+    def check_config(config):
+        if isinstance(config, dict):
+            if 'version' in config and 'protocol' in config:
+                return
+        raise ValueError(
+            "Wrong `config`. Excepted `config=dict(version = *, protocol = *)`, but received `config={}`".
+            format(config))
+
+    with open(path, 'rb') as f:
+        f.seek(0, 2)
+        file_size = f.tell()
+        f.seek(0, 0)
+        load_config = pickle.load(f) if six.PY2 else pickle.load(
+            f, encoding='latin1')
+        check_config(load_config)
+        if not isinstance(load_config, dict):
+            raise ValueError(
+                "Type of `load_config` is wrong. Expected `dict`, but reveived {}.".
+                format(type(load_config)))
+
+        # offset = pickle.load(f) if six.PY2 else pickle.load(
+        #     f, encoding='latin1')
+        # load_tell=f.tell()
+        # if not isinstance(offset, dict):
+        #     raise ValueError("Type of `offset` is wrong. Expected `dict`, but reveived {}.".format(type(offset)))
+
+        config_tell = f.tell()
+
+        offset, read_size = core._read_number(f, config_tell)
+
+        array_map = None
+        if file_size > offset:
+            array_map = core._load_numpy_array_from_var_list(f, offset)
+
+        def persistent_load(save_id):
+
+            if not isinstance(save_id, tuple):
+                raise ValueError(
+                    'Type of saved id is wrong. Expected `tuple`, but received {}.'.
+                    format(type(save_id)))
+            save_type = save_id[0]
+            if save_type not in ('VarBase', 'Variable'):
+                raise ValueError('Unknown saved id: {}'.format(save_id))
+            save_name = save_id[1]
+
+            if save_name in array_map:
+                return array_map[save_name]
+            else:
+                raise ValueError('`{}` has not be loaded.'.format(save_name))
+
+        f.seek(config_tell + read_size, 0)
+        Unpickler = pickle.Unpickler(f)
+        Unpickler.persistent_load = persistent_load
+        obj = Unpickler.load()
+
+        return obj
+
+
+def _save_extend(obj, path, global_scope=None):
+    save_tesnors = []
+    protocol = 2
+    config = dict(version=None, protocol=protocol)
+
+    # offset=dict(offset=0)
+
+    def persistent_id(obj):
+        if isinstance(obj, core.VarBase):
+            tensor_name = obj.name
+            save_tesnors.append(obj)
+            return ('VarBase', tensor_name)
+        elif isinstance(obj, Variable):
+            tensor_name = obj.name
+            save_tesnors.append(obj)
+            return ('Variable', tensor_name)
+        return None
+
+    def check_same_type_in_list(var_list):
+        save_type = None
+        for var in var_list:
+            if isinstance(var, core.VarBase):
+                if save_type is None:
+                    save_type = core.VarBase.__name__
+                else:
+                    if save_type != core.VarBase.__name__:
+                        err_msg = "Cannot save static graph variables and dynamic graph variables to one file.`{}` is different from its former type({}).".format(
+                            var.name, save_type)
+                        raise ValueError(err_msg)
+            elif isinstance(var, Variable):
+                if save_type is None:
+                    save_type = Variable
+                else:
+                    if save_type != Variable.__name__:
+                        err_msg = "Cannot save static graph variables and dynamic graph variables to one file.`{}` is different from its former type({}).".format(
+                            var.name, save_type)
+                        raise ValueError(err_msg)
+            else:
+                raise ValueError(
+                    "Expected `{}` to be type `Variable` or type `VarBase`, But received type {}.".
+                    format(var.name, type(var)))
+
+        return save_type
+
+    with open(path, "wb") as f:
+        pickle.dump(config, f, protocol)
+
+        config_offset = f.tell()
+        # pickle.dump(offset,f,protocol)
+        f.flush()
+        save_byte_num = core._save_number(f, 0)
+        f.flush()
+        # f.seek(tell_offset+save_byte_num,0)
+        Pickler = pickle.Pickler(f, protocol=protocol)
+        Pickler.persistent_id = persistent_id
+        Pickler.dump(obj)
+        save_type = check_same_type_in_list(save_tesnors)
+
+        # update offset
+        tensor_offset = f.tell()
+        f.seek(config_offset, 0)
+        f.flush()
+        core._save_number(f, tensor_offset)
+        f.flush()
+
+        f.seek(tensor_offset, 0)
+        f.flush()
+
+        if save_type == core.VarBase.__name__:
+            core._save_VarBase_list(f, save_tesnors)
+        elif save_type == core.VarBase.__name__:
+            if global_scope is None:
+                raise ValueError(
+                    "The argument `global_scope` can not be `None` When saving static graph variables."
+                )
+            core._save_static_var_list(f, save_tesnors, global_scope)
+        else:
+            if save_type is not None:
+                raise ValueError(
+                    "Expected `save_type` is `{}`, `{}` or `None`, But received `{}`.".
+                    format(core.VarBase.__name__, core.VarBase.__name__,
+                           save_type))
+
+
 @static_only
 def save(program, model_path):
     """
@@ -1808,20 +1952,27 @@ def save(program, model_path):
         return np.array(t)
 
     parameter_list = list(filter(is_parameter, program.list_vars()))
-    param_dict = {p.name: get_tensor(p) for p in parameter_list}
-    param_dict = _unpack_saved_dict(param_dict)
+    if 0:
+        param_dict = {p.name: get_tensor(p) for p in parameter_list}
+        param_dict = _unpack_saved_dict(param_dict)
 
-    # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3.5/6'
-    if sys.platform == 'darwin' and sys.version_info.major == 3 and (
-            sys.version_info.minor == 5 or sys.version_info.minor == 6):
-        pickle_bytes = pickle.dumps(param_dict, protocol=2)
-        with open(model_path + ".pdparams", 'wb') as f:
-            max_bytes = 2**30
-            for i in range(0, len(pickle_bytes), max_bytes):
-                f.write(pickle_bytes[i:i + max_bytes])
+        # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3.5/6'
+        if sys.platform == 'darwin' and sys.version_info.major == 3 and (
+                sys.version_info.minor == 5 or sys.version_info.minor == 6):
+            pickle_bytes = pickle.dumps(param_dict, protocol=2)
+            with open(model_path + ".pdparams", 'wb') as f:
+                max_bytes = 2**30
+                for i in range(0, len(pickle_bytes), max_bytes):
+                    f.write(pickle_bytes[i:i + max_bytes])
+        else:
+            with open(model_path + ".pdparams", 'wb') as f:
+                pickle.dump(param_dict, f, protocol=2)
     else:
+        # core._save_static_dict(model_path + ".pdparams", parameter_list,
+        #                        global_scope())
         with open(model_path + ".pdparams", 'wb') as f:
-            pickle.dump(param_dict, f, protocol=2)
+            core._save_static_var_list(f, parameter_list, global_scope())
+            # _new_save(parameter_list,global_scope(),f)
 
     optimizer_var_list = list(
         filter(is_belong_to_optimizer, program.list_vars()))
@@ -1997,10 +2148,22 @@ def load(program, model_path, executor=None, var_list=None):
         paddle.fluid.core._create_loaded_parameter(parameter_list,
                                                    global_scope(),
                                                    executor._default_executor)
-    with open(parameter_file_name, 'rb') as f:
-        load_dict = pickle.load(f) if six.PY2 else pickle.load(
-            f, encoding='latin1')
-        load_dict = _pack_loaded_dict(load_dict)
+    if 0:
+        with open(parameter_file_name, 'rb') as f:
+            load_dict = pickle.load(f) if six.PY2 else pickle.load(
+                f, encoding='latin1')
+            load_dict = _pack_loaded_dict(load_dict)
+    else:
+        try:
+            with open(parameter_file_name, 'rb') as f:
+                load_dict = pickle.load(f) if six.PY2 else pickle.load(
+                    f, encoding='latin1')
+                load_dict = _pack_loaded_dict(load_dict)
+        except:
+            # load_result=core._load_dygraph_dict(path)
+            with open(parameter_file_name, 'rb') as f:
+                load_dict = core._load_numpy_array_from_var_list(f, 0)
+
     for v in parameter_list:
         assert v.name in load_dict, \
             "Can not find [{}] in model file [{}]".format(
@@ -2176,11 +2339,15 @@ def load_program_state(model_path, var_list=None):
 
     assert os.path.exists(parameter_file_name), \
         "Parameter file [{}] not exits".format(parameter_file_name)
-
-    with open(parameter_file_name, 'rb') as f:
-        para_dict = pickle.load(f) if six.PY2 else pickle.load(
-            f, encoding='latin1')
-    para_dict = _pack_loaded_dict(para_dict)
+    try:
+        with open(parameter_file_name, 'rb') as f:
+            para_dict = pickle.load(f) if six.PY2 else pickle.load(
+                f, encoding='latin1')
+        para_dict = _pack_loaded_dict(para_dict)
+    except:
+        # load_result=core._load_dygraph_dict(path)
+        with open(parameter_file_name, 'rb') as f:
+            para_dict = core._load_numpy_array_from_var_list(f, 0)
 
     opt_file_name = model_prefix + ".pdopt"
     if os.path.exists(opt_file_name):
