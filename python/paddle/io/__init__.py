@@ -21,7 +21,7 @@ __all__ = [
     'ChainDataset',
     'BatchSampler',
     'DistributedBatchSampler',
-    #            'Transform',
+    #      'Transform',
     'DataLoader',
     'get_worker_info',
     'Sampler',
@@ -29,10 +29,11 @@ __all__ = [
     'RandomSampler',
     'WeightedRandomSampler',
     'random_split',
-    'Subset'
+    'Subset',
+    'BufferedShuffleDataset'
 ]
 
 from ..fluid.io import DataLoader
 from ..fluid.dataloader import Dataset, IterableDataset, BatchSampler, get_worker_info, \
         TensorDataset, Sampler, SequenceSampler, RandomSampler, DistributedBatchSampler, \
-        ComposeDataset, ChainDataset, WeightedRandomSampler, Subset, random_split
+        ComposeDataset, ChainDataset, WeightedRandomSampler, Subset, random_split, BufferedShuffleDataset

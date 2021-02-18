@@ -14,12 +14,14 @@
 
 from __future__ import print_function
 
+import random
+
 from .. import framework
 import paddle.dataset.common
 
 __all__ = [
     "Dataset", "IterableDataset", "TensorDataset", "ComposeDataset",
-    "ChainDataset", "random_split", "Subset"
+    "ChainDataset", "random_split", "Subset", "BufferedShuffleDataset"
 ]
 
 
@@ -528,3 +530,94 @@ def _accumulate(iterable, fn=lambda x, y: x + y):
     for element in it:
         total = fn(total, element)
         yield total
+
+
+class BufferedShuffleDataset(IterableDataset):
+    """
+    Dataset shuffled from the original dataset.
+
+    This class is useful to shuffle an existing instance of an IterableDataset.
+    The buffer with `buffer_size` is filled with the items from the dataset first. Then,
+    each item will be yielded from the buffer by reservoir sampling via iterator.
+
+    `buffer_size` is required to be larger than 0. For `buffer_size == 1`, the
+    dataset is not shuffled. In order to fully shuffle the whole dataset, `buffer_size`
+    is required to be greater than or equal to the size of dataset.
+
+    When it is used with :class:`paddle.io.DataLoader`, each item in the
+    dataset will be yielded from the :class:`~paddle.io.DataLoader` iterator.
+    And, the method to set up a random seed is different based on :attr:`num_workers`.
+
+    :code:`__iter__`: yield sample sequentially. This method is required by reading dataset sample in :code:`paddle.io.DataLoader`.
+
+    Args:
+        dataset (IterableDataset): The original IterableDataset.
+        buffer_size (int): The buffer size for shuffling.
+
+    Returns:
+        Datasets: A IterableDataset, which shuffle the underlining instance of an IterableDataset with buffer reservoir.
+
+    Example code:
+    
+        .. code-block:: python
+
+            import random
+
+            import numpy as np
+
+            import paddle
+            from paddle.io import BufferedShuffleDataset, Dataset
+
+                        
+            # define a random dataset
+            class RandomDataset(Dataset):
+                def __init__(self, num_samples):
+                    self.num_samples = num_samples
+            
+                def __getitem__(self, idx):
+                    image = np.random.random([5]).astype('float32')
+                    label = np.random.randint(0, 9, (1, )).astype('int64')
+                    return image, label
+                
+                def __len__(self):
+                    return self.num_samples
+            
+            dataset = RandomDataset(10)
+            for i in range(len(dataset)):
+                print(dataset[i])
+
+            def shuffle_ds_init_fn(worker_id):
+                random.seed(123)
+
+            # Example:
+            # For single-process mode (:attr:`num_workers == 0`), the random seed is required to
+            # be set before the :class:`~paddle.io.DataLoader` in the main process.
+            
+            ds = BufferedShuffleDataset(dataset = dataset, buffer_size = 2)
+            random.seed(123)
+            list2print = []
+            for item in iter(paddle.io.DataLoader(ds, num_workers=0, batch_size=1, drop_last=True, worker_init_fn=shuffle_ds_init_fn)):
+                list2print.append(item)
+            print(list2print)
+    """
+    dataset = None
+    buffer_size = None
+
+    def __init__(self, dataset, buffer_size):
+        super(BufferedShuffleDataset, self).__init__()
+        assert buffer_size > 0, "buffer_size should be larger than 0"
+        self.dataset = dataset
+        self.buffer_size = buffer_size
+
+    def __iter__(self):
+        buf = []
+        for x in self.dataset:
+            if len(buf) == self.buffer_size:
+                idx = random.randint(0, self.buffer_size - 1)
+                yield buf[idx]
+                buf[idx] = x
+            else:
+                buf.append(x)
+        random.shuffle(buf)
+        while buf:
+            yield buf.pop()

@@ -13,16 +13,51 @@
 # limitations under the License.
 
 from __future__ import division
-
+import math
+import random
 import unittest
+
 import numpy as np
 
 import paddle
 import paddle.fluid as fluid
 from paddle.io import Dataset, IterableDataset, TensorDataset, \
-        ComposeDataset, ChainDataset, DataLoader, random_split, Subset
+        ComposeDataset, ChainDataset, DataLoader, random_split, Subset, BufferedShuffleDataset, get_worker_info
 
+# tests' settings
 IMAGE_SIZE = 32
+START = 0
+END = 10
+EXPECTED_RANGE = 10
+BUFFER_SIZES = [5, 15]
+WORKER_SETTING = [0, 1]
+
+
+def shuffle_ds_init_fn(worker_id):
+    random.seed(123)
+
+
+def worker_init_fn(worker_id):
+    worker_info = get_worker_info()
+
+    dataset = worker_info.dataset
+    start = dataset.start
+    end = dataset.end
+    num_per_worker = int(
+        math.ceil((end - start) / float(worker_info.num_workers)))
+
+    worker_id = worker_info.id
+    dataset.start = start + worker_id * num_per_worker
+    dataset.end = min(dataset.start + num_per_worker, end)
+
+
+def get_dataloader(dataset, num_workers, worker_init_fn):
+    return DataLoader(
+        dataset,
+        num_workers=num_workers,
+        batch_size=1,
+        drop_last=True,
+        worker_init_fn=worker_init_fn)
 
 
 class RandomDataset(Dataset):
@@ -233,6 +268,70 @@ class TestChainDataset(unittest.TestCase):
             places.append(paddle.CUDAPlace(0))
         for p in places:
             self.run_main(num_workers=0, places=p)
+
+
+class RangeIterableDataset(IterableDataset):
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def __iter__(self):
+        for i in range(self.start, self.end):
+            yield np.array([i])
+
+
+class CountingIterableDataset(IterableDataset):
+    def __init__(self, n):
+        super(CountingIterableDataset, self).__init__()
+        self.n = n
+
+    def __iter__(self):
+        return iter([np.array([i]) for i in range(self.n)])
+
+
+class TestBufferShuffleDataset(unittest.TestCase):
+    def run_main(self, places):
+        paddle.static.default_startup_program().random_seed = 1
+        paddle.static.default_main_program().random_seed = 1
+
+        dataset_range_ = RangeIterableDataset(start=START, end=EXPECTED_RANGE)
+        dataset_count_ = CountingIterableDataset(EXPECTED_RANGE)
+
+        for num_workers in WORKER_SETTING:
+            dataloader_range_origin = get_dataloader(
+                dataset_range_, num_workers, worker_init_fn)
+            list_orgin = [data for data in dataloader_range_origin]
+            for buffer_size in BUFFER_SIZES:
+                dataloader_count_with_buffer = get_dataloader(
+                    BufferedShuffleDataset(dataset_count_, buffer_size),
+                    num_workers, shuffle_ds_init_fn)
+                list_count = [data for data in dataloader_count_with_buffer]
+
+                dataloader_range_with_buffer = get_dataloader(
+                    BufferedShuffleDataset(dataset_range_, buffer_size),
+                    num_workers, shuffle_ds_init_fn)
+                list_range = [data for data in dataloader_range_with_buffer]
+
+                list_count, list_range = sorted(list_count), sorted(list_range)
+                for origin_item, count_item, range_item in zip(
+                        list_orgin, list_count, list_range):
+                    # self.assertEqual(origin_item, count_item)
+                    # self.assertEqual(count_item, range_item)
+                    # self.assertEqual(range_item, origin_item)
+
+                    assert origin_item == count_item
+                    assert count_item == range_item
+                    assert range_item == origin_item
+                # self.assertCountEqual(list_range, list_count)
+                # self.assertCountEqual(list_count, list_orgin)
+                # self.assertCountEqual(list_orgin, list_range)
+
+    def test_main(self):
+        places = [paddle.CPUPlace()]
+        if paddle.is_compiled_with_cuda():
+            places.append(paddle.CUDAPlace(0))
+        for p in places:
+            self.run_main(places=p)
 
 
 if __name__ == '__main__':
