@@ -40,6 +40,8 @@ std::vector<int64_t> ConvOp::ComputeOutputShape(
   auto in_dims = ctx->GetInputDim("Input");
   auto filter_dims = ctx->GetInputDim("Filter");
 
+  VLOG(4) << "Conv get input dim success";
+
   std::vector<int> strides = ctx->Attrs().Get<std::vector<int>>("strides");
   std::vector<int> paddings = ctx->Attrs().Get<std::vector<int>>("paddings");
   std::string padding_algorithm =
@@ -48,6 +50,7 @@ std::vector<int64_t> ConvOp::ComputeOutputShape(
   std::vector<int> dilations = ctx->Attrs().Get<std::vector<int>>("dilations");
   const std::string data_format = ctx->Attrs().Get<std::string>("data_format");
 
+  VLOG(4) << "Conv get attrs success";
   // MKL-DNN Kernels are using NCHW order of dims description
   // so we ignore data_format consideration for MKL-DNN kernel
   const bool channel_last = (this->IsMKLDNNType() == false) &&
@@ -103,6 +106,7 @@ std::vector<int64_t> ConvOp::ComputeOutputShape(
           "the groups is %d.",
           filter_dims[0], filter_dims, groups));
 
+  VLOG(4) << "Conv enforce sucess";
   framework::DDim in_data_dims;
   if (channel_last) {
     in_data_dims = framework::slice_ddim(in_dims, 1, in_dims.size() - 1);
@@ -116,7 +120,7 @@ std::vector<int64_t> ConvOp::ComputeOutputShape(
   std::vector<int> ksize = framework::vectorize<int>(filter_data_dims);
   UpdatePaddingAndDilation(&paddings, &dilations, padding_algorithm,
                            in_data_dims, strides, ksize);
-
+  VLOG(4) << "Conv set output_shape";
   std::vector<int64_t> output_shape({in_dims[0]});
   if (!channel_last) {
     output_shape.push_back(filter_dims[0]);

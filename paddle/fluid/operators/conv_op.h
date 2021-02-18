@@ -171,11 +171,13 @@ class ConvOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
   void InferShape(framework::InferShapeContext* ctx) const override {
+    VLOG(4) << "InferShape here";
     std::vector<int64_t> output_shape = ComputeOutputShape(ctx);
 
     OP_INOUT_CHECK(ctx->HasOutput("Output"), "Output", "Output", "Conv");
     ctx->SetOutputDim("Output", framework::make_ddim(output_shape));
     ctx->ShareLoD("Input", "Output");
+    VLOG(4) << "InferShape end";
   }
 
  protected:

@@ -1180,6 +1180,8 @@ void ParallelExecutor::FeedTensorsIntoLocalScopes(
       auto *trg = feed_var->GetMutable<LoDTensor>();
       trg->ShareDataWith(pair.second);
       trg->set_lod(pair.second.lod());
+      feed_var->NotifyAvailable();
+      VLOG(4) << "Notify Available at Feed";
     }
   }
 
@@ -1286,6 +1288,8 @@ void ParallelExecutor::FeedAndSplitTensorIntoLocalScopes(
       auto t = feed_var->GetMutable<LoDTensor>();
       t->ShareDataWith(lod_tensors[j]);
       t->set_lod(lod_tensors[j].lod());
+      feed_var->NotifyAvailable();
+      VLOG(4) << "Notify Available at FeedAndSplit";
     }
   }
 

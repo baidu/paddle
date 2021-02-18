@@ -1,4 +1,4 @@
-// Copyright (c) 2018 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "paddle/fluid/framework/details/fast_threaded_ssa_graph_executor.h"
+#include "paddle/fluid/framework/details/mult_level_executor.h"
 
 #include <deque>
 #include <memory>
@@ -20,21 +20,17 @@
 #include <unordered_set>
 #include <vector>
 
-#include "gflags/gflags.h"
 #include "paddle/fluid/framework/details/computation_op_handle.h"
 #include "paddle/fluid/framework/details/fetch_async_op_handle.h"
 #include "paddle/fluid/framework/details/multi_devices_helper.h"
 #include "paddle/fluid/framework/ir/graph_helper.h"
 #include "paddle/fluid/platform/profiler.h"
 
-DEFINE_int32(async_run_logic, 1,
-             "1 to run new async logic, 0 to run old logic.");
-
 namespace paddle {
 namespace framework {
 namespace details {
 
-FastThreadedSSAGraphExecutor::FastThreadedSSAGraphExecutor(
+MultLevelExecutor::MultLevelExecutor(
     const ExecutionStrategy &strategy, const std::vector<Scope *> &local_scopes,
     const std::vector<Scope *> &local_exec_scopes,
     const std::vector<platform::Place> &places, ir::Graph *graph)
@@ -60,11 +56,11 @@ FastThreadedSSAGraphExecutor::FastThreadedSSAGraphExecutor(
   PrepareAtomicOpDeps();
 }
 
-FetchResultType FastThreadedSSAGraphExecutor::Run(
+FetchResultType MultLevelExecutor::Run(
     const std::vector<std::string> &fetch_tensors, bool return_merged) {
-  VLOG(3) << "enter FastThreadedSSAGraphExecutor Run";
+  VLOG(3) << "enter MultLevelExecutor Run";
   std::unique_ptr<platform::RecordEvent> event(
-      new platform::RecordEvent("FastThreadedSSAGraphExecutorPrepare"));
+      new platform::RecordEvent("MultLevelExecutorPrepare"));
   std::unique_ptr<std::unordered_map<OpHandleBase *, std::atomic<int>>>
       op_deps = atomic_op_deps_.get();
   PrepareAtomicOpDeps();
@@ -98,19 +94,14 @@ FetchResultType FastThreadedSSAGraphExecutor::Run(
   } else {
     traced_ops_.clear();
     remaining_ = 0;
-    error_happen_ = false;
     auto complete_q = std::make_shared<BlockingQueue<size_t>>();
-    if (FLAGS_async_run_logic == 1) {
-      RunOpWithAsyncVariable(op_deps.get(), bootstrap_ops_, complete_q);
-      RunOpWithAsyncVariable(op_deps.get(), ready_fetch_ops, complete_q);
-    } else {
-      for (auto op : bootstrap_ops_) {
-        RunOpAsync(op_deps.get(), op, complete_q);
-      }
-      for (auto op : ready_fetch_ops) {
-        RunOpAsync(op_deps.get(), op, complete_q);
-      }
+    for (auto op : bootstrap_ops_) {
+      RunOpAsync(op_deps.get(), op, complete_q);
     }
+    for (auto op : ready_fetch_ops) {
+      RunOpAsync(op_deps.get(), op, complete_q);
+    }
+
     size_t num_complete = 0;
     while (num_complete != op_deps->size()) {
       size_t num_comp = complete_q->Pop();
@@ -142,7 +133,7 @@ FetchResultType FastThreadedSSAGraphExecutor::Run(
   return fetches;
 }
 
-void FastThreadedSSAGraphExecutor::InsertFetchOps(
+void MultLevelExecutor::InsertFetchOps(
     const std::vector<std::string> &fetch_tensors, FetchResultType *fetches,
     std::unordered_map<std::string, std::vector<VarHandleBase *>> *fetched_vars,
     std::unordered_map<OpHandleBase *, std::atomic<int>> *op_deps,
@@ -209,7 +200,7 @@ void FastThreadedSSAGraphExecutor::InsertFetchOps(
   }
 }
 
-bool FastThreadedSSAGraphExecutor::RunOp(
+bool MultLevelExecutor::RunOp(
     OpHandleBase *op, const std::shared_ptr<BlockingQueue<size_t>> &complete_q,
     size_t *complete) {
   RunOpSync(op);
@@ -226,7 +217,7 @@ bool FastThreadedSSAGraphExecutor::RunOp(
   }
 }
 
-void FastThreadedSSAGraphExecutor::RunOpAsync(
+void MultLevelExecutor::RunOpAsync(
     std::unordered_map<OpHandleBase *, std::atomic<int>> *op_deps,
     OpHandleBase *op,
     const std::shared_ptr<BlockingQueue<size_t>> &complete_q) {
@@ -294,84 +285,7 @@ void FastThreadedSSAGraphExecutor::RunOpAsync(
   });
 }
 
-void FastThreadedSSAGraphExecutor::RunOpWithAsyncVariable(
-    std::unordered_map<OpHandleBase *, std::atomic<int>> *op_deps,
-    const std::vector<OpHandleBase *> &ready_ops,
-    const std::shared_ptr<BlockingQueue<size_t>> &complete_q) {
-  std::deque<OpHandleBase *> op_queue;
-  for (auto *ready_op : ready_ops) {
-    // tmp code for handling parameters
-    UpdateAsyncVariableState(ready_op->Inputs());
-    op_queue.push_back(ready_op);
-  }
-  while (!op_queue.empty() && !error_happen_.load()) {
-    OpHandleBase *op_to_run = op_queue.front();
-    op_queue.pop_front();
-    // TODO(Aurelius84): Consider special case in MultiDeviceTransfer
-    if (op_to_run->IsMultiDeviceTransfer()) {
-      VLOG(4) << "Found MultiDeviceTranser op: " << op_to_run->Name()
-              << ", skip it now.";
-    }
-    VLOG(4) << "Launching op: " << op_to_run->Name();
-    // this->pool_.enqueue([=] {
-    VLOG(4) << "Running op: " << op_to_run->Name();
-    // TODO(zhhsplendid): fix threading number
-    size_t complete = 0;
-    if (!RunOp(op_to_run, complete_q, &complete)) {
-      // TODO(zhhsplendid): atomic<bool> to indicate fail
-      VLOG(4) << "Run op " << op_to_run->Name() << " failed.";
-      error_happen_.store(true);
-      return;
-    }
-    VLOG(4) << "Successfully running op: " << op_to_run->Name();
-    UpdateAsyncVariableState(op_to_run->Outputs());
-    complete_q->Push(complete);
-    //});
-
-    auto &outputs = op_to_run->Outputs();
-    for (auto &output : outputs) {
-      for (auto &pending_op : output->PendingOps()) {
-        std::atomic<int> &op_dep = op_deps->at(pending_op);
-        if (op_dep.fetch_sub(1) != 1) {
-          continue;
-        }
-        // TODO(Aurelius84): Consider to avoid thread switch by launching one op
-        // in current thread.
-        op_queue.push_back(pending_op);
-      }
-    }
-  }
-  VLOG(4) << "Finish Running Ops";
-}
-
-void FastThreadedSSAGraphExecutor::UpdateAsyncVariableState(
-    const std::vector<VarHandleBase *> &vars) {
-  // TODO(Aurelius84): we should only update Available state for ready_op's
-  // input vars once, and use callback
-  // and hook to deal with other op's outputs.
-  for (auto var_handle_base : vars) {
-    PADDLE_ENFORCE_NOT_NULL(var_handle_base,
-                            platform::errors::PreconditionNotMet(
-                                "var_handle_base should not be nullptr."));
-    auto *var_handle = static_cast<VarHandle *>(var_handle_base);
-    auto &scope = local_exec_scopes_.at(var_handle->scope_idx());
-    auto *var = scope->FindVar(var_handle->Name());
-    if (var == nullptr) {
-      // control_var
-      VLOG(3) << var_handle->Name() << " is not found in scope.";
-    } else {
-      VLOG(3) << "Set var: " << var_handle->Name()
-              << " with AsyncState::kAvailable";
-      // Tmp code for handling feed data.
-      if (var_handle->Name() == "img" || var_handle->Name() == "label") {
-        return;
-      }
-      var->NotifyAvailable();
-    }
-  }
-}
-
-void FastThreadedSSAGraphExecutor::PrepareAtomicOpDeps() {
+void MultLevelExecutor::PrepareAtomicOpDeps() {
   atomic_op_deps_ = prepare_pool_.enqueue([&] {
     auto *op_deps = new std::unordered_map<OpHandleBase *, std::atomic<int>>;
     for (auto &pair : op_deps_) {
@@ -382,16 +296,15 @@ void FastThreadedSSAGraphExecutor::PrepareAtomicOpDeps() {
   });
 }
 
-const ir::Graph &FastThreadedSSAGraphExecutor::Graph() const { return *graph_; }
+const ir::Graph &MultLevelExecutor::Graph() const { return *graph_; }
 
-void FastThreadedSSAGraphExecutor::RecordOps(OpHandleBase *op) {
+void MultLevelExecutor::RecordOps(OpHandleBase *op) {
   if (strategy_.num_threads_ == 1 && !dynamic_cast<FetchAsyncOpHandle *>(op)) {
     traced_ops_.emplace_back(op);
   }
 }
 
-void FastThreadedSSAGraphExecutor::ExecutionFinal(
-    std::vector<OpHandleBase *> *fetch_ops) {
+void MultLevelExecutor::ExecutionFinal(std::vector<OpHandleBase *> *fetch_ops) {
   VLOG(3) << "caught exception " << exception_.Type() << ", rethrow it";
   // NOTE: If a new exception occurs in this ClearFetchOp operation, it will
   // cause the loss of exception triggered firstly not thrown.
@@ -404,7 +317,7 @@ void FastThreadedSSAGraphExecutor::ExecutionFinal(
   exception_.ReThrow();
 }
 
-bool FastThreadedSSAGraphExecutor::RunTracedOps(
+bool MultLevelExecutor::RunTracedOps(
     const std::vector<OpHandleBase *> &traced_ops) {
   for (auto &op : traced_ops) {
     if (!RunOpSync(op)) return false;
@@ -412,7 +325,7 @@ bool FastThreadedSSAGraphExecutor::RunTracedOps(
   return true;
 }
 
-bool FastThreadedSSAGraphExecutor::RunOpSync(OpHandleBase *op) {
+bool MultLevelExecutor::RunOpSync(OpHandleBase *op) {
   try {
     VLOG(10) << op << " " << op->Name() << " : " << op->DebugString();
     if (LIKELY(!strategy_.dry_run_)) {
@@ -422,11 +335,6 @@ bool FastThreadedSSAGraphExecutor::RunOpSync(OpHandleBase *op) {
     return true;
   } catch (...) {
     exception_.Catch(std::current_exception());
-    try {
-      exception_.ReThrow();
-    } catch (const std::exception &e) {
-      VLOG(4) << e.what();
-    }
     return false;
   }
 }

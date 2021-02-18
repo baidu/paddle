@@ -18,42 +18,27 @@
 #include <typeindex>
 #include <typeinfo>
 
+#include "paddle/fluid/framework/async_variable.h"
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/framework/var_type_traits.h"
+
 namespace paddle {
 namespace framework {
 
 class Variable {
  public:
+  Variable() { holder_.reset(new AsyncVariable()); }
+
   template <typename T>
   const T& Get() const {
-    static_assert(
-        IsRegisteredVarType<T>(),
-        "Not registered type. Please register T inside var_type_traits.h");
-    PADDLE_ENFORCE_NOT_NULL(
-        holder_, platform::errors::NotFound("Variable is not initialized."));
-    PADDLE_ENFORCE_EQ(
-        holder_->Type(), VarTypeTrait<T>::kId,
-        platform::errors::InvalidArgument(
-            "The Variable type must be %s, but the type it holds is %s.",
-            ToTypeName(VarTypeTrait<T>::kId), ToTypeName(holder_->Type())));
-    return *static_cast<const T*>(holder_->Ptr());
+    return holder_->Get<T>();
   }
 
-  bool IsInitialized() const { return holder_ != nullptr; }
+  bool IsInitialized() const { return holder_->IsAvailable(); }
 
   template <typename T>
   T* GetMutable() {
-    if (!holder_) {
-      holder_.reset(new PlaceholderImpl<T>());
-    } else {
-      PADDLE_ENFORCE_EQ(
-          holder_->Type(), VarTypeTrait<T>::kId,
-          platform::errors::InvalidArgument(
-              "The Variable type must be %s, but the type it holds is %s.",
-              ToTypeName(VarTypeTrait<T>::kId), ToTypeName(holder_->Type())));
-    }
-    return static_cast<T*>(holder_->Ptr());
+    return holder_->GetMutable<T>();
   }
 
   template <typename T>
@@ -61,12 +46,19 @@ class Variable {
     return holder_ && holder_->Type() == VarTypeTrait<T>::kId;
   }
 
-  void Clear() { holder_.reset(); }
+  void Clear() { holder_->Clear(); }
 
   int Type() const {
     PADDLE_ENFORCE_NOT_NULL(
         holder_, platform::errors::NotFound("Variable is not initialized."));
     return holder_->Type();
+  }
+
+  void NotifyAvailable() {
+    if (holder_ == nullptr) {
+      VLOG(8) << "Warning: Calling NotifyAvailable on null AsyncVariable";
+    }
+    holder_->NotifyAvailable();
   }
 
  private:
@@ -79,38 +71,8 @@ class Variable {
   void BumpInplaceVersion();
 
  private:
-  struct Placeholder {
-    virtual ~Placeholder() PADDLE_MAY_THROW {}
-
-    inline int Type() const { return type_; }
-    inline const void* Ptr() const { return ptr_; }
-    inline void* Ptr() { return ptr_; }
-
-   protected:
-    inline void Init(void* p, int type) {
-      ptr_ = p;
-      type_ = type;
-    }
-
-    void* ptr_;
-    int type_;
-  };
-
-  // Placeholder hides type T, so it doesn't appear as a template
-  // parameter of Variable.
-  template <typename T>
-  struct PlaceholderImpl : public Placeholder {
-    static_assert(
-        IsRegisteredVarType<T>(),
-        "Not registered type. Please register T inside var_type_traits.h");
-    PlaceholderImpl() { this->Init(&obj_, VarTypeTrait<T>::kId); }
-
-   private:
-    T obj_;
-  };
-
-  // pointers to a PlaceholderImpl object indeed.
-  std::shared_ptr<Placeholder> holder_;
+  // pointers to an AsyncVariable object indeed.
+  std::shared_ptr<AsyncVariable> holder_;
 };
 
 inline framework::TensorInplaceVersion* Variable::InplaceVersionCounter() {

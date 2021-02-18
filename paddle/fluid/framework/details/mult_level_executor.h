@@ -1,4 +1,4 @@
-// Copyright (c) 2018 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,13 +29,13 @@ class Scope;
 namespace details {
 
 class OpHandleBase;
-class FastThreadedSSAGraphExecutor : public SSAGraphExecutor {
+class MultLevelExecutor : public SSAGraphExecutor {
  public:
-  FastThreadedSSAGraphExecutor(const ExecutionStrategy &strategy,
-                               const std::vector<Scope *> &local_scopes,
-                               const std::vector<Scope *> &local_exec_scopes,
-                               const std::vector<platform::Place> &places,
-                               ir::Graph *graph);
+  MultLevelExecutor(const ExecutionStrategy &strategy,
+                    const std::vector<Scope *> &local_scopes,
+                    const std::vector<Scope *> &local_exec_scopes,
+                    const std::vector<platform::Place> &places,
+                    ir::Graph *graph);
   FetchResultType Run(const std::vector<std::string> &fetch_tensors,
                       bool return_merged) override;
   const ir::Graph &Graph() const override;
@@ -54,7 +54,6 @@ class FastThreadedSSAGraphExecutor : public SSAGraphExecutor {
 
   platform::DeviceContextPool fetch_ctxs_;
   std::atomic<int> remaining_;
-  std::atomic<bool> error_happen_;
 
   std::future<
       std::unique_ptr<std::unordered_map<OpHandleBase *, std::atomic<int>>>>
@@ -65,13 +64,6 @@ class FastThreadedSSAGraphExecutor : public SSAGraphExecutor {
   ::ThreadPool prepare_pool_;
 
   std::vector<OpHandleBase *> traced_ops_;
-
-  void RunOpWithAsyncVariable(
-      std::unordered_map<OpHandleBase *, std::atomic<int>> *op_deps,
-      const std::vector<OpHandleBase *> &ready_op,
-      const std::shared_ptr<BlockingQueue<size_t>> &complete_q);
-
-  void UpdateAsyncVariableState(const std::vector<VarHandleBase *> &vars);
 
   bool RunOp(OpHandleBase *op,
              const std::shared_ptr<BlockingQueue<size_t>> &complete_q,

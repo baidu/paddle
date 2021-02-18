@@ -922,6 +922,7 @@ class RuntimeInferShapeContext : public InferShapeContext {
     PADDLE_ENFORCE_NOT_NULL(
         var, platform::errors::InvalidArgument("Input variable is nullptr."));
     if (var->IsType<LoDTensor>()) {
+      VLOG(4) << "Calling GetDim";
       return var->Get<LoDTensor>().dims();
     } else if (var->IsType<SelectedRows>()) {
       return var->Get<SelectedRows>().GetCompleteDims();
@@ -957,6 +958,7 @@ class RuntimeInferShapeContext : public InferShapeContext {
           "(%s).",
           ToTypeName(var->Type())));
     }
+    var->NotifyAvailable();
   }
 
   void SetDims(const std::vector<Variable*>& vars,
@@ -1102,6 +1104,7 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
   }
 
   // do data transformScope &transfer_scope;
+  VLOG(4) << "do data transformScope &transfer_scope";
   std::vector<std::string> transfered_inplace_vars;
   Scope* transfer_scope = nullptr;
   {
@@ -1113,32 +1116,35 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
     }
   }
   // exec scope is the scope that kernel actually executed on.
+  VLOG(4) << "exec scope is the scope that kernel actually executed on";
   const Scope& exec_scope =
       (transfer_scope == nullptr ? scope : *transfer_scope);
 
   if (!(kernel_type_->place_ == dev_ctx->GetPlace())) {
     dev_ctx = pool.Get(kernel_type_->place_);
   }
-
+  VLOG(4) << "Before InferShape";
   if (!all_kernels_must_compute_runtime_shape_) {
     platform::RecordEvent record_event("infer_shape",
                                        platform::EventRole::kInnerOp);
     RuntimeInferShapeContext infer_shape_ctx(*this, *runtime_ctx);
     this->InferShape(&infer_shape_ctx);
   }
-
+  VLOG(4) << "Before Clearing GetThreadLocalUsedVarNameSet";
   if (FLAGS_enable_unused_var_check) {
     GetThreadLocalUsedVarNameSet()->clear();
   }
 
   // TODO(panyx0718): ExecutionContext should only depend on RuntimeContext
   // not Scope. Imperative mode only pass inputs and get outputs.
+  VLOG(4) << "Before running kernel_func ";
   {
     platform::RecordEvent record_event("compute",
                                        platform::EventRole::kInnerOp);
     (*kernel_func_)(
         ExecutionContext(*this, exec_scope, *dev_ctx, *runtime_ctx));
   }
+  VLOG(4) << "After running kernel_func ";
 
   if (!transfered_inplace_vars.empty()) {
     // there is inplace variable has been transferred.
@@ -1274,6 +1280,7 @@ void OperatorWithKernel::ChooseKernel(const RuntimeContext& ctx,
 
   std::lock_guard<std::mutex> lock(cache_update_mutex_);
   if (kernel_type_.get() == nullptr || kernel_func_.get() == nullptr) {
+    VLOG(4) << "setting kernel type and func";
     kernel_type_.reset(new OpKernelType(expected_kernel_key));
     kernel_func_.reset(new OpKernelFunc(kernel_iter->second));
   }
@@ -1553,6 +1560,9 @@ void OperatorWithKernel::ParseInputDataType(
           }
         }
       }
+      VLOG(4) << "Var " << name
+              << " is initialized after get: " << var->IsInitialized();
+
       if (t != nullptr) {
         PADDLE_ENFORCE_EQ(
             t->IsInitialized(), true,
@@ -1582,6 +1592,9 @@ proto::VarType::Type OperatorWithKernel::IndicateDataType(
   proto::VarType::Type data_type = dafault_data_type;
   for (auto& input : ctx.InNameList()) {
     ParseInputDataType(ctx, input, &data_type);
+    if (data_type != dafault_data_type) {
+      break;
+    }
   }
   PADDLE_ENFORCE_NE(
       data_type, dafault_data_type,
@@ -1606,7 +1619,7 @@ proto::VarType::Type OperatorWithKernel::IndicateVarDataType(
   return data_type;
 }
 
-Tensor* OperatorWithKernel::GetTensorFormInputSafely(
+const Tensor* OperatorWithKernel::GetTensorFromInputSafely(
     const ExecutionContext& ctx, const std::string& name) const {
   // 1. get variable and check
   // NOTE: only supports signal input var now
@@ -1619,13 +1632,13 @@ Tensor* OperatorWithKernel::GetTensorFormInputSafely(
       platform::errors::NotFound(
           "The variable %s is not found when promote complex types.", name));
   // 2. get tensor and check
-  Tensor* t = nullptr;
+  const Tensor* t = nullptr;
   if (var->IsType<Tensor>()) {
-    t = var->GetMutable<Tensor>();
+    t = &var->Get<Tensor>();
   } else if (var->IsType<LoDTensor>()) {
-    t = var->GetMutable<LoDTensor>();
+    t = &var->Get<LoDTensor>();
   } else if (var->IsType<SelectedRows>()) {
-    t = var->GetMutable<SelectedRows>()->mutable_value();
+    t = &((&var->Get<SelectedRows>())->value());
   } else {
     PADDLE_THROW(platform::errors::Unimplemented(
         "Unsupported input variable type in complex type promotion."));
@@ -1653,8 +1666,8 @@ proto::VarType::Type OperatorWithKernel::IndicateOrPromoteVarDataTypes(
     const ExecutionContext& ctx, const std::string& name1,
     const std::string& name2) const {
   // 1. Get tensor
-  auto* tensor_a = GetTensorFormInputSafely(ctx, name1);
-  auto* tensor_b = GetTensorFormInputSafely(ctx, name2);
+  auto* tensor_a = GetTensorFromInputSafely(ctx, name1);
+  auto* tensor_b = GetTensorFromInputSafely(ctx, name2);
 
   // 2. Get two input types
   auto type_a = tensor_a->type();
