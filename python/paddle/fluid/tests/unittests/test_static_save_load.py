@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function
+import sys
 
 import unittest
 import paddle
@@ -1450,6 +1451,60 @@ class TestProgramStateOldSaveSingleModel(unittest.TestCase):
                         main_program.global_block().create_var(
                             name="fake_var_name", persistable=True)
                     ])
+
+
+class TestStaticSaveLoadPickle(unittest.TestCase):
+    def test_pickle_protocol(self):
+        # enable static mode
+        paddle.enable_static()
+
+        with new_program_scope():
+            # create network
+            x = paddle.static.data(
+                name="static_save_load_large_x",
+                shape=[None, 10],
+                dtype='float32')
+            z = paddle.static.nn.fc(x, 10, bias_attr=False)
+            place = paddle.CPUPlace()
+            exe = paddle.static.Executor(place)
+            exe.run(paddle.static.default_startup_program())
+            prog = paddle.static.default_main_program()
+
+            base_map = {}
+            for var in prog.list_vars():
+                if isinstance(var, framework.Parameter) or var.persistable:
+                    t = np.array(fluid.global_scope().find_var(var.name)
+                                 .get_tensor())
+                    # make sure all the paramerter or optimizer var have been update
+                    self.assertTrue(np.sum(np.abs(t)) != 0)
+                    base_map[var.name] = t
+
+            path = os.path.join("test_static_save_load_pickle",
+                                "pickle_protocol")
+            protocols = [2, ]
+            if sys.version_info.major >= 3 and sys.version_info.minor >= 4:
+                protocols += [3, 4]
+            for protocol in protocols:
+                paddle.fluid.save(prog, path, protocol)
+                # set var to zero
+                for var in prog.list_vars():
+                    if isinstance(var, framework.Parameter) or var.persistable:
+                        ten = fluid.global_scope().find_var(
+                            var.name).get_tensor()
+                        ten.set(np.zeros_like(np.array(ten)), place)
+
+                        new_t = np.array(fluid.global_scope().find_var(var.name)
+                                         .get_tensor())
+                        self.assertTrue(np.sum(np.abs(new_t)) == 0)
+
+                paddle.fluid.load(prog, path)
+
+                for var in prog.list_vars():
+                    if isinstance(var, framework.Parameter) or var.persistable:
+                        new_t = np.array(fluid.global_scope().find_var(var.name)
+                                         .get_tensor())
+                        base_t = base_map[var.name]
+                        self.assertTrue(np.array_equal(new_t, base_t))
 
 
 if __name__ == '__main__':

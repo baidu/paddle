@@ -20,6 +20,7 @@ import pickle
 import six
 import warnings
 import sys
+import numpy as np
 
 import paddle
 
@@ -198,7 +199,7 @@ def _parse_load_config(configs):
     return inner_config
 
 
-def save(obj, path):
+def save(obj, path, protocol=2):
     '''
     Save an object to the specified path.
     
@@ -240,10 +241,10 @@ def save(obj, path):
     '''
 
     # 1. input check
-    if not isinstance(obj, dict):
+    if not isinstance(obj, dict) and not isinstance(obj, core.VarBase):
         raise NotImplementedError(
-            "Now only supports save state_dict of Layer or Optimizer, "
-            "expect dict, but received %s." % type(obj))
+            "Now only supports save state_dict of Layer or Optimizer or tensor, "
+            "expected dict or tensor, but received %s." % type(obj))
 
     if len(obj) == 0:
         warnings.warn("The input state dict is empty, no need to save.")
@@ -254,26 +255,38 @@ def save(obj, path):
                          "[dirname\\filename in Windows system], but received "
                          "filename is empty string.")
 
+    if not isinstance(protocol, int):
+        raise ValueError("The 'protocol' MUST be `int`,but received {}".format(
+            type(protocol)))
+
+    if protocol < 2 or protocol > 4:
+        raise ValueError("Expected 1<'protocol'<5 ,but received protocol={}".
+                         format(protocol))
+
     # 2. save object
     dirname = os.path.dirname(path)
     if dirname and not os.path.exists(dirname):
         os.makedirs(dirname)
 
     # TODO(chenweihang): supports save other object
-    saved_obj = _build_saved_state_dict(obj)
-    saved_obj = _unpack_saved_dict(saved_obj)
+    if isinstance(obj, dict):
+        saved_obj = _build_saved_state_dict(obj)
+    elif isinstance(obj, core.VarBase):
+        saved_obj = obj.numpy()
+
+    saved_obj = _unpack_saved_dict(saved_obj, protocol)
 
     # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3.5/6'
     if sys.platform == 'darwin' and sys.version_info.major == 3 and (
             sys.version_info.minor == 5 or sys.version_info.minor == 6):
-        pickle_bytes = pickle.dumps(saved_obj, protocol=2)
+        pickle_bytes = pickle.dumps(saved_obj, protocol=protocol)
         with open(path, 'wb') as f:
             max_bytes = 2**30
             for i in range(0, len(pickle_bytes), max_bytes):
                 f.write(pickle_bytes[i:i + max_bytes])
     else:
         with open(path, 'wb') as f:
-            pickle.dump(saved_obj, f, protocol=2)
+            pickle.dump(saved_obj, f, protocol=protocol)
 
 
 def load(path, **configs):

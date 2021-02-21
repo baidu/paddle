@@ -1711,27 +1711,32 @@ def _load_persistable_nodes(executor, dirname, graph):
     load_vars(executor=executor, dirname=dirname, vars=var_list)
 
 
-def _unpack_saved_dict(saved_obj):
+def _unpack_saved_dict(saved_obj, protocol):
     temp_saved_obj = {}
     unpack_infor = {}
-    for key, value in saved_obj.items():
-        if isinstance(value, np.ndarray):
-            MAX_NUMBER_OF_ELEMENT = int((2**30 - 1) / value.dtype.itemsize)
-            num_element = np.prod(value.shape)
-            if num_element > MAX_NUMBER_OF_ELEMENT:
-                unpack_infor[key] = {}
-                unpack_infor[key]["OriginShape"] = value.shape
-                unpack_infor[key]["slices"] = []
-                value = value.flatten()
-                for i in range(
-                        int(
-                            math.ceil(num_element * 1.0 /
-                                      MAX_NUMBER_OF_ELEMENT))):
-                    part_name = key + "@@." + str(i)
-                    unpack_infor[key]["slices"].append(part_name)
-                    temp_saved_obj[part_name] = value[
-                        i * MAX_NUMBER_OF_ELEMENT:MAX_NUMBER_OF_ELEMENT * (i + 1
-                                                                           )]
+    if isinstance(saved_obj, np.ndarray):
+        saved_obj = {'UnpackFakeVarBase@@': saved_obj}
+    if 1 < protocol < 4:
+        if isinstance(saved_obj, dict):
+            for key, value in saved_obj.items():
+                if isinstance(value, np.ndarray):
+                    MAX_NUMBER_OF_ELEMENT = int(
+                        (2**30 - 1) / value.dtype.itemsize)
+                    num_element = np.prod(value.shape)
+                    if num_element > MAX_NUMBER_OF_ELEMENT:
+                        unpack_infor[key] = {}
+                        unpack_infor[key]["OriginShape"] = value.shape
+                        unpack_infor[key]["slices"] = []
+                        value = value.flatten()
+                        for i in range(
+                                int(
+                                    math.ceil(num_element * 1.0 /
+                                              MAX_NUMBER_OF_ELEMENT))):
+                            part_name = key + "@@." + str(i)
+                            unpack_infor[key]["slices"].append(part_name)
+                            temp_saved_obj[part_name] = value[
+                                i * MAX_NUMBER_OF_ELEMENT:MAX_NUMBER_OF_ELEMENT
+                                * (i + 1)]
 
     if unpack_infor:
         for key, value in unpack_infor.items():
@@ -1744,21 +1749,26 @@ def _unpack_saved_dict(saved_obj):
 
 
 def _pack_loaded_dict(load_obj):
-    unpack_info = 'UnpackBigParamInfor@@'
-    if unpack_info in load_obj:
-        removes = []
-        for key, value in load_obj[unpack_info].items():
-            slices = [load_obj[part] for part in value["slices"]]
-            load_obj[key] = np.concatenate(slices).reshape(value["OriginShape"])
-            removes += value["slices"]
-        for key in removes:
-            load_obj.pop(key)
-        load_obj.pop(unpack_info)
+    if isinstance(load_obj, dict):
+        unpack_info = 'UnpackBigParamInfor@@'
+        if unpack_info in load_obj:
+            removes = []
+            for key, value in load_obj[unpack_info].items():
+                slices = [load_obj[part] for part in value["slices"]]
+                load_obj[key] = np.concatenate(slices).reshape(value[
+                    "OriginShape"])
+                removes += value["slices"]
+            for key in removes:
+                load_obj.pop(key)
+            load_obj.pop(unpack_info)
+        if 'UnpackFakeVarBase@@' in load_obj:
+            return load_obj['UnpackFakeVarBase@@']
+
     return load_obj
 
 
 @static_only
-def save(program, model_path):
+def save(program, model_path, protocol=2):
     """
     :api_attr: Static Graph
 
@@ -1799,6 +1809,14 @@ def save(program, model_path):
     assert base_name != "", \
         "The input model_path MUST be format of dirname/filename [dirname\\filename in Windows system], but received model_path is empty string."
 
+    if not isinstance(protocol, int):
+        raise ValueError("The 'protocol' should be `int`,but received {}".
+                         format(type(protocol)))
+
+    if protocol < 2 or protocol > 4:
+        raise ValueError("Expected 1<'protocol'<5 ,but received protocol={}".
+                         format(protocol))
+
     dir_name = os.path.dirname(model_path)
     if dir_name and not os.path.exists(dir_name):
         os.makedirs(dir_name)
@@ -1809,26 +1827,27 @@ def save(program, model_path):
 
     parameter_list = list(filter(is_parameter, program.list_vars()))
     param_dict = {p.name: get_tensor(p) for p in parameter_list}
-    param_dict = _unpack_saved_dict(param_dict)
+
+    param_dict = _unpack_saved_dict(param_dict, protocol)
 
     # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3.5/6'
     if sys.platform == 'darwin' and sys.version_info.major == 3 and (
             sys.version_info.minor == 5 or sys.version_info.minor == 6):
-        pickle_bytes = pickle.dumps(param_dict, protocol=2)
+        pickle_bytes = pickle.dumps(param_dict, protocol=protocol)
         with open(model_path + ".pdparams", 'wb') as f:
             max_bytes = 2**30
             for i in range(0, len(pickle_bytes), max_bytes):
                 f.write(pickle_bytes[i:i + max_bytes])
     else:
         with open(model_path + ".pdparams", 'wb') as f:
-            pickle.dump(param_dict, f, protocol=2)
+            pickle.dump(param_dict, f, protocol=protocol)
 
     optimizer_var_list = list(
         filter(is_belong_to_optimizer, program.list_vars()))
 
     opt_dict = {p.name: get_tensor(p) for p in optimizer_var_list}
     with open(model_path + ".pdopt", 'wb') as f:
-        pickle.dump(opt_dict, f, protocol=2)
+        pickle.dump(opt_dict, f, protocol=protocol)
 
     main_program = program.clone()
     program.desc.flush()
