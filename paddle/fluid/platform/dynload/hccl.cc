@@ -12,34 +12,27 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#pragma once
-#include <string>
+#include "paddle/fluid/platform/dynload/hccl.h"
 
 namespace paddle {
 namespace platform {
 namespace dynload {
 
-#ifndef _WIN32
-#define DECLARE_TYPE(__name, ...) decltype(__name(__VA_ARGS__))
-#else
-#define DECLARE_TYPE(__name, ...) decltype(auto)
+std::once_flag hccl_dso_flag;
+void *hccl_dso_handle;
+
+#define DEFINE_WRAP(__name) DynLoad__##__name __name
+
+HCCL_RAND_ROUTINE_EACH(DEFINE_WRAP);
+
+#if HCCL_VERSION_CODE >= 2212
+HCCL_RAND_ROUTINE_EACH_AFTER_2212(DEFINE_WRAP)
 #endif
 
-void* GetCublasDsoHandle();
-void* GetCUDNNDsoHandle();
-void* GetCUPTIDsoHandle();
-void* GetCurandDsoHandle();
-void* GetCusolverDsoHandle();
-void* GetNVRTCDsoHandle();
-void* GetCUDADsoHandle();
-void* GetWarpCTCDsoHandle();
-void* GetNCCLDsoHandle();
-void* GetHCCLDsoHandle();
-void* GetTensorRtDsoHandle();
-void* GetMKLMLDsoHandle();
-void* GetOpDsoHandle(const std::string& dso_name);
+#if HCCL_VERSION_CODE >= 2703
+HCCL_RAND_ROUTINE_EACH_AFTER_2703(DEFINE_WRAP)
+#endif
 
-void SetPaddleLibPath(const std::string&);
 }  // namespace dynload
 }  // namespace platform
 }  // namespace paddle

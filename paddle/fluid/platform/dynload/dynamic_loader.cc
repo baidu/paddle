@@ -36,6 +36,11 @@ DEFINE_string(nccl_dir, "",
               "For instance, /usr/local/cuda/lib64. If default, "
               "dlopen will search cuda from LD_LIBRARY_PATH");
 
+DEFINE_string(hccl_dir, "",
+              "Specify path for loading hccl library, such as libhccl.so. "
+              "For instance, /usr/local/Ascend/ascend-toolkit/latest/fwkacllib/lib64/. If default, "
+              "dlopen will search hccl from LD_LIBRARY_PATH");
+
 DEFINE_string(cupti_dir, "", "Specify path for loading cupti.so.");
 
 DEFINE_string(
@@ -383,6 +388,26 @@ void* GetNCCLDsoHandle() {
                                     warning_msg);
 #endif
 }
+void* GetHCCLDsoHandle() {
+  std::string warning_msg(
+      "You may need to install 'hccl2' from Huawei official website: "
+      "before install PaddlePaddle.");
+#if defined(__APPLE__) || defined(__OSX__)
+  return GetDsoHandleFromSearchPath(FLAGS_nccl_dir, "libnccl.dylib", true, {},
+                                    warning_msg);
+#elif defined(PADDLE_WITH_HIP) && defined(PADDLE_WITH_RCCL)
+  return GetDsoHandleFromSearchPath(FLAGS_rccl_dir, "librccl.so", true);
+
+#elif defined(PADDLE_WITH_ASCEND_CL)
+  return GetDsoHandleFromSearchPath(FLAGS_hccl_dir, "libhccl.so", true, {},
+                                    warning_msg);
+#else
+  return GetDsoHandleFromSearchPath(FLAGS_nccl_dir, "libnccl.so", true, {},
+                                    warning_msg);
+#endif
+}
+
+
 
 void* GetTensorRtDsoHandle() {
 #if defined(__APPLE__) || defined(__OSX__)

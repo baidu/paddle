@@ -30,6 +30,11 @@ limitations under the License. */
 #include "paddle/fluid/framework/fleet/gloo_wrapper.h"
 #endif
 
+#if defined(PADDLE_WITH_ASCEND_CL)
+#include "paddle/fluid/platform/collective_helper.h"
+#include "paddle/fluid/platform/hccl_helper.h"
+#endif
+
 namespace paddle {
 namespace operators {
 
@@ -106,6 +111,72 @@ class CAllReduceOpCPUKernel : public framework::OpKernel<T> {
 };
 
 template <ReduceType red_type, typename T>
+class CAllReduceOpASCENDKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+#if defined(PADDLE_WITH_ASCEND_CL)
+    auto in = ctx.Input<framework::LoDTensor>("X");
+    auto out = ctx.Output<framework::LoDTensor>("Out");
+
+    auto place = ctx.GetPlace();
+    HcclDataType dtype = platform::ToHCCLDataType(in->type());
+
+    int64_t numel = in->numel();
+    void* sendbuff = reinterpret_cast<void*>(const_cast<T*>(in->data<T>()));
+
+    // void* sendbuff = in->data<void>();
+
+    out->Resize(in->dims());
+    void* recvbuff = reinterpret_cast<void*>(const_cast<T*>(out->data<T>()));
+    // void* recvbuff = out->mutable_data<T>(place);
+
+
+    //int rid = ctx.Attr<int>("ring_id");
+    auto comm = platform::HCCLCommContext::Instance().Get();
+
+    aclrtStream stream = nullptr;
+    if (ctx.Attr<bool>("use_calc_stream")) {
+      auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+      stream = static_cast<platform::NPUDeviceContext*>(dev_ctx)->stream();
+    } else {
+      stream = comm->stream();
+    }
+
+    HcclReduceOp hccl_red_type = HCCL_REDUCE_SUM;
+    switch (red_type) {
+      case kRedSum:
+        hccl_red_type = HCCL_REDUCE_SUM;
+        break;
+
+      case kRedMax:
+        hccl_red_type = HCCL_REDUCE_MAX;
+        break;
+
+      case kRedMin:
+        hccl_red_type = HCCL_REDUCE_MIN;
+        break;
+
+      case kRedProd:
+        hccl_red_type = HCCL_REDUCE_PROD;
+        break;
+
+      default:
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Invalid reduce type: %d", red_type));
+    }
+    platform::dynload::HcclAllReduce(
+        sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm(), stream);
+
+    // PADDLE_ENFORCE_CUDA_SUCCESS(platform::dynload::HcclAllReduce(
+    //     sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm(), stream));
+#else
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "PaddlePaddle should compile with GPU."));
+#endif
+  }
+};
+
+template <ReduceType red_type, typename T>
 class CAllReduceOpCUDAKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
@@ -114,7 +185,7 @@ class CAllReduceOpCUDAKernel : public framework::OpKernel<T> {
     auto out = ctx.Output<framework::Tensor>("Out");
 
     auto place = ctx.GetPlace();
-    ncclDataType_t dtype = platform::ToNCCLDataType(in->type());
+    ncclDataType_t dtype = platform::ToHCCLDataType(in->type());
     int64_t numel = in->numel();
     const void* sendbuff = in->data<void>();
     out->Resize(in->dims());
