@@ -24,6 +24,7 @@ class ConstantTest(unittest.TestCase):
         self.assertEqual(framework.TEMP_VAR_NAME, "@TEMP@")
         self.assertEqual(framework.GRAD_VAR_SUFFIX, "@GRAD")
         self.assertEqual(framework.ZERO_VAR_SUFFIX, "@ZERO")
+        self.assertEqual(1, 2)
 
 
 if __name__ == '__main__':

@@ -430,7 +430,7 @@ goto:eof
 echo    ========================================
 echo    Running CPU unit tests in parallel way ...
 echo    ========================================
-ctest.exe -E "(%disable_ut_quickly%)" -LE %nightly_label% --output-on-failure -C Release -j 8 --repeat until-pass:4 after-timeout:4
+ctest.exe -E "(%disable_ut_quickly%)" -LE %nightly_label% --output-on-failure -C Release -j 8 --repeat until-pass:3 after-timeout:3
 
 goto:eof
 

@@ -615,18 +615,18 @@ EOF
         retry_time=3
         exec_times=0
         exec_time_array=('first' 'second' 'third')
-        exec_retry_threshold=20
+        exec_retry_threshold=10
         if [ -n "$failed_test_lists" ];then
             mactest_error=1
             read need_retry_ut_str <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(" | sed 's/(//' | sed 's/- //' )
             need_retry_ut_arr=(${need_retry_ut_str})
             need_retry_ut_count=${#need_retry_ut_arr[@]}
+            read retry_unittests <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(" | sed 's/(//' | sed 's/- //' )
             if [ $need_retry_ut_count -lt $exec_retry_threshold ];then
-                while ( [ $exec_times -lt $retry_time ] && [ -n "${failed_test_lists}" ] )
+                while ( [ $exec_times -lt $retry_time ] )
                     do
                         retry_unittests_record="$retry_unittests_record$failed_test_lists"
                         failed_test_lists_ult=`echo "${failed_test_lists}"`
-                        read retry_unittests <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(" | sed 's/(//' | sed 's/- //' )
                         echo "========================================="
                         echo "This is the ${exec_time_array[$exec_times]} time to re-run"
                         echo "========================================="
@@ -651,7 +651,7 @@ EOF
                     done
             else
                 echo "========================================="
-                echo "There are more than 20 failed unit tests, so no unit test retry!!!"
+                echo "There are more than 10 failed unit tests, so no unit test retry!!!"
                 echo "========================================="
             fi
 
@@ -667,19 +667,20 @@ EOF
         export https_proxy=$my_proxy
         set -x
         if [ "$mactest_error" != 0 ];then
-            if [[ "$failed_test_lists" == "" ]]; then
+            retry_unittests_record_judge=$(echo ${retry_unittests_record} | tr ' ' '\n' | sort | uniq -c | awk '{if ($1 >=3) {print $2}}')
+            if [ -z "${retry_unittests_record_judge}" ];then
                 echo "========================================"
                 echo "There are failed tests, which have been successful after re-run:"
                 echo "========================================"
                 echo "The following tests have been re-ran:"
                 echo "${retry_unittests_record}"
             else
-                failed_test_lists_ult=`echo "${failed_test_lists}"`
                 echo "========================================"
+                echo "There are failed tests, which have been executed re-run, but success rate is less than 50%:"
                 echo "Summary Failed Tests... "
                 echo "========================================"
                 echo "The following tests FAILED: "
-                echo "${failed_test_lists_ult}"
+                echo "${retry_unittests_record_judge}"
                 exit 8;
             fi
         fi
@@ -1204,18 +1205,17 @@ set +x
         retry_unittests_record=''
         retry_time=3
         exec_time_array=('first' 'second' 'third')
-        exec_retry_threshold=20
+        exec_retry_threshold=10
         if [ -n "$failed_test_lists" ];then
             read need_retry_ut_str <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(.+\)" | sed 's/(.\+)//' | sed 's/- //' )
             need_retry_ut_arr=(${need_retry_ut_str})
             need_retry_ut_count=${#need_retry_ut_arr[@]}
+            read retry_unittests <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(.+\)" | sed 's/(.\+)//' | sed 's/- //' )
             if [ $need_retry_ut_count -lt $exec_retry_threshold ];then
-                while ( [ $exec_times -lt $retry_time ] && [ -n "${failed_test_lists}" ] )
+                while ( [ $exec_times -lt $retry_time ] )
                     do
-                        
                         retry_unittests_record="$retry_unittests_record$failed_test_lists"
                         failed_test_lists_ult=`echo "${failed_test_lists}" |grep -Po '[^ ].*$'`
-                        read retry_unittests <<< $(echo "$failed_test_lists" | grep -oEi "\-.+\(.+\)" | sed 's/(.\+)//' | sed 's/- //' )
                         echo "========================================="
                         echo "This is the ${exec_time_array[$exec_times]} time to re-run"
                         echo "========================================="
@@ -1270,29 +1270,29 @@ set +x
                         one_card_retry=''
                         multiple_card_retry=''
                         exclusive_retry=''
-                        retry_unittests=''
                     done
             else 
                 echo "========================================="
-                echo "There are more than 20 failed unit tests, so no unit test retry!!!"
+                echo "There are more than 10 failed unit tests, so no unit test retry!!!"
                 echo "========================================="
             fi
         fi
 
         if [[ "$EXIT_CODE" != "0" ]]; then
-            if [[ "$failed_test_lists" == "" ]]; then
+            retry_unittests_record_judge=$(echo ${retry_unittests_record} | tr ' ' '\n'| sort | uniq -c | awk '{if ($1 >=3) {print $2}}')
+            if [ -z "${retry_unittests_record_judge}" ];then
                 echo "========================================"
                 echo "There are failed tests, which have been successful after re-run:"
                 echo "========================================"
                 echo "The following tests have been re-ran:"
                 echo "${retry_unittests_record}"
             else
-                failed_test_lists_ult=`echo "${failed_test_lists}" |grep -Po '[^ ].*$'`
                 echo "========================================"
+                echo "There are failed tests, which have been executed re-run,but success rate is less than 50%:"
                 echo "Summary Failed Tests... "
                 echo "========================================"
                 echo "The following tests FAILED: "
-                echo "${failed_test_lists_ult}"
+                echo "${retry_unittests_record_judge}"
                 exit 8;
             fi
         fi
