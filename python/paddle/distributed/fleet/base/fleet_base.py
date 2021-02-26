@@ -592,8 +592,8 @@ class Fleet(object):
         self._runtime_handle._save_persistables(executor, dirname, main_program,
                                                 mode)
 
-    def shrink(self, threshold):
-        self._runtime_handle._shrink(threshold)
+    def shrink(self, sparse_table_name=None, threshold=7):
+        self._runtime_handle._shrink(sparse_table_name, threshold)
 
     def distributed_optimizer(self, optimizer, strategy=None):
         """
