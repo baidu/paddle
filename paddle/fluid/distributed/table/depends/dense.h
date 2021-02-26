@@ -23,9 +23,17 @@
 #include "gflags/gflags.h"
 
 #include "paddle/fluid/distributed/common/utils.h"
+#include "paddle/fluid/framework/executor.h"
+#include "paddle/fluid/framework/lod_tensor.h"
+#include "paddle/fluid/framework/program_desc.h"
+#include "paddle/fluid/framework/scope.h"
+
+DECLARE_double(eager_delete_tensor_gb);
 
 namespace paddle {
 namespace distributed {
+
+using LoDTensor = framework::LoDTensor;
 
 // dense optimzier
 // TODO(tangwei12) integrate with sparse optimzer later.
@@ -183,6 +191,90 @@ class DAdam : public DenseOptimizer {
   float beta1;
   float beta2;
   float epsilon;
+};
+
+// general optimizer for dense tensor
+class DGeneralOptimizer : public DenseOptimizer {
+ public:
+  explicit DGeneralOptimizer(
+      const std::vector<framework::ProgramDesc>* sub_program,
+      const TableParameter& program_config,
+      std::vector<std::vector<float>>* values) {
+    scope_ = new framework::Scope();
+    place_ = platform::CPUPlace();
+    executor_ = new framework::Executor(place_);
+    common_ = program_config.common();
+
+    auto& names = common_.params();
+    for (int x = 0; x < static_cast<int>(names.size()); ++x) {
+      if (names[x] == "LearningRate") {
+        learning_rate = (*values)[x].data();
+      }
+    }
+    values_ = values;
+
+    FLAGS_eager_delete_tensor_gb = -1;
+    auto& tensor_config = program_config.tensor();
+    if (tensor_config.has_main_program_id()) {
+      auto main_program_id_ = tensor_config.main_program_id();
+      // Run main porgram, if program is used for learning decay
+      auto main_program_desc = sub_program->at(main_program_id_);
+      auto main_ctx = executor_->Prepare(main_program_desc, 0);
+      exec_context_ = std::move(main_ctx);
+    }
+  }
+
+  void update(const float* update_values, size_t num, int begin,
+              int end) override {
+    auto update_numel = end - begin;
+    if (update_numel == 0) return;
+
+    FLAGS_eager_delete_tensor_gb = -1;
+    std::unique_ptr<framework::Scope> local_scope = scope_->NewTmpScope();
+
+    auto blas = GetBlas<float>();
+    auto* grad_tensor = local_scope->Var("Grad")->GetMutable<LoDTensor>();
+    grad_tensor->Resize(framework::make_ddim({1, update_numel}));
+    auto* grad_data = grad_tensor->mutable_data<float>(place_);
+    blas.VCOPY(update_numel, update_values + begin, grad_data);
+
+    int size = static_cast<int>(common_.params().size());
+    for (int x = 0; x < size; ++x) {
+      auto& varname = common_.params()[x];
+      auto* var_tensor = local_scope->Var(varname)->GetMutable<LoDTensor>();
+      if (varname == "LearningRate") {
+        var_tensor->Resize(framework::make_ddim({1}));
+        float* lr_data = var_tensor->mutable_data<float>(place_);
+        lr_data[0] = *(global_learning_rate_) * (*learning_rate);
+      } else {
+        var_tensor->Resize(framework::make_ddim({1, update_numel}));
+        auto* var_data = var_tensor->mutable_data<float>(place_);
+        float* param_data = values_->at(x).data();
+        blas.VCOPY(update_numel, param_data, var_data);
+      }
+    }
+    executor_->RunPreparedContext(exec_context_.get(), local_scope.get(), false,
+                                  false);
+
+    for (int x = 0; x < size; ++x) {
+      auto& varname = common_.params()[x];
+      if (varname == "LearningRate") {
+        continue;
+      } else {
+        const float* var_data =
+            local_scope->FindVar(varname)->Get<LoDTensor>().data<float>();
+        blas.VCOPY(update_numel, var_data, values_->at(x).data());
+      }
+    }
+  }
+
+  float* learning_rate;
+  std::vector<std::vector<float>>* values_;
+  framework::Executor* executor_;
+  framework::Scope* scope_;
+  platform::Place place_;
+  std::shared_ptr<framework::ExecutorPrepareContext> exec_context_ = nullptr;
+  CommonAccessorParameter common_;
 };
 
 }  // namespace distributed

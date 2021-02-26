@@ -21,6 +21,7 @@ import os
 import warnings
 import logging
 import six
+import paddle
 import paddle.fluid as fluid
 from paddle.fluid import core
 from paddle.fluid.core import CommContext
@@ -163,6 +164,7 @@ class CompileTimeStrategy(object):
         self._build_var_distributed()
 
         self.tensor_table_dict = {}
+        self.optimize_info = None
 
         # for heter-ps save variables
         self.origin_merged_variables_pairs = list(self.merged_variables_pairs)
@@ -1149,6 +1151,65 @@ def _get_optimize_ops(_program):
                 continue
             opt_ops.append(op)
     return opt_ops
+
+
+def _get_optimize_program(main_program, compiled_config, inner_opt):
+    _main = fluid.framework.Program()
+    _startup = fluid.framework.Program()
+
+    global_block = main_program.global_block()
+    params = compiled_config.origin_merged_dense_pairs + compiled_config.origin_merged_sparse_pairs
+    params = [(global_block.var(param_grad[0].merged_var.name),
+               global_block.var(param_grad[1].merged_var.name))
+              for param_grad in params]
+
+    with paddle.static.program_guard(_main, _startup):
+        param = paddle.static.data(
+            name='Param', shape=[None, None], dtype='float32')
+        grad = paddle.static.data(
+            name='Grad', shape=[None, None], dtype='float32')
+        param.optimize_attr = {"learning_rate": 1.0}
+        param_and_grad = (param, grad)
+
+        keys = inner_opt._accumulators.keys()
+        for key in keys:
+            var = inner_opt._get_accumulator(key, params[0][0])
+            var = _main.global_block().create_var(
+                name="Param_" + key,
+                type=var.type,
+                dtype=var.dtype,
+                shape=param.shape)
+            inner_opt._accumulators[key][param.name] = var
+
+        with _main._optimized_guard(param_and_grad), paddle.static.name_scope(
+                "optimizer"):
+            inner_opt._create_global_learning_rate()
+            global_lr = inner_opt._global_learning_rate()
+            optimize_op = inner_opt._append_optimize_op(_main.global_block(),
+                                                        param_and_grad)
+
+            if optimize_op.input("Param")[0] == "Param":
+                for input_name in optimize_op.input_names:
+                    origin_varname = optimize_op.input(input_name)[0]
+                    _main.global_block()._rename_var(origin_varname, input_name)
+                    if _startup.global_block().has_var(origin_varname):
+                        _startup.global_block()._rename_var(origin_varname,
+                                                            input_name)
+
+    return _main, _startup
+
+
+def _add_optimize_table_pass(main_program, compiled_config, inner_opt):
+    _main, _startup = _get_optimize_program(main_program, compiled_config,
+                                            inner_opt)
+
+    compiled_config.optimize_info = {
+        "feed_var_name": "feed_var_name",
+        "fetch_var_name": "fetch_var_name",
+        "main_program": _main,
+        "startup_program": _startup,
+        "class": "OptimizeTable"
+    }
 
 
 def _add_lr_decay_table_pass(main_program, compiled_config, lr_decay_steps):

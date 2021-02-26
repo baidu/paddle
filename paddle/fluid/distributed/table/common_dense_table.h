@@ -63,6 +63,13 @@ class CommonDenseTable : public DenseTable {
   virtual int32_t shrink(const std::string& param) override { return 0; }
   virtual void clear() override { return; }
 
+  virtual int32_t set_program_env(
+      framework::Scope* scope, platform::Place place,
+      const std::vector<framework::ProgramDesc>* sub_program) override {
+    sub_program_ = sub_program;
+    return 0;
+  }
+
  protected:
   int32_t _push_dense(const float* values, size_t num);
 
@@ -72,11 +79,13 @@ class CommonDenseTable : public DenseTable {
   std::vector<std::shared_ptr<::ThreadPool>> _shards_task_pool;
   int param_dim_ = 0;
   int param_idx_ = 0;
-  std::shared_ptr<DenseOptimizer> optimizer_;
+  std::shared_ptr<DenseOptimizer> optimizer_ = nullptr;
   std::vector<std::vector<float>> values_;
   ReservoirValue<float> pull_reservoir_;
   std::unordered_map<std::string, Initializer*> initializers_;
   std::unordered_map<std::string, int> names_index_;
+
+  const std::vector<framework::ProgramDesc>* sub_program_;
 };
 
 }  // namespace distributed

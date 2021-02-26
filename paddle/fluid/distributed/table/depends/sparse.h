@@ -25,10 +25,17 @@
 
 #include "paddle/fluid/distributed/common/utils.h"
 #include "paddle/fluid/distributed/table/depends/large_scale_kv.h"
+#include "paddle/fluid/framework/executor.h"
+#include "paddle/fluid/framework/lod_tensor.h"
+#include "paddle/fluid/framework/program_desc.h"
+#include "paddle/fluid/framework/scope.h"
+
+DECLARE_double(eager_delete_tensor_gb);
 
 namespace paddle {
 namespace distributed {
 
+using LoDTensor = framework::LoDTensor;
 class SparseOptimizer {
  public:
   explicit SparseOptimizer(
@@ -216,6 +223,102 @@ class SAdam : public SparseOptimizer {
   float beta1;
   float beta2;
   float epsilon;
+};
+
+class SGeneralOptimizer : public SparseOptimizer {
+ public:
+  explicit SGeneralOptimizer(
+      const std::vector<framework::ProgramDesc>* sub_program,
+      const TableParameter& program_config,
+      const std::vector<std::string>& value_names,
+      const std::vector<int>& value_dims, const std::vector<int>& value_offsets,
+      const std::unordered_map<std::string, int>& value_idx)
+      : SparseOptimizer(value_names, value_dims, value_offsets, value_idx) {
+    scope_ = new framework::Scope();
+    place_ = platform::CPUPlace();
+    executor_ = new framework::Executor(place_);
+    common_ = program_config.common();
+
+    auto idx = value_idx.at("Param");
+    param_offset = value_offsets.at(idx);
+    update_numel = value_dims.at(idx);
+
+    auto& tensor_config = program_config.tensor();
+
+    if (tensor_config.has_main_program_id()) {
+      auto main_program_id_ = tensor_config.main_program_id();
+      // Run main porgram, if program is used for learning decay
+      auto main_program_desc = sub_program->at(main_program_id_);
+      auto main_ctx = executor_->Prepare(main_program_desc, 0);
+      exec_context_ = std::move(main_ctx);
+    }
+  }
+
+  void update(const uint64_t* keys, const float* update_values, size_t num,
+              const std::vector<uint64_t>& offsets,
+              ValueBlock* block) override {
+    FLAGS_eager_delete_tensor_gb = -1;
+    std::unique_ptr<framework::Scope> local_scope = scope_->NewTmpScope();
+
+    auto update_num = offsets.size();
+    if (update_num == 0) return;
+
+    auto blas = GetBlas<float>();
+    // Grad
+    auto* grad_tensor = local_scope->Var("Grad")->GetMutable<LoDTensor>();
+    grad_tensor->Resize(
+        framework::make_ddim({static_cast<int64_t>(update_num),
+                              static_cast<int64_t>(update_numel)}));
+    auto* grad_data = grad_tensor->mutable_data<float>(place_);
+    blas.VCOPY(update_num * update_numel, update_values, grad_data);
+
+    int size = static_cast<int>(common_.params().size());
+    for (int i = 0; i < size; i++) {
+      auto& varname = value_names_[i];
+      auto* var = local_scope->Var(varname)->GetMutable<LoDTensor>();
+      if (varname == "LearningRate") {
+        var->Resize(framework::make_ddim({1}));
+        float* lr_data = var->mutable_data<float>(place_);
+        auto* values = block->Get(keys[offsets[0]]);
+        lr_data[0] = *(global_learning_rate_) * (values + value_offsets_[i])[0];
+      } else {
+        var->Resize(
+            framework::make_ddim({static_cast<int64_t>(update_num),
+                                  static_cast<int64_t>(value_dims_[i])}));
+        auto* var_data = var->mutable_data<float>(place_);
+        for (size_t x = 0; x < update_num; x++) {
+          auto id = keys[offsets[x]];
+          auto* values = block->Get(id);
+          blas.VCOPY(value_dims_[i], values + value_offsets_[i],
+                     var_data + x * value_dims_[i]);
+        }
+      }
+    }
+
+    executor_->RunPreparedContext(exec_context_.get(), local_scope.get(), false,
+                                  false);
+
+    for (int i = 0; i < size; i++) {
+      auto& varname = value_names_[i];
+      if (varname == "LearningRate") {
+        continue;
+      }
+      const float* var_data =
+          local_scope->FindVar(varname)->Get<LoDTensor>().data<float>();
+      for (size_t x = 0; x < update_num; x++) {
+        auto id = keys[offsets[x]];
+        auto* values = block->Get(id);
+        blas.VCOPY(value_dims_[i], var_data + x * value_dims_[i],
+                   values + value_offsets_[i]);
+      }
+    }
+  }
+
+  framework::Executor* executor_;
+  framework::Scope* scope_;
+  platform::Place place_;
+  std::shared_ptr<framework::ExecutorPrepareContext> exec_context_ = nullptr;
+  CommonAccessorParameter common_;
 };
 
 }  // namespace distributed

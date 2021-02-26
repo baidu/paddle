@@ -19,12 +19,19 @@ import re
 import os
 import platform
 from ..base.private_helper_function import wait_server_ready
+from paddle.incubate.optimizer import LookAhead, ModelAverage
 
 
 class ParameterServerOptimizer(MetaOptimizerBase):
     def __init__(self, optimizer):
         super(ParameterServerOptimizer, self).__init__(optimizer)
         self.inner_opt = optimizer
+        if isinstance(optimizer, LookAhead):
+            raise TypeError(
+                "LookAhead Optimizer is not supported in ParameterServer.")
+        if isinstance(optimizer, ModelAverage):
+            raise TypeError(
+                "ModelAverage Optimizer is not supported in ParameterServer.")
         # we do not allow meta optimizer to be inner optimizer currently
         self.meta_optimizers_white_list = []
 
@@ -145,6 +152,12 @@ class ParameterServerOptimizer(MetaOptimizerBase):
                     break
 
             if is_sgd_adam:
+                return _main, _startup
+            else:
+                from paddle.fluid.incubate.fleet.parameter_server.ir.public import _add_optimize_table_pass
+                _add_optimize_table_pass(main_program, compiled_config,
+                                         self.inner_opt)
+
                 return _main, _startup
 
             _main = server.add_listen_and_serv_pass(_main, compiled_config)

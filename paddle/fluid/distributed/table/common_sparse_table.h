@@ -67,6 +67,12 @@ class CommonSparseTable : public SparseTable {
   virtual int32_t push_sparse(const uint64_t* keys, const float* values,
                               size_t num);
 
+  virtual int32_t set_program_env(
+      framework::Scope* scope, platform::Place place,
+      const std::vector<framework::ProgramDesc>* sub_program) override {
+    sub_program_ = sub_program;
+    return 0;
+  }
   // only for sparse geo table
   virtual int32_t push_sparse_param(const uint64_t* keys, const float* values,
                                     size_t num);
@@ -96,10 +102,12 @@ class CommonSparseTable : public SparseTable {
   std::vector<int> value_offsets_;
   std::vector<std::string> initializer_attrs_;
 
-  std::shared_ptr<SparseOptimizer> optimizer_;
+  std::shared_ptr<SparseOptimizer> optimizer_ = nullptr;
   std::vector<std::shared_ptr<ValueBlock>> shard_values_;
   std::unordered_map<uint64_t, ReservoirValue<float>> pull_reservoir_;
   std::unique_ptr<framework::RWLock> rwlock_{nullptr};
+
+  const std::vector<framework::ProgramDesc>* sub_program_;
 };
 
 }  // namespace distributed

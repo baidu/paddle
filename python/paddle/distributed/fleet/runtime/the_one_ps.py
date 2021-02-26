@@ -168,10 +168,21 @@ class CommonAccessor:
             param_varnames = self.opt_input_map["sum"]
             attr_varnames = self.opt_attr_map["sum"]
             self.accessor_class = "sum"
-        else:
+        elif oop.type in self.opt_input_map:
             param_varnames = self.opt_input_map[oop.type]
             attr_varnames = self.opt_attr_map[oop.type]
             self.accessor_class = oop.type
+        else:
+            param_varnames = []
+            for name in op.input_names:
+                if name == "Grad":
+                    continue
+                if name == "LearningRate":
+                    param_varnames.append((name, 1))
+                else:
+                    param_varnames.append((name, None))
+            attr_varnames = []
+            self.accessor_class = "general_optimizer"
 
         for (formal_name, shape) in param_varnames:
             params.append(formal_name)
@@ -651,20 +662,17 @@ class TheOnePSRuntime(RuntimeBase):
 
         def _add_tensor_table(tables):
             tensor_table_dict = self.compiled_strategy.get_tensor_table_dict()
-            program_idx = 0
             for table_name in tensor_table_dict:
                 if tensor_table_dict[table_name]["startup_program"] != None:
-                    tensor_table_dict[table_name][
-                        "startup_program_id"] = program_idx
+                    tensor_table_dict[table_name]["startup_program_id"] = len(
+                        self._server_sub_program)
                     self._server_sub_program.append(tensor_table_dict[
                         table_name]["startup_program"].desc)
-                    program_idx += 1
                 if tensor_table_dict[table_name]["main_program"] != None:
-                    tensor_table_dict[table_name][
-                        "main_program_id"] = program_idx
+                    tensor_table_dict[table_name]["main_program_id"] = len(
+                        self._server_sub_program)
                     self._server_sub_program.append(tensor_table_dict[
                         table_name]["main_program"].desc)
-                    program_idx += 1
                 # Todo: Hard code for lr_decay table apply table id
                 new_table = _build_tensor_table(
                     len(tables), tensor_table_dict[table_name])
@@ -678,6 +686,24 @@ class TheOnePSRuntime(RuntimeBase):
                 _is_heter_parameter_server_mode)
 
             tables = []
+            tensor = None
+            if self.compiled_strategy.optimize_info is not None:
+                optimize_info = self.compiled_strategy.optimize_info
+                if optimize_info["startup_program"] != None:
+                    startup_program_id = len(self._server_sub_program)
+                    self._server_sub_program.append(optimize_info[
+                        "startup_program"].desc)
+                if optimize_info["main_program"] != None:
+                    main_program_id = len(self._server_sub_program)
+                    self._server_sub_program.append(optimize_info[
+                        "main_program"].desc)
+
+                tensor = Tensor()
+                tensor.main_program_id = main_program_id
+                tensor.startup_program_id = startup_program_id
+                tensor.feed_var_name = optimize_info["feed_var_name"]
+                tensor.fetch_var_name = optimize_info["fetch_var_name"]
+
             for idx, (name, ctx) in enumerate(send_ctx.items()):
                 if ctx.is_tensor_table() or len(ctx.origin_varnames()) < 1:
                     continue
@@ -719,6 +745,9 @@ class TheOnePSRuntime(RuntimeBase):
                     common.sync = "false"
 
                 table.common = common
+
+                if tensor is not None:
+                    table.tensor = tensor
 
                 accessor = _build_merge_accessor(ctx)
                 table.accessor = accessor

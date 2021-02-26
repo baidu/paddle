@@ -295,7 +295,10 @@ int32_t CommonSparseTable::initialize_optimizer() {
     optimizer_ = std::make_shared<SSUM>(value_names_, value_dims_,
                                         value_offsets_, value_idx_);
   } else {
-    VLOG(0) << "init optimizer failed";
+    optimizer_ = std::make_shared<SGeneralOptimizer>(
+        sub_program_, _config, value_names_, value_dims_, value_offsets_,
+        value_idx_);
+    optimizer_->set_global_lr(_global_lr);
   }
 
   VLOG(0) << "init optimizer " << name << " done";
@@ -440,6 +443,9 @@ int32_t CommonSparseTable::pull_sparse(float* pull_values, const uint64_t* keys,
 
 int32_t CommonSparseTable::_push_sparse(const uint64_t* keys,
                                         const float* values, size_t num) {
+  if (num == 0) {
+    return 0;
+  }
   rwlock_->RDLock();
   std::vector<std::vector<uint64_t>> offset_bucket;
   offset_bucket.resize(task_pool_size_);

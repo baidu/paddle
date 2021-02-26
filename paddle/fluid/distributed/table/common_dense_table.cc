@@ -92,7 +92,9 @@ int32_t CommonDenseTable::initialize_optimizer() {
   } else if (name == "sum") {
     optimizer_ = std::make_shared<DSUM>(common, &values_);
   } else {
-    VLOG(0) << "init optimizer failed";
+    optimizer_ =
+        std::make_shared<DGeneralOptimizer>(sub_program_, _config, &values_);
+    optimizer_->set_global_lr(_global_lr);
   }
   VLOG(0) << "init optimizer " << name << " done";
   return 0;
