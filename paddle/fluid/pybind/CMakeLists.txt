@@ -129,6 +129,7 @@ if(WITH_PYTHON)
     else(${CBLAS_PROVIDER} STREQUAL EXTERN_OPENBLAS)
       add_custom_command(TARGET op_function_generator
             PRE_LINK
+
             COMMAND ${CMAKE_COMMAND} -E copy ${OPENBLAS_SHARED_LIB} ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
           )
     endif()
