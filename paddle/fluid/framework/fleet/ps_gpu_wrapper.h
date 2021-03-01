@@ -23,8 +23,10 @@ limitations under the License. */
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include "paddle/fluid/framework/data_set.h"
 #include "paddle/fluid/framework/fleet/heter_context.h"
 #include "paddle/fluid/framework/fleet/heter_ps/heter_ps_base.h"
 #include "paddle/fluid/framework/fleet/heter_ps/heter_resource.h"
@@ -73,16 +75,77 @@ class PSGPUWrapper {
                    const int hidden_size, const int64_t total_length,
                    const int batch_size);
 
-  void BuildGPUPS(const uint64_t table_id, int feature_dim,
-                  std::shared_ptr<HeterContext> context);
+  void BuildGPUPS(const uint64_t table_id, int feature_dim);
+  void BuildTask(uint64_t table_id, int feature_dim);
   void InitializeGPU(const std::vector<int>& dev_ids) {
     if (s_instance_ != NULL) {
       VLOG(3) << "PSGPUWrapper Begin InitializeGPU";
       resource_ = std::make_shared<HeterPsResource>(dev_ids);
       resource_->enable_p2p();
       keys_tensor.resize(resource_->total_gpu());
+      heter_devices_ = dev_ids;
     }
   }
+
+  void SetSparseSGD(float nonclk_coeff, float clk_coeff, float min_bound,
+                    float max_bound, float learning_rate, float initial_g2sum,
+                    float initial_range);
+  void SetEmbedxSGD(float mf_create_thresholds, float mf_learning_rate,
+                    float mf_initial_g2sum, float mf_initial_range,
+                    float mf_min_bound, float mf_max_bound);
+  void InitializeGPUServer(std::unordered_map<std::string, float> config) {
+    float nonclk_coeff = (config.find("nonclk_coeff") == config.end())
+                             ? 1.0
+                             : config["nonclk_coeff"];
+    float clk_coeff =
+        (config.find("clk_coeff") == config.end()) ? 1.0 : config["clk_coeff"];
+    float min_bound = (config.find("min_bound") == config.end())
+                          ? -10000.0
+                          : config["min_bound"];
+    float max_bound = (config.find("max_bound") == config.end())
+                          ? 10000.0
+                          : config["max_bound"];
+    float learning_rate = (config.find("learning_rate") == config.end())
+                              ? 1.0
+                              : config["learning_rate"];
+    float initial_g2sum = (config.find("initial_g2sum") == config.end())
+                              ? 1.0
+                              : config["initial_g2sum"];
+    float initial_range = (config.find("initial_range") == config.end())
+                              ? 1.0
+                              : config["initial_range"];
+
+    // mf config settings
+    float mf_create_thresholds =
+        (config.find("mf_create_thresholds") == config.end())
+            ? static_cast<float>(1.0)
+            : config["mf_create_thresholds"];
+    float mf_learning_rate = (config.find("mf_learning_rate") == config.end())
+                                 ? 1.0
+                                 : config["mf_learning_rate"];
+    float mf_initial_g2sum = (config.find("mf_initial_g2sum") == config.end())
+                                 ? 1.0
+                                 : config["mf_initial_g2sum"];
+    float mf_initial_range = (config.find("mf_initial_range") == config.end())
+                                 ? 1.0
+                                 : config["mf_initial_range"];
+    float mf_min_bound = (config.find("mf_min_bound") == config.end())
+                             ? 1.0
+                             : config["mf_min_bound"];
+    float mf_max_bound = (config.find("mf_max_bound") == config.end())
+                             ? 1.0
+                             : config["mf_max_bound"];
+    for (size_t i = 0; i < heter_devices_.size(); i++) {
+      PADDLE_ENFORCE_CUDA_SUCCESS(cudaSetDevice(heter_devices_[i]));
+      this->SetSparseSGD(nonclk_coeff, clk_coeff, min_bound, max_bound,
+                         learning_rate, initial_g2sum, initial_range);
+      this->SetEmbedxSGD(mf_create_thresholds, mf_learning_rate,
+                         mf_initial_g2sum, mf_initial_range, mf_min_bound,
+                         mf_max_bound);
+    }
+  }
+  void SetDataset(Dataset* dataset) { dataset_ = dataset; }
+
   // PSGPUWrapper singleton
   static std::shared_ptr<PSGPUWrapper> GetInstance() {
     if (NULL == s_instance_) {
@@ -100,6 +163,7 @@ class PSGPUWrapper {
 
  private:
   static std::shared_ptr<PSGPUWrapper> s_instance_;
+  Dataset* dataset_;
   std::unordered_map<
       uint64_t, std::vector<std::unordered_map<uint64_t, std::vector<float>>>>
       local_tables_;
@@ -108,6 +172,13 @@ class PSGPUWrapper {
   std::shared_ptr<HeterPsResource> resource_;
   int32_t sleep_seconds_before_fail_exit_;
   std::vector<int> slot_vector_;
+  std::vector<int> heter_devices_;
+  std::unordered_set<std::string> gpu_ps_config_keys_;
+  HeterObjectPool<HeterContext> gpu_task_pool_;
+  std::vector<std::vector<std::vector<uint64_t>>> thread_keys_;
+  int thread_keys_thread_num_ = 37;
+  int thread_keys_shard_num_ = 37;
+  uint64_t max_fea_num_per_pass_ = 5000000000;
 
  protected:
   static bool is_initialized_;
