@@ -70,21 +70,48 @@ class ScaleOpConverter : public OpConverter {
     nvinfer1::ILayer* layer = nullptr;
 
     auto input_dim = input->getDimensions();
-    PADDLE_ENFORCE_GE(input_dim.nbDims, 3,
-                      platform::errors::Fatal(
-                          "Paddle-TRT scale mode only support dimension >= 3"));
-
     nvinfer1::IShuffleLayer* expand_layer = nullptr;
     nvinfer1::IShuffleLayer* squeeze_layer = nullptr;
+    if (engine_->with_dynamic_shape()) {
+      PADDLE_ENFORCE_GE(
+          input_dim.nbDims, 3,
+          platform::errors::Fatal("Paddle-TRT scale converter only support "
+                                  "dimension >= 3 with dynamic shape"));
 
-    if (input_dim.nbDims == 3) {
-      // TensorRT scale layer is not supporting input dims < 4 when using
-      // explicit batch
-      expand_layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *input);
-      nvinfer1::Dims4 target_shape(0, 0, 0, 1);  // expand 1 dims
-      expand_layer->setReshapeDimensions(target_shape);
-      input = expand_layer->getOutput(0);
+      if (input_dim.nbDims == 3) {
+        // TensorRT scale layer is not supporting input dims < 4 when using
+        // explicit batch
+        expand_layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *input);
+        nvinfer1::Dims4 target_shape(0, 0, 0, 1);  // expand 1 dims
+        expand_layer->setReshapeDimensions(target_shape);
+        input = expand_layer->getOutput(0);
+      }
+    } else {
+      PADDLE_ENFORCE_GE(
+          input_dim.nbDims, 1,
+          platform::errors::Fatal("Paddle-TRT scale converter only support "
+                                  "dimension >= 1 without dynamic shape"));
+      if (input_dim.nbDims < 3) {
+        expand_layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *input);
+        int expand_dims[4];
+        for (int i = 0; i < 3; i++) {
+          if (i < input_dim.nbDims) {
+            expand_dims[i] = 0;
+          } else {
+            expand_dims[i] = 1;
+          }
+        }
+        expand_layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *input);
+        nvinfer1::Dims3 target_shape(expand_dims[0], expand_dims[1],
+                                     expand_dims[2]);
+        expand_layer->setReshapeDimensions(target_shape);
+        input = expand_layer->getOutput(0);
+      }
     }
+    PADDLE_ENFORCE_NOT_NULL(
+        input,
+        platform::errors::NotFound(
+            "input after expand layer in scale converter should not be null"));
 
     if (bias_after_scale) {
       layer = TRT_ENGINE_ADD_LAYER(
@@ -103,16 +130,23 @@ class ScaleOpConverter : public OpConverter {
 
     PADDLE_ENFORCE_EQ(layer != nullptr, true,
                       platform::errors::Fatal("Create scale layer failed."));
-
-    if (input_dim.nbDims == 3) {
-      // TensorRT scale layer is not supporting input dims < 4 when using
-      // explicit batch
+    if (engine_->with_dynamic_shape()) {
+      if (input_dim.nbDims == 3) {
+        // TensorRT scale layer is not supporting input dims < 4 when using
+        // explicit batch
+        squeeze_layer =
+            TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *(layer->getOutput(0)));
+        nvinfer1::Dims3 target_shape(0, 0, 0);  // expand 1 dims
+        squeeze_layer->setReshapeDimensions(target_shape);
+        layer = static_cast<nvinfer1::ILayer*>(squeeze_layer);
+      }
+    } else {
       squeeze_layer =
           TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *(layer->getOutput(0)));
-      nvinfer1::Dims3 target_shape(0, 0, 0);  // expand 1 dims
-      squeeze_layer->setReshapeDimensions(target_shape);
+      squeeze_layer->setReshapeDimensions(input_dim);
       layer = static_cast<nvinfer1::ILayer*>(squeeze_layer);
     }
+
     RreplenishLayerAndOutput(layer, "scale", {out_name}, test_mode);
   }
 };

@@ -108,15 +108,24 @@ class FcOpConverter : public OpConverter {
                          TensorRTEngine::Weight& bias) {
       auto* fc_layer = TRT_ENGINE_ADD_LAYER(engine_, FullyConnected, *inputs,
                                             n_output, weight.get(), bias.get());
-
+      nvinfer1::ILayer* layer = fc_layer;
+      if (!engine_->with_dynamic_shape()) {
+        auto* final_reshape_layer =
+            TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *(fc_layer->getOutput(0)));
+        nvinfer1::Dims fc_out_dims;
+        fc_out_dims.nbDims = 1;
+        fc_out_dims.d[0] = n_output;
+        final_reshape_layer->setReshapeDimensions(fc_out_dims);
+        layer = final_reshape_layer;
+      }
       auto output_name = op_desc.Output("Out").front();
       if (activation_type == "relu") {
         nvinfer1::IActivationLayer* relu_layer =
-            TRT_ENGINE_ADD_LAYER(engine_, Activation, *(fc_layer->getOutput(0)),
+            TRT_ENGINE_ADD_LAYER(engine_, Activation, *(layer->getOutput(0)),
                                  nvinfer1::ActivationType::kRELU);
         RreplenishLayerAndOutput(relu_layer, "fc", {output_name}, test_mode);
       } else {
-        RreplenishLayerAndOutput(fc_layer, "fc", {output_name}, test_mode);
+        RreplenishLayerAndOutput(layer, "fc", {output_name}, test_mode);
       }
     };
 
