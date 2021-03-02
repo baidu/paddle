@@ -510,6 +510,7 @@ struct numeric_limits<paddle::platform::complex64> {
 };
 
 }  // namespace std
+/*
 namespace Eigen {
 
 using complex64 = paddle::platform::complex64;
@@ -604,4 +605,5 @@ HOSTDEVICE inline float abs(const complex64& a) {
 }  // namespace numext
 }  // namespace Eigen
 
+*/
 #define MKL_Complex8 paddle::platform::complex64

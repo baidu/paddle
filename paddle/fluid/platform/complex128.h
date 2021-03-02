@@ -509,6 +509,7 @@ struct numeric_limits<paddle::platform::complex128> {
 };
 
 }  // namespace std
+/*
 namespace Eigen {
 
 using complex128 = paddle::platform::complex128;
@@ -601,5 +602,6 @@ HOSTDEVICE inline double abs(const complex128& a) {
 
 }  // namespace numext
 }  // namespace Eigen
+*/
 
 #define MKL_Complex16 paddle::platform::complex128
