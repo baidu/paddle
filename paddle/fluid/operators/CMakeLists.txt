@@ -161,6 +161,13 @@ add_subdirectory(benchmark)
 
 cc_test(op_debug_string_test SRCS op_debug_string_test.cc DEPS elementwise_add_op)
 
+cc_test(squeeze_op_npu_test SRCS squeeze_op_npu_test.cc DEPS op_registry squeeze_op scope device_context enforce executor)
+cc_test(unsqueeze_op_npu_test SRCS unsqueeze_op_npu_test.cc DEPS op_registry unsqueeze_op scope device_context enforce executor)
+cc_test(softmax_op_npu_test SRCS softmax_op_npu_test.cc DEPS op_registry softmax_op softmax scope device_context enforce executor)
+cc_test(top_k_op_npu_test SRCS top_k_op_npu_test.cc DEPS op_registry top_k_op scope device_context enforce executor)
+cc_test(uniform_random_op_npu_test SRCS uniform_random_op_npu_test.cc DEPS op_registry uniform_random_op generator scope device_context enforce executor)
+
+
 if(WITH_MKLDNN)
 include(mkldnn/inplace_op_tests.cmake)
 include(mkldnn/caching_tests.cmake)
