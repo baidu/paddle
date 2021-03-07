@@ -80,6 +80,7 @@ class TestComplexConjOp(unittest.TestCase):
                     result = paddle.conj(var_x).numpy()
                     target = np.conj(input)
                     self.assertTrue(np.array_equal(result, target))
+                    self.assertEqual(1, 2)
 
     def test_conj_operator(self):
         for dtype in self._dtypes:

@@ -88,6 +88,7 @@ class TestCastOpError(unittest.TestCase):
                 output = fluid.layers.cast(x=x4, dtype='int16')
 
             self.assertRaises(TypeError, test_dtype_type)
+            self.assertEqual(1, 2)
 
 
 if __name__ == '__main__':

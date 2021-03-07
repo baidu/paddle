@@ -27,6 +27,7 @@ class TestCReduceOp(TestDistBase):
         pass
 
     def test_reduce(self):
+        self.assertEqual(1, 2)
         self.check_with_place("collective_reduce_op.py", "reduce")
 
     def test_reduce_calc_stream(self):

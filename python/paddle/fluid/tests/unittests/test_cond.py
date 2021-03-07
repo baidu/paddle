@@ -136,6 +136,7 @@ class TestCondInputOutput(unittest.TestCase):
             self.assertTrue(
                 np.allclose(
                     np.asarray(ret), np.full((3, 2, 1), expected_a, np.int32)))
+            self.assertEqual(1, 2)
 
     def test_return_none(self):
         """

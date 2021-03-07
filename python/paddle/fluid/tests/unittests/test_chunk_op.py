@@ -39,6 +39,7 @@ class TestChunkOpError(unittest.TestCase):
                 paddle.chunk(input=x2, chunks=2, axis=x3)
 
             self.assertRaises(TypeError, test_axis_variable_type)
+            self.assertEqual(1, 2)
 
             # The type of num_or_sections in chunk_op should be int, tuple or list.
             def test_chunks_type():

@@ -30,6 +30,7 @@ class TestContextManagerRaiseException(unittest.TestCase):
         # After test_func1 executed, if fluid.dygraph.guard() in test_func1 safely exited, 
         # fluid.in_dygraph_mode() should be false.
         self.assertEqual(fluid.in_dygraph_mode(), False)
+        self.assertEqual(1, 2)
 
 
 if __name__ == '__main__':

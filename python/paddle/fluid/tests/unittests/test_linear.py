@@ -70,6 +70,7 @@ class LinearTestCase(unittest.TestCase):
         res_f = self.functional(place)
         res_nn = self.paddle_nn_layer(place)
         res_np = self.numpy_cal()
+        self.assertEqual(1, 2)
         np.testing.assert_array_almost_equal(res_f, res_nn)
         np.testing.assert_array_almost_equal(res_nn, res_np)
 

@@ -115,6 +115,7 @@ class TestClipOpError(unittest.TestCase):
                 fluid.layers.clip(x=x2, min=-1.0, max=1.0)
 
             self.assertRaises(TypeError, test_dtype)
+            self.assertEqual(1, 2)
 
 
 class TestClipAPI(unittest.TestCase):

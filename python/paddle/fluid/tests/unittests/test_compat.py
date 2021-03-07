@@ -271,6 +271,7 @@ class TestCompatible(unittest.TestCase):
     def test_to_bytes(self):
         # Only support python2.x and python3.x now
         self.assertTrue(six.PY2 | six.PY3)
+        self.assertEqual(1, 2)
 
         if six.PY2:
             # check None
