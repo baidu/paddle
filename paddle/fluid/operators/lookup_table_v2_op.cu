@@ -90,7 +90,7 @@ class LookupTableV2CUDAKernel : public framework::OpKernel<T> {
     size_t K = ids_t->numel();
 
     dim3 threads(256, 4);
-    dim3 grids(80, 1);
+    dim3 grids(160, 1);
 
     // copy GPU memory to CPU pinned memory
     framework::Vector<int64_t> ids;
@@ -127,12 +127,12 @@ class LookupTableV2CUDAKernel : public framework::OpKernel<T> {
 
     if (padding_idx == -1)
       LookupTableV2<
-          T, 256, 4, 80,
+          T, 256, 4, 160,
           false><<<grids, threads, 0, context.cuda_device_context().stream()>>>(
           output, table, ids_p, N, K, D, padding_idx);
     else
       LookupTableV2<
-          T, 256, 4, 80,
+          T, 256, 4, 160,
           true><<<grids, threads, 0, context.cuda_device_context().stream()>>>(
           output, table, ids_p, N, K, D, padding_idx);
   }
