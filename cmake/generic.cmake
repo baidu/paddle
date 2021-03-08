@@ -805,7 +805,8 @@ function(py_test TARGET_NAME)
     else()
       add_test(NAME ${TARGET_NAME}
                COMMAND ${CMAKE_COMMAND} -E env FLAGS_init_allocated_mem=true FLAGS_cudnn_deterministic=true
-               FLAGS_cpu_deterministic=true ${py_test_ENVS}
+               FLAGS_cpu_deterministic=true
+               PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_ENVS}
                ${PYTHON_EXECUTABLE} -u ${py_test_SRCS} ${py_test_ARGS}
                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()

@@ -15,6 +15,7 @@
 set -e
 set +x
 NIGHTLY_MODE=$1
+WINGPU=$2
 
 PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
 if [ ${NIGHTLY_MODE:-OFF} == "ON" ]; then
@@ -203,25 +204,12 @@ long_time_test="^best_fit_allocator_test$|\
 ^test_strided_slice_op$|\
 ^test_transpose_op$"
 
-export FLAGS_call_stack_level=2
-export FLAGS_fraction_of_gpu_memory_to_use=0.92
-export CUDA_VISIBLE_DEVICES=0
-
-UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
-num=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d' | wc -l)
-echo "Windows 1 card TestCases count is $num"
-output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
-eight_parallel_job=$(echo $output | cut -d ";" -f 1)
-tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)
-non_parallel_job=$(echo $output | cut -d ";" -f 3)
-
-non_parallel_job_1=$(echo $non_parallel_job | cut -d "," -f 1)
-non_parallel_job_2=$(echo $non_parallel_job | cut -d "," -f 2)
 
 failed_test_lists=''
 tmp_dir=`mktemp -d`
 function collect_failed_tests() {
-    set +e
+
+  set +e
     for file in `ls $tmp_dir`; do
         grep -q 'The following tests FAILED:' $tmp_dir/$file
         exit_code=$?
@@ -253,8 +241,48 @@ function run_unittest() {
     wait;
 }
 
+
+function run_unittest_gpu() {
+    export FLAGS_call_stack_level=2
+    export FLAGS_fraction_of_gpu_memory_to_use=0.92
+    export CUDA_VISIBLE_DEVICES=0
+
+    UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
+    num=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d' | wc -l)
+    echo "Windows 1 card TestCases count is $num"
+    output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
+    eight_parallel_job=$(echo $output | cut -d ";" -f 1)
+    tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)
+    non_parallel_job=$(echo $output | cut -d ";" -f 3)
+
+    non_parallel_job_1=$(echo $non_parallel_job | cut -d "," -f 1)
+    non_parallel_job_2=$(echo $non_parallel_job | cut -d "," -f 2)
+
+    set +e
+    run_unittest $eight_parallel_job 8
+    run_unittest $tetrad_parallel_jog 4
+    run_unittest $non_parallel_job_1
+    run_unittest $non_parallel_job_2
+    collect_failed_tests
+    set -e
+
+}
+
+function run_unittest_cpu() {
+    echo    ========================================
+    echo    Running CPU unit tests in parallel way ...
+    echo    ========================================
+    tmpfile=$tmp_dir/$RANDOM
+    ctest -E "(%disable_ut_quickly%)" -LE %nightly_label% --output-on-failure -C Release -j 8 | tee $tmpfile
+    collect_failed_tests
+}
+
 function unittests_retry(){
-    parallel_job=1
+    if [[ "${WINGPU}" == "ON" ]];then
+        parallel_job=1
+    else
+        parallel_job=4
+    fi
     is_retry_execuate=0
     wintest_error=1
     retry_time=3
@@ -327,13 +355,12 @@ function show_ut_retry_result() {
     fi
 }
 
-set +e
-run_unittest $eight_parallel_job 8
-run_unittest $tetrad_parallel_jog 4
-run_unittest $non_parallel_job_1
-run_unittest $non_parallel_job_2
-collect_failed_tests
-set -e
+if [ "${WINGPU}" == "ON" ];then
+    run_unittest_gpu
+else
+    run_unittest_cpu
+fi
+
 rm -f $tmp_dir/*
 if [[ "$failed_test_lists" != "" ]]; then
     unittests_retry
