@@ -15,8 +15,9 @@
 set -e
 set +x
 NIGHTLY_MODE=$1
+PRECISION_TEST=$2
 
-PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
+export PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
 if [ ${NIGHTLY_MODE:-OFF} == "ON" ]; then
     nightly_label=""
 else
@@ -210,6 +211,35 @@ export CUDA_VISIBLE_DEVICES=0
 UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
 num=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d' | wc -l)
 echo "Windows 1 card TestCases count is $num"
+
+if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
+    python ${PADDLE_ROOT}/tools/get_pr_ut.py
+    if [[ -f "ut_list" ]]; then
+        set +x 
+        echo "PREC length: "`wc -l ut_list`
+        precision_cases=`cat ut_list`
+        set -x
+    fi
+fi
+
+if [ ${PRECISION_TEST:-OFF} == "ON"] && [[ "$precision_cases" != ""]];then
+    UT_list_prec=''
+    re=^$(cat ut_list| awk BEGIN{RS=EOF}'{gsub(/\n/,"$|^");print}')$
+    for case in $UT_list; do
+        flag=$(echo $case|grep -oE $re)
+        if [ -n "$flag" ];then
+            if [ -z "$UT_list_prec" ];then
+                UT_list_prec=$case
+            else
+                UT_list_prec=$UT_list_prec'\n'$case
+            fi
+        else
+            echo $case "won't run in PRECISION_TEST mode."
+        fi
+    done
+    UT_list=$UT_list_prec
+fi
+
 output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
 eight_parallel_job=$(echo $output | cut -d ";" -f 1)
 tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)

@@ -21,7 +21,11 @@ if [ -z ${BRANCH} ]; then
 fi
 
 export CI_SKIP_CPP_TEST=OFF
-PADDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
+if [ "$SYSTEM" == "Linux" ];then
+    PADDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
+elif ["$SYSTEM" == "Windows_NT" ];then
+    PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
+fi
 CURDIR=`pwd`
 cd $PADDLE_ROOT
 cp $PADDLE_ROOT/paddle/scripts/paddle_build.sh $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh
@@ -30,7 +34,13 @@ echo $CURBRANCH
 git checkout -b prec_added_ut upstream/${BRANCH}
 mkdir prec_build
 cd prec_build
-bash $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh cmake_gen_in_current_dir >prebuild.log 2>&1
+SYSTEM=`uname -s`
+if [ "$SYSTEM" == "Linux" ];then
+    bash $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh cmake_gen_in_current_dir >prebuild.log 2>&1
+elif ["$SYSTEM" == "Windows_NT" ];then
+    bash $PADDLE_ROOT/get_added_ut.sh
+    echo "Windows Added UT"
+fi
 ctest -N | awk -F ':' '{print $2}' | sed '/^$/d' | sed '$d' | sed 's/ //g' > /$PADDLE_ROOT/br-ut
 cd $PADDLE_ROOT/build
 ctest -N | awk -F ':' '{print $2}' | sed '/^$/d' | sed '$d' | sed 's/ //g' > /$PADDLE_ROOT/pr-ut
