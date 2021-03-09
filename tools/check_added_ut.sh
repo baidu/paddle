@@ -45,4 +45,5 @@ git checkout $CURBRANCH
 echo $CURBRANCH
 git branch -D prec_added_ut
 cd $CURDIR
+echo $CURDIR
 export CI_SKIP_CPP_TEST=
