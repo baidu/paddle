@@ -178,3 +178,7 @@ if(WITH_UNITY_BUILD)
     # The specified link dependency needs to be displayed here.
     target_link_libraries(paddle_operators_unity ${OP_HEADER_DEPS} ${COMMON_OP_DEPS})
 endif()
+
+if(WITH_ASCEND_CL)
+cc_test(activation_op_npu_test SRCS activation_op_npu_test.cc DEPS op_registry activation_op scope device_context enforce executor)
+endif()

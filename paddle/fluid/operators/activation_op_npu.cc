@@ -103,17 +103,222 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename DeviceContext, typename T>
+class SqrtNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto runner = NpuOpRunner("Sqrt", {*x}, {*out}, {});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class SqrtGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* out = ctx.Input<Tensor>("Out");
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+
+    auto place = ctx.GetPlace();
+
+    dx->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto dx_runner = NpuOpRunner("SqrtGrad", {*out, *dout}, {*dx}, {});
+    dx_runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class LogNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    Tensor one(x->type());
+    one.mutable_data<T>(x->dims(), place);
+    auto one_runner = NpuOpRunner("OnesLike", {*x}, {one}, {});
+    one_runner.Run(stream);
+
+    Tensor sub(x->type());
+    sub.mutable_data<T>(x->dims(), place);
+    auto sub_runner = NpuOpRunner("Sub", {*x, one}, {sub}, {});
+    sub_runner.Run(stream);
+
+    auto out_runner = NpuOpRunner("Log1p", {sub}, {*out}, {});
+    out_runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class LogGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+
+    auto place = ctx.GetPlace();
+
+    dx->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    auto runner = NpuOpRunner("DivNoNan", {*dout, *x}, {*dx}, {});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class TanhNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto runner = NpuOpRunner("Tanh", {*x}, {*out}, {});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class TanhGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* out = ctx.Input<Tensor>("Out");
+
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+
+    auto place = ctx.GetPlace();
+
+    dx->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto dx_runner = NpuOpRunner("TanhGrad", {*out, *dout}, {*dx}, {});
+    dx_runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class SquareNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto runner = NpuOpRunner("Square", {*x}, {*out}, {});
+    runner.Run(stream);
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
 
 REGISTER_OP_NPU_KERNEL(
-    pow, ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow,
+    ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowNPUKernel<paddle::platform::NPUDeviceContext,
                       paddle::platform::float16>);
 
 REGISTER_OP_NPU_KERNEL(
-    pow_grad, ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow_grad,
+    ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext,
                           paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    sqrt,
+    ops::SqrtNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::SqrtNPUKernel<paddle::platform::NPUDeviceContext,
+                      paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    sqrt_grad,
+    ops::SqrtGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::SqrtGradNPUKernel<paddle::platform::NPUDeviceContext,
+                          paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    log,
+    ops::LogNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LogNPUKernel<paddle::platform::NPUDeviceContext,
+                      paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    log_grad,
+    ops::LogGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LogGradNPUKernel<paddle::platform::NPUDeviceContext,
+                          paddle::platform::float16>);
+
+
+REGISTER_OP_NPU_KERNEL(
+    tanh,
+    ops::TanhNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::TanhNPUKernel<paddle::platform::NPUDeviceContext,
+                       paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    tanh_grad,
+    ops::TanhGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::TanhGradNPUKernel<paddle::platform::NPUDeviceContext,
+                           paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    square,
+    ops::SquareNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::SquareNPUKernel<paddle::platform::NPUDeviceContext,
+                         paddle::platform::float16>);
+#endif
