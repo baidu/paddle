@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the Licnse. */
 
+#ifdef PADDLE_WITH_ASCEND_CL
 #include <memory>
 #include <string>
 
@@ -73,19 +74,24 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
     runner_pow.Run(stream);
 
     // Step 2: Construct a broadcast factor, which has the same shape with x.
+    // 2.1 Get the shape of x
+    Tensor x_shape(framework::proto::VarType::INT32);
+    x_shape.mutable_data<int32_t>({x_dims.size()}, place);
+    TensorFromVector(framework::vectorize<int32_t>(x_dims),
+                     ctx.device_context(), &x_shape);
 
-    // 2.1 Get a factor tensor with shape [1].
+    // 2.2 Get a factor tensor with shape [1].
     Tensor factor_tensor(framework::proto::VarType::FP32);
     factor_tensor.mutable_data<float>({1}, place);
     TensorFromVector(std::vector<float>{factor}, ctx.device_context(),
                      &factor_tensor);
 
-    // 2.2 Get the factor which has the shape with x and the same value with
+    // 2.3 Get the factor which has the shape with x and the same value with
     // factor.
     Tensor factor_bc_tensor(framework::proto::VarType::FP32);
     factor_bc_tensor.mutable_data<float>(x_dims, place);
-    auto runner_bc = NpuOpRunner("FillD", {factor_tensor}, {factor_bc_tensor},
-                                 {{"dims", framework::vectorize(x_dims)}});
+    auto runner_bc = NpuOpRunner("BroadcastTo", {factor_tensor, x_shape},
+                                 {factor_bc_tensor}, {});
     runner_bc.Run(stream);
 
     // Step 3: Compute x_power_mul_factor = factor * x.pow(factor-1)
@@ -117,3 +123,5 @@ REGISTER_OP_NPU_KERNEL(
     pow_grad, ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext,
                           paddle::platform::float16>);
+
+#endif

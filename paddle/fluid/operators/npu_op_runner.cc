@@ -143,8 +143,11 @@ NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
       data.push_back(v.data());
       num.push_back(v.size());
     }
-    PADDLE_ENFORCE_NPU_SUCCESS(aclopSetAttrListListInt(
-        attr_, name.c_str(), data.size(), num.data(), data.data()));
+    PADDLE_ENFORCE_NPU_SUCCESS(
+        aclopSetAttrListListInt(attr_, name.c_str(),
+                                data.size(),
+                                num.data(),
+                                data.data()));
   } else {
     PADDLE_THROW(platform::errors::Unimplemented(
         "Can not convert attribubte '%s' to convert to aclopAttr", name));
@@ -234,9 +237,8 @@ aclTensorDesc *NpuOpRunner::CreateTensorDesc(Tensor tensor) {
   auto format = ConvertToNpuFormat(tensor.layout());
   auto dims = framework::vectorize(tensor.dims());
 
-  VLOG(4) << "dtype:" << dtype << " "
-          << "rank:" << dims.size() << " dims:" << tensor.dims()
-          << " format:" << format;
+  VLOG(4) << dtype << " " << dims.size() << " " << dims[0] << "," << dims[1]
+          << " " << format;
 
   auto *desc = aclCreateTensorDesc(dtype, dims.size(), dims.data(), format);
   PADDLE_ENFORCE_NOT_NULL(
