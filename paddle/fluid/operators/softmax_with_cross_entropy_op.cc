@@ -54,6 +54,10 @@ class SoftmaxWithCrossEntropyOpMaker
         "the given labels as soft labels.")
         .SetDefault(false);
     AddAttr<bool>(
+        "softmax_switch",
+        "(bool, default: true), A flag to indicate whether to do softmax ")
+        .SetDefault(true);
+    AddAttr<bool>(
         "numeric_stable_mode",
         "(bool, default: true), A flag to indicate whether to use more "
         "numerically stable algorithm. This flag is only valid when "
