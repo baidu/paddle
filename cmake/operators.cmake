@@ -213,7 +213,6 @@ function(op_library TARGET)
     # The registration of USE_OP, please refer to paddle/fluid/framework/op_registry.h.
     # Note that it's enough to just adding one operator to pybind in a *_op.cc file.
     # And for detail pybind information, please see generated paddle/pybind/pybind.h.
-    set(ORIGINAL_TARGET ${TARGET})
     file(READ ${TARGET}.cc TARGET_CONTENT)
     string(REGEX MATCH "REGISTER_OPERATOR\\(.*REGISTER_OPERATOR\\(" multi_register "${TARGET_CONTENT}")
     # [ \t\r\n]* is used for blank characters
@@ -287,26 +286,9 @@ function(op_library TARGET)
     if (WITH_XPU AND ${xpu_cc_srcs_len} GREATER 0)
         file(APPEND ${pybind_file} "USE_OP_DEVICE_KERNEL(${TARGET}, XPU);\n")
     endif()
-
-    if (WITH_ASCEND_CL AND ${npu_cc_srcs_len} GREATER 0)
-        file(READ ${ORIGINAL_TARGET}_npu.cc TARGET_NPU_CONTENT)
-        # It is different from the logic above, becareful
-        string(REGEX MATCH "REGISTER_OP_NPU_KERNEL\\(.*" multi_npu_register "${TARGET_NPU_CONTENT}")
-        # [ \t\r\n]* is used for blank characters
-        string(REGEX MATCH "REGISTER_OP_NPU_KERNEL\\([ \t\r\n]*[a-z0-9_]*," one_npu_register "${multi_npu_register}")
-
-        if (one_npu_register STREQUAL "")
-            string(REPLACE "_op" "" NPU_TARGET "${TARGET}")
-        else ()
-            string(REPLACE "REGISTER_OP_NPU_KERNEL(" "" NPU_TARGET "${one_npu_register}")
-            string(REPLACE "," "" NPU_TARGET "${NPU_TARGET}")
-            # [ \t\r\n]+ is used for blank characters.
-            # Here we use '+' instead of '*' since it is a REPLACE operation.
-            string(REGEX REPLACE "[ \t\r\n]+" "" NPU_TARGET "${NPU_TARGET}")
-        endif()
-        file(APPEND ${pybind_file} "USE_OP_DEVICE_KERNEL(${NPU_TARGET}, NPU);\n")
+    if (WITH_XPU AND ${npu_cc_srcs_len} GREATER 0)
+        file(APPEND ${pybind_file} "USE_OP_DEVICE_KERNEL(${TARGET}, NPU);\n")
     endif()
-
     # pybind USE_OP_DEVICE_KERNEL for MKLDNN
     if (WITH_MKLDNN AND ${mkldnn_cc_srcs_len} GREATER 0)
       # Append first implemented MKLDNN activation operator

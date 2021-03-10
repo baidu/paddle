@@ -144,6 +144,11 @@ cc_test(beam_search_decode_op_test SRCS beam_search_decode_op_test.cc DEPS lod_t
 cc_test(strided_memcpy_test SRCS strided_memcpy_test.cc DEPS tensor memory)
 cc_test(save_load_op_test SRCS save_load_op_test.cc DEPS save_op load_op)
 cc_test(save_load_combine_op_test SRCS save_load_combine_op_test.cc DEPS save_combine_op load_combine_op)
+cc_test(range_op_npu_test SRCS range_op_npu_test.cc DEPS op_registry range_op scope device_context enforce executor)
+cc_test(mean_op_npu_test SRCS mean_op_npu_test.cc DEPS op_registry mean_op scope device_context enforce executor)
+cc_test(assign_op_npu_test SRCS assign_op_npu_test.cc DEPS op_registry assign_op scope device_context enforce executor)
+cc_test(increment_op_npu_test SRCS increment_op_npu_test.cc DEPS op_registry increment_op scope device_context enforce executor)
+
 nv_test(dropout_op_test SRCS dropout_op_test.cc DEPS dropout_op tensor generator)
 if (WITH_GPU)
     nv_test(test_leaky_relu_grad_grad_functor SRCS test_leaky_relu_grad_grad_functor.cc test_leaky_relu_grad_grad_functor.cu DEPS tensor device_context eigen3)

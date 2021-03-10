@@ -2194,3 +2194,4 @@ class AdamParser(AscendParserBase):
                                     "epsilon", epsilon).set_input("grad", grad)
 
         return [adam], [[0]]
+
