@@ -151,11 +151,6 @@ else()
     cc_test(test_leaky_relu_grad_grad_functor SRCS test_leaky_relu_grad_grad_functor.cc DEPS tensor device_context eigen3)
 endif()
 
-# ascend gather_op_npu unittest
-if (WITH_ASCEND_CL)
-    cc_test(gather_op_npu_test SRCS gather_op_npu_test.cc DEPS gather_op tensor op_registry scope device_context enforce executor)
-endif()
-
 cc_library(tensor_formatter SRCS tensor_formatter.cc DEPS ${OP_HEADER_DEPS})
 if (WITH_PYTHON)
   cc_library(py_func_op SRCS py_func_op.cc DEPS op_registry python pybind)
@@ -177,4 +172,11 @@ if(WITH_UNITY_BUILD)
     # the unity library to lose some symbols.
     # The specified link dependency needs to be displayed here.
     target_link_libraries(paddle_operators_unity ${OP_HEADER_DEPS} ${COMMON_OP_DEPS})
+endif()
+if(WITH_ASCEND_CL)
+    #cc_test(scatter_op_npu_test SRCS scatter_op_npu_test.cc DEPS op_registry scatter_op scope device_context enforce executor)
+    #cc_test(stack_op_npu_test SRCS stack_op_npu_test.cc DEPS op_registry stack_op scope device_context enforce executor)
+    cc_test(stack_op_npu_test SRCS stack_op_npu_test.cc DEPS op_registry stack_op scope device_context enforce executor)
+    #cc_test(sum_op_npu_test SRCS sum_op_npu_test.cc DEPS op_registry sum_op scope device_context enforce executor)
+    #cc_test(stack_op_npu_test SRCS stack_op_npu_test.cc DEPS op_registry sum_op scope device_context enforce executor)
 endif()
