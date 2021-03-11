@@ -129,18 +129,12 @@ class TestStaticDataLoader(unittest.TestCase):
             start_t = time.time()
             for i in six.moves.range(EPOCH_NUM):
                 step = 0
-                for d in dataloader:
-                    assert len(d) == len(places), "{} != {}".format(
-                        len(d), len(places))
-                    for i, item in enumerate(d):
-                        image = item['image']
-                        label = item['label']
-                        assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
-                        assert label.shape() == [BATCH_SIZE, 1]
-                        assert image._place()._equals(places[i])
-                        assert label._place()._equals(places[i])
+                for image, label in dataloader:
+                    assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
+                    assert label.shape() == [BATCH_SIZE, 1]
                     L, = exe.run(program=prog,
-                                 feed=d,
+                                 feed={'image': image,
+                                       'label': label},
                                  fetch_list=[loss],
                                  use_program_cache=True)
                     loss_list.append(np.mean(L))
@@ -216,18 +210,12 @@ class TestStaticDataLoaderWithBatchedDataset(TestStaticDataLoader):
             start_t = time.time()
             for i in six.moves.range(EPOCH_NUM):
                 step = 0
-                for d in dataloader:
-                    assert len(d) == len(places), "{} != {}".format(
-                        len(d), len(places))
-                    for i, item in enumerate(d):
-                        image = item['image']
-                        label = item['label']
-                        assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
-                        assert label.shape() == [BATCH_SIZE, 1]
-                        assert image._place()._equals(places[i])
-                        assert label._place()._equals(places[i])
+                for image, label in dataloader:
+                    assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
+                    assert label.shape() == [BATCH_SIZE, 1]
                     L, = exe.run(program=prog,
-                                 feed=d,
+                                 feed={'image': image,
+                                       'label': label},
                                  fetch_list=[loss],
                                  use_program_cache=True)
                     loss_list.append(np.mean(L))

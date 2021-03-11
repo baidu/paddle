@@ -18,6 +18,7 @@ import math
 import unittest
 import numpy as np
 
+import paddle
 import paddle.fluid as fluid
 from paddle.io import IterableDataset, BatchSampler, DataLoader, get_worker_info
 
@@ -41,7 +42,7 @@ class RangeIterableDatasetSplit(IterableDataset):
             iter_end = min(iter_start + per_worker, self.end)
 
         for i in range(iter_start, iter_end):
-            yield np.array([i])
+            yield i
 
 
 class TestDynamicDataLoaderIterSplit(unittest.TestCase):
@@ -58,7 +59,7 @@ class TestDynamicDataLoaderIterSplit(unittest.TestCase):
 
             rets = []
             for d in dataloader:
-                rets.append(d[0].numpy()[0][0])
+                rets.append(int(d[0].numpy()))
 
             assert tuple(sorted(rets)) == tuple(range(0, 10))
 
@@ -70,7 +71,7 @@ class RangeIterableDataset(IterableDataset):
 
     def __iter__(self):
         for i in range(self.start, self.end):
-            yield np.array([i])
+            yield i
 
 
 class TestDynamicDataLoaderIterInitFuncSplit(unittest.TestCase):
@@ -102,7 +103,7 @@ class TestDynamicDataLoaderIterInitFuncSplit(unittest.TestCase):
 
             rets = []
             for d in dataloader:
-                rets.append(d[0].numpy()[0][0])
+                rets.append(int(d[0].numpy()))
 
             assert tuple(sorted(rets)) == tuple(range(0, 10))
 

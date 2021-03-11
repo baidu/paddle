@@ -182,9 +182,11 @@ static void InitVarBaseFromNumpyWithArgDefault(imperative::VarBase *self,
 }
 
 static void InitVarBaseFromTensorWithArgDefault(
-    imperative::VarBase *self, const framework::LoDTensor &tensor) {
+    imperative::VarBase *self, const framework::LoDTensor &tensor,
+    const bool keep_place) {
   VLOG(4) << "Init VarBase";
-  auto place = imperative::GetCurrentTracer()->ExpectedPlace();
+  auto place = keep_place ? tensor.place()
+                          : imperative::GetCurrentTracer()->ExpectedPlace();
   new (self) imperative::VarBase(
       imperative::GetCurrentTracer()->GenerateUniqueName("generated_tensor"));
   self->SetPersistable(false);
@@ -576,7 +578,8 @@ void BindImperative(py::module *m_ptr) {
            py::arg("zero_copy") = false, py::arg("name") = "",
            py::arg("stop_gradient") = -1)
       .def("__init__", &InitVarBaseFromNumpyWithArgDefault, py::arg("value"))
-      .def("__init__", &InitVarBaseFromTensorWithArgDefault, py::arg("tensor"))
+      .def("__init__", &InitVarBaseFromTensorWithArgDefault, py::arg("tensor"),
+           py::arg("keep_place") = false)
       .def("__init__", &InitVarBaseFromNumpyWithKwargs)
       .def("__setitem__",
            [](std::shared_ptr<imperative::VarBase> &self, py::handle _index,
@@ -1160,6 +1163,61 @@ void BindImperative(py::module *m_ptr) {
            py::return_value_policy::copy)
       .def("value", [](imperative::VarBase &self) { return self.MutableVar(); },
            py::return_value_policy::reference)
+#ifndef _WIN32
+      .def(py::pickle(
+          [](imperative::VarBase &self) {  // __getstate__
+            auto &t = self.Var().Get<framework::LoDTensor>();
+            auto holder = t.Holder();
+            PADDLE_ENFORCE_EQ(
+                platform::is_cpu_place(holder->place()), true,
+                platform::errors::PreconditionNotMet(
+                    "LoDTensor is not on CPU."
+                    "Now only LoDTensor on CPU can be serialized."));
+            auto *mmap_writer_allocation =
+                dynamic_cast<memory::allocation::MemoryMapWriterAllocation *>(
+                    holder.get());
+            PADDLE_ENFORCE_NOT_NULL(
+                mmap_writer_allocation,
+                platform::errors::PreconditionNotMet(
+                    "LoDTensor is not in shared memory."
+                    "Now only LoDTensor on shared memory can be serialized."));
+            int type_idx = static_cast<int>(t.type());
+
+            return py::make_tuple(mmap_writer_allocation->ipc_name(),
+                                  mmap_writer_allocation->size(), type_idx,
+                                  vectorize(t.dims()), t.lod());
+          },
+          [](py::tuple t) {  // __setstate__
+            if (t.size() != 5)
+              throw std::runtime_error("Invalid VarBase(LoDTensor) state!");
+
+            // 1. init VarBase and get LoDTensor
+            auto var = imperative::VarBase(
+                imperative::GetCurrentTracer()->GenerateUniqueName(
+                    "generated_tensor"));
+            auto *tensor = var.MutableVar()->GetMutable<framework::LoDTensor>();
+
+            // 2. Rebuild Allocation
+            const std::string &ipc_name = t[0].cast<std::string>();
+            size_t size = t[1].cast<size_t>();
+            auto shared_reader_holder =
+                memory::allocation::RebuildMemoryMapReaderAllocation(ipc_name,
+                                                                     size);
+
+            // 3. Maintain global fd set
+            VLOG(3) << "LoDTensor ipc name: " << ipc_name;
+            memory::allocation::MemoryMapFdSet::Instance().Insert(ipc_name);
+
+            // 4. Rebuild LoDTensor
+            tensor->ResetHolderWithType(
+                shared_reader_holder,
+                static_cast<framework::proto::VarType::Type>(t[2].cast<int>()));
+            tensor->Resize(framework::make_ddim(t[3].cast<std::vector<int>>()));
+            tensor->set_lod(t[4].cast<framework::LoD>());
+
+            return var;
+          }))
+#endif
       .def_property("name", &imperative::VarBase::Name,
                     &imperative::VarBase::SetName)
       .def_property("stop_gradient",
@@ -1167,22 +1225,28 @@ void BindImperative(py::module *m_ptr) {
                     &imperative::VarBase::SetOverridedStopGradient)
       .def_property("persistable", &imperative::VarBase::Persistable,
                     &imperative::VarBase::SetPersistable)
-      .def_property_readonly(
-          "shape",
-          [](imperative::VarBase &self) {
-            if (self.Var().IsType<framework::LoDTensor>()) {
-              return framework::vectorize<int>(
-                  self.Var().Get<framework::LoDTensor>().dims());
-            } else if (self.Var().IsType<framework::SelectedRows>()) {
-              return framework::vectorize<int>(
-                  self.Var().Get<framework::SelectedRows>().value().dims());
-            } else {
-              VLOG(2) << "It is meaningless to get shape of "
-                         "variable type "
-                      << GetTypeName(self);
-              return std::vector<int>();
-            }
-          })
+      .def_property_readonly("shape",
+                             [](imperative::VarBase &self) {
+                               if (self.Var().IsType<framework::LoDTensor>()) {
+                                 return framework::vectorize<int>(
+                                     self.Var()
+                                         .Get<framework::LoDTensor>()
+                                         .dims());
+                               } else if (self.Var()
+                                              .IsType<
+                                                  framework::SelectedRows>()) {
+                                 return framework::vectorize<int>(
+                                     self.Var()
+                                         .Get<framework::SelectedRows>()
+                                         .value()
+                                         .dims());
+                               } else {
+                                 VLOG(2) << "It is meaningless to get shape of "
+                                            "variable type "
+                                         << GetTypeName(self);
+                                 return std::vector<int>();
+                               }
+                             })
       .def_property_readonly("is_leaf", &imperative::VarBase::IsLeaf,
                              R"DOC(
       Whether a Tensor is leaf Tensor.

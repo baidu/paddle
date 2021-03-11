@@ -188,13 +188,13 @@ class DataLoader(object):
             The Tensors should be created by :code:`paddle.static.data()`.
             :attr:`feed_list` must be set if :attr:`return_list` is
             False. Default None.
-        places(list(Place)|tuple(Place)|list(str)|optional): a list of Place,
-            to put data onto, :attr:`places` can be None, if 
+        places(list(Place)|tuple(Place)|list(str)|optional): **deprecated**
+            a list of Place, to put data onto, :attr:`places` can be None, if 
             :attr:`places` is None, default place(CPUPlace or CUDAPlace(0))
             will be used. Default None. If ``places`` is list of string,
             the string in the list can be ``cpu``, ``gpu:x`` and ``gpu_pinned``,
             where ``x`` is the index of the GPUs.
-        return_list (bool): whether the return value on each device is 
+        return_list (bool): **deprecated** whether the return value on each device is 
             presented as a list. If :attr:`return_list=False`, the return
             value on each device would be a dict of str -> Tensor, where
             the key of the dict is the name of each fed Tensors. If 
@@ -220,11 +220,13 @@ class DataLoader(object):
             0(same as :attr::`np.stack(..., axis=0)`). Default None
         num_workers(int): the number of subprocess to load data, 0 for no
             subprocess used and loading data in main process. Default 0
-        use_buffer_reader (bool): whether to use bufferred reader. 
+        use_buffer_reader (bool): **deprecated** whether to use bufferred reader. 
             If use_buffer_reader=True, the DataLoader would prefetch next 
             batch data asynchronously, so it would speed up data feeding 
             and occupies a little more CPU or GPU memory, i.e., the memory
             of one batch input data. Default True.
+        pin_memory (bool): whether copy tensors to CUDA pinned memory before
+            yielded. Default True.
         use_shared_memory (bool): whether to use shared memory to speed up
             putting data into inter-process queue, set :attr:`use_shared_memory`
             as True only when the shared memory space on your machine(e.g.
@@ -320,6 +322,7 @@ class DataLoader(object):
                  collate_fn=None,
                  num_workers=0,
                  use_buffer_reader=True,
+                 pin_memory=True,
                  use_shared_memory=True,
                  timeout=0,
                  worker_init_fn=None):
@@ -327,6 +330,11 @@ class DataLoader(object):
         self.collate_fn = collate_fn
         self.use_buffer_reader = use_buffer_reader
         self.worker_init_fn = worker_init_fn
+
+        self.pin_memory = pin_memory
+        if self.pin_memory and not paddle.is_compiled_with_cuda():
+            warnings.warn("Disable pin_memory on CPU-only version")
+            self.pin_memory = False
 
         assert isinstance(dataset, Dataset), \
             "dataset should be subclass instance of paddle.io.Dataset"
@@ -398,11 +406,6 @@ class DataLoader(object):
                     drop_last=drop_last)
 
         self.auto_collate_batch = self.batch_sampler is not None
-
-        self.pin_memory = False
-        if in_dygraph_mode():
-            self.pin_memory = True if use_pinned_memory(
-            ) is None else use_pinned_memory()
 
     def __len__(self):
         if self.dataset_kind == _DatasetKind.ITER:

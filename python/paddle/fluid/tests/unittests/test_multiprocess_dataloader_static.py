@@ -130,18 +130,12 @@ class TestStaticDataLoader(unittest.TestCase):
             start_t = time.time()
             for _ in six.moves.range(EPOCH_NUM):
                 step = 0
-                for d in dataloader:
-                    assert len(d) == len(places), "{} != {}".format(
-                        len(d), len(places))
-                    for i, item in enumerate(d):
-                        image = item['image']
-                        label = item['label']
-                        assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
-                        assert label.shape() == [BATCH_SIZE, 1]
-                        assert image._place()._equals(places[i])
-                        assert label._place()._equals(places[i])
+                for image, label in dataloader:
+                    assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
+                    assert label.shape() == [BATCH_SIZE, 1]
                     L, = exe.run(program=prog,
-                                 feed=d,
+                                 feed={'image': image,
+                                       'label': label},
                                  fetch_list=[loss],
                                  use_program_cache=True)
                     loss_list.append(np.mean(L))
@@ -192,28 +186,6 @@ class TestStaticDataLoaderReturnList(unittest.TestCase):
                 assert len(d) == 2
                 assert not isinstance(d[0], list)
                 assert not isinstance(d[1], list)
-
-    def test_multi_place(self):
-        scope = fluid.Scope()
-        image = fluid.data(
-            name='image', shape=[None, IMAGE_SIZE], dtype='float32')
-        label = fluid.data(name='label', shape=[None, 1], dtype='int64')
-        with fluid.scope_guard(scope):
-            dataset = RandomDataset(SAMPLE_NUM, CLASS_NUM)
-            dataloader = DataLoader(
-                dataset,
-                feed_list=[image, label],
-                num_workers=0,
-                batch_size=BATCH_SIZE,
-                places=[fluid.CPUPlace()] * 2,
-                drop_last=True,
-                return_list=True)
-
-            for d in dataloader:
-                assert isinstance(d, list)
-                assert len(d) == 2
-                assert isinstance(d[0], list)
-                assert isinstance(d[1], list)
 
 
 class RandomBatchedDataset(Dataset):
@@ -267,18 +239,12 @@ class TestStaticDataLoaderWithBatchedDataset(TestStaticDataLoader):
             start_t = time.time()
             for _ in six.moves.range(EPOCH_NUM):
                 step = 0
-                for d in dataloader:
-                    assert len(d) == len(places), "{} != {}".format(
-                        len(d), len(places))
-                    for i, item in enumerate(d):
-                        image = item['image']
-                        label = item['label']
-                        assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
-                        assert label.shape() == [BATCH_SIZE, 1]
-                        assert image._place()._equals(places[i])
-                        assert label._place()._equals(places[i])
+                for image, label in dataloader:
+                    assert image.shape() == [BATCH_SIZE, IMAGE_SIZE]
+                    assert label.shape() == [BATCH_SIZE, 1]
                     L, = exe.run(program=prog,
-                                 feed=d,
+                                 feed={'image': image,
+                                       'label': label},
                                  fetch_list=[loss],
                                  use_program_cache=True)
                     loss_list.append(np.mean(L))

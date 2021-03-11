@@ -25,6 +25,10 @@ if six.PY2:
 else:
     import queue
 
+# multi-process worker check indices queue interval, avoid
+# hanging in subprocess data loading
+MP_STATUS_CHECK_INTERVAL = 5.
+
 # NOTE: [ mmap files clear ] If there is still data in the multiprocess queue when the main process finishes reading,
 # the data in the queue needs to be popped. Then the LoDTensor read by the main process
 # from the child process will automatically clear the memory-mapped file.
