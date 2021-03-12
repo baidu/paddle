@@ -103,17 +103,46 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename DeviceContext, typename T>
+class SquareNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    auto runner = NpuOpRunner("Square", {*x}, {*out}, {});
+    runner.Run(stream);
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
 
 REGISTER_OP_NPU_KERNEL(
-    pow, ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow,
+    ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowNPUKernel<paddle::platform::NPUDeviceContext,
                       paddle::platform::float16>);
 
 REGISTER_OP_NPU_KERNEL(
-    pow_grad, ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow_grad,
+    ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext,
                           paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    square,
+    ops::SquareNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::SquareNPUKernel<paddle::platform::NPUDeviceContext,
+                         paddle::platform::float16>);
