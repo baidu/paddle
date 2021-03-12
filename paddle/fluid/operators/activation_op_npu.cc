@@ -103,17 +103,83 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename DeviceContext, typename T>
+class LogNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* out = ctx.Output<Tensor>("Out");
+
+    auto place = ctx.GetPlace();
+
+    out->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    Tensor one(x->type());
+    one.mutable_data<T>(x->dims(), place);
+    auto one_runner = NpuOpRunner("OnesLike", {*x}, {one}, {});
+    one_runner.Run(stream);
+
+    Tensor sub(x->type());
+    sub.mutable_data<T>(x->dims(), place);
+    auto sub_runner = NpuOpRunner("Sub", {*x, one}, {sub}, {});
+    sub_runner.Run(stream);
+
+    auto out_runner = NpuOpRunner("Log1p", {sub}, {*out}, {});
+    out_runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class LogGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* x = ctx.Input<Tensor>("X");
+
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+
+    auto place = ctx.GetPlace();
+
+    dx->mutable_data<T>(place);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    auto runner = NpuOpRunner("DivNoNan", {*dout, *x}, {*dx}, {});
+    runner.Run(stream);
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
 
 REGISTER_OP_NPU_KERNEL(
-    pow, ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow,
+    ops::PowNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowNPUKernel<paddle::platform::NPUDeviceContext,
                       paddle::platform::float16>);
 
 REGISTER_OP_NPU_KERNEL(
-    pow_grad, ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    pow_grad,
+    ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::PowGradNPUKernel<paddle::platform::NPUDeviceContext,
+                          paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    log,
+    ops::LogNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LogNPUKernel<paddle::platform::NPUDeviceContext,
+                      paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    log_grad,
+    ops::LogGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LogGradNPUKernel<paddle::platform::NPUDeviceContext,
                           paddle::platform::float16>);
