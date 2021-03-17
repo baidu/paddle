@@ -51,6 +51,23 @@ class PluginTensorRT;
 using FluidDT = framework::proto::VarType_Type;
 using TRT_DT = nvinfer1::DataType;
 
+inline FluidDT TRT2FluidDataType(TRT_DT type) {
+  switch (type) {
+    case TRT_DT::kFLOAT:
+      return FluidDT::VarType_Type_FP32;
+    case TRT_DT::kINT32:
+      return FluidDT::VarType_Type_INT32;
+    case TRT_DT::kHALF:
+      return FluidDT::VarType_Type_FP16;
+    case TRT_DT::kINT8:
+      return FluidDT::VarType_Type_INT8;
+    default:
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "unknown TRT type in TRT op converter"));
+      return FluidDT::VarType_Type_FP32;
+  }
+}
+
 namespace {  // NOLINT
 
 TRT_DT FluidDataType2TRT(FluidDT type) {

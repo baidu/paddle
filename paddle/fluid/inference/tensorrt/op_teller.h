@@ -38,8 +38,8 @@ namespace tensorrt {
  */
 struct Teller {
   virtual bool operator()(const std::string& op_type,
-                          const framework::OpDesc& desc,
-                          bool use_no_calib_int8) = 0;
+                          const framework::OpDesc& desc, bool use_no_calib_int8,
+                          bool with_dynamic_shape) = 0;
 
   virtual ~Teller() = default;
 };

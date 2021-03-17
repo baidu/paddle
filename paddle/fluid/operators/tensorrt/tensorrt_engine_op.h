@@ -52,6 +52,7 @@ using inference::tensorrt::TensorRTEngine;
 using inference::tensorrt::TRTInt8Calibrator;
 using inference::tensorrt::TRTCalibratorEngine;
 using inference::tensorrt::TRTCalibratorEngineManager;
+using inference::tensorrt::TRT2FluidDataType;
 
 static void RuntimeStaticShapeCheck(std::vector<int64_t> runtime_input_shape,
                                     std::vector<int64_t> model_input_shape) {
@@ -334,8 +335,10 @@ class TensorRTEngineOp : public framework::OperatorBase {
                             "than the number of bindings, but got binding "
                             "index = %d, number of bindings = %d.",
                             bind_index, num_bindings));
-      buffers[bind_index] = static_cast<void *>(fluid_t->mutable_data<float>(
-          BOOST_GET_CONST(platform::CUDAPlace, dev_place)));
+      buffers[bind_index] = static_cast<void *>(fluid_t->mutable_data(
+          BOOST_GET_CONST(platform::CUDAPlace, dev_place),
+          TRT2FluidDataType(
+              engine->GetITensor(output_maps[output_index])->getType())));
 
       output_index += 1;
     }

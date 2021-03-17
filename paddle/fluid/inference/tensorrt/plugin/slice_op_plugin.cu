@@ -296,9 +296,10 @@ nvinfer1::DataType SlicePluginDynamic::getOutputDataType(
                                   "index value should be 0, but get %d.",
                                   index));
   PADDLE_ENFORCE_EQ((input_types[0] == nvinfer1::DataType::kFLOAT ||
-                     input_types[0] == nvinfer1::DataType::kHALF),
+                     input_types[0] == nvinfer1::DataType::kHALF) ||
+                        input_types[0] == nvinfer1::DataType::kINT32,
                     true, platform::errors::InvalidArgument(
-                              "The input type should be half or float"));
+                              "The input type should be half, float or int"));
   return input_types[0];
 }
 
@@ -364,6 +365,12 @@ int SlicePluginDynamic::enqueue(const nvinfer1::PluginTensorDesc *input_desc,
     const half *input1 = static_cast<const half *>(inputs[0]);
     half *output = static_cast<half *>(outputs[0]);
     SliceKernel<half><<<blocks, threads, 3 * num_dims * sizeof(int), stream>>>(
+        out_num, num_dims, input1, offset_temp_data_, output);
+  } else if (input_type == nvinfer1::DataType::kINT32) {
+    LOG(INFO) << "TRT Plugin DataType selected. Slice-->int32";
+    const int *input1 = static_cast<const int *>(inputs[0]);
+    int *output = static_cast<int *>(outputs[0]);
+    SliceKernel<int><<<blocks, threads, 3 * num_dims * sizeof(int), stream>>>(
         out_num, num_dims, input1, offset_temp_data_, output);
   } else {
     PADDLE_THROW(platform::errors::Fatal(

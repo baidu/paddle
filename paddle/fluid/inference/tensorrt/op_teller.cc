@@ -41,6 +41,10 @@ struct SimpleOpTypeSetTeller : public Teller {
     teller_set.insert("multihead_matmul");
     teller_set.insert("skip_layernorm");
     teller_set.insert("slice");
+    dynamic_teller_set.insert(teller_set.begin(), teller_set.end());
+#endif
+#if IS_TRT_VERSION_GE(6010)
+    dynamic_teller_set.insert("shape");
 #endif
 #if IS_TRT_VERSION_GE(7130)
     teller_set.insert("group_norm");
@@ -48,9 +52,11 @@ struct SimpleOpTypeSetTeller : public Teller {
   }
 
   bool operator()(const std::string& op_type, const framework::OpDesc& desc,
-                  bool use_no_calib_int8) override {
+                  bool use_no_calib_int8, bool with_dynamic_shape) override {
     if (use_no_calib_int8) {
       return int8_teller_set.count(op_type);
+    } else if (with_dynamic_shape) {
+      return dynamic_teller_set.count(op_type);
     } else {
       return teller_set.count(op_type);
     }
@@ -110,6 +116,8 @@ struct SimpleOpTypeSetTeller : public Teller {
       "flatten2",
       "flatten",
   };
+
+  std::unordered_set<std::string> dynamic_teller_set;
 };
 
 bool OpTeller::Tell(const framework::ir::Node* node, bool use_no_calib_int8,
@@ -182,7 +190,8 @@ bool OpTeller::Tell(const framework::ir::Node* node, bool use_no_calib_int8,
         if (axis != 1) return false;
       }
     }
-    if ((*teller)(op_type, desc, use_no_calib_int8)) return true;
+    if ((*teller)(op_type, desc, use_no_calib_int8, with_dynamic_shape))
+      return true;
   }
   return false;
 }
