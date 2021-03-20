@@ -57,11 +57,9 @@ if(WITH_TESTING)
   if (NOT APPLE AND NOT WIN32)
     inference_base_test(test_api_impl SRCS api_impl_tester.cc DEPS paddle_inference_shared
       ARGS --word2vec_dirname=${WORD2VEC_MODEL_DIR} --book_dirname=${IMG_CLS_RESNET_INSTALL_DIR})
-    set_tests_properties(test_api_impl PROPERTIES DEPENDS test_image_classification)
   elseif(WIN32)
     inference_base_test(test_api_impl SRCS api_impl_tester.cc DEPS ${inference_deps}
       ARGS --word2vec_dirname=${WORD2VEC_MODEL_DIR} --book_dirname=${IMG_CLS_RESNET_INSTALL_DIR})
-    set_tests_properties(test_api_impl PROPERTIES DEPENDS test_image_classification)
   endif()
 
 endif()

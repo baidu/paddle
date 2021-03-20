@@ -1153,8 +1153,9 @@ set -x
 set +x
         EXIT_CODE=0;
         test_cases=$(ctest -N -V) # get all test cases
-        single_card_tests_eight_parallel='^job$'    # cases list which would run 8 job each time with single GPU
+        single_card_tests_high_parallel='^job$'     # cases list which would run the most job each time with single GPU
         single_card_tests_tetrad_parallel='^job$'   # cases list which would run 4 job each time with single GPU
+        single_card_tests_two_parallel='^job$'      # cases list which would run 2 job each time with single GPU
         single_card_tests_non_parallel_1='^job$'    # cases list which would run 1 job each time with single GPU
         single_card_tests_non_parallel_2='^job$'    # cases list which would run 1 job each time with single GPU
         single_card_tests='^job$' # all cases list which would take one graph card
@@ -1167,9 +1168,10 @@ set +x
 
         UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
         output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
-        eight_parallel_job=$(echo $output | cut -d ";" -f 1)
-        tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)
-        non_parallel_job=$(echo $output | cut -d ";" -f 3)
+        cpu_parallel_job=$(echo $output | cut -d ";" -f 1)
+        tetrad_parallel_job=$(echo $output | cut -d ";" -f 2)
+        two_parallel_job=$(echo $output | cut -d ";" -f 3)
+        non_parallel_job=$(echo $output | cut -d ";" -f 4)
         while read -r line; do
             if [[ "$line" == "" ]]; then
                 continue
@@ -1223,10 +1225,12 @@ set +x
                         multiple_card_tests="$multiple_card_tests|^$testcase$"
                     fi
                 else
-                    if [[ $(echo $eight_parallel_job | grep $testcase) != "" ]]; then
-                        single_card_tests_eight_parallel="$single_card_tests_eight_parallel|^$testcase$"
-                    elif [[ $(echo $tetrad_parallel_jog | grep $testcase) != "" ]]; then
+                    if [[ $(echo $cpu_parallel_job | grep $testcase) != "" ]]; then
+                        single_card_tests_high_parallel="$single_card_tests_high_parallel|^$testcase$"
+                    elif [[ $(echo $tetrad_parallel_job | grep $testcase) != "" ]]; then
                         single_card_tests_tetrad_parallel="$single_card_tests_tetrad_parallel|^$testcase$"
+                    elif [[ $(echo $two_parallel_job | grep $testcase) != "" ]]; then
+                        single_card_tests_two_parallel="$single_card_tests_two_parallel|^$testcase$"
                     elif [[ "${#single_card_tests_non_parallel_1}" -gt 10000 ]];then
                         single_card_tests_non_parallel_2="$single_card_tests_non_parallel_2|^$testcase$"
                     else
@@ -1243,6 +1247,7 @@ set +x
 
         card_test "$single_card_tests_eight_parallel" 1 8     # run cases 8 job each time with single GPU
         card_test "$single_card_tests_tetrad_parallel" 1 4    # run cases 4 job each time with single GPU
+        card_test "$single_card_tests_two_parallel" 1 2    # run cases 4 job each time with single GPU
         card_test "$single_card_tests_non_parallel_1" 1       # run cases 1 job each time with single GPU
         card_test "$single_card_tests_non_parallel_2" 1       # run cases 1 job each time with single GPU
         card_test "$multiple_card_tests" 2    # run cases with two GPUs
