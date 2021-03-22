@@ -54,6 +54,10 @@ class TestReshape2(OpTest):
         self.check_output(
             self.place, check_dygraph=False, no_check_set=['XShape'])
 
+    def test_check_grad(self):
+        self.check_grad_with_place(
+            self.place, ['X'], ['Out'], check_dygraph=False)
+
 
 class TestReshape2_case2(TestReshape2):
     def init_data(self):
@@ -63,18 +67,15 @@ class TestReshape2_case2(TestReshape2):
 
 
 class TestReshape2_case3(TestReshape2):
+    # Input's shape should be large than or equal to 100 for reshape2 Op.
+    no_need_check_grad = True
+
     def init_data(self):
         self.ori_shape = (2, 5, 6)
         self.new_shape = (-1, 0, 3)
         self.infered_shape = (4, 5, 3)
 
 
-    # TODO(ascendrc): Add grad test
-    # def test_check_grad(self):
-    #     if self.dtype == np.float16:
-    #         return
-    #     self.check_grad(['X'], 'Out')
-    #
 @unittest.skipIf(not paddle.is_compiled_with_npu(),
                  "core is not compiled with NPU")
 class TestReshapeNet(unittest.TestCase):

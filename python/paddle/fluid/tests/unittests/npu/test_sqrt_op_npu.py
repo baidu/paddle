@@ -52,12 +52,15 @@ class TestSqrt(OpTest):
     def test_check_output(self):
         self.check_output_with_place(self.place, check_dygraph=False)
 
-    # TODO(ascendrc): Add grad test
-    # def test_check_grad(self):
-    #     if self.dtype == np.float16:
-    #         return
-    #     self.check_grad(['X'], 'Out')
-    #
+    def test_check_grad(self):
+        # TODO: The error exceeds the default allowable accuracy range.
+        # `max_relative_error` is used to adjust the accuracy in temporary,
+        # which needs to be dealt with later.
+        self.check_grad_with_place(
+            self.place, ['X'],
+            'Out',
+            max_relative_error=0.008,
+            check_dygraph=False)
 
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),

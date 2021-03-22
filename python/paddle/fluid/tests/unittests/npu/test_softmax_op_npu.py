@@ -45,13 +45,16 @@ class TestSoftmax(OpTest):
 
     def set_npu(self):
         self.__class__.use_npu = True
-        self.__class__.no_need_check_grad = True
 
     def init_dtype(self):
         self.dtype = np.float32
 
     def test_check_output(self):
         self.check_output_with_place(self.place, check_dygraph=False)
+
+    def test_check_grad(self):
+        self.check_grad_with_place(
+            self.place, ['X'], 'Out', check_dygraph=False)
 
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),

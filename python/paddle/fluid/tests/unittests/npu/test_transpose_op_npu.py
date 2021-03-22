@@ -39,7 +39,7 @@ class TestTransposeOp(OpTest):
 
         self.inputs = {'X': OpTest.np_dtype_to_fluid_dtype(self.x)}
         self.attrs = {'axis': [0, 2, 1, 3], 'data_format': 'AnyLayout'}
-        self.outputs = {'Out': self.out}
+        self.outputs = {'Out': self.out, 'XShape': self.x}
 
     def set_npu(self):
         self.__class__.use_npu = True
@@ -48,7 +48,7 @@ class TestTransposeOp(OpTest):
         self.use_mkldnn = False
 
     def init_input_output(self):
-        self.x = np.random.uniform(0.1, 1, [8, 512, 12, 64]).astype(self.dtype)
+        self.x = np.random.uniform(0.1, 1, [2, 4, 6, 8]).astype(self.dtype)
         self.out = np.transpose(self.x, [0, 2, 1, 3])
 
     def init_dtype(self):
@@ -58,7 +58,12 @@ class TestTransposeOp(OpTest):
         self.axis = -1
 
     def test_check_output(self):
-        self.check_output_with_place(self.place, check_dygraph=False)
+        self.check_output_with_place(
+            self.place, no_check_set=['XShape'], check_dygraph=False)
+
+    def test_check_grad(self):
+        self.check_grad_with_place(
+            self.place, ['X'], 'Out', check_dygraph=False)
 
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),
@@ -68,6 +73,9 @@ class TestTransposeOpFP16(TestTransposeOp):
 
     def init_dtype(self):
         self.dtype = np.float16
+
+    def test_check_grad(self):
+        pass
 
 
 if __name__ == '__main__':
