@@ -20,11 +20,18 @@ limitations under the License. */
 #include <map>
 #include <string>
 #include <vector>
+#include <sstream>
 
 #include "acl/acl.h"
 #include "acl/acl_op_compiler.h"
 
 #include "paddle/fluid/framework/framework.pb.h"
+#include "paddle/fluid/platform/stream/npu_stream.h"
+#include "paddle/fluid/platform/timer.h"
+
+DECLARE_bool(benchmark);
+DEFINE_int32(npu_benchmark_steps, 0,
+             "specify the step when run npu benchmark.");
 
 namespace paddle {
 namespace operators {
@@ -249,9 +256,12 @@ aclTensorDesc *NpuOpRunner::CreateTensorDesc(Tensor tensor) {
   auto format = ConvertToNpuFormat(tensor.layout());
   auto dims = framework::vectorize(tensor.dims());
 
-  VLOG(4) << "dtype:" << dtype << " "
+  std::stringstream ss;
+  ss << "NpuOpRunner::CreateTensorDesc op_type:" << op_type_ << ",dtype:" << dtype << " "
           << "rank:" << dims.size() << " dims:" << tensor.dims()
           << " format:" << format;
+  VLOG(4) << ss.str();
+  desc_log_ += ss.str();
 
   auto *desc = aclCreateTensorDesc(dtype, dims.size(), dims.data(), format);
   PADDLE_ENFORCE_NOT_NULL(
@@ -277,11 +287,25 @@ void NpuOpRunner::Run(aclrtStream stream) {
   VLOG(4) << "output_desc.size: " << output_descs_.size();
   VLOG(4) << "stream: " << stream;
   VLOG(4) << "attr: " << attr_;
+
+  platform::Timer timeline;
+  if(FLAGS_benchmark){
+    timeline.Start();
+  }
+
   aclError ret = aclopCompileAndExecute(
       op_type_.c_str(), input_descs_.size(), input_descs_.data(),
       input_buffers_.data(), output_descs_.size(), output_descs_.data(),
       output_buffers_.data(), attr_, ACL_ENGINE_SYS, ACL_COMPILE_SYS, NULL,
       stream);
+
+  if(FLAGS_benchmark){
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeDevice());
+    timeline.Pause();
+    VLOG(4) << "NpuOpRunner::Run op_type: " << op_type_ << ",time:" << timeline.ElapsedUS()/1.0 << ","
+        << desc_log_;
+  }
+
   VLOG(4) << "after aclopCompileAndExecute: " << ret;
   PADDLE_ENFORCE_NPU_SUCCESS(ret);
 }

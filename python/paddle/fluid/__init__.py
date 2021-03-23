@@ -179,6 +179,7 @@ def __bootstrap__():
         'check_nan_inf',
         'fast_check_nan_inf',
         'benchmark',
+        'npu_benchmark_steps',
         'eager_delete_scope',
         'fraction_of_cpu_memory_to_use',
         'initial_cpu_memory_in_mb',

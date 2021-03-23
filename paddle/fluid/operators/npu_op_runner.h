@@ -82,6 +82,7 @@ class NpuOpRunner {
   std::vector<aclTensorDesc *> input_descs_;
   std::vector<aclTensorDesc *> output_descs_;
   aclopAttr *attr_{nullptr};
+  std::string desc_log_;
 };
 
 aclDataType ConvertToNpuDtype(framework::proto::VarType::Type dtype);
