@@ -217,6 +217,8 @@ class LayerList(Layer):
         if isinstance(idx, slice):
             return self.__class__(list(self._sub_layers.values())[idx])
         else:
+            if idx < 0:
+                idx = len(self) + idx
             return self._sub_layers[str(idx)]
 
     def __setitem__(self, idx, sublayer):
