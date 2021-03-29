@@ -206,12 +206,22 @@ class ConvMKLDNNHandlerT
           std::is_same<T_out, platform::bfloat16>::value)
         data_type = mkldnn::memory::data_type::bf16;
 
-      const auto src_md =
-          platform::MKLDNNMemDesc(src_tz, data_type, chosen_memory_format);
-      const auto weights_md = platform::MKLDNNMemDesc(weights_tz, data_type,
-                                                      MKLDNNMemoryFormat::any);
-      const auto dst_md = platform::MKLDNNMemDesc(
+      auto dst_md = platform::MKLDNNMemDesc(
           dst_tz, platform::MKLDNNGetDataType<T_out>(), chosen_memory_format);
+
+      platform::MKLDNNMemoryDescriptor src_md, weights_md;
+
+      if (this->dev_ctx_.UseInputMemFormat()) {
+        src_md = platform::MKLDNNMemDesc(src_tz, data_type, input->format());
+        weights_md = platform::MKLDNNMemDesc(
+            weights_tz, data_type,
+            GetWeightsFormat(filter->format(), groups, strides.size() == 3U));
+      } else {
+        src_md =
+            platform::MKLDNNMemDesc(src_tz, data_type, chosen_memory_format);
+        weights_md = platform::MKLDNNMemDesc(weights_tz, data_type,
+                                             chosen_memory_format);
+      }
 
       const auto fwd_prop_kind = is_test ? mkldnn::prop_kind::forward_inference
                                          : mkldnn::prop_kind::forward_training;

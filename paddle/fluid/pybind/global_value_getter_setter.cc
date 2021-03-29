@@ -96,6 +96,10 @@ DECLARE_int32(rpc_send_thread_num);
 DECLARE_int32(rpc_get_thread_num);
 DECLARE_int32(rpc_prefetch_thread_num);
 #endif
+#ifdef PADDLE_WITH_MKLDNN
+// memory management
+DECLARE_bool(onednn_use_input_mem_format);
+#endif
 
 namespace paddle {
 namespace pybind {
@@ -376,6 +380,9 @@ static void RegisterGlobalVarGetterSetter() {
   REGISTER_PUBLIC_GLOBAL_VAR(FLAGS_rpc_send_thread_num,
                              FLAGS_rpc_get_thread_num,
                              FLAGS_rpc_prefetch_thread_num);
+#endif
+#ifdef PADDLE_WITH_MKLDNN
+  REGISTER_PUBLIC_GLOBAL_VAR(FLAGS_onednn_use_input_mem_format);
 #endif
 }
 }  // namespace pybind

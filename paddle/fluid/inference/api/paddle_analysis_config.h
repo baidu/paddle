@@ -493,6 +493,22 @@ struct PD_INFER_DECL AnalysisConfig {
   MkldnnQuantizerConfig* mkldnn_quantizer_config() const;
 
   ///
+  /// \brief  Configure OneDNN to use input tensor memory format.
+  ///
+  void EnableOneDNNUseInputMemFormat();
+
+  ///
+  /// \brief      A boolean state telling whether oneDNN kernels will use input
+  ///             tensor memory format.
+  ///
+  /// \return     True if oneDNN will use input tensor memory format, false
+  ///             otherwise.
+  ///
+  bool onednn_use_input_mem_format_enabled() const {
+    return onednn_use_input_mem_format_;
+  }
+
+  ///
   /// \brief Specify the memory buffer of program and parameter.
   /// Used when model and params are loaded directly from memory.
   ///
@@ -668,6 +684,7 @@ struct PD_INFER_DECL AnalysisConfig {
   std::shared_ptr<MkldnnQuantizerConfig> mkldnn_quantizer_config_;
   bool use_mkldnn_bfloat16_{false};
   std::unordered_set<std::string> bfloat16_enabled_op_types_;
+  bool onednn_use_input_mem_format_{false};
 
   // If the config is already used on a predictor, it becomes invalid.
   // Any config can only be used with one predictor.

@@ -19,6 +19,8 @@ limitations under the License. */
 
 #include "glog/logging.h"
 
+DECLARE_bool(onednn_use_input_mem_format);
+
 namespace paddle {
 namespace memory {
 
@@ -502,6 +504,7 @@ MKLDNNDeviceContext::MKLDNNDeviceContext(CPUPlace place)
     : CPUDeviceContext(place), p_blobmap_() {
   p_blobmap_.reset(new BlobMap());
   p_mutex_.reset(new std::mutex());
+  if (FLAGS_onednn_use_input_mem_format) use_input_mem_format_ = true;
 }
 
 MKLDNNDeviceContextThreadLocals::Body::Body()

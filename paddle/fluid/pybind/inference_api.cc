@@ -535,6 +535,10 @@ void BindAnalysisConfig(py::module *m) {
       .def("set_mkldnn_cache_capacity", &AnalysisConfig::SetMkldnnCacheCapacity,
            py::arg("capacity") = 0)
       .def("set_bfloat16_op", &AnalysisConfig::SetBfloat16Op)
+      .def("onednn_use_input_mem_format_enabled",
+           &AnalysisConfig::onednn_use_input_mem_format_enabled)
+      .def("enable_onednn_use_input_mem_format",
+           &AnalysisConfig::EnableOneDNNUseInputMemFormat)
 #endif
       .def("set_mkldnn_op", &AnalysisConfig::SetMKLDNNOp)
       .def("set_model_buffer", &AnalysisConfig::SetModelBuffer)

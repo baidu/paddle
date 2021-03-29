@@ -682,12 +682,21 @@ class MKLDNNDeviceContext : public CPUDeviceContext {
     return MKLDNNDeviceContextThreadLocals::fetch();
   }
 
+  /// Return whether or not to use input tensor memory format.
+  bool UseInputMemFormat() const { return use_input_mem_format_; }
+  void SetUseInputMemFormat(bool val) { use_input_mem_format_ = val; }
+
  private:
   std::shared_ptr<BlobMap> p_blobmap_;
   std::shared_ptr<std::mutex> p_mutex_;
   bool block_next_cache_clearing_ = false;
   std::string key_suffix_;  // Key identifying current Executor
   bool key_attach_thread_id_ = true;
+  ///
+  /// If flag is set to true do not use ANY format tag for memory descriptors
+  /// in compute-intensive primitives.
+  ///
+  bool use_input_mem_format_{false};
 };
 #endif
 

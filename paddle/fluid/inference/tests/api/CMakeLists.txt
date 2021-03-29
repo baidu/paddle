@@ -40,7 +40,7 @@ function(download_quant_data install_dir data_file)
 endfunction()
 
 function(download_model_and_data install_dir model_name data_name)
-    download_data(${install_dir} ${model_name}) 
+    download_data(${install_dir} ${model_name})
     download_data(${install_dir} ${data_name})
 endfunction()
 
@@ -114,7 +114,7 @@ function(inference_analysis_api_test_with_fake_data_run TARGET_NAME test_binary 
     inference_analysis_test_run(${TARGET_NAME}
 	COMMAND ${test_binary}
         ARGS --infer_model=${model_dir}/model
-             --disable_mkldnn_fc=${disable_fc}) 
+             --disable_mkldnn_fc=${disable_fc})
 endfunction()
 
 function(inference_analysis_api_quant_test_run TARGET_NAME test_binary fp32_model_dir int8_model_dir data_path)
@@ -167,7 +167,7 @@ if(NOT APPLE AND WITH_MKLML)
     set(RNN1_INSTALL_DIR "${INFERENCE_DEMO_INSTALL_DIR}/rnn1")
     download_model_and_data(${RNN1_INSTALL_DIR} "rnn1/model.tar.gz" "rnn1/data.txt.tar.gz")
     inference_analysis_api_test(test_analyzer_rnn1 ${RNN1_INSTALL_DIR} analyzer_rnn1_tester.cc)
-    
+
     # seq_pool1
     set(SEQ_POOL1_INSTALL_DIR "${INFERENCE_DEMO_INSTALL_DIR}/seq_pool")
     download_model_and_data(${SEQ_POOL1_INSTALL_DIR} "seq_pool1_model_.tar.gz" "seq_pool1_data.txt.tar.gz")
@@ -211,7 +211,7 @@ inference_analysis_test(test_analyzer_small_dam SRCS analyzer_dam_tester.cc
         EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
         ARGS --infer_model=${DAM_SMALL_INSTALL_DIR}/model --infer_data=${DAM_SMALL_INSTALL_DIR}/data.txt)
 
-#save model 
+#save model
 inference_analysis_api_test(test_analyzer_save_model ${DAM_SMALL_INSTALL_DIR} analyzer_save_model_tester.cc)
 
 # chinese_ner
@@ -262,17 +262,17 @@ inference_analysis_api_test(test_analyzer_seq_conv1 ${SEQ_CONV1_INSTALL_DIR} ana
 # transformer, the dataset only works on batch_size=8 now
 set(TRANSFORMER_INSTALL_DIR "${INFERENCE_DEMO_INSTALL_DIR}/transformer")
 download_model_and_data(${TRANSFORMER_INSTALL_DIR} "temp/transformer_model.tar.gz" "temp/transformer_data.txt.tar.gz")
-inference_analysis_test(test_analyzer_transformer SRCS analyzer_transformer_compare_tester.cc 
+inference_analysis_test(test_analyzer_transformer SRCS analyzer_transformer_compare_tester.cc
   EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
-  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8 
+  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8
        --cpu_num_threads=${CPU_NUM_THREADS_ON_CI})
-inference_analysis_test(test_analyzer_transformer_fuse SRCS analyzer_transformer_fuse_tester.cc 
+inference_analysis_test(test_analyzer_transformer_fuse SRCS analyzer_transformer_fuse_tester.cc
   EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
-  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8 
+  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8
        --cpu_num_threads=${CPU_NUM_THREADS_ON_CI})
-inference_analysis_test(test_analyzer_transformer_profile SRCS analyzer_transformer_profile_tester.cc 
+inference_analysis_test(test_analyzer_transformer_profile SRCS analyzer_transformer_profile_tester.cc
   EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
-  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8 
+  ARGS --infer_model=${TRANSFORMER_INSTALL_DIR}/model --infer_data=${TRANSFORMER_INSTALL_DIR}/data.txt --batch_size=8
        --cpu_num_threads=${CPU_NUM_THREADS_ON_CI})
 
 # ocr
@@ -285,9 +285,9 @@ inference_analysis_api_test(test_analyzer_ocr ${OCR_INSTALL_DIR} analyzer_vis_te
 # densebox
 set(DENSEBOX_INSTALL_DIR "${INFERENCE_DEMO_INSTALL_DIR}/densebox")
 download_data(${DENSEBOX_INSTALL_DIR} "densebox.tar.gz")
-#inference_analysis_test(test_analyzer_detect SRCS analyzer_detect_tester.cc 
+#inference_analysis_test(test_analyzer_detect SRCS analyzer_detect_tester.cc
 #  EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
-#  ARGS --infer_model=${DENSEBOX_INSTALL_DIR}/model --infer_data=${DENSEBOX_INSTALL_DIR}/detect_input_50.txt 
+#  ARGS --infer_model=${DENSEBOX_INSTALL_DIR}/model --infer_data=${DENSEBOX_INSTALL_DIR}/detect_input_50.txt
 #       --infer_shape=${DENSEBOX_INSTALL_DIR}/shape_50.txt)
 #set_property(TEST test_analyzer_detect PROPERTY ENVIRONMENT GLOG_vmodule=analysis_predictor=2)
 
@@ -356,24 +356,24 @@ if(WITH_MKLDNN)
   set(INT8_MOBILENETV1_MODEL_DIR "${INT8_DATA_DIR}/mobilenetv1")
   download_int8_data(${INT8_MOBILENETV1_MODEL_DIR} "mobilenetv1_int8_model.tar.gz" )
   inference_analysis_api_int8_test_run(test_analyzer_int8_mobilenetv1 ${INT8_IMG_CLASS_TEST_APP} ${INT8_MOBILENETV1_MODEL_DIR} ${IMAGENET_DATA_PATH})
- 
+
   # mobilenetv2 int8
   set(INT8_MOBILENETV2_MODEL_DIR "${INT8_DATA_DIR}/mobilenetv2")
   download_int8_data(${INT8_MOBILENETV2_MODEL_DIR} "mobilenet_v2_int8_model.tar.gz" )
   inference_analysis_api_int8_test_run(test_analyzer_int8_mobilenetv2 ${INT8_IMG_CLASS_TEST_APP} ${INT8_MOBILENETV2_MODEL_DIR} ${IMAGENET_DATA_PATH})
- 
+
   # resnet101 int8
   # TODO(grygielski) Enable after MKL-DNN 1.0 merge
   set(INT8_RESNET101_MODEL_DIR "${INT8_DATA_DIR}/resnet101")
   download_int8_data(${INT8_RESNET101_MODEL_DIR} "Res101_int8_model.tar.gz" )
 #   inference_analysis_api_int8_test_run(test_analyzer_int8_resnet101 ${INT8_IMG_CLASS_TEST_APP} ${INT8_RESNET101_MODEL_DIR} ${IMAGENET_DATA_PATH})
- 
+
   # vgg16 int8
   # TODO(grygielski) Enable after MKL-DNN 1.0 merge
   set(INT8_VGG16_MODEL_DIR "${INT8_DATA_DIR}/vgg16")
   download_int8_data(${INT8_VGG16_MODEL_DIR} "VGG16_int8_model.tar.gz" )
 #   inference_analysis_api_int8_test_run(test_analyzer_int8_vgg16 ${INT8_IMG_CLASS_TEST_APP} ${INT8_VGG16_MODEL_DIR} ${IMAGENET_DATA_PATH})
- 
+
   # vgg19 int8
   # TODO(grygielski) Enable after MKL-DNN 1.0 merge
   set(INT8_VGG19_MODEL_DIR "${INT8_DATA_DIR}/vgg19")
@@ -394,7 +394,7 @@ if(WITH_MKLDNN)
 
   # resnet50 bfloat16
   inference_analysis_api_bfloat16_test_run(test_analyzer_bfloat16_resnet50 ${BF16_IMG_CLASS_TEST_APP} ${INT8_RESNET50_MODEL_DIR} ${IMAGENET_DATA_PATH})
-  
+
   # googlenet bfloat16
   inference_analysis_api_bfloat16_test_run(test_analyzer_bfloat16_googlenet ${BF16_IMG_CLASS_TEST_APP} ${INT8_GOOGLENET_MODEL_DIR} ${IMAGENET_DATA_PATH})
 
@@ -438,7 +438,7 @@ if(WITH_MKLDNN)
   inference_analysis_api_lexical_bfloat16_test_run(test_analyzer_lexical_gru_bfloat16 ${LEXICAL_TEST_APP} ${GRU_MODEL_PATH} ${GRU_DATA_PATH})
 
   ### optimized FP32 vs. Quant INT8 tests
-  
+
   set(QUANT_DATA_DIR "${INFERENCE_DEMO_INSTALL_DIR}/quant")
   set(QUANT_IMG_CLASS_TEST_APP "test_analyzer_quant_image_classification")
   set(QUANT_IMG_CLASS_TEST_APP_SRC "analyzer_quant_image_classification_tester.cc")
@@ -457,7 +457,7 @@ if(WITH_MKLDNN)
   inference_analysis_api_quant_test_run(test_analyzer_quant_performance_benchmark ${QUANT_IMG_CLASS_TEST_APP} ${QUANT2_MobileNetV1_MODEL_DIR}/MobileNet_qat_perf/float ${QUANT2_INT8_MobileNetV1_MODEL_DIR}/MobileNet_qat_perf_int8 ${IMAGENET_DATA_PATH})
 
   ### Other tests
- 
+
   # MKLDNN quantizer config
   set(MKLDNN_QUANTIZER_CONFIG_TEST_APP "test_mkldnn_quantizer_config")
   set(MKLDNN_QUANTIZER_CONFIG_TEST_APP_SRC "mkldnn_quantizer_config_tester.cc")
@@ -469,7 +469,7 @@ if(WITH_MKLDNN)
     set(IMAGENET_SMALL_DATA_DIR "${INT8_DATA_DIR}/imagenet_small")
     set(IMAGENET_SMALL_OUTPUT_FILE "imagenet_small.bin")
     preprocess_data2bin_test_run(preprocess_local_imagenet "full_ILSVRC2012_val_preprocess.py" ${IMAGENET_SMALL_DATA_DIR} ${IMAGENET_SMALL_OUTPUT_FILE})
-    
+
   # preprocess data2bin pascalvoc
   download_int8_data(${INT8_DATA_DIR} "pascalvoc_small.tar.gz")
   set(PASCALVOC_SMALL_DATA_DIR "${INT8_DATA_DIR}/pascalvoc_small")
@@ -485,7 +485,7 @@ inference_analysis_api_test(test_analyzer_bert ${BERT_INSTALL_DIR} analyzer_bert
 
 # multiple models prediction
 set(MMP_INSTALL_DIR "${INFERENCE_DEMO_INSTALL_DIR}/multi_model_prediction")
-download_data(${MMP_INSTALL_DIR} PaddleInference/mobilenet_v2_models.tar.gz) 
+download_data(${MMP_INSTALL_DIR} PaddleInference/mobilenet_v2_models.tar.gz)
 inference_multiple_models_analysis_api_test(test_analyzer_multi_model_prediction ${MMP_INSTALL_DIR} analyzer_mmp_tester.cc)
 
 if(WITH_GPU AND TENSORRT_FOUND)
@@ -517,10 +517,10 @@ if(WITH_GPU AND TENSORRT_FOUND)
             EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TRT_MODEL_INSTALL_DIR}/trt_inference_test_models)
     inference_analysis_test(trt_split_converter_test SRCS trt_split_converter_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_SPLIT_CONVERTER_MODEL}/)
     inference_analysis_test(trt_instance_norm_test SRCS trt_instance_norm_converter_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_INSTANCE_NORM_MODEL}/)
     inference_analysis_test(test_analyzer_capi_gpu SRCS analyzer_capi_gpu_tester.cc
             EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
@@ -528,7 +528,7 @@ if(WITH_GPU AND TENSORRT_FOUND)
     inference_analysis_test(test_analyzer_capi_xpu SRCS analyzer_capi_xpu_tester.cc
             EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${TRT_MODEL_INSTALL_DIR}/trt_inference_test_models)
-            
+
     set(TRT_MODEL_QUANT_RESNET_DIR "${INFERENCE_DEMO_INSTALL_DIR}/small_quant_model")
     if (NOT EXISTS ${INFERENCE_DEMO_INSTALL_DIR}/small_quant_model.tgz)
         inference_download_and_uncompress(${INFERENCE_DEMO_INSTALL_DIR} ${INFERENCE_URL}/tensorrt_test "small_quant_model.tgz")
@@ -564,7 +564,7 @@ if(WITH_GPU AND TENSORRT_FOUND)
     endif()
 
     inference_analysis_test(test_trt_dynamic_shape_ernie SRCS trt_dynamic_shape_ernie_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_TRT_ERNIE_MODEL}/ernie_model_4)
 
     set(TEST_TRT_TRANSFORMER_PRUNE_MODEL "${TRT_MODEL_INSTALL_DIR}/transformer_prune")
@@ -573,7 +573,7 @@ if(WITH_GPU AND TENSORRT_FOUND)
     endif()
 
     inference_analysis_test(test_trt_dynamic_shape_transformer_prune SRCS trt_dynamic_shape_transformer_prune_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_TRT_TRANSFORMER_PRUNE_MODEL}/transformer_prune)
 
     if (NOT EXISTS ${TEST_TRT_ERNIE_MODEL}/ernie_model_4_unserialized.tgz)
@@ -581,7 +581,7 @@ if(WITH_GPU AND TENSORRT_FOUND)
     endif()
 
     inference_analysis_test(test_trt_dynamic_shape_ernie_ser_deser SRCS trt_dynamic_shape_ernie_serialize_deserialize_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_TRT_ERNIE_MODEL}/ernie_model_4_unserialized)
 
     if (NOT EXISTS ${TEST_TRT_ERNIE_MODEL}/ernie_model_4_fp16_unserialized.tgz)
@@ -589,7 +589,7 @@ if(WITH_GPU AND TENSORRT_FOUND)
     endif()
 
     inference_analysis_test(test_trt_dynamic_shape_ernie_fp16_ser_deser SRCS trt_dynamic_shape_ernie_fp16_serialize_deserialize_test.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
             ARGS --infer_model=${TEST_TRT_ERNIE_MODEL}/ernie_model_4_fp16_unserialized)
 
 endif()
@@ -613,20 +613,20 @@ inference_analysis_test(test_analyzer_capi_pd_tensor SRCS analyzer_capi_pd_tenso
             ARGS --infer_model=${MOBILENET_INSTALL_DIR}/model)
 
 inference_analysis_test(test_analyzer_zerocopytensor_tensor SRCS analyzer_zerocopy_tensor_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
-            ARGS --infer_model=${OCR_INSTALL_DIR}/model)        
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
+            ARGS --infer_model=${OCR_INSTALL_DIR}/model)
 
 inference_analysis_test(test_analyzer_paddletensor_tensor SRCS analyzer_paddle_tensor_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
-            ARGS --infer_model=${OCR_INSTALL_DIR}/model --infer_data=${OCR_INSTALL_DIR}/data.txt --refer_result=${OCR_INSTALL_DIR}/result.txt)    
-            
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS}
+            ARGS --infer_model=${OCR_INSTALL_DIR}/model --infer_data=${OCR_INSTALL_DIR}/data.txt --refer_result=${OCR_INSTALL_DIR}/result.txt)
+
 if(WITH_MKLDNN)
   inference_analysis_test(test_analyzer_capi_int SRCS analyzer_capi_int_tester.cc
             EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${INT8_DATA_DIR}/resnet50/model)
  endif()
 
-inference_analysis_test(test_analyzer_capi_ner SRCS analyzer_capi_ner_tester.cc 
+inference_analysis_test(test_analyzer_capi_ner SRCS analyzer_capi_ner_tester.cc
         EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
         ARGS --infer_model=${CHINESE_NER_INSTALL_DIR}/model)
 

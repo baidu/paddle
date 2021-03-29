@@ -328,6 +328,11 @@ void AnalysisPredictor::MkldnnPreSet(
     VLOG(2) << "Set input shape=" << ss.str();
     platform::MKLDNNDeviceContext::tls().set_cur_input_shape_str(ss.str());
   }
+  if (config_.onednn_use_input_mem_format_) {
+    auto *dev_ctx = static_cast<platform::MKLDNNDeviceContext *>(
+        (platform::DeviceContextPool::Instance()).Get(platform::CPUPlace()));
+    dev_ctx->SetUseInputMemFormat(true);
+  }
 #endif
 }
 

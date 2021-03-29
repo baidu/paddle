@@ -564,3 +564,22 @@ DEFINE_string(tracer_mkldnn_ops_on, "",
  */
 DEFINE_string(tracer_mkldnn_ops_off, "",
               "List of OneDNN operation types to be turned off");
+
+#ifdef PADDLE_WITH_MKLDNN
+/**
+ * Memory related FLAG
+ * Name: onednn_use_input_mem_format
+ * Since Version:
+ * Value Range: bool, default=false
+ * Example:
+ * Note: Decides whether to use input tensor memory format. By default for
+ *       compute-intensive operators oneDNN kernels use it's own optimized
+ *       memory format. However this usually results in copying tensor data,
+ *       thus more memory consumption. With this flag set to true oneDNN kernels
+ *       will use input tensor, Paddle memory format, which will result in less
+ *       memory consumption, although at a const of performance.
+ */
+DEFINE_bool(onednn_use_input_mem_format, false,
+            "Whether to use input tensor memory format instead of oneDNN "
+            "optimized format. This may result in less memory consumption.");
+#endif

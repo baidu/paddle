@@ -138,6 +138,7 @@ AnalysisConfig::AnalysisConfig(const AnalysisConfig &other) {
   CP_MEMBER(use_mkldnn_);
   CP_MEMBER(mkldnn_enabled_op_types_);
   CP_MEMBER(mkldnn_cache_capacity_);
+  CP_MEMBER(onednn_use_input_mem_format_);
   // Bfloat16 related.
   CP_MEMBER(use_mkldnn_bfloat16_);
   CP_MEMBER(bfloat16_enabled_op_types_);
@@ -282,6 +283,17 @@ MkldnnQuantizerConfig *AnalysisConfig::mkldnn_quantizer_config() const {
                           platform::errors::PreconditionNotMet(
                               "MkldnnQuantizer was not enabled yet."));
   return mkldnn_quantizer_config_.get();
+}
+
+void AnalysisConfig::EnableOneDNNUseInputMemFormat() {
+#ifdef PADDLE_WITH_MKLDNN
+  onednn_use_input_mem_format_ = true;
+#else
+  LOG(ERROR) << "Please compile with MKLDNN first to use "
+                "EnableOneDNNUseInputMemFormat";
+  onednn_use_input_mem_format_ = false;
+#endif
+  Update();
 }
 
 void AnalysisConfig::EnableTensorRtEngine(
@@ -496,6 +508,7 @@ std::string AnalysisConfig::SerializeInfoCache() {
   ss << use_mkldnn_bfloat16_;
   for (auto &item : bfloat16_enabled_op_types_) ss << item;
   ss << ";";
+  ss << onednn_use_input_mem_format_;
   ss << model_from_memory_;
 
   ss << with_profile_;

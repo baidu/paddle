@@ -196,8 +196,15 @@ class FCPrimitiveFactory {
       LoDTensor* output, const ExecutionContext& ctx) {
     auto src_desc = CreateMemDescriptor<T_in>(input, input->format());
     auto weight_dims = Get2DWeightDimsForDNNL(weights);
-    auto weights_desc =
-        CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::any);
+    platform::MKLDNNMemoryDescriptor weights_desc;
+    const auto& dev_ctx = ctx.device_context<platform::MKLDNNDeviceContext>();
+    if (dev_ctx.UseInputMemFormat()) {
+      weights_desc =
+          CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::oi);
+    } else {
+      weights_desc =
+          CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::any);
+    }
     auto bias_desc = CreateMemDescriptor<float>(bias, MKLDNNMemoryFormat::x);
     auto dst_desc = CreateMemDescriptor<T_out>(output, MKLDNNMemoryFormat::any);
     const auto attrs = CreatePostOps(ctx);
@@ -221,8 +228,15 @@ class FCPrimitiveFactory {
     auto src_desc = CreateMemDescriptor<T_in>(new_input_dims, input->format());
 
     auto weight_dims = Get3DWeightDimsForDNNL(weights);
-    auto weights_desc =
-        CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::any);
+    platform::MKLDNNMemoryDescriptor weights_desc;
+    const auto& dev_ctx = ctx.device_context<platform::MKLDNNDeviceContext>();
+    if (dev_ctx.UseInputMemFormat()) {
+      weights_desc =
+          CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::oiw);
+    } else {
+      weights_desc =
+          CreateMemDescriptor<T_w>(weight_dims, MKLDNNMemoryFormat::any);
+    }
 
     auto bias_desc = CreateMemDescriptor<float>(bias, MKLDNNMemoryFormat::x);
 
@@ -251,7 +265,13 @@ class FCPrimitiveFactory {
     // inner_product primitive, transpose the weights to be in
     // row-major format
     auto dims = Get4DWeightDimsForDNNL(input, weights);
-    auto weights_desc = CreateMemDescriptor<T_w>(dims, MKLDNNMemoryFormat::any);
+    platform::MKLDNNMemoryDescriptor weights_desc;
+    const auto& dev_ctx = ctx.device_context<platform::MKLDNNDeviceContext>();
+    if (dev_ctx.UseInputMemFormat()) {
+      weights_desc = CreateMemDescriptor<T_w>(dims, MKLDNNMemoryFormat::oihw);
+    } else {
+      weights_desc = CreateMemDescriptor<T_w>(dims, MKLDNNMemoryFormat::any);
+    }
     auto bias_desc = CreateMemDescriptor<float>(bias, MKLDNNMemoryFormat::x);
     auto dst_desc = CreateMemDescriptor<T_out>(output, MKLDNNMemoryFormat::any);
     const auto attrs = CreatePostOps(ctx);

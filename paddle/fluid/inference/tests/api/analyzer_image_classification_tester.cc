@@ -44,12 +44,14 @@ void SetOptimConfig(AnalysisConfig *cfg) {
 }
 
 // Easy for profiling independently.
-void profile(bool use_mkldnn = false) {
+void profile(bool use_mkldnn = false,
+             bool onednn_use_input_mem_format = false) {
   AnalysisConfig cfg;
   SetConfig(&cfg);
 
   if (use_mkldnn) {
     cfg.EnableMKLDNN();
+    if (onednn_use_input_mem_format) cfg.EnableOneDNNUseInputMemFormat();
     if (!FLAGS_disable_mkldnn_fc) {
       cfg.pass_builder()->AppendPass("fc_mkldnn_pass");
       cfg.pass_builder()->AppendPass("fc_act_mkldnn_fuse_pass");
@@ -66,6 +68,9 @@ void profile(bool use_mkldnn = false) {
 TEST(Analyzer_resnet50, profile) { profile(); }
 #ifdef PADDLE_WITH_MKLDNN
 TEST(Analyzer_resnet50, profile_mkldnn) { profile(true /* use_mkldnn */); }
+TEST(Analyzer_resnet50, profile_mkldnn_input_mem_format) {
+  profile(true /* use_mkldnn */, true /* onednn_use_input_mem_format */);
+}
 #endif
 
 // Check the fuse status
@@ -80,11 +85,13 @@ TEST(Analyzer_resnet50, fuse_statis) {
 }
 
 // Compare result of NativeConfig and AnalysisConfig
-void compare(bool use_mkldnn = false) {
+void compare(bool use_mkldnn = false,
+             bool onednn_use_input_mem_format = false) {
   AnalysisConfig cfg;
   SetConfig(&cfg);
   if (use_mkldnn) {
     cfg.EnableMKLDNN();
+    if (onednn_use_input_mem_format) cfg.EnableOneDNNUseInputMemFormat();
     if (!FLAGS_disable_mkldnn_fc) {
       cfg.pass_builder()->AppendPass("fc_mkldnn_pass");
       cfg.pass_builder()->AppendPass("fc_act_mkldnn_fuse_pass");
@@ -100,6 +107,9 @@ void compare(bool use_mkldnn = false) {
 TEST(Analyzer_resnet50, compare) { compare(); }
 #ifdef PADDLE_WITH_MKLDNN
 TEST(Analyzer_resnet50, compare_mkldnn) { compare(true /* use_mkldnn */); }
+TEST(Analyzer_resnet50, compare_mkldnn_input_mem_format) {
+  compare(true /* use_mkldnn */, true /*onednn_use_input_mem_format*/);
+}
 #endif
 
 // Compare Deterministic result
