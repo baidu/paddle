@@ -24,10 +24,14 @@ class TestSoftmaxWithXe(unittest.TestCase):
         self.initParameter()
         self.m, self.n = np.random.random_integers(
             low=100, high=2000, size=[2]).astype('int64')
+        self.executed_api()
 
     def initParameter(self):
         self.dtype = 'float32'
         self.soft_label = False
+
+    def executed_api(self):
+        self.function = fluid.layers.softmax_with_cross_entropy
 
     def softmax_with_xe(self,
                         x,
@@ -48,7 +52,7 @@ class TestSoftmaxWithXe(unittest.TestCase):
                     shape=[m, 1] if not self.soft_label else [m, n],
                     dtype='int64' if not self.soft_label else self.dtype,
                     append_batch_size=False)
-                z_d, s_d = fluid.layers.softmax_with_cross_entropy(
+                z_d, s_d = self.function(
                     x_d,
                     y_d,
                     soft_label=self.soft_label,
@@ -107,6 +111,7 @@ class TestSoftmaxWithXe(unittest.TestCase):
             self.assertTrue((s1 == s2).all())
 
     def test_main(self):
+        paddle.enable_static()
         self.main_with_place(fluid.CPUPlace())
         if fluid.core.is_compiled_with_cuda():
             self.main_with_place(fluid.CUDAPlace(0))
@@ -128,6 +133,52 @@ class TestSoftmaxWithXe3(TestSoftmaxWithXe):
     def initParameter(self):
         self.dtype = 'float64'
         self.soft_label = True
+
+
+class TestDygraphInplaceApiInStaticMode(TestSoftmaxWithXe):
+    def executed_api(self):
+        self.function = paddle.nn.functional.softmax_with_cross_entropy_
+
+
+class TestDygraphInplaceApi(unittest.TestCase):
+    def setUp(self):
+        self.init_data()
+
+    def init_data(self):
+        self.return_softmax = False
+
+    def executed_non_inplace_api(self, data, label, return_softmax):
+        return paddle.nn.functional.softmax_with_cross_entropy(
+            logits=data, label=label, return_softmax=return_softmax)
+
+    def executed_inplace_api(self, data, label, return_softmax):
+        return paddle.nn.functional.softmax_with_cross_entropy_(
+            logits=data, label=label, return_softmax=return_softmax)
+
+    def test_dygraph_mode(self):
+        paddle.disable_static()
+        data = np.random.rand(128).astype("float32")
+        label = np.random.rand(1).astype("int64")
+        data = paddle.to_tensor(data)
+        label = paddle.to_tensor(label)
+        out_non_inplace = self.executed_non_inplace_api(data, label,
+                                                        self.return_softmax)
+        out_inplace = self.executed_inplace_api(data, label,
+                                                self.return_softmax)
+        if not self.return_softmax:
+            self.assertTrue((out_non_inplace.numpy() == out_inplace.numpy()
+                             ).all())
+        else:
+            self.assertTrue((out_non_inplace[0].numpy() == out_inplace[0].numpy(
+            )).all())
+            self.assertTrue((out_non_inplace[1].numpy() == out_inplace[1].numpy(
+            )).all())
+        paddle.enable_static()
+
+
+class TestDygraphInplaceApiReturnSoftmax(TestDygraphInplaceApi):
+    def init_data(self):
+        self.return_softmax = True
 
 
 if __name__ == '__main__':

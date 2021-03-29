@@ -25,7 +25,7 @@ from ..fluid.framework import core, _varbase_creator, in_dygraph_mode, Variable,
 from ..fluid.layer_helper import LayerHelper
 from ..fluid.data_feeder import check_variable_and_dtype, check_type, check_dtype, convert_dtype
 from ..fluid.layers.layer_function_generator import _generate_doc_string_, generate_activation_fn, generate_layer_fn
-from .manipulation import _print_warning_in_static_mode
+from ..fluid.dygraph.inplace_utils import inplace_apis_in_dygraph_only
 
 # TODO: define math functions
 # yapf: disable
@@ -33,6 +33,7 @@ from ..fluid.layers import abs    #DEFINE_ALIAS
 from ..fluid.layers import acos    #DEFINE_ALIAS
 from ..fluid.layers import asin    #DEFINE_ALIAS
 from ..fluid.layers import ceil    #DEFINE_ALIAS
+from ..fluid.layers import ceil_    #DEFINE_ALIAS
 from ..fluid.layers import cos    #DEFINE_ALIAS
 from ..fluid.layers import tan    #DEFINE_ALIAS
 from ..fluid.layers import sinh    #DEFINE_ALIAS
@@ -45,21 +46,27 @@ from ..fluid.layers import cosh    #DEFINE_ALIAS
 # from ..fluid.layers import elementwise_pow    #DEFINE_ALIAS
 # from ..fluid.layers import elementwise_sub    #DEFINE_ALIAS
 from ..fluid.layers import exp    #DEFINE_ALIAS
+from ..fluid.layers import exp_    #DEFINE_ALIAS
 from ..fluid.layers import floor    #DEFINE_ALIAS
+from ..fluid.layers import floor_    #DEFINE_ALIAS
 from ..fluid.layers import log    #DEFINE_ALIAS
 from ..fluid.layers import reciprocal    #DEFINE_ALIAS
+from ..fluid.layers import reciprocal_    #DEFINE_ALIAS
 # from ..fluid.layers import reduce_max    #DEFINE_ALIAS
 # from ..fluid.layers import reduce_min    #DEFINE_ALIAS
 # from ..fluid.layers import reduce_prod    #DEFINE_ALIAS
 # from ..fluid.layers import reduce_sum    #DEFINE_ALIAS
 from ..fluid.layers import round    #DEFINE_ALIAS
+from ..fluid.layers import round_    #DEFINE_ALIAS
 from ..fluid.layers import rsqrt    #DEFINE_ALIAS
+from ..fluid.layers import rsqrt_    #DEFINE_ALIAS
 from ..fluid.layers import scale    #DEFINE_ALIAS
 from ..fluid.layers import square    #DEFINE_ALIAS
 from ..fluid.layers import stanh    #DEFINE_ALIAS
 from ..fluid.layers import atan    #DEFINE_ALIAS
 from ..fluid.layers import erf    #DEFINE_ALIAS
 from ..fluid.layers import sqrt    #DEFINE_ALIAS
+from ..fluid.layers import sqrt_    #DEFINE_ALIAS
 from ..fluid.layers import sin    #DEFINE_ALIAS
 
 from ..fluid.layers import multiplex    #DEFINE_ALIAS
@@ -74,11 +81,14 @@ __all__ = [
         'asin',
         'atan',
         'ceil',
+        'ceil_',
         'cos',
         'cosh',
         'cumsum',
         'exp',
+        'exp_',
         'floor',
+        'floor_',
         'increment',
         'log',
         'log2',
@@ -89,19 +99,25 @@ __all__ = [
         'pow',
         'prod',
         'reciprocal',
+        'reciprocal_',
         'round',
+        'round_',
         'rsqrt',
+        'rsqrt_',
         'scale',
+        'scale_',
         'sign',
         'sin',
         'sinh',
         'sqrt',
+        'sqrt_',
         'square',
         'stanh',
         'sum',
         'tanh',
         'tanh_',
         'add_n',
+        'add_n_',
         'max',
         'maximum',
         'min',
@@ -114,7 +130,9 @@ __all__ = [
         'floor_mod',
         'multiply',
         'add',
+        'add_',
         'subtract',
+        'subtract_',
         'atan',
         'logsumexp',
         'inverse',
@@ -122,6 +140,7 @@ __all__ = [
         'erf',
         'addmm',
         'clip',
+        'clip_',
         'trace',
         'kron',
         'isfinite',
@@ -144,6 +163,19 @@ _supported_float_dtype_ = [
     VarDesc.VarType.FP32,
     VarDesc.VarType.FP64,
 ]
+
+
+@inplace_apis_in_dygraph_only
+def scale_(x, scale=1.0, bias=0.0, bias_after_scale=True, act=None, name=None):
+    """
+    Inplace version of ``scale`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_tensor_scale`.
+    """
+    _scale = scale.numpy().item(0) if isinstance(scale, Variable) else scale
+    return core.ops.scale_(x, 'scale',
+                            float(_scale), 'bias',
+                            float(bias), 'bias_after_scale', bias_after_scale)
+
 
 def pow(x, y, name=None):
     """
@@ -292,6 +324,24 @@ def add(x, y, name=None):
     return _elementwise_op(LayerHelper(op_type, **locals()))
 
 
+@inplace_apis_in_dygraph_only
+def add_(x, y, name=None):
+    """
+    Inplace version of ``add`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_tensor_add`.
+    """
+    op_type = 'elementwise_add_'
+    axis = -1
+
+    out_shape = broadcast_shape(x.shape, y.shape)
+    if out_shape != x.shape:
+        raise ValueError("The shape of broadcast output {} is different from that of inplace tensor {} in the Inplace operation.".format(out_shape, x.shape))
+
+    out = _elementwise_op_in_dygraph(
+        x, y, axis=axis, op_name=op_type)
+    return out
+
+
 def subtract(x, y, name=None):
     """
     Substract two tensors element-wise. The equation is:
@@ -351,6 +401,24 @@ def subtract(x, y, name=None):
         return _elementwise_op_in_dygraph(
             x, y, axis=axis, act=act, op_name=op_type)
     return _elementwise_op(LayerHelper(op_type, **locals()))
+
+
+@inplace_apis_in_dygraph_only
+def subtract_(x, y, name=None):
+    """
+    Inplace version of ``subtract`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_tensor_subtract`.
+    """
+    axis = -1
+    act = None
+
+    out_shape = broadcast_shape(x.shape, y.shape)
+    if out_shape != x.shape:
+        raise ValueError("The shape of broadcast output {} is different from that of inplace tensor {} in the Inplace operation.".format(out_shape, x.shape))
+
+    out = _elementwise_op_in_dygraph(
+        x, y, axis=axis, act=act, op_name='elementwise_sub_')
+    return out
 
 
 def divide(x, y, name=None):
@@ -870,6 +938,17 @@ def add_n(inputs, name=None):
         attrs={'use_mkldnn': False})
 
     return out
+
+
+@inplace_apis_in_dygraph_only
+def add_n_(inputs, name=None):
+    """
+    Inplace version of ``add_n`` API, the output Tensor will be inplaced with the first Tensor in input ``inputs``.
+    Please refer to :ref:`api_tensor_add_n`.
+    """
+    if isinstance(inputs, Variable):
+        inputs = [inputs]
+    return core.ops.sum_(inputs, 'use_mkldnn', False)
 
 
 def mm(input, mat2, name=None):
@@ -1552,6 +1631,24 @@ def clip(x, min=None, max=None, name=None):
     return output
 
 
+@inplace_apis_in_dygraph_only
+def clip_(x, min=None, max=None, name=None):
+    """
+    Inplace version of ``clip`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_tensor_clip`.
+    """
+    fmin = float(np.finfo(np.float32).min)
+    fmax = float(np.finfo(np.float32).max)
+    if isinstance(min, Variable):
+        min = min.numpy().item(0)
+    if isinstance(max, Variable):
+        max = max.numpy().item(0)
+    min = fmin if min is None else min
+    max = fmax if max is None else max
+    return core.ops.clip_(x, "min", min, "max", max)
+
+
+
 def trace(x, offset=0, axis1=0, axis2=1, name=None):
     """
     **trace**
@@ -1971,16 +2068,14 @@ def tanh(x, name=None):
     helper.append_op(type='tanh', inputs={'X': x}, outputs={'Out': out})
     return out
 
+@inplace_apis_in_dygraph_only
 def tanh_(x, name=None):
     r"""
     Inplace version of ``tanh`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_tensor_tanh`.
     """
-    if in_dygraph_mode():
-        return core.ops.tanh_(x)
+    return core.ops.tanh_(x)
 
-    _print_warning_in_static_mode("tanh")
-    return tanh(x, name)
 
 def increment(x, value=1.0, name=None):
     """

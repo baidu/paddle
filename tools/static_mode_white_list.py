@@ -277,7 +277,6 @@ STATIC_MODE_TESTING_LIST = [
     'test_initializer',
     'test_inplace_abn_op',
     'test_inplace_addto_strategy',
-    'test_inplace_softmax_with_cross_entropy',
     'test_input_spec',
     'test_instance_norm_op',
     'test_instance_norm_op_v2',
