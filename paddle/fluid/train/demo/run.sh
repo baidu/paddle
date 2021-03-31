@@ -2,19 +2,14 @@
 
 set -x
 
-PADDLE_ROOT=$1
-TURN_ON_MKL=$2 # use MKL or Openblas
+PADDLE_ROOT=/home/yiak/WorkSpace/Github/Paddle
+TURN_ON_MKL=ON # use MKL or Openblas
 
-# download models
-function download() {
-    wget -q http://paddle-tar.bj.bcebos.com/train_demo/LR-1-7/main_program
-    wget -q http://paddle-tar.bj.bcebos.com/train_demo/LR-1-7/startup_program
-}
-
-download
+# generate models program description
+python demo_trainer.py
 
 # build demo trainer
-paddle_install_dir=${PADDLE_ROOT}/build/paddle_install_dir
+paddle_install_dir=${PADDLE_ROOT}/build
 
 mkdir -p build
 cd build

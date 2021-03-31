@@ -736,6 +736,7 @@ inline const char *streamStateFromFormat(std::ostream &out,
 inline void formatImpl(std::ostream &out, const char *fmt,
                        const detail::FormatArg *formatters, int numFormatters) {
   // Saved stream state
+  const char* ori = fmt;
   std::streamsize origWidth = out.width();
   std::streamsize origPrecision = out.precision();
   std::ios::fmtflags origFlags = out.flags();
@@ -777,9 +778,15 @@ inline void formatImpl(std::ostream &out, const char *fmt,
 
   // Print remaining part of format string.
   fmt = printFormatStringLiteral(out, fmt);
-  if (fmt != nullptr && *fmt != '\0' && *fmt != 0)
+  if (fmt != nullptr && *fmt != '\0' && *fmt != 0) {
+    if (ori != nullptr) {
+      printf("[DEBUG] [Tinyformat::formatImpl] original fmt: %s", ori);
+    }
+    /*
     TINYFORMAT_ERROR(
         "tinyformat: Too many conversion specifiers in format string");
+     */
+  }
 
   // Restore stream state
   out.width(origWidth);

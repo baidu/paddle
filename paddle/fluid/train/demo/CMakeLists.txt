@@ -4,14 +4,32 @@ project(cpp_train_demo CXX C)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+if (NOT DEFINED PADDLE_SRC)
+  set(PADDLE_SRC "/home/yiak/WorkSpace/Github/Paddle")
+  message(WARNING "please set PADDLE_SRC with -DPADDLE_SRC, defaults to ${PADDLE_SRC}")
+endif()
 if(NOT DEFINED PADDLE_LIB)
-  message(FATAL_ERROR "please set PADDLE_LIB with -DPADDLE_LIB=/paddle/lib/dir")
+  set(PADDLE_LIB "${PADDLE_SRC}/build")
+  message(WARNING "please set PADDLE_LIB with -DPADDLE_LIB, defaults to ${PADDLE_LIB}")
 endif()
 
 option(WITH_MKLDNN     "Compile PaddlePaddle with MKLDNN"                                   OFF)
 option(WITH_MKL        "Compile PaddlePaddle with MKL support, default use openblas."       OFF)
 
+execute_process(COMMAND find ${PADDLE_LIB}/third_party/threadpool
+                             ${PADDLE_LIB}/third_party/dlpack
+        -type f -name "*.h" -exec dirname {} \; OUTPUT_VARIABLE THIRD_INCR OUTPUT_STRIP_TRAILING_WHITESPACE)
+message(STATUS "THIRD_INCR : ${THIRD_INCR}")
+
+string(REPLACE "\n" " " THIRD_INCR ${THIRD_INCR})
+message(STATUS "THIRD_INCR : ${THIRD_INCR}")
+include_directories("${THIRD_INCR}")
+# include Eigen 3
+include_directories("${PADDLE_SRC}/build/third_party/eigen3/src/extern_eigen3/")
+
+include_directories("${PADDLE_SRC}")
 include_directories("${PADDLE_LIB}")
+message(STATUS "PADDLE_LIB ${PADDLE_LIB}")
 include_directories("${PADDLE_LIB}/third_party/install/protobuf/include")
 include_directories("${PADDLE_LIB}/third_party/install/glog/include")
 include_directories("${PADDLE_LIB}/third_party/install/gflags/include")
@@ -37,7 +55,7 @@ if(WITH_MKLDNN)
   if(WIN32)
     set(MKLDNN_LIB ${PADDLE_LIB}/third_party/install/mkldnn/lib/mkldnn.lib)
   else(WIN32)
-    set(MKLDNN_LIB ${PADDLE_LIB}/third_party/install/mkldnn/lib/libmkldnn.so.0)
+    set(MKLDNN_LIB ${PADDLE_LIB}/third_party/install/mkldnn/lib/libmkldnn.so)
   endif(WIN32)
 endif(WITH_MKLDNN)
 
@@ -66,6 +84,15 @@ else(APPLE)
   set(EXTERNAL_LIB "-lrt -ldl -lpthread")
 endif(APPLE)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
+
+set_target_properties(demo_trainer PROPERTIES LINKER_LANGUAGE CXX)
+
+# this line does not work as expected
+# target_include_directories(demo_trainer PUBLIC "${THIRD_INCR}")
+
+target_include_directories(demo_trainer PUBLIC ${PADDLE_LIB}/third_party/threadpool/src/extern_threadpool)
+target_include_directories(demo_trainer PUBLIC ${PADDLE_LIB}/third_party/dlpack/src/extern_dlpack/include/)
 target_link_libraries(demo_trainer
         ${MACOS_LD_FLAGS}
         ${ARCHIVE_START}
@@ -73,5 +100,5 @@ target_link_libraries(demo_trainer
         ${ARCHIVE_END}
         ${MATH_LIB}
         ${MKLDNN_LIB}
-        glog gflags protobuf z xxhash
+        gflags glog protobuf z xxhash
         ${EXTERNAL_LIB})

@@ -6,7 +6,18 @@
 # WITH_MKL=ON|OFF
 # WITH_MKLDNN=ON|OFF
 
-PADDLE_LIB=/paddle/lib/dir
+# for paddle main line, see CMakeList.txt so that you use libraries
+# for both forward and backpopagation computation in a third party project
+PADDLE_LIB=${PADDLE_SRC}/build
+
+# for paddle-inference, download compiled libraries directly withtout
+# compiling the source codes and grabs output headers and libraries:
+#   https://paddle-inference.readthedocs.io/en/latest/product_introduction/inference_intro.html
+# PADDLE_LIB=paddle_inference/paddle_inference_install_dir/
+
+conda activate py36 # using python3.6
+source env.sh
+bash build.sh
 cmake .. -DPADDLE_INSTALL_DIR=$PADDLE_LIB \
          -DCMAKE_BUILD_TYPE=Release \
          -DWITH_GPU=OFF \
@@ -14,7 +25,8 @@ cmake .. -DPADDLE_INSTALL_DIR=$PADDLE_LIB \
          -DWITH_MKL=OFF \
          -DWITH_MKLDNN=OFF
 make -j8
-make -j8 fluid_lib_dist
+cd ${PADDLE_LIB}/python/dist/
+pip install paddlepaddle_gpu-$VERSION-cp36-cp36m-linux_x86_64.whl
 ```
 
 ### step 2. generate program desc
@@ -39,7 +51,6 @@ cd build
 
 # WITH_MKL=ON|OFF
 # WITH_MKLDNN=ON|OFF
-PADDLE_LIB=/paddle/lib/dir
 
 # PADDLE_LIB is the same with PADDLE_INSTALL_DIR when building the lib
 cmake .. -DPADDLE_LIB=$PADDLE_LIB \
@@ -47,12 +58,10 @@ cmake .. -DPADDLE_LIB=$PADDLE_LIB \
          -DWITH_MKL=OFF
 make
 
-# copy startup_program and main_program to this dir
-cp ../startup_program .
-cp ../main_program .
+cd ..
 
 # run demo cpp trainer
-./demo_trainer
+./build/demo_trainer
 
 ```
 
