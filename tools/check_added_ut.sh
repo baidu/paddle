@@ -16,21 +16,40 @@
 
 set +e
 set -x
+SYSTEM=`uname -s`
 if [ -z ${BRANCH} ]; then
     BRANCH="develop"
 fi
 
 export CI_SKIP_CPP_TEST=OFF
-PADDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
+if [[ "$SYSTEM" == "Linux" ]] || [[ "$SYSTEM" == "Darwin" ]];then
+    PADDLE_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
+elif [[ "$SYSTEM" == "Windows_NT" ]];then
+    PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
+fi
 CURDIR=`pwd`
 cd $PADDLE_ROOT
-cp $PADDLE_ROOT/paddle/scripts/paddle_build.sh $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh
+if [[ "$SYSTEM" == "Linux" ]] || [[ "$SYSTEM" == "Darwin" ]];then
+    cp $PADDLE_ROOT/paddle/scripts/paddle_build.sh $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh
+elif [[ "$SYSTEM" == "Windows_NT" ]];then
+    git remote | grep upstream
+    if [ $? != 0 ]; then git remote add upstream https://github.com/PaddlePaddle/Paddle.git; fi
+fi
 CURBRANCH=`git rev-parse --abbrev-ref HEAD`
 echo $CURBRANCH
+if [ `git branch | grep 'prec_added_ut'` ];then
+    git branch -D 'prec_added_ut'
+fi
 git checkout -b prec_added_ut upstream/${BRANCH}
+git branch
 mkdir prec_build
 cd prec_build
-bash $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh cmake_gen_in_current_dir >prebuild.log 2>&1
+if [[ "$SYSTEM" == "Linux" ]] || [[ "$SYSTEM" == "Darwin" ]];then
+    bash $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh cmake_gen_in_current_dir >prebuild.log 2>&1
+elif [[ "$SYSTEM" == "Windows_NT" ]];then
+    cat $PADDLE_ROOT/get_added_ut.sh
+    bash $PADDLE_ROOT/get_added_ut.sh
+fi
 ctest -N | awk -F ':' '{print $2}' | sed '/^$/d' | sed '$d' | sed 's/ //g' > /$PADDLE_ROOT/br-ut
 cd $PADDLE_ROOT/build
 ctest -N | awk -F ':' '{print $2}' | sed '/^$/d' | sed '$d' | sed 's/ //g' > /$PADDLE_ROOT/pr-ut
@@ -40,7 +59,11 @@ sort pr-ut |uniq -d > $PADDLE_ROOT/duplicate_ut
 echo "New-UT:"
 cat $PADDLE_ROOT/added_ut
 rm -rf prec_build
-rm $PADDLE_ROOT/br-ut $PADDLE_ROOT/pr-ut $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh
+if [[ "$SYSTEM" == "Linux" ]] || [[ "$SYSTEM" == "Darwin" ]];then
+    rm $PADDLE_ROOT/br-ut $PADDLE_ROOT/pr-ut $PADDLE_ROOT/paddle/scripts/paddle_build_pre.sh
+elif [[ "$SYSTEM" == "Windows_NT" ]];then
+    rm $PADDLE_ROOT/br-ut $PADDLE_ROOT/pr-ut $PADDLE_ROOT/get_added_ut.sh
+fi
 git checkout $CURBRANCH
 echo $CURBRANCH
 git branch -D prec_added_ut
