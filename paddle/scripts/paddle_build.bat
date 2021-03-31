@@ -52,6 +52,8 @@ if not defined WITH_CACHE set WITH_CACHE=OFF
 if not defined WITH_UNITY_BUILD set WITH_UNITY_BUILD=OFF
 if not defined INFERENCE_DEMO_INSTALL_DIR set INFERENCE_DEMO_INSTALL_DIR=%cache_dir:\=/%/inference_demo
 if not defined LOG_LEVEL set LOG_LEVEL=normal
+if not defined PRECISION_TEST set PRECISION_TEST=OFF
+if not defined NIGHTLY_MODE set PRECISION_TEST=OFF
 
 rem -------set cache build directory-----------
 rmdir build\python /s/q
@@ -500,7 +502,7 @@ setlocal enabledelayedexpansion
 :: for /F %%# in ('cmd /C nvidia-smi -L ^|find "GPU" /C') do set CUDA_DEVICE_COUNT=%%#
 set CUDA_DEVICE_COUNT=1
 
-%cache_dir%\tools\busybox64.exe bash %work_dir%\tools\windows\run_unittests.sh %NIGHTLY_MODE% %PRECISION_TEST%
+%cache_dir%\tools\busybox64.exe bash %work_dir%\tools\windows\run_unittests.sh %NIGHTLY_MODE% %PRECISION_TEST% %WITH_GPU%
 
 goto:eof
 
@@ -509,7 +511,7 @@ echo    ========================================
 echo    Running CPU unit tests in parallel way ...
 echo    ========================================
 
-ctest.exe -E "(%disable_ut_quickly%)" -LE %nightly_label% --output-on-failure -C Release -j 8 --repeat until-pass:4 after-timeout:4
+%cache_dir%\tools\busybox64.exe bash %work_dir%\tools\windows\run_unittests.sh %NIGHTLY_MODE% %PRECISION_TEST% %WITH_GPU%
 
 goto:eof
 

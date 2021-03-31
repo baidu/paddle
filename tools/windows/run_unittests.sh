@@ -16,6 +16,7 @@ set -e
 set +x
 NIGHTLY_MODE=$1
 PRECISION_TEST=$2
+WITH_GPU=$3
 
 export PADDLE_ROOT="$(cd "$PWD/../" && pwd )"
 if [ ${NIGHTLY_MODE:-OFF} == "ON" ]; then
@@ -204,50 +205,52 @@ long_time_test="^best_fit_allocator_test$|\
 ^test_strided_slice_op$|\
 ^test_transpose_op$"
 
-export FLAGS_call_stack_level=2
-export FLAGS_fraction_of_gpu_memory_to_use=0.92
-export CUDA_VISIBLE_DEVICES=0
+if [ ${WITH_GPU:-OFF} == "ON" ];then
+    export FLAGS_call_stack_level=2
+    export FLAGS_fraction_of_gpu_memory_to_use=0.92
+    export CUDA_VISIBLE_DEVICES=0
 
-UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
-num=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d' | wc -l)
-echo "Windows 1 card TestCases count is $num"
-if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
-    python ${PADDLE_ROOT}/tools/get_pr_ut.py
-    if [[ -f "ut_list" ]]; then
-        set +x
-        echo "PREC length: "`wc -l ut_list`
-        precision_cases=`cat ut_list`
-        set -x
-    fi
-fi
-
-set +e
-if [ ${PRECISION_TEST:-OFF} == "ON" ] && [[ "$precision_cases" != "" ]];then
-    UT_list_prec=''
-    re=$(cat ut_list|awk -F ' ' '{print }' | awk 'BEGIN{ all_str=""}{if (all_str==""){all_str=$1}else{all_str=all_str"$|^"$1}} END{print "^"all_str"$"}')
-    for case in $UT_list; do
-        flag=$(echo $case|grep -oE $re)
-        if [ -n "$flag" ];then
-            if [ -z "$UT_list_prec" ];then
-                UT_list_prec=$case
-            else
-                UT_list_prec=$UT_list_prec'\n'$case
-            fi
-        else
-            echo $case "won't run in PRECISION_TEST mode."
+    UT_list=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d')
+    num=$(ctest -N | awk -F ': ' '{print $2}' | sed '/^$/d' | sed '$d' | wc -l)
+    echo "Windows 1 card TestCases count is $num"
+    if [ ${PRECISION_TEST:-OFF} == "ON" ]; then
+        python ${PADDLE_ROOT}/tools/get_pr_ut.py
+        if [[ -f "ut_list" ]]; then
+            set +x
+            echo "PREC length: "`wc -l ut_list`
+            precision_cases=`cat ut_list`
+            set -x
         fi
-    done
-    UT_list=$UT_list_prec
+    fi
+
+    set +e
+    if [ ${PRECISION_TEST:-OFF} == "ON" ] && [[ "$precision_cases" != "" ]];then
+        UT_list_prec=''
+        re=$(cat ut_list|awk -F ' ' '{print }' | awk 'BEGIN{ all_str=""}{if (all_str==""){all_str=$1}else{all_str=all_str"$|^"$1}} END{print "^"all_str"$"}')
+        for case in $UT_list; do
+            flag=$(echo $case|grep -oE $re)
+            if [ -n "$flag" ];then
+                if [ -z "$UT_list_prec" ];then
+                    UT_list_prec=$case
+                else
+                    UT_list_prec=$UT_list_prec'\n'$case
+                fi
+            else
+                echo $case "won't run in PRECISION_TEST mode."
+            fi
+        done
+        UT_list=$UT_list_prec
+    fi
+    set -e
+
+    output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
+    eight_parallel_job=$(echo $output | cut -d ";" -f 1)
+    tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)
+    non_parallel_job=$(echo $output | cut -d ";" -f 3)
+
+    non_parallel_job_1=$(echo $non_parallel_job | cut -d "," -f 1)
+    non_parallel_job_2=$(echo $non_parallel_job | cut -d "," -f 2)
 fi
-set -e
-
-output=$(python ${PADDLE_ROOT}/tools/parallel_UT_rule.py "${UT_list}")
-eight_parallel_job=$(echo $output | cut -d ";" -f 1)
-tetrad_parallel_jog=$(echo $output | cut -d ";" -f 2)
-non_parallel_job=$(echo $output | cut -d ";" -f 3)
-
-non_parallel_job_1=$(echo $non_parallel_job | cut -d "," -f 1)
-non_parallel_job_2=$(echo $non_parallel_job | cut -d "," -f 2)
 
 failed_test_lists=''
 tmp_dir=`mktemp -d`
@@ -265,6 +268,12 @@ function collect_failed_tests() {
         fi
     done
     set -e
+}
+
+function run_unittest_cpu() {
+    tmpfile=$tmp_dir/$RANDOM
+    (ctest -E "${disable_ut_quickly}" -LE "${nightly_label}" --output-on-failure -C Release -j 8 | tee $tmpfile) &
+    wait;
 }
 
 function run_unittest() {
@@ -285,7 +294,11 @@ function run_unittest() {
 }
 
 function unittests_retry(){
-    parallel_job=1
+    if [ "${WITH_GPU:-OFF}" == "ON" ];then
+        parallel_job=1
+    else
+        parallel_job=4
+    fi
     is_retry_execuate=0
     wintest_error=1
     retry_time=3
@@ -336,7 +349,7 @@ function unittests_retry(){
 
 function show_ut_retry_result() {
     if [[ "$is_retry_execuate" != "0" ]];then
-        failed_test_lists_ult=`echo "${failed_test_lists}" | grep -Po '[^ ].*$'`
+        failed_test_lists_ult=`echo "${failed_test_lists}"`
         echo "========================================="
         echo "There are more than 10 failed unit tests, so no unit test retry!!!"
         echo "========================================="
@@ -365,10 +378,14 @@ function show_ut_retry_result() {
 }
 
 set +e
-run_unittest $eight_parallel_job 8
-run_unittest $tetrad_parallel_jog 4
-run_unittest $non_parallel_job_1
-run_unittest $non_parallel_job_2
+if [ "${WITH_GPU:-OFF}" == "ON" ];then
+    run_unittest $eight_parallel_job 8
+    run_unittest $tetrad_parallel_jog 4
+    run_unittest $non_parallel_job_1
+    run_unittest $non_parallel_job_2
+else
+    run_unittest_cpu
+fi
 collect_failed_tests
 set -e
 rm -f $tmp_dir/*
