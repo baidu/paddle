@@ -16,8 +16,8 @@ from paddle.distributed.fleet.meta_optimizers.common import OP_ROLE_KEY, OpRole
 
 
 class GradientClipHelper(object):
-    def __init__(self, sharding_ring_id):
-        self.sharding_ring_id = sharding_ring_id
+    def __init__(self, mp_ring_id):
+        self.mp_ring_id = mp_ring_id
 
     def _is_gradient_clip_op(self, op):
         return op.desc.has_attr("op_namescope") \
@@ -31,6 +31,7 @@ class GradientClipHelper(object):
         """
         deperated_vars = set()
         deperate_op_idx = set()
+        reversed_x_paramname = []
         for idx, op in enumerate(block.ops):
             if not self._is_gradient_clip_op(op):
                 continue
@@ -44,6 +45,8 @@ class GradientClipHelper(object):
                 if shard.is_param(param_name) and \
                   not shard.has_param(param_name):
                     deperate_op = True
+                elif shard.is_param(param_name) :
+                    reversed_x_paramname.append(param_name)
 
             if deperate_op:
                 deperate_op_idx.add(idx)
@@ -65,32 +68,42 @@ class GradientClipHelper(object):
                 for input_name in op.desc.input_arg_names():
                     if input_name not in deperated_vars:
                         reversed_inputs.append(input_name)
+                        
                 op.desc.set_input("X", reversed_inputs)
                 assert (len(op.desc.output_arg_names()) == 1)
                 sum_res = op.desc.output_arg_names()[0]
-                block._insert_op_without_sync(
-                    idx + 1,
-                    type='c_sync_comm_stream',
-                    inputs={'X': sum_res},
-                    outputs={'Out': sum_res},
-                    attrs={'ring_id': 0,
-                           OP_ROLE_KEY: OpRole.Optimize})
+
+                # this allreduce should not overlap with calc and should be scheduled in calc stream
+                # block._insert_op_without_sync(
+                #     idx + 1,
+                #     type='c_sync_comm_stream',
+                #     inputs={'X': sum_res},
+                #     outputs={'Out': sum_res},
+                #     attrs={'ring_id': 0,
+                #            OP_ROLE_KEY: OpRole.Optimize})
                 block._insert_op_without_sync(
                     idx + 1,
                     type='c_allreduce_sum',
                     inputs={'X': sum_res},
                     outputs={'Out': sum_res},
                     attrs={
-                        'ring_id': self.sharding_ring_id,
-                        OP_ROLE_KEY: OpRole.Optimize
+                        'ring_id': self.mp_ring_id,
+                        'op_namescope': "/gradient_clip_model_parallelism",
+                        'use_calc_stream': True,
+                        OP_ROLE_KEY: OpRole.Optimize,
                     })
-                block._insert_op_without_sync(
-                    idx + 1,
-                    type='c_sync_calc_stream',
-                    inputs={'X': sum_res},
-                    outputs={'Out': sum_res},
-                    attrs={OP_ROLE_KEY: OpRole.Optimize})
+                # block._insert_op_without_sync(
+                #     idx + 1,
+                #     type='c_sync_calc_stream',
+                #     inputs={'X': sum_res},
+                #     outputs={'Out': sum_res},
+                #     attrs={OP_ROLE_KEY: OpRole.Optimize})
 
+        # the grad sum here should take the all and only param in the current shard
+        to_check_param = set(reversed_x_paramname)
+        should_check_param = set(shard.global_params).intersection(set([param for param, worker_idx in shard.global_param2device.items() if worker_idx == shard.worker_idx]))
+        assert to_check_param == should_check_param, "amp check_finite_and_unscale checking miss [{}] and got unexpected [{}]".format(should_check_param - to_check_param, to_check_param - should_check_param)
+       
         for var_name in deperated_vars:
             block._remove_var(var_name, sync=False)
         block._sync_with_cpp()

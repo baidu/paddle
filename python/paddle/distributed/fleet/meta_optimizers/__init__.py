@@ -17,6 +17,7 @@ from .gradient_merge_optimizer import GradientMergeOptimizer
 from .graph_execution_optimizer import GraphExecutionOptimizer
 from .parameter_server_optimizer import ParameterServerOptimizer
 from .pipeline_optimizer import PipelineOptimizer
+from .model_parallel_optimizer import ModelParallelOptimizer
 from .localsgd_optimizer import LocalSGDOptimizer
 from .localsgd_optimizer import AdaptiveLocalSGDOptimizer
 from .lars_optimizer import LarsOptimizer
