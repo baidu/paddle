@@ -32,6 +32,8 @@ message ShardingConfig {
   optional float fuse_broadcast_MB = 1 [ default = 32.0 ];
   optional bool hybrid_dp = 2 [ default = false ];
   optional int32 sharding_group_size = 3 [ default = 8 ];
+  optional bool as_outer_parallelism = 4 [ default = false ];
+  optional int32 inner_parallelism_size = 5 [ default = 8 ];
 }
 
 message AMPConfig {
@@ -123,6 +125,8 @@ message PipelineConfig {
   optional string schedule_mode = 3 [ default = '1F1B' ];
 }
 
+message ModelParallelConfig { optional int32 parallelism = 1 [ default = 1 ]; }
+
 message DistributedStrategy {
   // bool options
   optional Mode mode = 1 [ default = COLLECTIVE ];
@@ -152,6 +156,7 @@ message DistributedStrategy {
   optional bool fp16_allreduce = 25 [ default = false ];
   optional bool sharding = 26 [ default = false ];
   optional float last_comm_group_size_MB = 27 [ default = 1 ];
+  optional bool model_parallel = 28 [ default = false ];
 
   optional RecomputeConfig recompute_configs = 101;
   optional AMPConfig amp_configs = 102;
@@ -164,6 +169,7 @@ message DistributedStrategy {
   optional LambConfig lamb_configs = 109;
   optional AdaptiveLocalSGDConfig adaptive_localsgd_configs = 110;
   optional ShardingConfig sharding_configs = 111;
+  optional ModelParallelConfig model_parallel_configs = 112;
   optional BuildStrategy build_strategy = 201;
   optional ExecutionStrategy execution_strategy = 202;
 }

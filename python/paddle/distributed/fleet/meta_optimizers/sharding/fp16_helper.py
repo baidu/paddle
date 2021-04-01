@@ -73,7 +73,7 @@ class FP16Utils(object):
     @staticmethod
     def prune_fp16(block, shard, reduced_grads_to_param, ring_id):
         """
-        1. prune all cast_fp32_to_fp16 ops if the param not belongs to this shard
+        1. prune all cast_fp16_to_fp32 ops if the param not belongs to this shard
         2. revise amp inifine grad checking for sharding
         """
         # remove cast
@@ -103,6 +103,7 @@ class FP16Utils(object):
                 op._rename_input(inf_var_name, inf_var_name + "@sharding")
             if op.type in ["check_finite_and_unscale", "update_loss_scaling"]:
                 reversed_x = []
+                reversed_x_paramname = []
                 for input_name in op.desc.input('X'):
                     param_name = input_name.strip("@GRAD")
                     if param_name not in shard.global_params:
@@ -111,12 +112,19 @@ class FP16Utils(object):
                             "be grads, but {} is not a grad".format(input_name))
                     if shard.has_param(param_name):
                         reversed_x.append(input_name)
+                        reversed_x_paramname.append(param_name)
                 op.desc.set_input('X', reversed_x)
                 op.desc.set_output('Out', reversed_x)
+
+                # the grad checking should take the all and only param in the current shard
+                to_check_param = set(reversed_x_paramname)
+                should_check_param = set(shard.global_params).intersection(set([param for param, worker_idx in shard.global_param2device.items() if worker_idx == shard.worker_idx]))
+                assert to_check_param == should_check_param, "amp check_finite_and_unscale checking miss [{}] and got unexpected [{}]".format(should_check_param - to_check_param, to_check_param - should_check_param)
+
         if update_loss_scaling_op_idx == -1:
             return
         inf_var = block.var(inf_var_name)
-        inf_var_fp32 = block.create_var(
+        inf_var_int32 = block.create_var(
             name=inf_var_name + "@cast_int32",
             shape=inf_var.shape,
             dtype=core.VarDesc.VarType.INT32)
@@ -128,32 +136,34 @@ class FP16Utils(object):
             update_loss_scaling_op_idx,
             type='cast',
             inputs={'X': inf_var},
-            outputs={'Out': inf_var_fp32},
+            outputs={'Out': inf_var_int32},
             attrs={
                 "in_dtype": inf_var.dtype,
-                "out_dtype": inf_var_fp32.dtype,
+                "out_dtype": inf_var_int32.dtype,
                 OP_ROLE_KEY: OpRole.Optimize
             })
-        insert_sync_calc_op(block, update_loss_scaling_op_idx + 1,
-                            [inf_var_fp32])
+        # this allreduce communication should not overlap with calc
+        # insert_sync_calc_op(block, update_loss_scaling_op_idx + 1,
+        #                     [inf_var_int32])
         block._insert_op_without_sync(
-            update_loss_scaling_op_idx + 2,
+            update_loss_scaling_op_idx + 1,
             type='c_allreduce_max',
-            inputs={'X': inf_var_fp32},
-            outputs={'Out': inf_var_fp32},
+            inputs={'X': inf_var_int32},
+            outputs={'Out': inf_var_int32},
             attrs={'ring_id': ring_id,
+                   'use_calc_stream': True,
                    OP_ROLE_KEY: OpRole.Optimize})
 
-        comm_op_num = insert_sync_comm_op(block, update_loss_scaling_op_idx + 3,
-                                          ring_id, [inf_var_fp32])
+        # comm_op_num = insert_sync_comm_op(block, update_loss_scaling_op_idx + 3,
+        #                                   ring_id, [inf_var_int32])
 
         block._insert_op_without_sync(
-            update_loss_scaling_op_idx + 3 + comm_op_num,
+            update_loss_scaling_op_idx + 2,
             type='cast',
-            inputs={'X': inf_var_fp32},
+            inputs={'X': inf_var_int32},
             outputs={'Out': inf_var_sharding},
             attrs={
-                "in_dtype": inf_var_fp32.dtype,
+                "in_dtype": inf_var_int32.dtype,
                 "out_dtype": inf_var_sharding.dtype,
                 OP_ROLE_KEY: OpRole.Optimize
             })

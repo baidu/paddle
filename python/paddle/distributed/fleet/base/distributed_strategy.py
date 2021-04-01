@@ -776,6 +776,61 @@ class DistributedStrategy(object):
         assign_configs_value(self.strategy.sharding_configs, configs)
 
     @property
+    def model_parallel(self):
+        """
+        Indicating whether we are using model_parallel parallelism for distributed training.
+
+        Examples:
+
+          .. code-block:: python
+
+            import paddle.distributed.fleet as fleet
+            strategy = fleet.DistributedStrategy()
+            strategy.model_parallel = True
+
+        """
+        return self.strategy.model_parallel
+
+    @model_parallel.setter
+    @is_strict_auto
+    def model_parallel(self, flag):
+        if isinstance(flag, bool):
+            self.strategy.model_parallel = flag
+        else:
+            print("WARNING: model_parallel should have value of bool type")
+
+    @property
+    def model_parallel_configs(self):
+        """
+        Set model parallel configurations. It configures how many devices
+        are used in a model parallel group.
+
+        **Notes**:
+            **Detailed arguments for model_parallel_configs**
+
+            **parallelism**: number of devices are used in a model parallel group.
+
+        Examples:
+
+          .. code-block:: python
+
+            import paddle.distributed.fleet as fleet
+            strategy = fleet.DistributedStrategy()
+            strategy.model_parallel = True
+            strategy.model_parallel_configs = {"parallelism": 8}
+
+        """
+
+        return get_msg_dict(self.strategy.model_parallel_configs)
+
+    @model_parallel_configs.setter
+    @is_strict_auto
+    def model_parallel_configs(self, configs):
+        check_configs_key(self.strategy.model_parallel_configs, configs,
+                          "model_parallel_configs")
+        assign_configs_value(self.strategy.model_parallel_configs, configs)
+
+    @property
     def pipeline(self):
         """
         Indicating whether we are using pipeline parallelism for distributed training.
