@@ -2857,7 +2857,6 @@ All parameter, weight, gradient are variables in Paddle.
       .def("device_count", &ParallelExecutor::DeviceCount);
 
   BindFleetWrapper(&m);
-
 #ifdef PADDLE_WITH_PSLIB
   BindHeterWrapper(&m);
 #endif
@@ -2896,6 +2895,10 @@ All parameter, weight, gradient are variables in Paddle.
   BindCommunicatorContext(&m);
   BindDistCommunicator(&m);
   BindHeterClient(&m);
+  BindIndexWrapper(&m);
+  BindTreeIndex(&m);
+  BindIndexSampler(&m);
+  BindIndexNode(&m);
 #endif
 }
 }  // namespace pybind
