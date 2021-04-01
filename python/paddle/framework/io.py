@@ -27,10 +27,10 @@ import paddle
 # deprecated module import
 from paddle import fluid
 from paddle.fluid import core
-from paddle.fluid.io import _unpack_saved_dict, _pack_loaded_dict
-from paddle.fluid.framework import Variable, _varbase_creator, _dygraph_tracer
+from paddle.fluid.io import _unpack_saved_dict, _pack_loaded_dict, _save_var, _load_var
+from paddle.fluid.framework import Variable, _varbase_creator, _dygraph_tracer, in_dygraph_mode
 from paddle.fluid.dygraph.jit import _SaveLoadConfig
-from paddle.fluid.dygraph.io import _construct_program_holders, _construct_params_and_buffers
+from paddle.fluid.dygraph.io import _construct_program_holders, _construct_params_and_buffers, _pickle_save, _pickle_load, _check_save_load_info, _get_file_version
 from paddle.fluid.dygraph.io import INFER_MODEL_SUFFIX, INFER_PARAMS_SUFFIX, INFER_PARAMS_INFO_SUFFIX
 
 __all__ = [
@@ -199,12 +199,12 @@ def _parse_load_config(configs):
     return inner_config
 
 
-def save(obj, path, pickle_protocol=2):
+def save(obj, path, pickle_protocol=2, **configs):
     '''
     Save an object to the specified path.
     
     .. note::
-        Now only supports save ``state_dict`` of Layer or Optimizer.
+        Now supports saving ``state_dict`` of Layer or Optimizer, Tensor, List[Tensor].
 
     .. note::
         Different from ``paddle.jit.save``, since the save result of ``paddle.save`` is a single file, 
@@ -221,6 +221,12 @@ def save(obj, path, pickle_protocol=2):
           If saved in the current directory, the input path string will be used as the file name. 
         pickle_protocol(int, optional): The protocol version of pickle module must be greater than 1 and less than 5.
                                  Default: 2
+        configs(dict, optional) : optional keyword arguments. When the saved object is static graph variable, 
+        you can specify ``use_binary_for_var`` and ``executor`` .
+            (1) use_binary_format(bool): If True, save the file in the c++ binary format when saving a single static graph variable; otherwise, save it in pickle format.
+                                Default: False
+            (2) executor(Executor): Specify the executor for saving the static graph variable. If it is None, a default executor will be generated.
+                                Default: None
 
     Returns:
         None
@@ -241,7 +247,45 @@ def save(obj, path, pickle_protocol=2):
             opt_state_dict = adam.state_dict()
             paddle.save(opt_state_dict, "adam.pdopt")
     '''
+    # 1. input check
+    filename = os.path.basename(path)
+    if filename == "":
+        raise ValueError("The input path MUST be format of dirname/filename "
+                         "[dirname\\filename in Windows system], but received "
+                         "filename is empty string.")
 
+    # 2. save object
+    dirname = os.path.dirname(path)
+    if dirname and not os.path.exists(dirname):
+        os.makedirs(dirname)
+
+    use_binary_format = configs.get('use_binary_format', False)
+    if not isinstance(use_binary_format, bool):
+        raise TypeError(
+            "Type of `use_binary_format` should be bool, but received {}.".
+            format(type(use_binary_format)))
+
+    if use_binary_format:
+        if in_dygraph_mode():
+            raise NotImplementedError(
+                "When `use_binary_format=True`, `paddle.save` is only supported in static graph mode"
+            )
+
+        if not isinstance(obj, Variable):
+            raise ValueError(
+                "When `use_binary_format=True`, the type of object to be saved should be static `Variable`, but received `{}`.".
+                format(type(obj)))
+
+        executor = configs['executor'] if 'executor' in configs else None
+
+        _save_var(obj, path, executor)
+
+    else:
+        with open(path, 'wb') as f:
+            _pickle_save(obj, f, pickle_protocol)
+
+
+def _legacy_save(obj, path, pickle_protocol=2):
     # 1. input check
     if not isinstance(obj, dict):
         raise NotImplementedError(
@@ -294,7 +338,7 @@ def load(path, **configs):
     Load an object can be used in paddle from specified path.
 
     .. note::
-        Now only supports load ``state_dict`` of Layer or Optimizer.
+        Now only supports load ``state_dict`` of Layer or Optimizer, Tensor, List[Tensor].
 
     .. note::
         In order to use the model parameters saved by paddle more efficiently, 
@@ -332,6 +376,9 @@ def load(path, **configs):
             (2) params_filename (str): The persistable variables file name of the paddle 1.x 
             ``save_inference_model`` save format. No default file name, save variables separately 
             by default.
+            (3) executor(Executor): Specify the executor for loading the static graph variable. If it is None, a default executor will be generated.
+                    Default: None
+            (4) return_tensor(bool): If specified as True, return tensor as tensor,otherwise return tensor as numpy.ndarray.
 
     Returns:
         Object(Object): a target object can be used in paddle
@@ -355,6 +402,31 @@ def load(path, **configs):
             load_layer_state_dict = paddle.load("emb.pdparams")
             load_opt_state_dict = paddle.load("adam.pdopt")
     '''
+
+    if os.path.isfile(path):
+
+        file_version = _get_file_version(path)
+        if 0 == file_version:
+            load_result = _load_var(path)
+        elif 1 == file_version:
+            load_result = _legacy_load(path, **configs)
+        elif 2 == file_version:
+            return_tensor = configs[
+                'return_tensor'] if 'return_tensor' in configs else False
+            with open(path, 'rb') as f:
+                load_result = _pickle_load(f, return_tensor=return_tensor)
+        else:
+            raise ValueError(
+                "File type error, expected 0 <= file version <= 2, but received file version = {}".
+                format(file_version))
+
+    else:
+        load_result = _legacy_load(path, **configs)
+
+    return load_result
+
+
+def _legacy_load(path, **configs):
     load_result = None
     config = _parse_load_config(configs)
 

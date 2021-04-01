@@ -24,6 +24,7 @@ import re
 import traceback
 import six
 import copy
+from types import MethodType, FunctionType
 
 import numpy as np
 import subprocess
@@ -5318,6 +5319,264 @@ class Program(object):
         for each_block in self.blocks:
             parameters.extend(each_block.all_parameters())
         return parameters
+
+    def state_dict(self, mode='all'):
+        """
+        Get parameters and persistable buffers of program. And set them into a dict
+
+        Parameters:
+            mode(str, optional) : Source of the obtained parameters and buffers. 
+                    'opt' :  The return value only contains the variable in the optimizer. 
+                    'param' : The return value only contains the variable in the network, not the variable in the optimizer.  
+                    'all' : The return value contains the variable in the network and optimizer.
+                Default: 'all'
+
+        Retruns:
+            dict: a dict contains the parameters and persistable buffers.
+
+        Examples:
+            .. code-block:: python
+
+            import paddle
+            import paddle.fluid as fluid
+
+            paddle.enable_static()
+
+            x = fluid.data(name="x", shape=[10, 10], dtype='float32')
+            y = fluid.layers.fc(x, 10)
+            z = fluid.layers.fc(y, 10)
+
+            place = paddle.CPUPlace()
+            exe = fluid.Executor(place)
+            exe.run(fluid.default_startup_program())
+            prog = fluid.default_main_program()
+
+            paddle.save(prog.state_dict(), "./temp/model.pdparams")
+        """
+        if not isinstance(mode, str):
+            raise TypeError("Type of `mode` should be string, but received {}.".
+                            format(type(mode)))
+
+        def is_parameter(var):
+            return isinstance(var, Parameter)
+
+        def is_persistable(var):
+            if var.desc.type() == core.VarDesc.VarType.FEED_MINIBATCH or \
+                var.desc.type() == core.VarDesc.VarType.FETCH_LIST or \
+                var.desc.type() == core.VarDesc.VarType.READER:
+                return False
+            return var.persistable
+
+        def is_belong_to_optimizer(var):
+            if not (isinstance(var, Parameter) or var.desc.need_check_feed()):
+                return is_persistable(var)
+            return False
+
+        def condition(var):
+
+            if mode == 'param':
+                return is_parameter(var)
+            elif mode == 'opt':
+                return is_belong_to_optimizer(var)
+            elif mode == 'all':
+                return is_parameter(var) or is_belong_to_optimizer(var)
+            else:
+                raise ValueError(
+                    "`mode` string should be 'param', 'opt' or 'all', but received {}.".
+                    format(mode))
+
+        var_list = filter(condition, self.list_vars())
+        state_dict = {var.name: var for var in var_list}
+        return state_dict
+
+    def set_state_dict(self, state_dict, scope=None):
+        """
+        Set program parameter from state_dict
+
+        An exception will throw if shape or dtype of the parameters is not match.
+
+        NOTICE: This function MUST called after run start_up_program
+
+        Args:
+            state_dict(dict): the dict store Parameter and optimizer information
+            scope(Scope, optional) : If scope is None, state_dict will be set to global scope 
+                obtained through 'global_scope()'. Otherwise, value will be set to scope.
+                Default: None
+        Returns:
+            None
+
+        Examples:
+            .. code-block:: python
+
+            import paddle
+            import paddle.fluid as fluid
+
+            paddle.enable_static()
+
+            x = fluid.data(name="x", shape=[10, 10], dtype='float32')
+            y = fluid.layers.fc(x, 10)
+            z = fluid.layers.fc(y, 10)
+
+            place = paddle.CPUPlace()
+            exe = fluid.Executor(place)
+            exe.run(fluid.default_startup_program())
+            prog = fluid.default_main_program()
+
+            paddle.save(prog.state_dict(), "./temp-")
+            state_dict_load = paddle.load("./temp-")
+            prog.set_state_dict(state_dict_load)
+        """
+        if not isinstance(state_dict, dict):
+            raise TypeError(
+                "Type of `state_dict` should be dict, but received {}.".format(
+                    type(state_dict)))
+
+        for name, value in state_dict.items():
+            try:
+                self.set_var(name, value, scope)
+            except ValueError as err:
+                warnings.warn(("Skip loading for {}. ".format(name) + str(err)))
+
+    def get_var(self, var_name):
+        """
+        Get parameter or persistable buffer of program through its name. 
+
+        Parameters:
+            var_name(str) : name of the parameter or persistable buffer.
+
+        Retruns:
+            Variable: parameter or persistable buffer named var_name.
+
+        Examples:
+            .. code-block:: python
+
+            import paddle
+            import paddle.fluid as fluid
+
+            paddle.enable_static()
+
+            x = fluid.data(name="x", shape=[10, 10], dtype='float32')
+
+            y = fluid.layers.fc(x, 10,name='fc')
+            prog = fluid.default_main_program()
+            place = paddle.CPUPlace()
+            exe = fluid.Executor(place)                                    
+            exe.run(fluid.default_startup_program())
+
+            var=prog.get_var('fc.b_0')
+            paddle.save(var, "./temp/var.pdparams")
+        """
+
+        str_instance = str
+        # Python2 has no unicode
+        if six.PY2:
+            str_instance = (str, unicode)
+        if not isinstance(var_name, str_instance):
+            raise TypeError(
+                "Name of variable should be string, but received {}.".format(
+                    type(var_name)))
+
+        for var in self.list_vars():
+            if var.name == var_name:
+                return var
+        return None
+
+    def set_var(self, var_name, value, scope=None):
+        '''
+        Set value to parameter or persistable buffer according to its name. 
+
+        Parameters:
+            var_name(str) : name of the parameter or persistable buffer
+            value(Variable) : The parameter or persistable buffer in the program.
+            scope(Scope, optional) : If scope is None, value will be set to global scope 
+                obtained through 'global_scope()'. Otherwise, value will be set to scope.
+                Default: None
+        Returns:
+            None
+        
+        Examples:
+            .. code-block:: python
+
+            import paddle
+            import paddle.fluid as fluid
+
+            paddle.enable_static()
+
+            x = fluid.data(name="x", shape=[10, 10], dtype='float32')
+            y = fluid.layers.fc(x, 10)
+            z = fluid.layers.fc(y, 10)
+
+            place = paddle.CPUPlace()
+            exe = fluid.Executor(place)
+            exe.run(fluid.default_startup_program())
+            prog = fluid.default_main_program()
+
+            for name,var in prog.state_dict().items():
+                paddle.save(var, "./temp-"+name)
+
+            for name,var in prog.state_dict().items():
+                var_load = paddle.load("./temp-"+name)
+                prog.set_var(name,var_load)
+        '''
+
+        # The 'framework' is a low-level module, and 'executor' or 'core' 
+        # can not be imported at the begainning of this file. 
+        # Therefore, the above two modules are dynamically imported.
+        from .executor import global_scope
+        str_instance = str
+        # Python2 has no unicode
+        if six.PY2:
+            str_instance = (str, unicode)
+        if not isinstance(var_name, (str, str_instance)):
+
+            raise TypeError(
+                "Name of variable should be string, but received {}.".format(
+                    type(var_name)))
+
+        if not (isinstance(value, np.ndarray) or hasattr(value, '__array__')):
+            raise TypeError(
+                "`value` should be `numpy.ndarray` or `LoDTensor`, but received {}.".
+                format(type(value)))
+
+        if scope is not None and not isinstance(scope, core._Scope):
+            raise TypeError(
+                "`scope` should be None or `core._Scope` type, but received {}.".
+                format(type(value)))
+
+        if scope is None:
+            scope = global_scope()
+        var_temp = scope.find_var(var_name)
+        if var_temp is None:
+            raise ValueError(
+                "Can not find Variable '{}' in the program.".format(var_name))
+
+        t = var_temp.get_tensor()
+
+        if hasattr(value, 'shape'):
+            if isinstance(value.shape, (MethodType, FunctionType)):
+                value_shape = value.shape()
+            else:
+                value_shape = value.shape
+            if list(t.shape()) != list(value_shape):
+                raise ValueError(
+                    "{} receives a shape {}, but the expected shape is {}.".
+                    format(var_name, list(t.shape()), list(value_shape)))
+
+        p = t._place()
+        if p.is_cpu_place():
+            place = core.CPUPlace()
+        elif p.is_cuda_pinned_place():
+            place = core.CUDAPinnedPlace()
+        elif p.is_xpu_place():
+            p = core.Place()
+            p.set_place(t._place())
+            place = core.XPUPlace(p.xpu_device_id())
+        else:
+            p = core.Place()
+            p.set_place(t._place())
+            place = core.CUDAPlace(p.gpu_device_id())
+
+        t.set(value, place)
 
 
 @six.add_metaclass(ParameterMetaClass)

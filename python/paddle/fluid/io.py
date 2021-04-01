@@ -45,7 +45,7 @@ from .dataloader import *
 from . import core
 from .. import compat as cpt
 from paddle.utils import deprecated
-from paddle.fluid.framework import static_only
+from paddle.fluid.framework import static_only, _current_expected_place
 
 batch = paddle.batch
 
@@ -186,6 +186,11 @@ def get_program_persistable_vars(program):
     return list(filter(is_persistable, program.list_vars()))
 
 
+@dygraph_not_support
+def get_optimizer_vars(program):
+    return list(filter(is_belong_to_optimizer, program.list_vars()))
+
+
 def _clone_var_in_block_(block, var):
     assert isinstance(var, Variable)
     if var.desc.type() == core.VarDesc.VarType.LOD_TENSOR:
@@ -233,6 +238,33 @@ def _get_valid_program(main_program=None):
             "The type of input main_program is invalid, expected type is fluid.Program, but received %s"
             % type(main_program))
     return main_program
+
+
+def _load_var(filename, executor=None):
+    if executor is None:
+        place = _current_expected_place()
+        executor = Executor(place=place)
+    main_program = default_main_program()
+    cur_block = main_program.current_block()
+    name = unique_name.generator('temp_load_var')
+    program_var = cur_block.create_var(name=name)
+
+    dirname = os.path.dirname(filename)
+    file_name = os.path.split(filename)[-1]
+
+    load_vars(
+        executor, vars=[program_var, ], dirname=dirname, filename=file_name)
+    scope_var = global_scope().find_var(program_var.name).get_tensor()
+    return scope_var
+
+
+def _save_var(var, filename, executor=None):
+    if executor is None:
+        place = _current_expected_place()
+        executor = Executor(place)
+    dirname = os.path.dirname(filename)
+    file_name = os.path.split(filename)[-1]
+    return save_vars(executor, dirname, vars=[var, ], filename=file_name)
 
 
 @dygraph_not_support

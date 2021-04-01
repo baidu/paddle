@@ -25,7 +25,7 @@ import warnings
 from .. import core
 from .base import guard
 from paddle.fluid.dygraph.jit import _SaveLoadConfig
-from paddle.fluid.dygraph.io import _construct_program_holders, _construct_params_and_buffers
+from paddle.fluid.dygraph.io import _construct_program_holders, _construct_params_and_buffers, _pickle_load, _get_file_version
 
 __all__ = [
     'save_dygraph',
@@ -193,17 +193,37 @@ def load_dygraph(model_path, **configs):
         # Load state dict by `save_dygraph` save format
         para_dict = {}
         if os.path.exists(params_file_path):
-            with open(params_file_path, 'rb') as f:
-                para_dict = pickle.load(f) if six.PY2 else pickle.load(
-                    f, encoding='latin1')
+            file_version = _get_file_version(params_file_path)
+
+            if file_version == 1:
+                with open(params_file_path, 'rb') as f:
+                    para_dict = pickle.load(f) if six.PY2 else pickle.load(
+                        f, encoding='latin1')
+            elif file_version == 2:
+                with open(params_file_path, 'rb') as f:
+                    para_dict = _pickle_load(f)
+            else:
+                raise ValueError(
+                    "File type error, expected 1 <= file version <= 2, but received file version = {}".
+                    format(file_version))
 
         if not config.keep_name_table and "StructuredToParameterName@@" in para_dict:
             del para_dict["StructuredToParameterName@@"]
 
         if os.path.exists(opti_file_path):
-            with open(opti_file_path, 'rb') as f:
-                opti_dict = pickle.load(f) if six.PY2 else pickle.load(
-                    f, encoding='latin1')
+            file_version = _get_file_version(params_file_path)
+
+            if file_version == 1:
+                with open(opti_file_path, 'rb') as f:
+                    opti_dict = pickle.load(f) if six.PY2 else pickle.load(
+                        f, encoding='latin1')
+            elif file_version == 2:
+                with open(opti_file_path, 'rb') as f:
+                    opti_dict = _pickle_load(f)
+            else:
+                raise ValueError(
+                    "File type error, expected 1 <= file version <= 2, but received file version = {}".
+                    format(file_version))
     else:
         # check model path
         if not os.path.isdir(model_prefix):

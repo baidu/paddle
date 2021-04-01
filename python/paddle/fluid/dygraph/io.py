@@ -18,6 +18,10 @@ import os
 import six
 import pickle
 import numpy as np
+import math
+import sys
+if not six.PY2:
+    from _pickle import UnpicklingError
 
 import paddle
 from paddle import compat as cpt
@@ -28,7 +32,8 @@ from paddle.fluid import unique_name
 from paddle.fluid.dygraph import layers
 from paddle.fluid.layers import nn
 from paddle.fluid.dygraph.base import switch_to_static_graph
-from paddle.fluid.framework import in_dygraph_mode
+from paddle.fluid.framework import in_dygraph_mode, Variable, Program
+from paddle.fluid.executor import global_scope
 
 __all__ = ['TranslatedLayer']
 
@@ -39,6 +44,151 @@ INFER_PARAMS_INFO_SUFFIX = ".pdiparams.info"
 LOADED_VAR_SUFFIX = "load"
 PARAMETER_NAME_PREFIX = "param"
 BUFFER_NAME_PREFIX = "buffer"
+
+# File version information of `_pickle_save/_pickle_load`
+VERSION_INFO_SAVE_LOAD = "__PADDLE_SAVE_LOAD_VERSION_0__"
+
+
+def _check_save_load_info(version_info):
+    if not isinstance(version_info, str):
+        raise TypeError(
+            "The type of version information is wrong. Expected string, but received {}.".
+            format(type(version_info)))
+    if not version_info == VERSION_INFO_SAVE_LOAD:
+        raise ValueError(
+            "The value of version information is wrong. Expected {}, but received {}.".
+            format(VERSION_INFO_SAVE_LOAD, version_info))
+
+
+def _get_file_version(file_path):
+    if not six.PY2:
+        pickle_key_error = UnpicklingError
+    try:
+        with open(file_path, 'rb') as f:
+            version_info = pickle.load(f) if six.PY2 else pickle.load(
+                f, encoding='latin1')
+        try:
+            _check_save_load_info(version_info)
+            return 2
+        except:
+            return 1
+    # The beginning part of the file saved by save_op/save_combine_op is version 
+    # information(`kCurTensorVersion`=0). When pickle.load loads binary files, 
+    # "KeyError: '\x00'" will be raised.
+    except KeyError:
+        return 0
+    return None
+
+
+def _pickle_save(obj, f, protocol):
+    # TODO:BytesIO
+    if not isinstance(protocol, int):
+        raise ValueError("The 'protocol' MUST be `int`, but received {}.".
+                         format(type(protocol)))
+
+    if protocol < 2 or protocol > 4:
+        raise ValueError("Expected 1<'protocol'<5, but received protocol={}.".
+                         format(protocol))
+
+    data_ndarray = []
+
+    def persistent_id(obj):
+        extend = dict()
+        if isinstance(obj, (core.VarBase, Variable)):
+            var2np = []
+            if isinstance(obj, core.VarBase):
+                ndarray = obj.numpy()
+            else:
+                temp_var = global_scope().find_var(obj.name)
+                if temp_var is None:
+                    raise ValueError(
+                        "Variable [ {} ] Not found in the scope, Please make sure run startup program.".
+                        format(obj.name))
+                t = temp_var.get_tensor()
+                ndarray = np.array(t)
+            max_number_element = int((2**30 - 1) / ndarray.dtype.itemsize)
+            num_element = np.prod(ndarray.shape)
+            if protocol < 4 and num_element > max_number_element:
+                value = ndarray.reshape((-1))
+                for i in range(
+                        int(math.ceil(num_element * 1.0 / max_number_element))):
+                    var2np.append(value[i * max_number_element:
+                                        max_number_element * (i + 1)])
+            else:
+                var2np = [ndarray, ]
+
+            if isinstance(obj, core.VarBase):
+                return ('VarBase', obj.name, ndarray.dtype, ndarray.shape,
+                        np.ndarray, var2np, extend)
+            else:
+                return ('Variable', obj.name, ndarray.dtype, ndarray.shape,
+                        np.ndarray, var2np, extend)
+
+        return None
+
+    pickle.dump(VERSION_INFO_SAVE_LOAD, f)
+    pickler = pickle.Pickler(f, protocol)
+    pickler.persistent_id = persistent_id
+    pickler.dump(obj)
+
+    # # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3.5/6'
+    if sys.platform == 'darwin' and sys.version_info.major == 3 and (
+            sys.version_info.minor == 5 or sys.version_info.minor == 6):
+        pickle_bytes = pickle.dumps(data_ndarray)
+        max_bytes = 2**30
+        for i in range(0, len(pickle_bytes), max_bytes):
+            f.write(pickle_bytes[i:i + max_bytes])
+    else:
+        pickle.dump(data_ndarray, f, protocol=protocol)
+
+
+def _pickle_load(f, return_tensor=False):
+    # TODO:BytesIO
+    def persistent_load(obj_id):
+        if not isinstance(obj_id, tuple):
+            raise ValueError(
+                "persistent_load only process tuple, but received {}".format(
+                    type(obj_id)))
+        typename = obj_id[0]
+        if typename == 'VarBase':
+            # obj.name,  ndarray.dtype,ndarray.shape,np.ndarray, var2np,extend
+            _, shape, _, ndarray = obj_id[2:6]
+
+            ndarray = np.concatenate(ndarray).reshape(
+                shape)  #creator(shape, dtype)
+            if return_tensor:
+                result = paddle.to_tensor(ndarray)
+            else:
+                result = ndarray
+            return result
+
+        elif typename == 'Variable':
+            _, shape, _, ndarray = obj_id[2:6]
+
+            ndarray = np.concatenate(ndarray).reshape(
+                shape)  #creator(shape, dtype)
+            if return_tensor:
+                result = core.LoDTensor()
+                place = framework._current_expected_place()
+                result.set(ndarray, place)
+            else:
+                result = ndarray
+
+            return result
+
+        else:
+            raise ValueError("unknow persistent id {}".format(type(obj_id)))
+
+    version_info = pickle.load(f) if six.PY2 else pickle.load(
+        f, encoding='latin1')
+    _check_save_load_info(version_info)
+
+    unpickler = pickle.Unpickler(f) if six.PY2 else pickle.Unpickler(
+        f, encoding='latin1')
+    unpickler.persistent_load = persistent_load
+    obj = unpickler.load()
+
+    return obj
 
 
 def _load_program_desc(model_file_path):
