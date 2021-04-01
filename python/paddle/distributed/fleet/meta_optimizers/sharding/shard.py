@@ -104,6 +104,15 @@ class Shard(object):
         for param, usage in param_usage.items():
             if usage > 0:
                 broadcast_vars.add(param)
+
+        # the paramA and paramA.cast_fp16 should not the broadcast_vars at the same time
+        # word_embedding bug should be fixed
+        for fp16_param in fp16_params:
+            if "word_embedding" not in fp16_param:
+                assert fp16_to_fp32[
+                    fp16_param] not in broadcast_vars, "Only one of the [{}] or [{}] should be broadcasted".format(
+                        fp16_to_fp32[fp16_param], fp16_param)
+
         return broadcast_vars
 
     def device(self, var_name):

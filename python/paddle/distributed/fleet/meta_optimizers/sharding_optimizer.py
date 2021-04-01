@@ -209,7 +209,7 @@ class ShardingOptimizer(MetaOptimizerBase):
                             reduced_grad not in self._reduced_grads_to_param)
                         self._reduced_grads_to_param[reduced_grad] = param
 
-            # find cast op
+            # find cast op to be insert
             if FP16Utils.is_fp16_cast_op(block, op, self._params):
                 fp32_param = op.desc.input_arg_names()[0]
                 fp16_param = op.desc.output_arg_names()[0]
