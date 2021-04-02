@@ -1,0 +1,29 @@
+syntax = "proto2";
+package paddle.framework;
+
+message Node {
+    required uint64 id = 1;
+    required bool is_leaf = 2;
+    required float probability = 3;
+}
+
+message TreeMeta {
+   required int32 height = 1;
+   required int32 branch = 2; 
+}
+
+message KVItem {
+    required bytes key = 1;
+    required bytes value = 2;
+}
+
+message GraphItem {
+    required uint64 item_id = 1; // item_id; 
+    repeated uint64 path_id = 2; // path_id
+}
+
+message GraphMeta {
+    required int64 width = 1; //D
+    required int64 height = 2; //K
+    required int64 item_path_nums = 3; //J
+}

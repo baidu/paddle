@@ -38,6 +38,8 @@ else()
 endif(WITH_GLOO)
 
 cc_library(heter_wrapper SRCS heter_wrapper.cc DEPS framework_proto device_context heter_service_proto)
+cc_library(index_wrapper SRCS index_wrapper.cc DEPS index_dataset_proto)
+cc_library(index_sampler SRCS index_sampler.cc DEPS index_wrapper)
 
 cc_test(test_fleet_cc SRCS test_fleet.cc DEPS fleet_wrapper gloo_wrapper fs shell)
 

@@ -29,6 +29,7 @@ add_subdirectory(io)
 proto_library(framework_proto SRCS framework.proto)
 proto_library(heter_service_proto SRCS heter_service.proto)
 proto_library(data_feed_proto SRCS data_feed.proto)
+proto_library(index_dataset_proto SRCS index_dataset.proto)
 proto_library(trainer_desc_proto SRCS trainer_desc.proto DEPS framework_proto
   data_feed_proto)
 
@@ -189,10 +190,11 @@ if(WITH_PYTHON)
   py_proto_compile(framework_py_proto SRCS framework.proto data_feed.proto)
   py_proto_compile(trainer_py_proto SRCS trainer_desc.proto data_feed.proto)
   py_proto_compile(distributed_strategy_py_proto SRCS distributed_strategy.proto)
+  py_proto_compile(index_dataset_py_proto SRCS index_dataset.proto)
 #Generate an empty \
     #__init__.py to make framework_py_proto as a valid python module.
   add_custom_target(framework_py_proto_init ALL COMMAND ${CMAKE_COMMAND} -E touch __init__.py)
-  add_dependencies(framework_py_proto framework_py_proto_init trainer_py_proto distributed_strategy_py_proto)
+  add_dependencies(framework_py_proto framework_py_proto_init trainer_py_proto distributed_strategy_py_proto index_dataset_py_proto)
   if (NOT WIN32)
     add_custom_command(TARGET framework_py_proto POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory ${PADDLE_BINARY_DIR}/python/paddle/fluid/proto
@@ -237,7 +239,7 @@ if(WITH_DISTRIBUTE)
     fleet_wrapper heter_wrapper ps_gpu_wrapper box_wrapper lodtensor_printer
     lod_rank_table feed_fetch_method collective_helper ${GLOB_DISTRIBUTE_DEPS}
     graph_to_program_pass variable_helper data_feed_proto timer monitor
-    heter_service_proto pslib_brpc)
+    heter_service_proto pslib_brpc index_dataset_proto)
     set(DISTRIBUTE_COMPILE_FLAGS "-Wno-non-virtual-dtor -Wno-error=non-virtual-dtor -Wno-error=delete-non-virtual-dtor")
     set_source_files_properties(executor.cc PROPERTIES COMPILE_FLAGS ${DISTRIBUTE_COMPILE_FLAGS})
   elseif(WITH_PSCORE)
@@ -249,7 +251,7 @@ if(WITH_DISTRIBUTE)
             pull_dense_worker.cc section_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
             device_context scope framework_proto data_feed_proto heter_service_proto trainer_desc_proto glog
             lod_rank_table fs shell fleet_wrapper heter_wrapper box_wrapper lodtensor_printer feed_fetch_method
-            graph_to_program_pass variable_helper timer monitor heter_service_proto fleet)
+            graph_to_program_pass variable_helper timer monitor heter_service_proto fleet index_dataset_proto)
     set(DISTRIBUTE_COMPILE_FLAGS "-Wno-non-virtual-dtor -Wno-error=non-virtual-dtor -Wno-error=delete-non-virtual-dtor")
     set_source_files_properties(executor.cc PROPERTIES COMPILE_FLAGS ${DISTRIBUTE_COMPILE_FLAGS})
     set_source_files_properties(multi_trainer.cc PROPERTIES COMPILE_FLAGS ${DISTRIBUTE_COMPILE_FLAGS})
@@ -263,7 +265,7 @@ if(WITH_DISTRIBUTE)
             pull_dense_worker.cc section_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
             device_context scope framework_proto data_feed_proto heter_service_proto trainer_desc_proto glog
             lod_rank_table fs shell fleet_wrapper heter_wrapper ps_gpu_wrapper box_wrapper lodtensor_printer feed_fetch_method
-            graph_to_program_pass variable_helper timer monitor)
+            graph_to_program_pass variable_helper timer monitor index_dataset_proto)
   endif()
 elseif(WITH_PSLIB)
   cc_library(executor SRCS executor.cc multi_trainer.cc pipeline_trainer.cc dataset_factory.cc
@@ -274,7 +276,7 @@ elseif(WITH_PSLIB)
   pull_dense_worker.cc section_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
   device_context scope framework_proto data_feed_proto heter_service_proto trainer_desc_proto glog
   lod_rank_table fs shell fleet_wrapper heter_wrapper ps_gpu_wrapper box_wrapper lodtensor_printer feed_fetch_method
-  graph_to_program_pass variable_helper timer monitor pslib_brpc )
+  graph_to_program_pass variable_helper timer monitor pslib_brpc index_dataset_proto)
 else()
   cc_library(executor SRCS executor.cc multi_trainer.cc pipeline_trainer.cc dataset_factory.cc
   dist_multi_trainer.cc trainer_factory.cc trainer.cc data_feed_factory.cc
@@ -284,7 +286,7 @@ else()
   pull_dense_worker.cc section_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
   device_context scope framework_proto data_feed_proto heter_service_proto trainer_desc_proto glog
   lod_rank_table fs shell fleet_wrapper heter_wrapper ps_gpu_wrapper box_wrapper lodtensor_printer feed_fetch_method
-  graph_to_program_pass variable_helper timer monitor)
+  graph_to_program_pass variable_helper timer monitor index_dataset_proto)
 endif()
 
 target_link_libraries(executor while_op_helper executor_gc_helper recurrent_op_helper conditional_block_op_helper)
