@@ -37,6 +37,8 @@ else
     disable_ut_quickly=''
 fi
 
+set -x
+
 # /*==================Fixed Disabled Windows unittests==============================*/
 # TODO: fix these unittest that is bound to fail
 diable_wingpu_test="^lite_mul_model_test$|\
