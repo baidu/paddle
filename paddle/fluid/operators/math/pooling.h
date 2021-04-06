@@ -47,9 +47,18 @@ class MaxPool {
 template <class T>
 class AvgPool {
  public:
-  DEVICE inline T initial() { return static_cast<T>(0); }
-  DEVICE inline void compute(const T& x, T* y) { *y += x; }
-  DEVICE inline void finalize(const T& pool_field, T* y) { *y /= pool_field; }
+  T res;
+  double intermediate_res;
+  DEVICE inline T initial() {
+    intermediate_res = static_cast<double>(0);
+    return static_cast<T>(0);
+  }
+  DEVICE inline void compute(const T& x, T* y) {
+    intermediate_res += static_cast<double>(x);
+  }
+  DEVICE inline void finalize(const T& pool_field, T* y) {
+    *y = static_cast<T>(intermediate_res / static_cast<double>(pool_field));
+  }
 };
 
 template <class T>
