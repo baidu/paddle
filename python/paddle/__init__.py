@@ -239,6 +239,8 @@ from .framework import create_parameter  #DEFINE_ALIAS
 from .framework import CPUPlace  #DEFINE_ALIAS
 from .framework import CUDAPlace  #DEFINE_ALIAS
 from .framework import CUDAPinnedPlace  #DEFINE_ALIAS
+from .framework import ROCMPlace  #DEFINE_ALIAS
+from .framework import ROCMPinnedPlace  #DEFINE_ALIAS
 
 from .framework import grad  #DEFINE_ALIAS
 from .framework import no_grad  #DEFINE_ALIAS

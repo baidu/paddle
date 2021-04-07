@@ -95,6 +95,8 @@ from .core import _cuda_synchronize
 Tensor = LoDTensor
 enable_imperative = enable_dygraph
 disable_imperative = disable_dygraph
+ROCMPlace = CUDAPlace
+ROCMPinnedPlace = CUDAPinnedPlace
 
 __all__ = framework.__all__ + executor.__all__ + \
     trainer_desc.__all__ + transpiler.__all__ + \
@@ -124,6 +126,8 @@ __all__ = framework.__all__ + executor.__all__ + \
         'XPUPlace',
         'CUDAPlace',
         'CUDAPinnedPlace',
+        'ROCMPlace',
+        'ROCMPinnedPlace',
         'Tensor',
         'ParamAttr',
         'WeightNormParamAttr',
