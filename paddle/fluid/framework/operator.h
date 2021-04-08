@@ -419,6 +419,7 @@ class ExecutionContext {
   const RuntimeContext Context() const { return ctx_; }
 
   std::string DebugString() const { return op_.DebugString(); }
+  const OperatorBase& GetOp() const { return op_; }
 
  private:
   const OperatorBase& op_;

@@ -279,6 +279,8 @@ class TracedGradOp {
 
   void SetType(const std::string& type) { op_->SetType(type); }
 
+  const framework::OperatorBase& InnerOp() { return op_->InnerOp(); }
+
   void SetAttrMap(const framework::AttributeMap& attrs) {
     return op_->SetAttrMap(attrs);
   }

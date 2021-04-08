@@ -99,3 +99,4 @@ from .norm import LocalResponseNorm  #DEFINE_ALIAS
 
 from .vision import PixelShuffle  #DEFINE_ALIAS
 from .distance import PairwiseDistance  #DEFINE_ALIAS
+from .py_layer import PyLayer  #DEFINE_ALIAS

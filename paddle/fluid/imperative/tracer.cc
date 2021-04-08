@@ -38,7 +38,7 @@ void SetCurrentTracer(const std::shared_ptr<Tracer>& tracer) {
   VLOG(6) << "Set current tracer: " << g_current_tracer;
 }
 
-static void PassStopGradient(const NameVarBaseMap& outs, bool generate_grad) {
+void PassStopGradient(const NameVarBaseMap& outs, bool generate_grad) {
   for (const auto& pair : outs) {
     for (const auto& var : pair.second) {
       // NOTE(zhiqiu): this happends when None output are passed from python

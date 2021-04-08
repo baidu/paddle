@@ -406,7 +406,7 @@ void OpBase::Run(const framework::OperatorBase& op,
   OpBaseRunImpl<VariableWrapper>(op, ins, outs, attrs, place);
 }
 
-static void ClearNoNeedBufferInputs(OpBase* op) {
+void ClearNoNeedBufferInputs(OpBase* op) {
   auto& inferer = op->Info().NoNeedBufferVarsInferer();
   if (!inferer) return;
   auto* ins = op->GetMutableInsMap();

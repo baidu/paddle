@@ -39,6 +39,7 @@ limitations under the License. */
 #include "paddle/fluid/imperative/nccl_context.h"
 #include "paddle/fluid/imperative/partial_grad_engine.h"
 #include "paddle/fluid/imperative/profiler.h"
+#include "paddle/fluid/imperative/py_layer_fwd/py_layer_fwd.h"
 #include "paddle/fluid/imperative/reducer.h"
 #include "paddle/fluid/imperative/tracer.h"
 #include "paddle/fluid/imperative/type_defs.h"
@@ -1287,28 +1288,22 @@ void BindImperative(py::module *m_ptr) {
                     &imperative::VarBase::SetOverridedStopGradient)
       .def_property("persistable", &imperative::VarBase::Persistable,
                     &imperative::VarBase::SetPersistable)
-      .def_property_readonly("shape",
-                             [](imperative::VarBase &self) {
-                               if (self.Var().IsType<framework::LoDTensor>()) {
-                                 return framework::vectorize<int>(
-                                     self.Var()
-                                         .Get<framework::LoDTensor>()
-                                         .dims());
-                               } else if (self.Var()
-                                              .IsType<
-                                                  framework::SelectedRows>()) {
-                                 return framework::vectorize<int>(
-                                     self.Var()
-                                         .Get<framework::SelectedRows>()
-                                         .value()
-                                         .dims());
-                               } else {
-                                 VLOG(2) << "It is meaningless to get shape of "
-                                            "variable type "
-                                         << GetTypeName(self);
-                                 return std::vector<int>();
-                               }
-                             })
+      .def_property_readonly(
+          "shape",
+          [](imperative::VarBase &self) {
+            if (self.Var().IsType<framework::LoDTensor>()) {
+              return framework::vectorize<int>(
+                  self.Var().Get<framework::LoDTensor>().dims());
+            } else if (self.Var().IsType<framework::SelectedRows>()) {
+              return framework::vectorize<int>(
+                  self.Var().Get<framework::SelectedRows>().value().dims());
+            } else {
+              VLOG(2) << "It is meaningless to get shape of "
+                         "variable type "
+                      << GetTypeName(self);
+              return std::vector<int>();
+            }
+          })
       .def_property_readonly("is_leaf", &imperative::VarBase::IsLeaf,
                              R"DOC(
       Whether a Tensor is leaf Tensor.
@@ -1597,6 +1592,29 @@ void BindImperative(py::module *m_ptr) {
            &imperative::BKCLParallelContext::InitWithRingID,
            py::arg("ring_id"));
 #endif
+  m.def("PyLayer_apply",
+        [](const platform::CPUPlace &place, const py::object &cls,
+           const py::args args, const py::kwargs kwargs) {
+          return imperative::PyLayer_apply(place, cls, args, kwargs);
+        });
+
+  m.def("PyLayer_apply",
+        [](const platform::CUDAPlace &place, const py::object &cls,
+           const py::args args, const py::kwargs kwargs) {
+          return imperative::PyLayer_apply(place, cls, args, kwargs);
+        });
+
+  m.def("PyLayer_apply",
+        [](const platform::XPUPlace &place, const py::object &cls,
+           const py::args args, const py::kwargs kwargs) {
+          return imperative::PyLayer_apply(place, cls, args, kwargs);
+        });
+
+  m.def("PyLayer_apply",
+        [](const platform::CUDAPinnedPlace &place, const py::object &cls,
+           const py::args args, const py::kwargs kwargs) {
+          return imperative::PyLayer_apply(place, cls, args, kwargs);
+        });
 }
 
 }  // namespace pybind

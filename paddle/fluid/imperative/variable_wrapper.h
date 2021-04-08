@@ -37,6 +37,8 @@ class VariableWrapper {
   friend class VarBase;
 
   explicit VariableWrapper(const std::string& name) : name_(name) {}
+  VariableWrapper(const std::string& name, const framework::Variable& variable)
+      : var_(variable), name_(name) {}
 
   ~VariableWrapper() { VLOG(10) << "Destruct VariableWrapper: " << Name(); }
 
