@@ -222,6 +222,8 @@ class DownpourWorker : public HogwildWorker {
   void PushGradients();
   void CollectLabelInfo(size_t table_id);
   void AdjustInsWeight();
+  // For hit interval ins weight in recall
+  void FillInsWeight(size_t table_id);
   void CopySparseTable();
   void CopyDenseTable();
   void CopyDenseVars();
@@ -275,6 +277,13 @@ class DownpourWorker : public HogwildWorker {
   std::vector<float> nid_show_;
   // std::map<uint64_t, uint64_t> table_dependency_;
   // std::vector<std::pair<uint64_t, uint64_t>> copy_dense_tables_;
+
+  // recall hit interval ins weight
+  RecallInsWeightConfig recall_ins_weight_config_;
+  std::vector<std::string> item_sampling_slots_;
+  std::vector<float> item_freq_vec_;
+  std::vector<float> hit_interval_new_;
+  std::vector<int> need_hit_interval_;
 };
 
 class DownpourWorkerOpt : public DownpourWorker {

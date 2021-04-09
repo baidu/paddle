@@ -85,6 +85,7 @@ void DownpourWorker::Initialize(const TrainerDesc& desc) {
     dump_fields_[i] = desc.dump_fields(i);
   }
   adjust_ins_weight_config_ = desc.adjust_ins_weight_config();
+  recall_ins_weight_config_ = desc.recall_ins_weight_config();
   need_dump_param_ = false;
   dump_param_.resize(desc.dump_param_size());
   for (int i = 0; i < desc.dump_param_size(); ++i) {
@@ -118,6 +119,13 @@ void DownpourWorker::Initialize(const TrainerDesc& desc) {
         table_dependency_[m.key()] = value;
       }
     }
+  }
+  // minibatch_sn_ = 0.0;
+  item_sampling_slots_.resize(
+      recall_ins_weight_config_.item_sampling_slot_size());
+  for (int i = 0; i < recall_ins_weight_config_.item_sampling_slot_size();
+       ++i) {
+    item_sampling_slots_[i] = recall_ins_weight_config_.item_sampling_slot(i);
   }
 }
 
@@ -234,6 +242,8 @@ void DownpourWorker::FillSparseValue(size_t table_idx) {
     if (var_emb == nullptr) {
       continue;
     }
+    // tensor_emb: slot对应feasign的embedding
+    // table.emb_dim(): embedx_dim 32 +1?
     LoDTensor* tensor_emb = var_emb->GetMutable<LoDTensor>();
     float* ptr = tensor_emb->mutable_data<float>({len, table.emb_dim()},
                                                  platform::CPUPlace());
@@ -248,7 +258,10 @@ void DownpourWorker::FillSparseValue(size_t table_idx) {
       nid_show_.clear();
     }
     int nid_ins_index = 0;
-
+    int memcpy_offset = 0;
+    if (recall_ins_weight_config_.enable_ins_weight()) {
+      memcpy_offset = 1;
+    }
     for (int index = 0; index < len; ++index) {
       if (use_cvm_ || no_cvm_) {
         if (ids[index] == 0u) {
@@ -260,11 +273,12 @@ void DownpourWorker::FillSparseValue(size_t table_idx) {
           }
           continue;
         }
-        memcpy(ptr + table.emb_dim() * index, fea_value[fea_idx].data(),
+        memcpy(ptr + table.emb_dim() * index,
+               fea_value[fea_idx].data() + memcpy_offset,
                sizeof(float) * table.emb_dim());
         if (is_nid &&
             static_cast<size_t>(index) == tensor->lod()[0][nid_ins_index]) {
-          nid_show_.push_back(fea_value[fea_idx][0]);
+          nid_show_.push_back(fea_value[fea_idx][memcpy_offset]);
           ++nid_ins_index;
         }
         fea_idx++;
@@ -278,11 +292,12 @@ void DownpourWorker::FillSparseValue(size_t table_idx) {
           }
           continue;
         }
-        memcpy(ptr + table.emb_dim() * index, fea_value[fea_idx].data() + 2,
+        memcpy(ptr + table.emb_dim() * index,
+               fea_value[fea_idx].data() + 2 + memcpy_offset,
                sizeof(float) * table.emb_dim());
         if (is_nid &&
             static_cast<size_t>(index) == tensor->lod()[0][nid_ins_index]) {
-          nid_show_.push_back(fea_value[fea_idx][0]);
+          nid_show_.push_back(fea_value[fea_idx][memcpy_offset]);
           ++nid_ins_index;
         }
         fea_idx++;
@@ -396,6 +411,106 @@ void DownpourWorker::CopySparseTable() {
   feasign_set_.clear();
 }
 
+void DownpourWorker::FillInsWeight(size_t table_idx) {
+  if (!recall_ins_weight_config_.enable_ins_weight()) {
+    VLOG(0) << "enable_ins_weight=false, skip fill ins_weight var";
+    return;
+  }
+  Variable* ins_weight_var = thread_scope_->FindVar(
+      recall_ins_weight_config_.item_sampling_ins_weight());
+  if (ins_weight_var == nullptr) {
+    VLOG(0) << "ins weight var "
+            << recall_ins_weight_config_.item_sampling_ins_weight()
+            << " is nullptr, skip fill ins_weight var";
+    return;
+  }
+
+  uint64_t table_id = static_cast<uint64_t>(
+      param_.program_config(0).pull_sparse_table_id(table_idx));
+
+  TableParameter table;
+  for (auto i : param_.sparse_table()) {
+    if (i.table_id() == table_id) {
+      table = i;
+      break;
+    }
+  }
+  auto& fea_value = feature_values_[table_id];
+  size_t global_index = 0;
+  size_t batch_size = device_reader_->GetCurBatchSize();
+  if (recall_ins_weight_config_.enable_ins_weight()) {
+    item_freq_vec_.clear();
+    item_freq_vec_.resize(batch_size);
+    for (size_t vid = 0; vid < batch_size; vid++) {
+      item_freq_vec_[vid] = 0.0;
+    }
+  }
+  for (size_t i = 0; i < sparse_key_names_[table_id].size(); ++i) {
+    std::string slot_name = sparse_key_names_[table_id][i];
+    std::string emb_slot_name = sparse_value_names_[table_id][i];
+    Variable* var = thread_scope_->FindVar(slot_name);
+    if (var == nullptr) {
+      continue;
+    }
+    LoDTensor* tensor = var->GetMutable<LoDTensor>();
+    CHECK(tensor != nullptr) << "tensor of var " << slot_name << " is null";
+
+    // skip slots which do not have embedding
+    Variable* emb_var = thread_scope_->FindVar(emb_slot_name);
+    if (emb_var == nullptr) {
+      continue;
+    }
+
+    int64_t* ids = tensor->data<int64_t>();
+    auto fea_idx = 0u;
+    int hit_sample_slots = 0;
+    if (std::find(item_sampling_slots_.begin(), item_sampling_slots_.end(),
+                  slot_name) != item_sampling_slots_.end()) {
+      hit_sample_slots = 1;
+    }
+    // tensor->lod()[0].size() == batch_size + 1
+    for (auto lod_idx = 1u; lod_idx < tensor->lod()[0].size(); ++lod_idx) {
+      for (; fea_idx < tensor->lod()[0][lod_idx]; ++fea_idx) {
+        // should be skipped feasign defined in protobuf
+        if (ids[fea_idx] == 0u) {
+          continue;
+        }
+        if (hit_sample_slots > 0) {
+          if (fea_value[global_index][0] > 1e-5) {
+            item_freq_vec_[lod_idx - 1] = 1.0 / fea_value[global_index][0];
+          }
+          VLOG(3) << "lod_idx:" << lod_idx << "  fea_value[global_index][0]:"
+                  << fea_value[global_index][0]
+                  << "  item_freq_vec_[lod_idx - 1]:"
+                  << item_freq_vec_[lod_idx - 1];
+        }
+        global_index++;
+      }
+    }
+  }
+
+  LoDTensor* ins_weight_tensor = ins_weight_var->GetMutable<LoDTensor>();
+  float* ins_weights = ins_weight_tensor->mutable_data<float>(
+      {static_cast<int>(batch_size), 1}, place_);
+  size_t ins_index = 0;
+  float item_weight;
+  for (size_t i = 0; i < batch_size; ++i) {
+    float item_freq = item_freq_vec_[i];
+    item_weight =
+        1.0 - item_freq * recall_ins_weight_config_.sampling_bias_scalar();
+    if (item_weight < 0.0) {
+      item_weight = 0.0;
+    }
+    if (item_weight > 1.0) {
+      item_weight = 1.0;
+    }
+    ins_weights[ins_index] = item_weight;
+    VLOG(3) << "item_freq:" << item_freq << "  ins_weights[" << ins_index
+            << "] = " << item_weight;
+    ++ins_index;
+  }
+}
+
 void DownpourWorker::CopyDenseTable() {
   if (thread_id_ != 0) {
     return;
@@ -492,6 +607,7 @@ void DownpourWorker::TrainFilesWithProfiler() {
   double read_time = 0.0;
   double pull_sparse_time = 0.0;
   double adjust_ins_weight_time = 0.0;
+  double recall_ins_weight_time = 0.0;
   double collect_label_time = 0.0;
   double fill_sparse_time = 0.0;
   double push_sparse_time = 0.0;
@@ -507,6 +623,7 @@ void DownpourWorker::TrainFilesWithProfiler() {
     total_time += timeline.ElapsedSec();
 
     timeline.Start();
+    fleet_ptr_->minibatch_sn_[thread_id_] += 1.0;
     if (copy_table_config_.need_copy()) {
       VLOG(3) << "copy_sparse_tables_.size " << copy_sparse_tables_.size();
       if (batch_cnt % copy_table_config_.batch_num() == 0) {
@@ -557,6 +674,13 @@ void DownpourWorker::TrainFilesWithProfiler() {
       }
       timeline.Pause();
       adjust_ins_weight_time += timeline.ElapsedSec();
+      total_time += timeline.ElapsedSec();
+      timeline.Start();
+      if (recall_ins_weight_config_.enable_ins_weight()) {
+        FillInsWeight(i);
+      }
+      timeline.Pause();
+      recall_ins_weight_time += timeline.ElapsedSec();
       total_time += timeline.ElapsedSec();
     }
     VLOG(3) << "Fill sparse value for all sparse table done.";
@@ -609,15 +733,94 @@ void DownpourWorker::TrainFilesWithProfiler() {
             break;
           }
         }
-        timeline.Start();
-        fleet_ptr_->PushSparseVarsWithLabelAsync(
-            *thread_scope_, tid, features_[tid], feature_labels_[tid],
-            sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
-            &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
-            dump_slot_, &sparse_push_keys_[tid], no_cvm_);
-        timeline.Pause();
-        push_sparse_time += timeline.ElapsedSec();
-        total_time += timeline.ElapsedSec();
+        if (recall_ins_weight_config_.enable_ins_weight()) {
+          timeline.Start();
+          need_hit_interval_.clear();
+          hit_interval_new_.clear();
+          need_hit_interval_.resize(features_[tid].size());
+          hit_interval_new_.resize(features_[tid].size());
+          size_t global_index = 0;
+          for (size_t i = 0; i < sparse_key_names_[tid].size(); ++i) {
+            int find_hit_slot = 0;
+            std::string slot_name = sparse_key_names_[tid][i];
+            if (std::find(item_sampling_slots_.begin(),
+                          item_sampling_slots_.end(),
+                          slot_name) != item_sampling_slots_.end()) {
+              find_hit_slot = 1;
+            }
+            Variable* var = thread_scope_->FindVar(slot_name);
+            if (var == nullptr) {
+              continue;
+            }
+            LoDTensor* tensor = var->GetMutable<LoDTensor>();
+            CHECK(tensor != nullptr) << "tensor of var " << slot_name
+                                     << " is null";
+            int64_t* ids = tensor->data<int64_t>();
+            size_t fea_idx = 0;
+
+            // tensor->lod()[0].size() == batch_size + 1
+            for (auto lod_idx = 1u; lod_idx < tensor->lod()[0].size();
+                 ++lod_idx) {
+              for (; fea_idx < tensor->lod()[0][lod_idx]; ++fea_idx) {
+                // should be skipped feasign defined in protobuf
+                if (ids[fea_idx] == 0u) {
+                  continue;
+                }
+                if (find_hit_slot > 0) {
+                  std::unordered_map<uint64_t, float>& last_hit_minibatch_sn =
+                      fleet_ptr_->last_hit_minibatch_sn_[thread_id_];
+                  float cur_minibatch_sn =
+                      fleet_ptr_->minibatch_sn_[thread_id_];
+                  float hit_interval_new = table.initial_value();
+                  auto it = last_hit_minibatch_sn.find(ids[fea_idx]);
+                  if (it != last_hit_minibatch_sn.end()) {
+                    hit_interval_new = cur_minibatch_sn - it->second;
+                    it->second = cur_minibatch_sn;
+                  } else {
+                    last_hit_minibatch_sn.emplace(ids[fea_idx],
+                                                  cur_minibatch_sn);
+                  }
+                  need_hit_interval_[global_index] = 1;
+                  hit_interval_new_[global_index] = hit_interval_new;
+                  VLOG(3) << "find slot: " << slot_name
+                          << " global_index:" << global_index
+                          << " need_hit_interval:"
+                          << need_hit_interval_[global_index]
+                          << " hit_interval_new_[" << global_index
+                          << "] = " << hit_interval_new_[global_index];
+                } else {
+                  need_hit_interval_[global_index] = 0;
+                  hit_interval_new_[global_index] = 1.0;
+                }
+                global_index++;
+              }
+            }
+          }
+          CHECK(global_index == features_[tid].size())
+              << "expect fea info size:" << features_[tid].size()
+              << " real:" << global_index;
+          timeline.Pause();
+          recall_ins_weight_time += timeline.ElapsedSec();
+          total_time += timeline.ElapsedSec();
+          timeline.Start();
+          fleet_ptr_->PushSparseVarsWithLabelAsync(
+              *thread_scope_, tid, features_[tid], feature_labels_[tid],
+              sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
+              &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
+              dump_slot_, &sparse_push_keys_[tid], no_cvm_, need_hit_interval_,
+              hit_interval_new_);
+          push_sparse_time += timeline.ElapsedSec();
+          total_time += timeline.ElapsedSec();
+        } else {
+          timeline.Start();
+          fleet_ptr_->PushSparseVarsWithLabelAsync(
+              *thread_scope_, tid, features_[tid], feature_labels_[tid],
+              sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
+              &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
+              dump_slot_, &sparse_push_keys_[tid], no_cvm_);
+          push_sparse_time += timeline.ElapsedSec();
+          total_time += timeline.ElapsedSec();
+        }
       }
     }
 
@@ -727,6 +930,8 @@ void DownpourWorker::TrainFilesWithProfiler() {
                 collect_label_time / batch_cnt);
         fprintf(stderr, "adjust ins weight time: %fs\n",
                 adjust_ins_weight_time / batch_cnt);
+        fprintf(stderr, "recall ins weight time: %fs\n",
+                recall_ins_weight_time / batch_cnt);
         fprintf(stderr, "copy table time: %fs\n", copy_table_time / batch_cnt);
         fprintf(stderr, "mean read time: %fs\n", read_time / batch_cnt);
         fprintf(stderr, "IO percent: %f\n", read_time / total_time * 100);
@@ -735,6 +940,8 @@ void DownpourWorker::TrainFilesWithProfiler() {
                 pull_sparse_time / total_time * 100);
         fprintf(stderr, "adjust ins weight time percent: %f\n",
                 adjust_ins_weight_time / total_time * 100);
+        fprintf(stderr, "recall ins weight time percent: %f\n",
+                recall_ins_weight_time / total_time * 100);
         fprintf(stderr, "copy table time percent: %f\n",
                 copy_table_time / total_time * 100);
         fprintf(stderr, "collect label time percent: %f\n",
@@ -764,6 +971,7 @@ void DownpourWorker::TrainFiles() {
   int batch_cnt = 0;
   int cur_batch;
   while ((cur_batch = device_reader_->Next()) > 0) {
+    fleet_ptr_->minibatch_sn_[thread_id_] += 1.0;
     if (copy_table_config_.need_copy()) {
       if (batch_cnt % copy_table_config_.batch_num() == 0) {
         CopySparseTable();
@@ -793,6 +1001,9 @@ void DownpourWorker::TrainFiles() {
                                 adjust_ins_weight_config_.nid_slot());
       if (nid_iter != sparse_value_names_[tid].end()) {
         AdjustInsWeight();
+      }
+      if (recall_ins_weight_config_.enable_ins_weight()) {
+        FillInsWeight(i);
       }
     }
     VLOG(3) << "fill sparse value for all sparse table done.";
@@ -883,11 +1094,84 @@ void DownpourWorker::TrainFiles() {
             break;
           }
         }
-        fleet_ptr_->PushSparseVarsWithLabelAsync(
-            *thread_scope_, tid, features_[tid], feature_labels_[tid],
-            sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
-            &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
-            dump_slot_, &sparse_push_keys_[tid], no_cvm_);
+        if (recall_ins_weight_config_.enable_ins_weight()) {
+          need_hit_interval_.clear();
+          hit_interval_new_.clear();
+          need_hit_interval_.resize(features_[tid].size());
+          hit_interval_new_.resize(features_[tid].size());
+          size_t global_index = 0;
+          for (size_t i = 0; i < sparse_key_names_[tid].size(); ++i) {
+            int find_hit_slot = 0;
+            std::string slot_name = sparse_key_names_[tid][i];
+            if (std::find(item_sampling_slots_.begin(),
+                          item_sampling_slots_.end(),
+                          slot_name) != item_sampling_slots_.end()) {
+              find_hit_slot = 1;
+            }
+            Variable* var = thread_scope_->FindVar(slot_name);
+            if (var == nullptr) {
+              continue;
+            }
+            LoDTensor* tensor = var->GetMutable<LoDTensor>();
+            CHECK(tensor != nullptr) << "tensor of var " << slot_name
+                                     << " is null";
+            int64_t* ids = tensor->data<int64_t>();
+            size_t fea_idx = 0;
+
+            // tensor->lod()[0].size() == batch_size + 1
+            for (auto lod_idx = 1u; lod_idx < tensor->lod()[0].size();
+                 ++lod_idx) {
+              for (; fea_idx < tensor->lod()[0][lod_idx]; ++fea_idx) {
+                // should be skipped feasign defined in protobuf
+                if (ids[fea_idx] == 0u) {
+                  continue;
+                }
+                if (find_hit_slot > 0) {
+                  std::unordered_map<uint64_t, float>& last_hit_minibatch_sn =
+                      fleet_ptr_->last_hit_minibatch_sn_[thread_id_];
+                  float cur_minibatch_sn =
+                      fleet_ptr_->minibatch_sn_[thread_id_];
+                  float hit_interval_new = table.initial_value();
+                  auto it = last_hit_minibatch_sn.find(ids[fea_idx]);
+                  if (it != last_hit_minibatch_sn.end()) {
+                    hit_interval_new = cur_minibatch_sn - it->second;
+                    it->second = cur_minibatch_sn;
+                  } else {
+                    last_hit_minibatch_sn.emplace(ids[fea_idx],
+                                                  cur_minibatch_sn);
+                  }
+                  need_hit_interval_[global_index] = 1;
+                  hit_interval_new_[global_index] = hit_interval_new;
+                  VLOG(3) << "find slot: " << slot_name
+                          << " global_index:" << global_index
+                          << " need_hit_interval:"
+                          << need_hit_interval_[global_index]
+                          << " hit_interval_new_[" << global_index
+                          << "] = " << hit_interval_new_[global_index];
+                } else {
+                  need_hit_interval_[global_index] = 0;
+                  hit_interval_new_[global_index] = 1.0;
+                }
+                global_index++;
+              }
+            }
+          }
+          CHECK(global_index == features_[tid].size())
+              << "expect fea info size:" << features_[tid].size()
+              << " real:" << global_index;
+          fleet_ptr_->PushSparseVarsWithLabelAsync(
+              *thread_scope_, tid, features_[tid], feature_labels_[tid],
+              sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
+              &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
+              dump_slot_, &sparse_push_keys_[tid], no_cvm_, need_hit_interval_,
+              hit_interval_new_);
+        } else {
+          fleet_ptr_->PushSparseVarsWithLabelAsync(
+              *thread_scope_, tid, features_[tid], feature_labels_[tid],
+              sparse_key_names_[tid], sparse_grad_names_[tid], table.emb_dim(),
+              &feature_grads_[tid], &push_sparse_status_, cur_batch, use_cvm_,
+              dump_slot_, &sparse_push_keys_[tid], no_cvm_);
+        }
       }
     }
 

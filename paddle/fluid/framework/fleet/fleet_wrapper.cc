@@ -523,6 +523,168 @@ void FleetWrapper::PushDenseVarsAsync(
 #endif
 }
 
+/* hit interval push value
+int need_hit_interval;
+float hit_interval_new;
+float slot;
+float show;
+float click;
+float embed_g;
+std::vector<float> embedx_g;
+*/
+void FleetWrapper::PushSparseVarsWithLabelAsync(
+    const Scope& scope, const uint64_t table_id,
+    const std::vector<uint64_t>& fea_keys, const std::vector<float>& fea_labels,
+    const std::vector<std::string>& sparse_key_names,
+    const std::vector<std::string>& sparse_grad_names, const int emb_dim,
+    std::vector<std::vector<float>>* push_values,
+    std::vector<::std::future<int32_t>>* push_sparse_status,
+    const int batch_size, const bool use_cvm, const bool dump_slot,
+    std::vector<uint64_t>* sparse_push_keys, const bool no_cvm,
+    const std::vector<int>& need_hit_interval,
+    const std::vector<float>& hit_interval_new) {
+#ifdef PADDLE_WITH_PSLIB
+  int offset = 2;
+  int slot_offset = 0;
+  int grad_dim = emb_dim;
+  int need_hit_interval_index = 0;
+  int hit_interval_new_index = 1;
+  int need_push_hit_interval = 1;
+  int hit_interval_offset = 2;
+  int show_index = 0 + hit_interval_offset;
+  int click_index = 1 + hit_interval_offset;
+  if (use_cvm) {
+    offset = 0;
+    grad_dim = emb_dim - 2;
+  }
+  if (no_cvm) {
+    offset = 0;
+    grad_dim = emb_dim;
+  }
+  if (dump_slot) {
+    slot_offset = 1;
+    show_index = 1 + hit_interval_offset;
+    click_index = 2 + hit_interval_offset;
+  }
+
+  CHECK_GE(grad_dim, 0);
+
+  sparse_push_keys->clear();
+  sparse_push_keys->reserve(fea_keys.size() + 1);
+  push_values->resize(fea_keys.size() + 1);
+  for (auto& t : *push_values) {
+    t.resize(emb_dim + offset + slot_offset + hit_interval_offset);
+  }
+  uint64_t fea_idx = 0u;
+  for (size_t i = 0;
+       i < sparse_key_names.size() && i < sparse_grad_names.size(); ++i) {
+    Variable* var = scope.FindVar(sparse_key_names[i]);
+    if (var == nullptr) {
+      continue;
+    }
+    LoDTensor* tensor = var->GetMutable<LoDTensor>();
+    if (tensor == nullptr) {
+      LOG(ERROR) << "tensor of var[" << sparse_key_names[i] << "] is null";
+      exit(-1);
+    }
+    size_t len = tensor->numel();
+    int64_t* ids = tensor->data<int64_t>();
+    int slot = 0;
+    if (dump_slot) {
+      slot = boost::lexical_cast<int>(sparse_key_names[i]);
+    }
+    Variable* g_var = scope.FindVar(sparse_grad_names[i]);
+    if (g_var == nullptr) {
+      continue;
+    }
+    LoDTensor* g_tensor = g_var->GetMutable<LoDTensor>();
+    if (g_tensor == nullptr) {
+      LOG(ERROR) << "tensor of var[" << sparse_key_names[i] << "] is null";
+      exit(-1);
+    }
+    float* g = g_tensor->data<float>();
+    if (scale_sparse_gradient_with_batch_size_ && grad_dim > 0) {
+      int dim = emb_dim;
+      Eigen::Map<
+          Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+          g_mat(g, g_tensor->numel() / dim, dim);
+      g_mat.rightCols(grad_dim) *= batch_size;
+    }
+    for (auto id_idx = 0u; id_idx < len; ++id_idx) {
+      if (ids[id_idx] == 0) {
+        g += emb_dim;
+        continue;
+      }
+      sparse_push_keys->push_back(ids[id_idx]);
+      CHECK(fea_idx < (*push_values).size());
+
+      if (use_cvm || no_cvm) {
+        memcpy((*push_values)[fea_idx].data() + offset + slot_offset +
+                   hit_interval_offset,
+               g, sizeof(float) * emb_dim);
+      } else {
+        CHECK(fea_idx < fea_labels.size());
+        memcpy((*push_values)[fea_idx].data() + offset + slot_offset +
+                   hit_interval_offset,
+               g, sizeof(float) * emb_dim);
+        (*push_values)[fea_idx][show_index] = 1.0f;
+        (*push_values)[fea_idx][click_index] =
+            static_cast<float>(fea_labels[fea_idx]);
+        if (need_push_hit_interval > 0) {
+          (*push_values)[fea_idx][need_hit_interval_index] =
+              static_cast<float>(need_hit_interval[fea_idx]);
+          (*push_values)[fea_idx][hit_interval_new_index] =
+              hit_interval_new[fea_idx];
+        }
+      }
+      if (dump_slot) {
+        (*push_values)[fea_idx][0 + hit_interval_offset] =
+            static_cast<float>(slot);
+      }
+      g += emb_dim;
+      fea_idx++;
+    }
+  }
+  // slots whose embedding has been stop gradient or
+  // not involved in forward-backward
+  uint64_t no_grad_fea_num = 0u;
+  for (size_t i = sparse_grad_names.size(); i < sparse_key_names.size(); ++i) {
+    Variable* var = scope.FindVar(sparse_key_names[i]);
+    if (var == nullptr) {
+      continue;
+    }
+    LoDTensor* tensor = var->GetMutable<LoDTensor>();
+    if (tensor == nullptr) {
+      LOG(ERROR) << "tensor of var[" << sparse_key_names[i] << "] is null";
+      exit(-1);
+    }
+    size_t len = tensor->numel();
+    int64_t* ids = tensor->data<int64_t>();
+    for (auto id_idx = 0u; id_idx < len; ++id_idx) {
+      if (ids[id_idx] == 0) {
+        continue;
+      }
+      ++no_grad_fea_num;
+    }
+  }
+  CHECK(fea_idx + no_grad_fea_num == fea_keys.size())
+      << "fea_idx: " << fea_idx << " no_grad_fea_num: " << no_grad_fea_num
+      << " features size: " << fea_keys.size();
+  CHECK(fea_idx == sparse_push_keys->size());
+  if (fea_idx == 0) {
+    return;
+  }
+  std::vector<float*> push_g_vec;
+  for (auto i = 0u; i < sparse_push_keys->size(); ++i) {
+    push_g_vec.push_back((*push_values)[i].data());
+  }
+  auto status = pslib_ptr_->_worker_ptr->push_sparse(
+      table_id, sparse_push_keys->data(), (const float**)push_g_vec.data(),
+      sparse_push_keys->size());
+  push_sparse_status->push_back(std::move(status));
+#endif
+}
+
 void FleetWrapper::PushSparseVarsWithLabelAsync(
     const Scope& scope, const uint64_t table_id,
     const std::vector<uint64_t>& fea_keys, const std::vector<float>& fea_labels,

@@ -49,8 +49,9 @@ message TrainerDesc {
   optional bool no_cvm = 21 [ default = false ];
   optional bool thread_barrier = 22;
   repeated string loss_names = 23;
-
   optional string user_define_dump_filename = 24;
+  // recall ins weight
+  optional RecallInsWeightConfig recall_ins_weight_config = 25;
 
   // device worker parameters
   optional HogwildWorkerParameter hogwild_param = 101;
@@ -116,6 +117,13 @@ message AdjustInsWeightConfig {
   optional string ins_weight_slot = 5 [ default = "" ];
 }
 
+message RecallInsWeightConfig {
+  optional bool enable_ins_weight = 1 [ default = false ];
+  repeated string item_sampling_slot = 2;
+  optional float sampling_bias_scalar = 3 [ default = 1.0 ];
+  optional string item_sampling_ins_weight = 4 [ default = "" ];
+}
+
 message TableDependencyMap {
   required int32 key = 1;
   repeated int32 values = 2;
@@ -175,4 +183,6 @@ message TableParameter {
   // if table will pull sparse asynchronously in worker
   optional bool is_async = 14 [ default = false ];
   optional string async_wait_op_name = 15;
+  // sparse hit interval initial value
+  optional float initial_value = 16;
 }

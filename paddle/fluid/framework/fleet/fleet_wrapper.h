@@ -70,6 +70,11 @@ class FleetWrapper {
     // pslib request max retry
     client2client_max_retry_ = 3;
     pull_local_thread_num_ = 25;
+    minibatch_sn_.resize(25);
+    last_hit_minibatch_sn_.resize(25);
+    for (size_t i = 0; i < minibatch_sn_.size(); i++) {
+      minibatch_sn_[i] = 0;
+    }
   }
 
   // set client to client communication config
@@ -165,6 +170,20 @@ class FleetWrapper {
       std::vector<::std::future<int32_t>>* push_sparse_status,
       const int batch_size, const bool use_cvm, const bool dump_slot,
       std::vector<uint64_t>* sparse_push_keys, const bool no_cvm);
+
+  // add need_hit_interval and hit_interval_new for hit_interval strategy
+  void PushSparseVarsWithLabelAsync(
+      const Scope& scope, const uint64_t table_id,
+      const std::vector<uint64_t>& fea_keys,
+      const std::vector<float>& fea_labels,
+      const std::vector<std::string>& sparse_key_names,
+      const std::vector<std::string>& sparse_grad_names, const int emb_dim,
+      std::vector<std::vector<float>>* push_values,
+      std::vector<::std::future<int32_t>>* push_sparse_status,
+      const int batch_size, const bool use_cvm, const bool dump_slot,
+      std::vector<uint64_t>* sparse_push_keys, const bool no_cvm,
+      const std::vector<int>& need_hit_interval,
+      const std::vector<float>& hit_interval_new);
 
   // Push sparse variables to server in async mode
   void PushSparseFromTensorWithLabelAsync(
@@ -290,6 +309,8 @@ class FleetWrapper {
 #ifdef PADDLE_WITH_PSLIB
   static std::shared_ptr<paddle::distributed::PSlib> pslib_ptr_;
 #endif
+  std::vector<float> minibatch_sn_;
+  std::vector<std::unordered_map<uint64_t, float>> last_hit_minibatch_sn_;
 
  private:
   static std::shared_ptr<FleetWrapper> s_instance_;

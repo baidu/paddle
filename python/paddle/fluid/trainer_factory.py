@@ -92,6 +92,8 @@ class TrainerFactory(object):
                         "check_nan_var_names"])
                 if opt_info.get("loss_names") is not None:
                     trainer._set_loss_names(opt_info["loss_names"])
+                if opt_info.get("recall_ins_weight") is not None:
+                    trainer._set_recall_ins_weight(opt_info["recall_ins_weight"])
             trainer._set_device_worker(device_worker)
         return trainer
 
