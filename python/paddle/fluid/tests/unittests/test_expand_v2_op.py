@@ -13,13 +13,19 @@
 # limitations under the License.
 
 from __future__ import print_function
-
 import unittest
+
 import numpy as np
-from op_test import OpTest
+
+import paddle
 import paddle.fluid as fluid
 from paddle.fluid import compiler, Program, program_guard
-import paddle
+import paddle.fluid.core as core
+from op_test import OpTest
+
+paddle.enable_static()
+
+DTYPE = "float32" if core.is_compiled_with_rocm() else "float64"
 
 
 # Situation 1: shape is a list(without tensor)
@@ -28,7 +34,7 @@ class TestExpandV2OpRank1(OpTest):
         self.op_type = "expand_v2"
         self.init_data()
 
-        self.inputs = {'X': np.random.random(self.ori_shape).astype("float64")}
+        self.inputs = {'X': np.random.random(self.ori_shape).astype(DTYPE)}
         self.attrs = {'shape': self.shape}
         output = np.tile(self.inputs['X'], self.expand_times)
         self.outputs = {'Out': output}
@@ -84,7 +90,7 @@ class TestExpandV2OpRank1_tensor_attr(OpTest):
                 (1)).astype('int32') * ele))
 
         self.inputs = {
-            'X': np.random.random(self.ori_shape).astype("float64"),
+            'X': np.random.random(self.ori_shape).astype(DTYPE),
             'expand_shapes_tensor': expand_shapes_tensor,
         }
         self.attrs = {"shape": self.infer_expand_shape}
@@ -119,7 +125,7 @@ class TestExpandV2OpRank1_tensor(OpTest):
         self.init_data()
 
         self.inputs = {
-            'X': np.random.random(self.ori_shape).astype("float64"),
+            'X': np.random.random(self.ori_shape).astype(DTYPE),
             'Shape': np.array(self.expand_shape).astype("int32"),
         }
         self.attrs = {}

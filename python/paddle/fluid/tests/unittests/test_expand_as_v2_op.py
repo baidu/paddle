@@ -13,19 +13,25 @@
 # limitations under the License.
 
 from __future__ import print_function
-
 import unittest
+
 import numpy as np
+
 from op_test import OpTest
 import paddle
 import paddle.fluid as fluid
+import paddle.fluid.core as core
+
+paddle.enable_static()
+
+DTYPE = "float32" if core.is_compiled_with_rocm() else "float64"
 
 
 class TestExpandAsOpRank1(OpTest):
     def setUp(self):
         self.op_type = "expand_as_v2"
-        x = np.random.rand(100).astype("float64")
-        target_tensor = np.random.rand(2, 100).astype("float64")
+        x = np.random.rand(100).astype(DTYPE)
+        target_tensor = np.random.rand(2, 100).astype(DTYPE)
         self.inputs = {'X': x}
         self.attrs = {'target_shape': target_tensor.shape}
         bcast_dims = [2, 1]
@@ -42,8 +48,8 @@ class TestExpandAsOpRank1(OpTest):
 class TestExpandAsOpRank2(OpTest):
     def setUp(self):
         self.op_type = "expand_as_v2"
-        x = np.random.rand(10, 12).astype("float64")
-        target_tensor = np.random.rand(10, 12).astype("float64")
+        x = np.random.rand(10, 12).astype(DTYPE)
+        target_tensor = np.random.rand(10, 12).astype(DTYPE)
         self.inputs = {'X': x}
         self.attrs = {'target_shape': target_tensor.shape}
         bcast_dims = [1, 1]
@@ -60,8 +66,8 @@ class TestExpandAsOpRank2(OpTest):
 class TestExpandAsOpRank3(OpTest):
     def setUp(self):
         self.op_type = "expand_as_v2"
-        x = np.random.rand(2, 3, 20).astype("float64")
-        target_tensor = np.random.rand(2, 3, 20).astype("float64")
+        x = np.random.rand(2, 3, 20).astype(DTYPE)
+        target_tensor = np.random.rand(2, 3, 20).astype(DTYPE)
         self.inputs = {'X': x}
         self.attrs = {'target_shape': target_tensor.shape}
         bcast_dims = [1, 1, 1]
@@ -78,8 +84,8 @@ class TestExpandAsOpRank3(OpTest):
 class TestExpandAsOpRank4(OpTest):
     def setUp(self):
         self.op_type = "expand_as_v2"
-        x = np.random.rand(1, 1, 7, 16).astype("float64")
-        target_tensor = np.random.rand(4, 6, 7, 16).astype("float64")
+        x = np.random.rand(1, 1, 7, 16).astype(DTYPE)
+        target_tensor = np.random.rand(4, 6, 7, 16).astype(DTYPE)
         self.inputs = {'X': x}
         self.attrs = {'target_shape': target_tensor.shape}
         bcast_dims = [4, 6, 1, 1]
