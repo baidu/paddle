@@ -37,6 +37,60 @@ using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
 using DataLayout = platform::DataLayout;
 using Tensor = framework::Tensor;
 
+// AccType: the compute type
+// to improve result accuracy
+template <typename T>
+struct GetAccType {
+  using type = T;
+};
+
+template <>
+struct GetAccType<platform::float16> {
+  using type = float;
+};
+
+// VecType: Vectorized data type
+// to achieve maximum memory throughput
+template <typename T, int N>
+struct GetVecType;
+
+template <typename T>
+struct GetVecType<T, 1> {
+  using type = T;
+};
+
+template <>
+struct GetVecType<platform::float16, 2> {
+  using type = half2;
+};
+
+template <>
+struct GetVecType<platform::float16, 4> {
+  using type = float2;
+};
+
+template <>
+struct GetVecType<float, 2> {
+  using type = float2;
+};
+
+template <>
+struct GetVecType<float, 4> {
+  using type = float4;
+};
+
+template <>
+struct GetVecType<double, 2> {
+  using type = double2;
+};
+
+template <>
+struct GetVecType<double, 4> {
+  using type = double4;
+};
+
+constexpr int MAX_BLOCK_DIM = 1024;
+
 #define LAUNCH_SOFTMAX_WARP_FORWARD(Log2Elements)                  \
   case Log2Elements:                                               \
     WarpSoftmaxForward<T, float, Log2Elements><<<                  \
@@ -318,6 +372,336 @@ __global__ void VecSoftmaxBackward(T* dst, const T* grad, const T* src,
   reinterpret_cast<decltype(local_dst.s)*>(&dst[offset])[0] = local_dst.s;
 }
 
+// When D is larg and dim is small:
+// Each block arranged by N，each thread arranged by D
+// each thread compute dim number's softmax
+template <typename T, typename AccT, int kVecSize>
+__global__ void KeLoopDimSoftmaxBackward(T* __restrict__ dx,
+                                         const T* __restrict__ out,
+                                         const T* __restrict__ dout,
+                                         const int N, const int dim,
+                                         const int D) {
+  const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  const int vec_id = tid * kVecSize;
+  const int out_id = vec_id / D;
+  if (out_id >= N) return;
+  const int in_id = vec_id - out_id * D;
+
+  // vectorization for global memory coalescing
+  using VecT = typename GetVecType<T, kVecSize>::type;
+  VecT vec_out, vec_dout, vec_dx;
+  T* buf_out = reinterpret_cast<T*>(&vec_out);
+  T* buf_dout = reinterpret_cast<T*>(&vec_dout);
+  T* buf_dx = reinterpret_cast<T*>(&vec_dx);
+
+  const int offset = out_id * dim * D + in_id;
+  const T* __restrict__ out_row = out + offset;
+  const T* __restrict__ dout_row = dout + offset;
+  T* __restrict__ dx_row = dx + offset;
+
+  // compute multiply then sum value
+  AccT sum_val[kVecSize]{0};
+  for (int dim_id = 0; dim_id < dim; dim_id++) {
+    vec_out = reinterpret_cast<const VecT*>(&out_row[dim_id * D])[0];
+    vec_dout = reinterpret_cast<const VecT*>(&dout_row[dim_id * D])[0];
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      sum_val[i] +=
+          static_cast<AccT>(buf_out[i]) * static_cast<AccT>(buf_dout[i]);
+    }
+  }
+
+  // compute softmax gradient value
+  for (int dim_id = 0; dim_id < dim; dim_id++) {
+    vec_out = reinterpret_cast<const VecT*>(&out_row[dim_id * D])[0];
+    vec_dout = reinterpret_cast<const VecT*>(&dout_row[dim_id * D])[0];
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      buf_dx[i] = static_cast<T>(static_cast<AccT>(buf_out[i]) *
+                                 (static_cast<AccT>(buf_dout[i]) - sum_val[i]));
+    }
+    reinterpret_cast<VecT*>(&dx_row[dim_id * D])[0] = vec_dx;
+  }
+}
+
+template <typename T, int kVecSize>
+inline void LaunchLoopDimSoftmaxBackwardKernel(const gpuStream_t& stream,
+                                               T* dx_data, const T* out_data,
+                                               const T* dout_data, const int N,
+                                               const int dim, const int D) {
+  int loop_num = N * D / kVecSize;
+  int threads = std::min(loop_num, MAX_BLOCK_DIM);
+  int grids = (loop_num + threads - 1) / threads;
+  using AccT = typename GetAccType<T>::type;
+
+  KeLoopDimSoftmaxBackward<T, AccT, kVecSize><<<grids, threads, 0, stream>>>(
+      dx_data, out_data, dout_data, N, dim, D);
+}
+
+template <typename T>
+inline void LaunchLoopDimSoftmaxBackward(const gpuStream_t& stream, T* dx_data,
+                                         const T* out_data, const T* dout_data,
+                                         const int N, const int dim,
+                                         const int D, const int sm_count) {
+  // ensure occupancy
+  const int num = N * D / (MAX_BLOCK_DIM * 4);
+  if (D % 4 == 0 && num / 4 >= sm_count) {
+    LaunchLoopDimSoftmaxBackwardKernel<T, 4>(stream, dx_data, out_data,
+                                             dout_data, N, dim, D);
+  } else if (D % 2 == 0 && num / 2 >= sm_count) {
+    LaunchLoopDimSoftmaxBackwardKernel<T, 2>(stream, dx_data, out_data,
+                                             dout_data, N, dim, D);
+  } else {
+    LaunchLoopDimSoftmaxBackwardKernel<T, 1>(stream, dx_data, out_data,
+                                             dout_data, N, dim, D);
+  }
+}
+
+// When D is small and (dim * D) is larger
+// Each block arranged by N，each thread arranged by dim * D
+// each block compute (dim * D) number's softmax
+template <typename T, typename AccT, int kVecSize>
+__global__ void KeSpandDimDSoftmaxForward(T* __restrict__ dst,
+                                          const T* __restrict__ src,
+                                          const int N, const int dim,
+                                          const int D) {
+  extern __shared__ __align__(sizeof(AccT)) unsigned char s_mem[];
+  AccT* s_data = reinterpret_cast<AccT*>(s_mem);
+
+  // vectorization for global memory coalescing
+  using VecT = typename GetVecType<T, kVecSize>::type;
+  VecT vec_src, vec_dst;
+  T* buf_src = reinterpret_cast<T*>(&vec_src);
+  T* buf_dst = reinterpret_cast<T*>(&vec_dst);
+
+  const int vec_id = threadIdx.x * kVecSize;
+  const int vec_num = blockDim.x * kVecSize;
+  for (int out_id = blockIdx.x; out_id < N; out_id += gridDim.x) {
+    const T* __restrict__ src_row = src + out_id * dim * D;
+    T* __restrict__ dst_row = dst + out_id * dim * D;
+
+    // Compute each thread's max value
+    AccT max_val[kVecSize];
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      max_val[i] = -std::numeric_limits<AccT>::infinity();
+    }
+
+    for (int id = vec_id; id < dim * D; id += vec_num) {
+      vec_src = reinterpret_cast<const VecT*>(&src_row[id])[0];
+#pragma unroll
+      for (int i = 0; i < kVecSize; i++) {
+        max_val[i] = max(static_cast<AccT>(buf_src[i]), max_val[i]);
+      }
+    }
+
+// write to shared memory
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) s_data[vec_id + i] = max_val[i];
+    __syncthreads();
+
+// compute total max value
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      for (int k = (vec_id + i) % D; k < vec_num; k += D) {
+        max_val[i] = max(s_data[k], max_val[i]);
+      }
+    }
+
+    // Compute each thread's sum value
+    AccT sum_val[kVecSize]{0};
+    for (int id = vec_id; id < dim * D; id += vec_num) {
+      vec_src = reinterpret_cast<const VecT*>(&src_row[id])[0];
+#pragma unroll
+      for (int i = 0; i < kVecSize; i++) {
+        sum_val[i] +=
+            math::exp_func(static_cast<AccT>(buf_src[i]) - max_val[i]);
+      }
+    }
+
+// write to shared memory
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) s_data[vec_id + i] = sum_val[i];
+    __syncthreads();
+
+// compute total sum value
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      sum_val[i] = 0;
+      for (int k = (vec_id + i) % D; k < vec_num; k += D) {
+        sum_val[i] += s_data[k];
+      }
+    }
+
+    // Compute finally softmax result
+    // TODO(jiangcheng): how to eliminate twice exp_func
+    for (int id = vec_id; id < dim * D; id += vec_num) {
+      vec_src = reinterpret_cast<const VecT*>(&src_row[id])[0];
+#pragma unroll
+      for (int i = 0; i < kVecSize; i++) {
+        buf_dst[i] = static_cast<T>(
+            math::exp_func(static_cast<AccT>(buf_src[i]) - max_val[i]) /
+            (sum_val[i] + std::numeric_limits<AccT>::min()));
+      }
+      reinterpret_cast<VecT*>(&dst_row[id])[0] = vec_dst;
+    }
+  }
+}
+template <typename T, int kVecSize>
+inline void LaunchSpandDimDSoftmaxForwardKernel(const gpuStream_t& stream,
+                                                const T* in_data, T* out_data,
+                                                const int N, const int dim,
+                                                const int D) {
+  // ensure occupancy
+  int D_size = 128;
+  if (D <= 256)
+    D_size = 256;
+  else if (D <= 512)
+    D_size = 512;
+  else if (D <= MAX_BLOCK_DIM)
+    D_size = MAX_BLOCK_DIM;
+  else
+    assert(false && "not support");
+
+  const int grids = N;
+  const int threads = D * (D_size / D);
+  using AccT = typename GetAccType<T>::type;
+  KeSpandDimDSoftmaxForward<
+      T, AccT,
+      kVecSize><<<grids, threads, threads * kVecSize * sizeof(AccT), stream>>>(
+      out_data, in_data, N, dim, D);
+}
+template <typename T>
+inline void LaunchSpandDimDSoftmaxForward(const gpuStream_t& stream,
+                                          const T* in_data, T* out_data,
+                                          const int N, const int dim,
+                                          const int D) {
+  if (D % 4 == 0) {
+    LaunchSpandDimDSoftmaxForwardKernel<T, 4>(stream, in_data, out_data, N, dim,
+                                              D);
+  } else if (D % 2 == 0) {
+    LaunchSpandDimDSoftmaxForwardKernel<T, 2>(stream, in_data, out_data, N, dim,
+                                              D);
+  } else {
+    LaunchSpandDimDSoftmaxForwardKernel<T, 1>(stream, in_data, out_data, N, dim,
+                                              D);
+  }
+}
+
+// When D is small and (dim * D) is larger
+// Each block arranged by N，each thread arranged by dim * D
+// each block compute (dim * D) number's softmax
+template <typename T, typename AccT, int kVecSize>
+__global__ void KeSpandDimDSoftmaxBackward(T* __restrict__ dx,
+                                           const T* __restrict__ out,
+                                           const T* __restrict__ dout,
+                                           const int N, const int dim,
+                                           const int D) {
+  extern __shared__ __align__(sizeof(AccT)) unsigned char s_mem[];
+  AccT* s_data = reinterpret_cast<AccT*>(s_mem);
+
+  // vectorization for global memory coalescing
+  using VecT = typename GetVecType<T, kVecSize>::type;
+  VecT vec_out, vec_dout, vec_dx;
+  T* buf_out = reinterpret_cast<T*>(&vec_out);
+  T* buf_dout = reinterpret_cast<T*>(&vec_dout);
+  T* buf_dx = reinterpret_cast<T*>(&vec_dx);
+
+  const int vec_id = threadIdx.x * kVecSize;
+  const int vec_num = blockDim.x * kVecSize;
+  for (int out_id = blockIdx.x; out_id < N; out_id += gridDim.x) {
+    const int offset = out_id * dim * D;
+    const T* __restrict__ out_row = out + offset;
+    const T* __restrict__ dout_row = dout + offset;
+    T* __restrict__ dx_row = dx + offset;
+
+    // Compute each thread's sum value
+    AccT sum_val[kVecSize]{0};
+    for (int id = vec_id; id < dim * D; id += vec_num) {
+      vec_out = reinterpret_cast<const VecT*>(&out_row[id])[0];
+      vec_dout = reinterpret_cast<const VecT*>(&dout_row[id])[0];
+#pragma unroll
+      for (int i = 0; i < kVecSize; i++) {
+        sum_val[i] +=
+            static_cast<AccT>(buf_out[i]) * static_cast<AccT>(buf_dout[i]);
+      }
+    }
+
+// write to shared memory
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      s_data[vec_id + i] = sum_val[i];
+    }
+    __syncthreads();
+
+// compute total sum value
+#pragma unroll
+    for (int i = 0; i < kVecSize; i++) {
+      sum_val[i] = 0;
+      for (int k = (vec_id + i) % D; k < vec_num; k += D) {
+        sum_val[i] += s_data[k];
+      }
+    }
+
+    // Compute finally softmax result
+    for (int id = vec_id; id < dim * D; id += vec_num) {
+      vec_out = reinterpret_cast<const VecT*>(&out_row[id])[0];
+      vec_dout = reinterpret_cast<const VecT*>(&dout_row[id])[0];
+#pragma unroll
+      for (int i = 0; i < kVecSize; i++) {
+        buf_dx[i] =
+            static_cast<T>(static_cast<AccT>(buf_out[i]) *
+                           (static_cast<AccT>(buf_dout[i]) - sum_val[i]));
+      }
+      reinterpret_cast<VecT*>(&dx_row[id])[0] = vec_dx;
+    }
+  }
+}
+
+template <typename T, int kVecSize>
+inline void LaunchSpandDimDSoftmaxBackwardKernel(const gpuStream_t& stream,
+                                                 T* dx_data, const T* out_data,
+                                                 const T* dout_data,
+                                                 const int N, const int dim,
+                                                 const int D) {
+  // ensure occupancy
+  int D_size = 128;
+  if (D <= 256)
+    D_size = 256;
+  else if (D <= 512)
+    D_size = 512;
+  else if (D <= MAX_BLOCK_DIM)
+    D_size = MAX_BLOCK_DIM;
+  else
+    assert(false && "not support");
+
+  const int grids = N;
+  const int threads = D * (D_size / D);
+  using AccT = typename GetAccType<T>::type;
+
+  KeSpandDimDSoftmaxBackward<
+      T, AccT,
+      kVecSize><<<grids, threads, threads * kVecSize * sizeof(AccT), stream>>>(
+      dx_data, out_data, dout_data, N, dim, D);
+}
+
+template <typename T>
+inline void LaunchSpandDimDSoftmaxBackward(const gpuStream_t& stream,
+                                           T* dx_data, const T* out_data,
+                                           const T* dout_data, const int N,
+                                           const int dim, const int D) {
+  if (D % 4 == 0) {
+    LaunchSpandDimDSoftmaxBackwardKernel<T, 4>(stream, dx_data, out_data,
+                                               dout_data, N, dim, D);
+  } else if (D % 2 == 0) {
+    LaunchSpandDimDSoftmaxBackwardKernel<T, 2>(stream, dx_data, out_data,
+                                               dout_data, N, dim, D);
+  } else {
+    LaunchSpandDimDSoftmaxBackwardKernel<T, 1>(stream, dx_data, out_data,
+                                               dout_data, N, dim, D);
+  }
+}
+
 template <typename T>
 class SoftmaxCUDNNKernel : public framework::OpKernel<T> {
  public:
@@ -386,6 +770,13 @@ class SoftmaxCUDNNKernel : public framework::OpKernel<T> {
           default:
             break;
         }
+      }
+    } else if (D > 1) {
+      auto stream = ctx.cuda_device_context().stream();
+      if (D <= MAX_BLOCK_DIM) {
+        optimize = true;
+        LaunchSpandDimDSoftmaxForward(stream, x->data<T>(), out_data, N, dim,
+                                      D);
       }
     }
     if (!optimize) {
@@ -506,6 +897,19 @@ class SoftmaxGradCUDNNKernel : public framework::OpKernel<T> {
           default:
             break;
         }
+      }
+    } else if (D > 1) {
+      auto stream = ctx.cuda_device_context().stream();
+      if (D <= MAX_BLOCK_DIM) {
+        optimize = true;
+        LaunchSpandDimDSoftmaxBackward(stream, dx_data, out->data<T>(),
+                                       dout->data<T>(), N, dim, D);
+      } else if (dim <= 512) {
+        optimize = true;
+        // sm_count ensure occupancy
+        const int sm_count = ctx.cuda_device_context().GetSMCount();
+        LaunchLoopDimSoftmaxBackward(stream, dx_data, out->data<T>(),
+                                     dout->data<T>(), N, dim, D, sm_count);
       }
     }
     if (!optimize) {

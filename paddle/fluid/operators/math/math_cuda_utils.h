@@ -97,6 +97,11 @@ __device__ __forceinline__ __half2 FloatsToPair<__half2>(const float a,
 }
 
 template <>
+__device__ __forceinline__ double exp_func<double>(double a) {
+  return exp(a);
+}
+
+template <>
 __device__ __forceinline__ float exp_func<float>(float a) {
   return expf(a);
 }
