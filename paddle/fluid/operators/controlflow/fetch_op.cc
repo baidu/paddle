@@ -44,6 +44,11 @@ static void DataCopy(const framework::LoDTensor &src_item,
       TensorCopySync(src_item, platform::CPUPlace(), dst_item);
     }
 #else
+#ifdef PADDLE_WITH_ASCEND_CL
+    if (platform::is_npu_place(src_item.place())) {
+      platform::DeviceContextPool::Instance().Get(src_item.place())->Wait();
+    }
+#endif
     TensorCopySync(src_item, platform::CPUPlace(), dst_item);
 #endif
   } else {

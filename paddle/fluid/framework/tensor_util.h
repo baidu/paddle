@@ -135,6 +135,7 @@ void TensorFromArray(const T* src, const size_t& array_size,
   }
 #endif
 }
+
 template <typename T>
 void TensorFromVector(const std::vector<T>& src,
                       const platform::DeviceContext& ctx, Tensor* dst) {
@@ -167,6 +168,49 @@ void TensorFromVector(const std::vector<T>& src,
 #endif
 }
 
+// The fully specialized function should be inline to avoid
+// multi-definition.
+template <>
+inline void TensorFromVector(const std::vector<bool>& src,
+                             const platform::DeviceContext& ctx, Tensor* dst) {
+  // vector<bool> has no data() member, use array instead.
+  // See details:
+  // https://stackoverflow.com/questions/46115669/why-does-stdvectorbool-have-no-data/46115714
+  bool* array = new bool[src.size()];
+  for (unsigned int i = 0; i < src.size(); i++) {
+    array[i] = static_cast<bool>(src[i]);
+  }
+
+  auto dst_place = ctx.GetPlace();
+  auto src_ptr = static_cast<const void*>(array);
+  platform::CPUPlace src_place;
+  dst->Resize({static_cast<int64_t>(src.size())});
+  auto dst_ptr = static_cast<void*>(dst->mutable_data<bool>(dst_place));
+  auto size = src.size() * sizeof(bool);
+
+  if (platform::is_cpu_place(dst_place)) {
+    memory::Copy(BOOST_GET_CONST(platform::CPUPlace, dst_place), dst_ptr,
+                 src_place, src_ptr, size);
+  }
+#ifdef PADDLE_WITH_CUDA
+  else if (platform::is_gpu_place(dst_place)) {  // NOLINT
+    memory::Copy(
+        BOOST_GET_CONST(platform::CUDAPlace, dst_place), dst_ptr, src_place,
+        src_ptr, size,
+        reinterpret_cast<const platform::CUDADeviceContext&>(ctx).stream());
+  }
+#endif
+#ifdef PADDLE_WITH_ASCEND_CL
+  else if (platform::is_npu_place(dst_place)) {  // NOLINT
+    memory::Copy(
+        BOOST_GET_CONST(platform::NPUPlace, dst_place), dst_ptr, src_place,
+        src_ptr, size,
+        reinterpret_cast<const platform::NPUDeviceContext&>(ctx).stream());
+  }
+#endif
+  delete[] array;
+}
+
 template <typename T>
 void TensorFromVector(const std::vector<T>& src, Tensor* dst) {
   platform::CPUPlace dst_place = platform::CPUPlace();
@@ -177,6 +221,23 @@ void TensorFromVector(const std::vector<T>& src, Tensor* dst) {
   auto size = src.size() * sizeof(T);
 
   memory::Copy(dst_place, dst_ptr, src_place, src_ptr, size);
+}
+
+template <>
+inline void TensorFromVector(const std::vector<bool>& src, Tensor* dst) {
+  bool* array = new bool[src.size()];
+  for (unsigned int i = 0; i < src.size(); i++) {
+    array[i] = static_cast<bool>(src[i]);
+  }
+  platform::CPUPlace dst_place = platform::CPUPlace();
+  auto src_ptr = static_cast<const void*>(array);
+  platform::CPUPlace src_place;
+  dst->Resize({static_cast<int64_t>(src.size())});
+  auto dst_ptr = static_cast<void*>(dst->mutable_data<bool>(dst_place));
+  auto size = src.size() * sizeof(bool);
+
+  memory::Copy(dst_place, dst_ptr, src_place, src_ptr, size);
+  delete[] array;
 }
 
 template <typename T>
@@ -212,6 +273,46 @@ void TensorToVector(const Tensor& src, const platform::DeviceContext& ctx,
 #endif
 }
 
+template <>
+inline void TensorToVector(const Tensor& src,
+                           const platform::DeviceContext& ctx,
+                           std::vector<bool>* dst) {
+  auto src_ptr = static_cast<const void*>(src.data<bool>());
+  auto size = src.numel() * sizeof(bool);
+
+  bool* array = new bool[src.numel()];
+
+  platform::CPUPlace dst_place;
+  dst->resize(src.numel());
+  auto dst_ptr = static_cast<void*>(array);
+
+  if (platform::is_cpu_place(src.place())) {
+    memory::Copy(dst_place, dst_ptr,
+                 BOOST_GET_CONST(platform::CPUPlace, src.place()), src_ptr,
+                 size);
+  }
+#ifdef PADDLE_WITH_CUDA
+  else if (platform::is_gpu_place(src.place())) {  // NOLINT
+    memory::Copy(
+        dst_place, dst_ptr, BOOST_GET_CONST(platform::CUDAPlace, src.place()),
+        src_ptr, size,
+        reinterpret_cast<const platform::CUDADeviceContext&>(ctx).stream());
+  }
+#endif
+#ifdef PADDLE_WITH_ASCEND_CL
+  else if (platform::is_npu_place(src.place())) {  // NOLINT
+    memory::Copy(
+        dst_place, dst_ptr, BOOST_GET_CONST(platform::NPUPlace, src.place()),
+        src_ptr, size,
+        reinterpret_cast<const platform::NPUDeviceContext&>(ctx).stream());
+  }
+#endif
+  for (unsigned int i = 0; i < src.numel(); i++) {
+    (*dst)[i] = static_cast<bool>(array[i]);
+  }
+  delete[] array;
+}
+
 template <typename T>
 void TensorToVector(const Tensor& src, std::vector<T>* dst) {
   auto src_ptr = static_cast<const void*>(src.data<T>());
@@ -229,6 +330,32 @@ void TensorToVector(const Tensor& src, std::vector<T>* dst) {
 
   memory::Copy(dst_place, dst_ptr,
                BOOST_GET_CONST(platform::CPUPlace, src.place()), src_ptr, size);
+}
+
+template <>
+inline void TensorToVector(const Tensor& src, std::vector<bool>* dst) {
+  auto src_ptr = static_cast<const void*>(src.data<bool>());
+  auto size = src.numel() * sizeof(bool);
+
+  bool* array = new bool[src.numel()];
+
+  platform::CPUPlace dst_place;
+  dst->resize(src.numel());
+  auto dst_ptr = static_cast<void*>(array);
+
+  PADDLE_ENFORCE_EQ(
+      platform::is_cpu_place(src.place()), true,
+      platform::errors::InvalidArgument(
+          "The input tensor should be CPU device, but actually it is in %s.",
+          src.place()));
+
+  memory::Copy(dst_place, dst_ptr,
+               BOOST_GET_CONST(platform::CPUPlace, src.place()), src_ptr, size);
+
+  for (unsigned int i = 0; i < src.numel(); i++) {
+    (*dst)[i] = static_cast<bool>(array[i]);
+  }
+  delete[] array;
 }
 
 std::ostream& operator<<(std::ostream& os, const Tensor& t);

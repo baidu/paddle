@@ -143,6 +143,8 @@ set(COMMON_FLAGS
     -Wno-error=int-in-bool-context # Warning in Eigen gcc 7.2
     -Wimplicit-fallthrough=0 # Warning in tinyformat.h
     -Wno-error=maybe-uninitialized # Warning in boost gcc 7.2
+    -Wno-error=nonnull-compare # Warning in boost gcc 7.2
+    -Wno-error=address # Warning in boost gcc 7.2
     ${fsanitize}
 )
 

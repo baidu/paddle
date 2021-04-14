@@ -530,6 +530,70 @@ GenerateOpFunctions(const std::string& module_name) {
         inplace_map[inplace_pair.second] = inplace_pair.first;
       }
     }
+    if (!input_args.empty() && input_args.back() == ',') {
+      input_args.pop_back();
+    }
+
+    // Generate outs initializer
+    std::string outs_initializer = "{";
+    std::string outs_initializer_with_null = "";
+    std::string return_type = "";
+    std::string return_str = "";
+
+    int outs_num = 0;
+    for (auto& output : op_proto->outputs()) {
+      auto& out_name = output.name();
+      // skip those dispensable oututs
+      if (output.dispensable() && !FindOutsMap(op_type, out_name)) {
+        continue;
+      }
+      const auto out_type =
+          output.duplicable() ? OUT_VAR_LIST_TYPE : OUT_VAR_TYPE;
+      const auto return_template =
+          output.duplicable() ? RETURN_LIST_TEMPLATE : RETURN_TEMPLATE;
+      if (FindPassingOutsMap(op_type, out_name)) {
+        if (input_args != "") {
+          input_args += ",";
+        }
+        input_args += out_type;
+        input_args += out_name;
+        input_args_num++;
+
+        if (output.dispensable()) {
+          const auto out_template =
+              output.duplicable() ? OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST
+                                  : OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL;
+          outs_initializer_with_null +=
+              paddle::string::Sprintf(out_template, out_name, out_name);
+        } else {
+          const auto out_template = output.duplicable()
+                                        ? INPUT_LIST_INITIALIZER_TEMPLATE
+                                        : INPUT_INITIALIZER_TEMPLATE;
+          outs_initializer +=
+              paddle::string::Sprintf(out_template, out_name, out_name);
+          outs_initializer += ",";
+        }
+      } else {
+        // There are few Operators that have duplicable output, like `Out` in
+        // split op. We need to specify the number of variables for the
+        // duplicable output, as the argument OutNum;
+        if (output.duplicable()) {
+          if (input_args != "") {
+            input_args += ",";
+          }
+          auto out_num_str = paddle::string::Sprintf(ARG_OUT_NUM, out_name);
+          input_args += ARG_OUT_NUM_TYPE;
+          input_args += out_num_str;
+          input_args_num++;
+          outs_initializer += paddle::string::Sprintf(
+              OUT_DUPLICABLE_INITIALIZER_TEMPLATE, out_name, out_num_str);
+        } else {
+          outs_initializer +=
+              paddle::string::Sprintf(OUT_INITIALIZER_TEMPLATE, out_name);
+        }
+        outs_initializer += ",";
+      }
+    }
 
     std::string func_name = "imperative_" + op_type;
     std::string op_function_str = GenerateOpFunctionsBody(op_proto, func_name);

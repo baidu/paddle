@@ -1449,9 +1449,17 @@ class OpTest(unittest.TestCase):
         if not type(output_names) is list:
             output_names = [output_names]
 
+        # FIXME: Replace numeric_place with place to calculate numeric_grads.
+        # NOTE(liym27): There is an unknown error when call op.run() on NPUPlace, which
+        # needs to be fixed.
+        if self.__class__.use_npu == True:
+            numeric_place = paddle.CPUPlace()
+        else:
+            numeric_place = place
+
         numeric_grads = user_defined_grads or [
             get_numeric_gradient(
-                place,
+                numeric_place,
                 self.scope,
                 self.op,
                 self.inputs,

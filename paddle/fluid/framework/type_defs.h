@@ -45,6 +45,17 @@ using Attribute = boost::variant<
 
 using AttributeMap = std::unordered_map<std::string, Attribute>;
 
+#ifdef PADDLE_WITH_ASCEND_CL
+using NPUAttribute =
+    boost::variant<boost::blank, int, float, std::string, std::vector<int>,
+                   std::vector<float>, std::vector<std::string>, bool,
+                   std::vector<bool>, BlockDesc*, int64_t,
+                   std::vector<BlockDesc*>, std::vector<int64_t>,
+                   std::vector<double>, std::vector<std::vector<int64_t>>>;
+
+using NPUAttributeMap = std::unordered_map<std::string, NPUAttribute>;
+#endif
+
 using OpCreator = std::function<OperatorBase*(
     const std::string& /*type*/, const VariableNameMap& /*inputs*/,
     const VariableNameMap& /*outputs*/, const AttributeMap& /*attrs*/)>;

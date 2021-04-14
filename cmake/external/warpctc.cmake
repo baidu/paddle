@@ -43,7 +43,7 @@ cache_third_party(extern_warpctc
     TAG          ${WARPCTC_TAG}
     DIR          WARPCTC_SOURCE_DIR)
 
-if(WITH_ASCEND)
+if(WITH_ASCEND OR WITH_ASCEND_CL)
     ExternalProject_Add(
         extern_warpctc
         ${EXTERNAL_PROJECT_LOG_ARGS}

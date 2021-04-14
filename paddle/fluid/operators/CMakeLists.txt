@@ -124,6 +124,7 @@ if (WITH_ASCEND)
 endif()
 
 if (WITH_ASCEND_CL)
+  cc_test(assign_op_npu_test SRCS assign_op_npu_test.cc DEPS assign_op)
   cc_library(npu_op_runner SRCS npu_op_runner.cc DEPS operator npu_info)
   set(COMMON_OP_DEPS ${COMMON_OP_DEPS} npu_op_runner)
 endif()
@@ -141,8 +142,8 @@ set(OPERATOR_DEPS ${OPERATOR_DEPS} ${COMMON_OP_DEPS})
 set(GLOB_OPERATOR_DEPS ${OPERATOR_DEPS} CACHE INTERNAL "Global Op dependencies")
 
 cc_test(test_common_infer_shape_functions SRCS test_common_infer_shape_functions.cc DEPS common_infer_shape_functions ${COMMON_OP_DEPS} activation_op elementwise_add_op softmax_op softmax)
-cc_test(assign_op_test SRCS assign_op_test.cc DEPS assign_op)
 cc_test(gather_test SRCS gather_test.cc DEPS tensor)
+cc_test(assign_op_test SRCS assign_op_test.cc DEPS assign_op)
 cc_test(scatter_test SRCS scatter_test.cc DEPS tensor math_function)
 cc_test(beam_search_decode_op_test SRCS beam_search_decode_op_test.cc DEPS lod_tensor)
 cc_test(strided_memcpy_test SRCS strided_memcpy_test.cc DEPS tensor memory)
@@ -163,10 +164,19 @@ if (WITH_PYTHON)
   cc_library(py_func_op SRCS py_func_op.cc DEPS op_registry python pybind)
 endif()
 
+if (WITH_ASCEND_CL)
+  cc_test(range_op_npu_test SRCS range_op_npu_test.cc DEPS op_registry range_op scope device_context enforce executor)
+  cc_test(lookup_table_v2_op_npu_test SRCS lookup_table_v2_op_npu_test.cc DEPS op_registry lookup_table_v2_op scope device_context enforce executor compare_op)
+endif()
+
 set(GLOB_OP_LIB ${OP_LIBRARY} CACHE INTERNAL "Global OP library")
 add_subdirectory(benchmark)
 
 cc_test(op_debug_string_test SRCS op_debug_string_test.cc DEPS elementwise_add_op)
+if (WITH_ASCEND_CL)
+    cc_test(transpose_op_npu_test SRCS transpose_op_npu_test.cc DEPS op_registry transpose_op scope device_context enforce executor)
+endif()
+
 
 if(WITH_MKLDNN)
 include(mkldnn/inplace_op_tests.cmake)
@@ -179,4 +189,8 @@ if(WITH_UNITY_BUILD)
     # the unity library to lose some symbols.
     # The specified link dependency needs to be displayed here.
     target_link_libraries(paddle_operators_unity ${OP_HEADER_DEPS} ${COMMON_OP_DEPS})
+endif()
+
+if(WITH_ASCEND_CL)
+cc_test(gelu_op_npu_test SRCS gelu_op_npu_test.cc DEPS op_registry gelu_op scope device_context enforce executor)
 endif()

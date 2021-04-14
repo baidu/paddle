@@ -16,22 +16,43 @@
 
 set -e
 
-# use paddlecloud
-echo "begin test use paddlecloud"
-cluster_node_ips="127.0.0.1,127.0.0.2"
-export PADDLE_TRAINERS_NUM=2
-export POD_IP=127.0.0.1
-export PADDLE_TRAINERS=127.0.0.1,127.0.0.2
-export PADDLE_TRAINER_ID=0
+RANK_TABLE_FILE_NAME="rank_table_file.json"
+cat > ${RANK_TABLE_FILE_NAME} <<EOF
+{
+    "status": "completed",
+    "version": "1.0",
+    "server_count": "1",
+    "server_list": [
+        {
+            "server_id": "127.0.0.1",
+            "device": [
+                {
+                    "device_id": "0",
+                    "device_ip": "192.1.184.23",
+                    "rank_id": "0"
+                },
+                {
+                    "device_id": "1",
+                    "device_ip": "192.2.21.93",
+                    "rank_id": "1"
+                }
+            ]
+        }
+    ]
+}
+EOF
 
-export PADDLE_PORT=35789
-export TRAINER_PORTS_NUM=2
+# set ascend rank table file env
+export RANK_TABLE_FILE="${PWD}/${RANK_TABLE_FILE_NAME}"
 
-distributed_args="--ips=${cluster_node_ips} --ascend_npus=0,1 --log_dir=testlog"
+# use ascend
+echo "begin test use ascend npu"
+
+distributed_args="--run_mode=collective --log_dir=testlog"
 python -m paddle.distributed.fleet.launch ${distributed_args} ascend_multi_process_collective.py fleetlaunchascend
 
-str1="selected_accelerators:0 worker_endpoints:127.0.0.1:35789,127.0.0.1:35790,127.0.0.2:35789,127.0.0.2:35790 trainers_num:4 current_endpoint:127.0.0.1:35789 trainer_id:0 device_ids:0,1,0,1 device_id:0"
-str2="selected_accelerators:1 worker_endpoints:127.0.0.1:35789,127.0.0.1:35790,127.0.0.2:35789,127.0.0.2:35790 trainers_num:4 current_endpoint:127.0.0.1:35790 trainer_id:1 device_ids:0,1,0,1 device_id:1"
+str1="selected_accelerators:0 selected_npus:0 worker_endpoints:127.0.0.1:6170,127.0.0.1:6171 trainers_num:2 current_endpoint:127.0.0.1:6170 trainer_id:0 device_ids:0,1 device_id:0"
+str2="selected_accelerators:1 selected_npus:1 worker_endpoints:127.0.0.1:6170,127.0.0.1:6171 trainers_num:2 current_endpoint:127.0.0.1:6171 trainer_id:1 device_ids:0,1 device_id:1"
 file_0="multi_process_fleetlaunchascend.check_0.log"
 file_1="multi_process_fleetlaunchascend.check_1.log"
 

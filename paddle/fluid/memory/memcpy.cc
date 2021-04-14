@@ -206,8 +206,16 @@ void Copy<platform::NPUPlace, platform::CPUPlace>(platform::NPUPlace dst_place,
   if (UNLIKELY(num == 0)) return;
 
   platform::SetNPUDeviceId(dst_place.device);
+
+  // NOTE(ascendrc): NPU memcpy async from host to device is a "real" async,
+  // which is different from CUDA. In Paddle, when async is called, "sync"
+  // is run actually, which means Paddle doesn't fully supported async.
+  // TODO(ascendrc): Support NPU memcpy async for better performance.
+  stream = nullptr;
+
   VLOG(4) << "memory::Copy " << num << " Bytes from " << src_place << " to "
           << dst_place << " by thream(" << stream << ")";
+
   if (stream) {
     platform::RecordEvent record_event("NpuMemcpyAsync:CPU->NPU");
     platform::NPUMemcpyAsync(dst, src, num, ACL_MEMCPY_HOST_TO_DEVICE, stream);
@@ -226,8 +234,16 @@ void Copy<platform::CPUPlace, platform::NPUPlace>(platform::CPUPlace dst_place,
   if (UNLIKELY(num == 0)) return;
 
   platform::SetNPUDeviceId(src_place.device);
+
+  // NOTE(ascendrc): NPU memcpy async from device to host is a "real" async,
+  // which is different from CUDA. In Paddle, when async is called, "sync"
+  // is run actually, which means Paddle doesn't fully supported async.
+  // TODO(ascendrc): Support NPU memcpy async for better performance.
+  stream = nullptr;
+
   VLOG(4) << "memory::Copy " << num << " Bytes from " << src_place << " to "
           << dst_place << " by thream(" << stream << ")";
+
   if (stream) {
     platform::RecordEvent record_event("NpuMemcpyAsync:NPU->CPU");
     platform::NPUMemcpyAsync(dst, src, num, ACL_MEMCPY_DEVICE_TO_HOST, stream);

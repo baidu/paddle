@@ -74,6 +74,7 @@ void Compare(f::Scope* scope, const p::DeviceContext& ctx,
                                     {{"Out", {"Out"}}}, attrs);
 
   op->Run(*scope, place);
+  ctx.Wait();
 
   std::vector<T> out_vec;
   TensorToVector(*tensor_out, ctx, &out_vec);
@@ -131,6 +132,7 @@ void CompareGrad(f::Scope* scope, const p::DeviceContext& ctx,
 
   auto place = ctx.GetPlace();
   op->Run(*scope, place);
+  ctx.Wait();
 
   std::vector<T> dx_vec;
   TensorToVector(*tensor_dx, ctx, &dx_vec);
@@ -178,4 +180,10 @@ TEST(elementwise_sub_grad, NPU) {
   f::Scope scope;
   p::NPUDeviceContext ctx(p::NPUPlace(0));
   CompareGrad<float>(&scope, ctx, "elementwise_sub_grad");
+}
+
+TEST(elementwise_add_grad, NPU) {
+  f::Scope scope;
+  p::NPUDeviceContext ctx(p::NPUPlace(0));
+  CompareGrad<float>(&scope, ctx, "elementwise_add_grad");
 }

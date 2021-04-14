@@ -16,7 +16,7 @@ INCLUDE(ExternalProject)
 
 SET(THREADPOOL_PREFIX_DIR ${THIRD_PARTY_PATH}/threadpool)
 SET(THREADPOOL_SOURCE_DIR ${THIRD_PARTY_PATH}/threadpool/src/extern_threadpool)
-if(WITH_ASCEND)
+if(WITH_ASCEND OR WITH_ASCEND_CL)
     SET(THREADPOOL_REPOSITORY https://gitee.com/tianjianhe/ThreadPool.git)
 else()
     SET(THREADPOOL_REPOSITORY ${GIT_URL}/progschj/ThreadPool.git)

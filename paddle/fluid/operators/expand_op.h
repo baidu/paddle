@@ -64,6 +64,12 @@ inline std::vector<int> get_expand_times(
       TensorCopySync(*expand_tensor, platform::CPUPlace(), &cpu_expand_tensor);
       expand_data = cpu_expand_tensor.data<int>();
     }
+#ifdef PADDLE_WITH_ASCEND_CL
+    if (platform::is_npu_place(expand_tensor->place())) {
+      TensorCopySync(*expand_tensor, platform::CPUPlace(), &cpu_expand_tensor);
+      expand_data = cpu_expand_tensor.data<int>();
+    }
+#endif
 #ifdef PADDLE_WITH_XPU
     if (platform::is_xpu_place(expand_tensor->place())) {
       TensorCopySync(*expand_tensor, platform::CPUPlace(), &cpu_expand_tensor);

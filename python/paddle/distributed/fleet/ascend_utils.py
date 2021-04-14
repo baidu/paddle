@@ -82,24 +82,25 @@ def _get_ascend_rankfile(rank_table_file_path):
 
 def get_cloud_cluster(rank_table_file=None,
                       device_mode=DeviceMode.ASCEND_NPU,
-                      devices_per_proc=None,
                       start_port=6070):
     """
     Args:
     rank_table_file: string, ascend npu rank file path
     device_mode: DeviceMode(Int)
-    devices_per_proc:list
     start_port: the start port of current runtime env
     """
     if rank_table_file:
         # multi trainers
         node_ips, device_count = _get_ascend_rankfile(rank_table_file)
-        node_index = os.environ.get("PADDLE_TRAINER_ID")
-        node_ip = None
-        if node_index is None:
-            _, node_ip = get_host_name_ip()
+        if len(node_ips) == 1:
+            node_ip = node_ips[0]
         else:
-            node_ip = node_ips[int(node_index)]
+            node_index = os.environ.get("PADDLE_TRAINER_ID")
+            node_ip = None
+            if node_index:
+                node_ip = node_ips[int(node_index)]
+            else:
+                _, node_ip = get_host_name_ip()
 
         assert node_ip in node_ips, "Can't find your local ip {%s} in node_ips: {%s}" \
             % (node_ip, node_ips)
@@ -108,11 +109,8 @@ def get_cloud_cluster(rank_table_file=None,
         node_ips = ["127.0.0.1"]
         node_ip = node_ips[0]
         device_count = 1
-        devices_per_proc = None
 
-    if devices_per_proc is None:
-        devices_per_proc = [str(x) for x in range(device_count)]
-
+    devices_per_proc = [str(x) for x in range(device_count)]
     free_ports = [
         x for x in range(start_port, start_port + len(devices_per_proc))
     ]

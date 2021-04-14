@@ -19,6 +19,7 @@ import time
 
 def train(prefix):
     selected_accelerators = os.getenv("FLAGS_selected_accelerators")
+    selected_npus = os.getenv("FLAGS_selected_npus")
     trainer_id = int(os.getenv("PADDLE_TRAINER_ID"))
     worker_endpoints_env = os.getenv("PADDLE_TRAINER_ENDPOINTS")
     current_endpoint = os.getenv("PADDLE_CURRENT_ENDPOINT")
@@ -27,8 +28,8 @@ def train(prefix):
     device_ids = os.getenv("PADDLE_WORLD_DEVICE_IDS")
     current_device_id = os.getenv("PADDLE_LOCAL_DEVICE_IDS")
 
-    details = "selected_accelerators:{} worker_endpoints:{} trainers_num:{} current_endpoint:{} trainer_id:{} device_ids:{} device_id:{}"\
-            .format(selected_accelerators, worker_endpoints, trainers_num, current_endpoint,trainer_id,device_ids, current_device_id)
+    details = "selected_accelerators:{} selected_npus:{} worker_endpoints:{} trainers_num:{} current_endpoint:{} trainer_id:{} device_ids:{} device_id:{}"\
+            .format(selected_accelerators, selected_npus, worker_endpoints, trainers_num, current_endpoint,trainer_id,device_ids, current_device_id)
 
     print(details)
     with open("multi_process_{}.check_{}.log".format(prefix, trainer_id),

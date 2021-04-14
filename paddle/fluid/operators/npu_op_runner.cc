@@ -64,13 +64,21 @@ aclFormat ConvertToNpuFormat(DataLayout layout) {
   return iter->second;
 }
 
+aclrtStream GetCurrentNPUStream() {
+  int device_id = platform::GetCurrentNPUDeviceId();
+  platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
+  auto *dev_ctx = static_cast<platform::NPUDeviceContext *>(
+      pool.Get(platform::NPUPlace(device_id)));
+  return dev_ctx->stream();
+}
+
 NpuOpRunner::NpuOpRunner(std::string op_type) : op_type_(op_type) {
   attr_ = aclopCreateAttr();
 }
 
 NpuOpRunner::NpuOpRunner(std::string op_type, const std::vector<Tensor> &inputs,
                          const std::vector<Tensor> &outputs,
-                         const AttributeMap &attrs)
+                         const NPUAttributeMap &attrs)
     : op_type_(op_type) {
   attr_ = aclopCreateAttr();
   AddInputs(inputs);
@@ -85,7 +93,7 @@ NpuOpRunner::~NpuOpRunner() {
 const std::string &NpuOpRunner::Type() { return op_type_; }
 
 NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
-                                  const Attribute &attr) {
+                                  const NPUAttribute &attr) {
   if (attr.type() == typeid(bool)) {
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrBool(attr_, name.c_str(), BOOST_GET_CONST(bool, attr)));
@@ -135,6 +143,16 @@ NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
     }
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrListString(attr_, name.c_str(), s.size(), s.data()));
+  } else if (attr.type() == typeid(std::vector<std::vector<int64_t>>)) {
+    auto a = BOOST_GET_CONST(std::vector<std::vector<int64_t>>, attr);
+    std::vector<int64_t *> data;
+    std::vector<int> num;
+    for (auto &&v : a) {
+      data.push_back(v.data());
+      num.push_back(v.size());
+    }
+    PADDLE_ENFORCE_NPU_SUCCESS(aclopSetAttrListListInt(
+        attr_, name.c_str(), data.size(), num.data(), data.data()));
   } else {
     PADDLE_THROW(platform::errors::Unimplemented(
         "Can not convert attribubte '%s' to convert to aclopAttr", name));
@@ -142,7 +160,7 @@ NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
   return *this;
 }
 
-NpuOpRunner &NpuOpRunner::AddAttrs(const AttributeMap &attrs) {
+NpuOpRunner &NpuOpRunner::AddAttrs(const NPUAttributeMap &attrs) {
   for (const auto &pair : attrs) {
     AddAttr(pair.first, pair.second);
   }
@@ -171,6 +189,21 @@ NpuOpRunner &NpuOpRunner::AddInputs(const std::vector<Tensor> &tensors) {
     input_descs_.emplace_back(CreateTensorDesc(tensor));
     // create aclDataBuffer
     input_buffers_.emplace_back(CreateDataBuffer(tensor));
+  }
+  return *this;
+}
+
+// NOTE(zhiqiu): For operators whose input is a list (such as concat, stack),
+// It is needed to set the name of each input tensor.
+NpuOpRunner &NpuOpRunner::AddInputNames(const std::vector<std::string> &names) {
+  PADDLE_ENFORCE_EQ(names.size(), input_descs_.size(),
+                    platform::errors::InvalidArgument(
+                        "The size of input names should be "
+                        "equal to the size of input descs, but got the size "
+                        "of input names is %d, the size of input descs is %d.",
+                        names.size(), input_descs_.size()));
+  for (size_t i = 0; i < names.size(); ++i) {
+    aclSetTensorDescName(input_descs_[i], names[i].c_str());
   }
   return *this;
 }
@@ -224,18 +257,22 @@ aclTensorDesc *NpuOpRunner::CreateTensorDesc(Tensor tensor) {
   auto format = ConvertToNpuFormat(tensor.layout());
   auto dims = framework::vectorize(tensor.dims());
 
-  VLOG(4) << dtype << " " << dims.size() << " " << dims[0] << "," << dims[1]
-          << " " << format;
+  VLOG(4) << "NPU dtype:" << dtype << " "
+          << "rank:" << dims.size() << " dims:" << tensor.dims()
+          << " format:" << format;
 
   auto *desc = aclCreateTensorDesc(dtype, dims.size(), dims.data(), format);
   PADDLE_ENFORCE_NOT_NULL(
       desc, platform::errors::External("Call aclCreateTensorDesc failed."));
+  PADDLE_ENFORCE_NPU_SUCCESS(aclSetTensorStorageFormat(desc, format));
+  PADDLE_ENFORCE_NPU_SUCCESS(
+      aclSetTensorStorageShape(desc, dims.size(), dims.data()));
   return desc;
 }
 
 aclDataBuffer *NpuOpRunner::CreateDataBuffer(Tensor tensor) {
   void *ptr = tensor.data<void>();
-  VLOG(4) << "ptr: " << ptr << ", size: " << tensor.memory_size();
+  VLOG(4) << "NPU ptr: " << ptr << ", size: " << tensor.memory_size();
   auto *buffer = aclCreateDataBuffer(ptr, tensor.memory_size());
   PADDLE_ENFORCE_NOT_NULL(
       buffer, platform::errors::External("Call aclCreateDataBuffer failed."));
@@ -243,11 +280,17 @@ aclDataBuffer *NpuOpRunner::CreateDataBuffer(Tensor tensor) {
 }
 
 void NpuOpRunner::Run(aclrtStream stream) {
+  if (!stream) {
+    VLOG(4) << "Run with default current npu stream: " << stream;
+    stream = GetCurrentNPUStream();
+  }
+
   VLOG(4) << "op_type: " << op_type_;
   VLOG(4) << "input_desc.size: " << input_descs_.size();
   VLOG(4) << "output_desc.size: " << output_descs_.size();
-  VLOG(4) << "stream: " << stream;
   VLOG(4) << "attr: " << attr_;
+  VLOG(4) << "stream: " << stream;
+
   aclError ret = aclopCompileAndExecute(
       op_type_.c_str(), input_descs_.size(), input_descs_.data(),
       input_buffers_.data(), output_descs_.size(), output_descs_.data(),

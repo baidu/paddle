@@ -32,7 +32,7 @@ cache_third_party(extern_gloo
     TAG           ${GLOO_TAG}
     DIR           GLOO_SOURCE_DIR)
 
-if(WITH_ASCEND)
+  if(WITH_ASCEND OR WITH_ASCEND_CL)
   ExternalProject_Add(
       extern_gloo
       ${EXTERNAL_PROJECT_LOG_ARGS}

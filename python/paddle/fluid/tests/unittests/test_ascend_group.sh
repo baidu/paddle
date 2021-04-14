@@ -16,15 +16,14 @@
 
 set -e
 
-cluster_node_ips="127.0.0.1"
-export PADDLE_TRAINERS_NUM=4
-export POD_IP=127.0.0.1
-export PADDLE_TRAINERS=127.0.0.1
-export PADDLE_TRAINER_ID=0
+curr_host_ip=`hostname -i`
+python hccl_tools.py --device_num "[0,4)" --server_ip ${curr_host_ip}
 
-export PADDLE_PORT=35789
-export TRAINER_PORTS_NUM=4
+export RANK_TABLE_FILE="${PWD}/hccl_4p_0123_${curr_host_ip}.json"
 
-distributed_args="--ips=${cluster_node_ips} --ascend_npus=0,1,2,3 --log_dir=testlog"
+# use ascend
+echo "begin test use ascend npu"
+
+distributed_args="--run_mode=collective --log_dir=testlog"
 python -m paddle.distributed.fleet.launch ${distributed_args} \
   ascend_group.py fleetascendgroup

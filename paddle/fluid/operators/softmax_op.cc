@@ -83,11 +83,13 @@ class SoftmaxOp : public framework::OperatorWithKernel {
     }
 #endif
 
+#ifndef PADDLE_WITH_ASCEND_CL
     if (input_data_type == framework::proto::VarType::FP16) {
       PADDLE_ENFORCE_EQ(platform::is_gpu_place(ctx.GetPlace()), true,
                         platform::errors::InvalidArgument(
                             "float16 can only be used on GPU place"));
     }
+#endif
 
     return framework::OpKernelType(input_data_type, ctx.GetPlace(), layout_,
                                    library_);
@@ -207,9 +209,10 @@ class SoftmaxOpGrad : public framework::OperatorWithKernel {
     }
 #endif
     if (input_data_type == framework::proto::VarType::FP16) {
-      PADDLE_ENFORCE_EQ(platform::is_gpu_place(ctx.GetPlace()), true,
-                        platform::errors::InvalidArgument(
-                            "float16 can only be used on GPU place"));
+      if (!(platform::is_gpu_place(ctx.GetPlace()) ||
+            platform::is_npu_place(ctx.GetPlace())))
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "float16 can only be used on GPU/NPU place"));
     }
 
     return framework::OpKernelType(input_data_type, ctx.GetPlace(), layout_,
