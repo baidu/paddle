@@ -1827,10 +1827,10 @@ def equal(x, y, cond=None, name=None):
           out1 = fluid.layers.equal(x=label,y=limit) #out1=[True, False]
           out2 = fluid.layers.equal(x=label_cond,y=limit, cond=out_cond) #out2=[False, True] out_cond=[False, True]
     """
-    check_variable_and_dtype(x, "x", ["float32", "float64", "int32", "int64"],
-                             "equal")
-    check_variable_and_dtype(y, "y", ["float32", "float64", "int32", "int64"],
-                             "equal")
+    check_variable_and_dtype(
+        x, "x", ["float16", "float32", "float64", "int32", "int64"], "equal")
+    check_variable_and_dtype(
+        y, "y", ["float16", "float32", "float64", "int32", "int64"], "equal")
     if cond is not None:
         check_type(cond, "cond", Variable, "equal")
 
