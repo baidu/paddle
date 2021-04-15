@@ -1609,9 +1609,9 @@ def less_than(x, y, force_cpu=None, cond=None, name=None):
             print(result) # [True, False, False, False]
 
     """
-    check_variable_and_dtype(x, "x", ["float32", "float64", "int32", "int64"],
+    check_variable_and_dtype(x, "x", ["float16", "float32", "float64", "int32", "int64"],
                              "less_than")
-    check_variable_and_dtype(y, "y", ["float32", "float64", "int32", "int64"],
+    check_variable_and_dtype(y, "y", ["float16", "float32", "float64", "int32", "int64"],
                              "less_than")
     if cond is not None:
         check_type(cond, "cond", Variable, "less_than")
