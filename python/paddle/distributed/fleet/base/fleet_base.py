@@ -289,7 +289,7 @@ class Fleet(object):
         return self._role_maker._worker_num()
 
     def node_num(self):
-        return self._role_maker._get_node_num()
+        return self._role_maker._node_num()
 
     def local_rank(self):
         return self._role_maker._get_local_rank()

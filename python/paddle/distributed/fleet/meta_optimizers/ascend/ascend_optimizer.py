@@ -96,6 +96,7 @@ class AscendIRParser(object):
             op_parser = self.parser_factory.create_parse(
                 ascend_parser.registerd_op[op.type])
             op_parser.apply(op)
+            #print("add op:", op_parser.parser_name)
         else:
             assert False, "Op[%s] has not been registered, so we have to skip it" % (
                 op.type)
@@ -224,12 +225,15 @@ class AscendOptimizer(Optimizer):
         self.ascend_instance = core.AscendInstance()
 
         from paddle.distributed import fleet
-        if auto_dp and fleet.world_size() > 1:
-            from paddle.fluid.transpiler import ascend_transpiler
-            t = ascend_transpiler.AscendTranspiler(startup_program,
-                                                   loss.block.program)
-            t.transpile()
-            #print(loss.block.program)
+        if auto_dp:
+            if rank_table_file is None:
+                assert False, "rank_table_file must not be None in ascend auto dp mode"
+
+            if fleet.world_size() > 1:
+                from paddle.fluid.transpiler import ascend_transpiler
+                t = ascend_transpiler.AscendTranspiler(
+                    fleet.util.role_maker, startup_program, loss.block.program)
+                t.transpile()
 
         # Config about Graph Engine can be found in https://support.huaweicloud.com/
         config = {

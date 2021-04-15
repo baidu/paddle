@@ -12,18 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
+
 from . import collective
 from .. import core
 OpRole = core.op_proto_and_checker_maker.OpRole
 from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_optimizers.common import OpRole, OP_ROLE_KEY, CollectiveHelper, is_update_op
+
 
 class AscendTranspiler(collective.Collective):
-    def __init__(self, startup_program, main_program):
+    def __init__(self, role_maker, startup_program, main_program):
         self.nrings = 1
+        self._role_maker = role_maker
         super(AscendTranspiler, self).__init__(self.nrings)
         self._startup_program = startup_program
         self._main_program = main_program
-
+        self._collective_helper = CollectiveHelper(self._role_maker,
+                                                   self.nrings)
 
     def _insert_allreduce_ops(self):
         block = self._main_program.global_block()
@@ -71,4 +77,11 @@ class AscendTranspiler(collective.Collective):
             return
 
     def transpile(self):
+        worker_endpoints = copy.copy(fleet.worker_endpoints())
+        rank = fleet.rank()
+        current = worker_endpoints[rank]
+        #print("rank:{} current:{} worker_endpoints:{}".format(rank, current,
+        #                                                      worker_endpoints))
+        self._collective_helper._init_communicator(
+            self._startup_program, current, worker_endpoints, rank, 0, False)
         self._insert_allreduce_ops()
