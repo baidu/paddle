@@ -1437,7 +1437,7 @@ def increment(x, value=1.0, in_place=True):
           counter = fluid.layers.zeros(shape=[1], dtype='float32') # [0.]
           fluid.layers.increment(counter) # [1.]
     """
-    check_variable_and_dtype(x, 'x', ['float32', 'float64', 'int32', 'int64'],
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64', 'int32', 'int64'],
                              'increment')
     helper = LayerHelper("increment", **locals())
     if not in_place:
