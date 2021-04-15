@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#ifdef PADDLE_WITH_ASCEND_CL
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,14 +31,16 @@ class StackNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto x = ctx.MultiInput<Tensor>("X");
-    int32_t N = x.size();
+    size_t N = x.size();
 
     PADDLE_ENFORCE_GT(
         N, 0, platform::errors::InvalidArgument("number of input Tensor <= 0"));
 
     std::vector<paddle::framework::Tensor> x_list;
-    for (int i = 0; i < N; i++) {
+    std::vector<std::string> names;
+    for (size_t i = 0; i < N; ++i) {
       x_list.push_back(*x[i]);
+      names.push_back("x" + std::to_string(i));
     }
 
     int axis = ctx.Attr<int>("axis");
@@ -57,39 +58,11 @@ class StackNPUKernel : public framework::OpKernel<T> {
 
     out->mutable_data<T>(place);
 
-    if (axis != 0) {
-      auto x_dim = x_list[0].dims();
-      std::vector<int> vec_dim_tmp;
-      vec_dim_tmp.push_back(N);
-      for (auto i = 0; i < x_dim.size(); ++i) {
-        vec_dim_tmp.push_back(x_dim[i]);
-      }
+    auto runner = NpuOpRunner("Pack", {x_list}, {*out},
+                              {{"axis", axis}, {"N", static_cast<int>(N)}});
 
-      Tensor tmp_stack(out->type());
-      tmp_stack.Resize(framework::make_ddim(vec_dim_tmp));
-      tmp_stack.mutable_data<T>(ctx.GetPlace());
-
-      auto runner =
-          NpuOpRunner("Pack", {x_list}, {tmp_stack}, {{"axis", 0}, {"N", N}});
-      runner.Run(stream);
-
-      std::vector<int64_t> vec_trans;
-      for (auto i = 1; i <= x_dim.size(); ++i) {
-        vec_trans.push_back(i);
-        if (i == axis) {
-          vec_trans.push_back(0);
-        }
-      }
-
-      auto runner_trans_final =
-          NpuOpRunner("TransposeD", {tmp_stack}, {*out}, {{"perm", vec_trans}});
-      runner_trans_final.Run(stream);
-
-    } else {
-      auto runner =
-          NpuOpRunner("Pack", {x_list}, {*out}, {{"axis", axis}, {"N", N}});
-      runner.Run(stream);
-    }
+    runner.AddInputNames(names);
+    runner.Run(stream);
   }
 };
 
@@ -102,5 +75,3 @@ REGISTER_OP_NPU_KERNEL(
     stack, ops::StackNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::StackNPUKernel<paddle::platform::NPUDeviceContext,
                         paddle::platform::float16>);
-
-#endif
