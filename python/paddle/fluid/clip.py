@@ -447,6 +447,7 @@ class ClipGradByGlobalNorm(ClipGradBase):
     def _static_clip(self, params_grads):
         params_and_grads = []
         sum_square_list = []
+        use_fp16 = False
         with framework.name_scope('gradient_clip'):
             for p, g in params_grads:
                 if g is None:
@@ -459,6 +460,11 @@ class ClipGradByGlobalNorm(ClipGradBase):
                         merge_grad = layers.merge_selected_rows(g)
                         merge_grad = layers.get_tensor_from_selected_rows(
                             merge_grad)
+
+                    # use to support pure fp16
+                    if merge_grad.dtype == core.VarDesc.VarType.FP16:
+                        use_fp16 = True
+                        merge_grad = layers.cast(merge_grad, 'float32')
 
                     square = layers.square(merge_grad)
                     sum_square = layers.reduce_sum(input=square)
@@ -479,6 +485,8 @@ class ClipGradByGlobalNorm(ClipGradBase):
                     x=max_global_norm,
                     y=layers.elementwise_max(
                         x=max_global_norm, y=global_norm_var))
+                if use_fp16:
+                    fp16_scale_var = layers.cast(scale_var, 'float16')
 
             param_new_grad_name_dict = dict()
             for p, g in params_grads:
@@ -489,7 +497,11 @@ class ClipGradByGlobalNorm(ClipGradBase):
                     continue
 
                 with p.block.program._optimized_guard([p, g]):
-                    new_grad = layers.elementwise_mul(x=g, y=scale_var)
+                    if g.dtype == core.VarDesc.VarType.FP16:
+                        tmp_scale_var = fp16_scale_var
+                    else:
+                        tmp_scale_var = scale_var
+                    new_grad = layers.elementwise_mul(x=g, y=tmp_scale_var)
                 param_new_grad_name_dict[p.name] = new_grad.name
                 params_and_grads.append((p, new_grad))
 

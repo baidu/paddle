@@ -2015,7 +2015,8 @@ class AdamOptimizer(Optimizer):
                  regularization=None,
                  grad_clip=None,
                  name=None,
-                 lazy_mode=False):
+                 lazy_mode=False,
+                 multi_precision=False):
         assert learning_rate is not None
         assert beta1 is not None
         assert beta2 is not None
@@ -2031,28 +2032,90 @@ class AdamOptimizer(Optimizer):
         self._beta2 = beta2
         self._epsilon = epsilon
         self._lazy_mode = lazy_mode
+        self._multi_precision = multi_precision
+        self._master_weights = {}
+
+    def _create_master_weight(self, param):
+        assert isinstance(self.helper, LayerHelper)
+
+        var_name = param.name + "_fp32_master"
+        var_name = unique_name.generate(var_name)
+        var = layers.create_global_var(
+            name=var_name,
+            shape=param.shape,
+            value=0,
+            dtype='float32',
+            persistable=True)
+        block = self.helper.startup_program.global_block()
+        block.append_op(
+            type="cast",
+            inputs={"X": [param]},
+            outputs={"Out": [var]},
+            attrs={
+                "in_dtype": param.dtype,
+                "out_dtype": core.VarDesc.VarType.FP32
+            })
+        self._master_weights[param.name] = var
+        return var
+
+    def _get_accumulator(self, name, param):
+        """Utility function to fetch an accumulator for a parameter
+        Args:
+            name: name of the accumulator
+            param: parameter variable for which accumulator is to be fetched
+        Returns:
+            accumulator variable for the parameter
+        """
+        if self._name is not None:
+            name = self._name + "_" + name
+        find_master = self._multi_precision and param.dtype == core.VarDesc.VarType.FP16
+        target_param = self._master_weights[
+            param.name] if find_master else param
+        target_name = target_param.name
+        if (name not in self._accumulators or
+                target_name not in self._accumulators[name]):
+            raise Exception("Accumulator {} does not exist for parameter {}".
+                            format(name, target_name))
+        return self._accumulators[name][target_name]
+
+    def _add_moments_pows(self, p):
+        acc_dtype = p.dtype
+        if acc_dtype == core.VarDesc.VarType.FP16:
+            acc_dtype = core.VarDesc.VarType.FP32
+        self._add_accumulator(self._moment1_acc_str, p, dtype=acc_dtype)
+        self._add_accumulator(self._moment2_acc_str, p, dtype=acc_dtype)
+        self._add_accumulator(
+            name=self._beta1_pow_acc_str,
+            param=p,
+            dtype=acc_dtype,
+            fill_value=0.9 if isinstance(self._beta1, Variable) \
+                    else self._beta1,
+            shape=[1],
+            type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+        self._add_accumulator(
+            name=self._beta2_pow_acc_str,
+            param=p,
+            dtype=acc_dtype,
+            fill_value=0.999 if isinstance(self._beta2, Variable) \
+                    else self._beta2,
+            shape=[1],
+            type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
 
     def _create_accumulators(self, block, parameters):
         assert isinstance(block, framework.Block)
 
         # Create accumulator tensors for first and second moments
         for p in parameters:
-            self._add_accumulator(self._moment1_acc_str, p)
-            self._add_accumulator(self._moment2_acc_str, p)
-            self._add_accumulator(
-                name=self._beta1_pow_acc_str,
-                param=p,
-                fill_value=0.9 if isinstance(self._beta1, Variable) \
-                        else self._beta1,
-                shape=[1],
-                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
-            self._add_accumulator(
-                name=self._beta2_pow_acc_str,
-                param=p,
-                fill_value=0.999 if isinstance(self._beta2, Variable) \
-                        else self._beta2,
-                shape=[1],
-                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+            if self._multi_precision and p.dtype == core.VarDesc.VarType.FP16:
+                master_p = self._create_master_weight(p)
+                self._add_moments_pows(master_p)
+                continue
+            if p.dtype == core.VarDesc.VarType.FP16 and not self._multi_precision:
+                logging.warning(
+                    "Accumulating with FP16 in optimizer can lead to poor accuracy or slow convergence."
+                    "Consider using multi_precision=True option of the Adam optimizer."
+                )
+            self._add_moments_pows(p)
 
     def _append_optimize_op(self, block, param_and_grad):
         assert isinstance(block, framework.Block)
@@ -2065,6 +2128,12 @@ class AdamOptimizer(Optimizer):
                                               param_and_grad[0])
         beta2_pow_acc = self._get_accumulator(self._beta2_pow_acc_str,
                                               param_and_grad[0])
+
+        find_master = self._multi_precision and \
+                      param_and_grad[0].dtype == core.VarDesc.VarType.FP16
+        master_weight = (self._master_weights[param_and_grad[0].name]
+                         if find_master else None)
+
         lr = self._create_param_lr(param_and_grad)
         # create the adam optimize op
 
@@ -2112,6 +2181,11 @@ class AdamOptimizer(Optimizer):
             inputs['Beta2Tensor'] = self._beta2
         else:
             attrs['beta2'] = self._beta2
+
+        if find_master:
+            inputs["MasterParam"] = master_weight
+            outputs["MasterParamOut"] = master_weight
+            attrs["multi_precision"] = find_master
 
         adam_op = block.append_op(
             type=self.type,

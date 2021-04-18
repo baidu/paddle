@@ -103,7 +103,7 @@ def _insert_cast_op(block, op, idx, src_dtype, dest_dtype):
             if in_name not in {'X', 'Z'}:
                 continue
         for in_var_name in op.input(in_name):
-            in_var = block.var(in_var_name)
+            in_var = block._var_recursive(in_var_name)
             if in_var.type not in _valid_types or in_var.dtype == dest_dtype:
                 continue
             if in_var.dtype == src_dtype:
@@ -258,6 +258,10 @@ def _need_keep_fp32(op, unsupported_op_list, use_fp16_guard):
     if op.type in unsupported_op_list:
         # the highest priority condition: If ops don't have fp16 computing kernels,
         # they must be executed in fp32 calculation pattern.
+        return True
+
+    if op.attr('op_role') == int(
+            core.op_proto_and_checker_maker.OpRole.LRSched):
         return True
 
     # process ops about learning rate
