@@ -37,9 +37,40 @@ class NPUStream final {
   bool Init(const Place& place);
 
   template <typename Callback>
-  void AddCallback(Callback&& callback) const {
+  void AddCallback(Callback&& callback) {
+    is_callback_exec_ = false;
+    std::thread td(ProcessCallback, &is_callback_exec_);
+    std::ostringstream oss;
+    oss << td.get_id();
+    callback_thread_id_ = std::stoull(oss.str());
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtSubscribeReport(
+        static_cast<uint64_t>(callback_thread_id_), stream_));
+
     callback_manager_->AddCallback(callback);
   }
+
+  static void ProcessCallback(void* arg) {
+    // aclrtContext context = nullptr;
+    // PADDLE_ENFORCE_NPU_SUCCESS(aclrtCreateContext(&context, place_.device));
+    while (true) {
+      // timeout value is 100ms
+      (void)aclrtProcessReport(1000);
+      if (*(static_cast<bool*>(arg)) == true) {
+        return;
+      }
+    }
+    // PADDLE_ENFORCE_NPU_SUCCESS(aclrtDestroyContext(context));
+  }
+
+  // bool GetCallbackExecuteFlag() const {
+  //   return is_callback_exec_;
+  // }
+
+  void SetCallbackExecuteFlag(bool callback_flag) {
+    is_callback_exec_ = callback_flag;
+  }
+
+  uint64_t GetCallbackThreadId() const { return callback_thread_id_; }
 
   template <typename Callback>
   void RecordEvent(aclrtEvent ev, Callback callback) const {
@@ -65,6 +96,8 @@ class NPUStream final {
   Place place_;
   aclrtStream stream_{nullptr};
   std::unique_ptr<StreamCallbackManager<aclrtStream>> callback_manager_;
+  bool is_callback_exec_;
+  uint64_t callback_thread_id_;
 
   DISABLE_COPY_AND_ASSIGN(NPUStream);
 };

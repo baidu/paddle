@@ -292,11 +292,13 @@ void SetTensorFromPyArrayT(
     platform::NPUDeviceGuard guard(
         BOOST_GET_CONST(platform::NPUPlace, tmp_place).device);
     auto dst = self->mutable_data<T>(place);
-    platform::NPUMemcpySync(dst, array.data(), array.nbytes(),
-                            ACL_MEMCPY_HOST_TO_DEVICE);
-    platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
-    auto &ctx = *pool.Get(place);
-    ctx.Wait();
+    // platform::NPUMemcpySync(dst, array.data(), array.nbytes(),
+    //                         ACL_MEMCPY_HOST_TO_DEVICE);
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+    auto stream = static_cast<platform::NPUDeviceContext *>(dev_ctx)->stream();
+    platform::NPUMemcpyAsync(dst, array.data(), array.nbytes(),
+                             ACL_MEMCPY_HOST_TO_DEVICE, stream);
+// ctx.Wait();
 #else
     PADDLE_THROW(platform::errors::PermissionDenied(
         "Cannot use NPUPlace in CPU/GPU/XPU version. "

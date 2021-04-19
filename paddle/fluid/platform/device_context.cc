@@ -260,6 +260,10 @@ void NPUDeviceContext::Wait() const {
 
 aclrtStream NPUDeviceContext::stream() const { return stream_->raw_stream(); }
 
+std::shared_ptr<stream::NPUStream> NPUDeviceContext::NPUstream() const {
+  return stream_;
+}
+
 Place NPUDeviceContext::GetPlace() const { return place_; }
 
 aclrtContext* NPUDeviceContext::context() const {
