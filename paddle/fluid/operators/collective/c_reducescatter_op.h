@@ -22,6 +22,9 @@ limitations under the License. */
 #include "paddle/fluid/framework/ddim.h"
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/collective/c_allreduce_op.h"
+
+
 
 namespace paddle {
 namespace operators {

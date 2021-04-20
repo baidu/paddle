@@ -447,9 +447,20 @@ function(cc_test TARGET_NAME)
     cc_test_build(${TARGET_NAME}
 	    SRCS ${cc_test_SRCS}
 	    DEPS ${cc_test_DEPS})
-    cc_test_run(${TARGET_NAME}
-	    COMMAND ${TARGET_NAME}
-	    ARGS ${cc_test_ARGS})
+    # we dont test hcom op, because it need complex configuration
+    # with more than one machine
+    if(NOT ("${TARGET_NAME}" STREQUAL "c_broadcast_op_npu_test"         OR
+            "${TARGET_NAME}" STREQUAL "c_allreduce_sum_op_npu_test"     OR
+            "${TARGET_NAME}" STREQUAL "c_allreduce_max_op_npu_test"     OR
+            "${TARGET_NAME}" STREQUAL "c_reducescatter_op_npu_test"     OR
+            "${TARGET_NAME}" STREQUAL "c_allgather_op_npu_test"         OR
+            "${TARGET_NAME}" STREQUAL "send_v2_op_npu_test"             OR
+            "${TARGET_NAME}" STREQUAL "c_reduce_sum_op_npu_test"        OR
+            "${TARGET_NAME}" STREQUAL "recv_v2_op_npu_test"))
+      cc_test_run(${TARGET_NAME}
+        COMMAND ${TARGET_NAME}
+        ARGS ${cc_test_ARGS})
+    endif()
   endif()
 endfunction(cc_test)
 
@@ -807,7 +818,7 @@ function(py_test TARGET_NAME)
                ${PYTHON_EXECUTABLE} -u ${py_test_SRCS} ${py_test_ARGS}
                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
-    
+
     if (WIN32)
         set_tests_properties(${TARGET_NAME} PROPERTIES TIMEOUT 150)
     endif()

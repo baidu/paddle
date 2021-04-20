@@ -182,16 +182,16 @@ const char* OUT_DUPLICABLE_INITIALIZER_TEMPLATE = R"({"%s", ConstructDuplicableO
 const char* INPUT_INITIALIZER_TEMPLATE = R"({"%s", {%s}})";
 const char* INPUT_LIST_INITIALIZER_TEMPLATE = R"({"%s", %s})";
 
-const char* INPUT_INITIALIZER_TEMPLATE_WITH_NULL = R"(	
-    if (%s != nullptr) {	
-      ins["%s"] = {%s};	
-    }	
+const char* INPUT_INITIALIZER_TEMPLATE_WITH_NULL = R"(
+    if (%s != nullptr) {
+      ins["%s"] = {%s};
+    }
 )";
 
-const char* INPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST = R"(	
+const char* INPUT_INITIALIZER_TEMPLATE_WITH_NULL_LIST = R"(
     if (%s.size() != 0) {
-      ins["%s"] = %s;	
-    }	
+      ins["%s"] = %s;
+    }
 )";
 
 const char* OUTPUT_INITIALIZER_TEMPLATE_WITH_NULL = R"(
@@ -264,8 +264,8 @@ R"(
     imperative::NameVarBaseMap ins = %s;
     %s
     tracer->TraceOp("%s", ins, outs, attrs, {%s});
-    return %s; 
-  }   
+    return %s;
+  }
 })";
 
 const char* PYBIND_ITEM_TEMPLATE = R"(  %s.def("%s", &%s);)";

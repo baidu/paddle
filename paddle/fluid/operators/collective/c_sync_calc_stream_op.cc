@@ -61,6 +61,15 @@ class CSyncCalcStreamCudaKernel : public framework::OpKernel<T> {
     PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamSynchronize(dev_ctx->stream()));
 #endif
 
+#elif defined(PADDLE_WITH_ASCEND_CL) && !defined(_WIN32)
+    auto place = ctx.GetPlace();
+    PADDLE_ENFORCE_EQ(is_npu_place(place), true,
+                      platform::errors::PreconditionNotMet(
+                          "Sync stream op can run on npu place only for now."));
+
+    auto dev_ctx = static_cast<platform::NPUDeviceContext*>(
+        platform::DeviceContextPool::Instance().Get(place));
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeStream(dev_ctx->stream()));
 #else
     PADDLE_THROW(platform::errors::PreconditionNotMet(
         "PaddlePaddle should compile with GPU."));

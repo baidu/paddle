@@ -28,9 +28,15 @@ limitations under the License. */
 #include "paddle/fluid/platform/collective_helper.h"
 #include "paddle/fluid/platform/nccl_helper.h"
 #endif
+
 #if defined(PADDLE_WITH_GLOO)
 #include <gloo/reduce.h>
 #include "paddle/fluid/framework/fleet/gloo_wrapper.h"
+#endif
+
+#if defined(PADDLE_WITH_ASCEND_CL)
+#include "paddle/fluid/platform/collective_helper.h"
+#include "paddle/fluid/platform/hccl_helper.h"
 #endif
 
 namespace paddle {
@@ -111,6 +117,85 @@ class CReduceOpCPUKernel : public framework::OpKernel<T> {
 };
 
 template <ReduceType red_type, typename T>
+class CReduceOpASCENDKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+#if defined(PADDLE_WITH_ASCEND_CL)
+    auto in = ctx.Input<framework::LoDTensor>("X");
+    auto out = ctx.Output<framework::LoDTensor>("Out");
+    auto place = ctx.GetPlace();
+    HcclDataType dtype = platform::ToHCCLDataType(in->type());
+    int64_t numel = in->numel();
+
+    void* sendbuff = reinterpret_cast<void*>(const_cast<T*>(in->data<T>()));
+    void* recvbuff = reinterpret_cast<void*>(out->data<T>());
+
+    int ring_id = ctx.Attr<int>("ring_id");
+    int root_id = ctx.Attr<int>("root_id");
+    std::string group = std::string(HCOM_GROUP_PREFIX) + std::to_string(ring_id);
+    auto comm = paddle::platform::HCCLCommContext::Instance().Get(ring_id, place);
+
+    aclrtStream stream = nullptr;
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+    if (ctx.Attr<bool>("use_calc_stream")) {
+      stream = static_cast<platform::NPUDeviceContext*>(dev_ctx)->stream();
+    } else {
+      stream = comm->stream();
+    }
+
+    int rank_id = comm->rank();
+
+    HcclReduceOp hccl_red_type = HCCL_REDUCE_SUM;
+    switch (red_type) {
+      case kRedSum:
+        hccl_red_type = HCCL_REDUCE_SUM;
+        break;
+
+      case kRedMax:
+        hccl_red_type = HCCL_REDUCE_MAX;
+        break;
+
+      case kRedMin:
+        hccl_red_type = HCCL_REDUCE_MIN;
+        break;
+
+      case kRedProd:
+        hccl_red_type = HCCL_REDUCE_PROD;
+        break;
+
+      default:
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "Invalid reduce type: %d", red_type));
+    }
+
+    VLOG(3) << "begin hccl reduce, parameter is: "
+      << "input num: " << numel
+      << "root_id: " << root_id
+      << "dtype: " << dtype
+      << "hccl_red_type: " << hccl_red_type
+      << ", group is: " << group;
+
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclAllReduce(
+        sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm(), (void*)stream));
+
+
+    if(rank_id != root_id){
+      auto npu_place = BOOST_GET_CONST(platform::NPUPlace, place);
+      memory::Copy(npu_place, reinterpret_cast<void*>(out->data<T>()),
+            npu_place, reinterpret_cast<void*>(const_cast<T*>(in->data<T>())),
+            numel * sizeof(T),
+            stream);
+    }
+
+    out->Resize(in->dims());
+#else
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "PaddlePaddle should compile with NPU."));
+#endif
+  }
+};
+
+template <ReduceType red_type, typename T>
 class CReduceOpCUDAKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
@@ -179,6 +264,10 @@ class CReduceOpMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("Out", "(Tensor) the reduced result.");
     AddAttr<int>("ring_id", "(int default 0) communication ring id.")
         .SetDefault(0);
+#if defined(PADDLE_WITH_ASCEND_CL)
+    AddAttr<std::string>("tag", "(string default tag) tag for reduce.")
+        .SetDefault("tag");
+#endif
     AddAttr<int>("root_id", "(int default 0) root id.").SetDefault(0);
     AddAttr<bool>(
         "use_calc_stream",

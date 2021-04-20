@@ -396,6 +396,7 @@ OperatorBase::OperatorBase(const std::string& type,
   // framework::OpRegistry::CreateOp(type, {}, {}, {}, false).
   // Inputs, outputs and attrs will be set to empty map
   // to improve the execution efficiency of dygraph.
+
   if (inputs_.size() > 0 || outputs_.size() > 0) {
     GenerateTemporaryNames();
     CheckAllInputOutputSet();

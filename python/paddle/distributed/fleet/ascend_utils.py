@@ -63,7 +63,7 @@ def _get_ascend_rankfile(rank_table_file_path):
     Returns:
         node_ips: node ip list
         device_count: number of npu per machine
-        
+
     """
     json_data = None
     with open(rank_table_file_path) as json_file:
