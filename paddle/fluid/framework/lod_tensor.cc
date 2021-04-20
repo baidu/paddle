@@ -268,6 +268,21 @@ void SerializeToStream(std::ostream &os, const LoDTensor &tensor,
   TensorToStream(os, static_cast<Tensor>(tensor), dev_ctx);
 }
 
+void SerializeToStream(std::ostream &os, const LoDTensor &tensor) {
+  platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
+  const platform::DeviceContext *dev_ctx;
+  auto place = tensor.place();
+  dev_ctx = pool.Get(place);
+  SerializeToStream(os, tensor, *dev_ctx);
+}
+
+void DeserializeFromStream(std::ifstream &os, LoDTensor *tensor) {
+  platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
+  const platform::DeviceContext *dev_ctx;
+  dev_ctx = pool.Get(platform::CPUPlace());
+  DeserializeFromStream(os, tensor, *dev_ctx);
+}
+
 void DeserializeFromStream(std::istream &is, LoDTensor *tensor,
                            const platform::DeviceContext &dev_ctx,
                            const size_t &seek,

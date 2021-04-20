@@ -501,7 +501,56 @@ PYBIND11_MODULE(core_noavx, m) {
 #endif
     return tensor;
   });
+  m.def("_save_lod_tensor", [](const LoDTensor &tensor,
+                               const std::string &str_file_name) {
+    std::ofstream fout(str_file_name, std::ios::binary);
+    PADDLE_ENFORCE_EQ(static_cast<bool>(fout), true,
+                      platform::errors::Unavailable(
+                          "Cannot open %s to save variables.", str_file_name));
+    SerializeToStream(fout, tensor);
 
+    int64_t tellp = fout.tellp();
+    fout.close();
+    return tellp;
+  });
+  m.def("_load_lod_tensor", [](LoDTensor &tensor,
+                               const std::string &str_file_name) {
+    std::ifstream fin(str_file_name, std::ios::binary);
+    PADDLE_ENFORCE_EQ(static_cast<bool>(fin), true,
+                      platform::errors::Unavailable(
+                          "Cannot open %s to load variables.", str_file_name));
+
+    DeserializeFromStream(fin, &tensor);
+    int64_t tellg = fin.tellg();
+    fin.close();
+    return tellg;
+  });
+  m.def("_save_selected_rows", [](const SelectedRows &selected_rows,
+                                  const std::string &str_file_name) {
+    std::ofstream fout(str_file_name, std::ios::binary);
+    PADDLE_ENFORCE_EQ(
+        static_cast<bool>(fout), true,
+        platform::errors::Unavailable("Cannot open %s to save SelectedRows.",
+                                      str_file_name));
+
+    SerializeToStream(fout, selected_rows);
+    int64_t tellp = fout.tellp();
+    fout.close();
+    return tellp;
+  });
+  m.def("_load_selected_rows",
+        [](SelectedRows &selected_rows, const std::string &str_file_name) {
+          std::ifstream fin(str_file_name, std::ios::binary);
+          PADDLE_ENFORCE_EQ(
+              static_cast<bool>(fin), true,
+              platform::errors::Unavailable(
+                  "Cannot open %s to load SelectedRows.", str_file_name));
+
+          DeserializeFromStream(fin, &selected_rows);
+          int64_t tellg = fin.tellg();
+          fin.close();
+          return tellg;
+        });
   m.def("_save_static_dict",
         [](const std::string &str_file_name, const py::handle &vec_var_list,
            const Scope &scope) {

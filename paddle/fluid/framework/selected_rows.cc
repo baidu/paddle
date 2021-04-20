@@ -113,6 +113,21 @@ void SerializeToStream(std::ostream& os, const SelectedRows& selected_rows,
   TensorToStream(os, selected_rows.value(), dev_ctx);
 }
 
+void SerializeToStream(std::ostream& os, const SelectedRows& selected_rows) {
+  platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
+  const platform::DeviceContext* dev_ctx;
+  auto place = selected_rows.place();
+  dev_ctx = pool.Get(place);
+  SerializeToStream(os, selected_rows, *dev_ctx);
+}
+
+void DeserializeFromStream(std::ifstream& os, SelectedRows* selected_rows) {
+  platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
+  const platform::DeviceContext* dev_ctx;
+  dev_ctx = pool.Get(platform::CPUPlace());
+  DeserializeFromStream(os, selected_rows, *dev_ctx);
+}
+
 void DeserializeFromStream(std::istream& is, SelectedRows* selected_rows,
                            const platform::DeviceContext& dev_ctx) {
   {

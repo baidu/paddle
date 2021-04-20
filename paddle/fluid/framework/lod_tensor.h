@@ -260,5 +260,9 @@ LoD ConvertToLengthBasedLoD(const LoD& offset_lod);
 
 LoD ConvertToOffsetBasedLoD(const LoD& length_lod);
 
+void SerializeToStream(std::ostream& os, const LoDTensor& tensor);
+
+void DeserializeFromStream(std::ifstream& os, LoDTensor* tensor);
+
 }  // namespace framework
 }  // namespace paddle

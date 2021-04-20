@@ -33,7 +33,7 @@ from paddle.fluid import core
 from paddle.fluid.io import _unpack_saved_dict, _pack_loaded_dict, _pickle_loads_mac
 from paddle.fluid.io import _legacy_save as _legacy_static_save
 
-from paddle.fluid.framework import Variable, _varbase_creator, _dygraph_tracer, in_dygraph_mode, ParamBase, _current_expected_place
+from paddle.fluid.framework import Variable, _varbase_creator, _dygraph_tracer, in_dygraph_mode, ParamBase, _current_expected_place, Program
 from paddle.fluid.dygraph.jit import _SaveLoadConfig
 from paddle.fluid.dygraph.io import _construct_program_holders, _construct_params_and_buffers
 from paddle.fluid.dygraph.io import INFER_MODEL_SUFFIX, INFER_PARAMS_SUFFIX, INFER_PARAMS_INFO_SUFFIX
@@ -235,11 +235,6 @@ def _pickle_save(obj, f, protocol):
         raise ValueError("Expected 1<'protocol'<5, but received protocol={}".
                          format(protocol))
 
-    if not isinstance(obj, (core.LoDTensor, core.VarBase)):
-        raise NotImplementedError(
-            "Support 'paddle.Tensor' or 'paddle.core.LoDTensor', but received {}.".
-            format(type(obj)))
-
     def reudce_varbase(self):
         data = self.numpy()
         name = self.name
@@ -287,11 +282,40 @@ def _pickle_save(obj, f, protocol):
             pickler.dump(obj)
 
 
-def _use_legacy(obj):
-    # TODO(weixin):If `obj` is any object, the judgment condition should be more precise.
-    if not isinstance(obj, dict):
+def _contain_x(obj, condition_func):
+    if isinstance(obj, core.SelectedRows):
+        raise NotImplementedError(
+            "`paddle.save` do not support saving 'SelectedRows'.")
+
+    if condition_func(obj):
+        return True
+    elif type(obj) in (dict, collections.OrderedDict, list, tuple):
+        if type(obj) in (dict, collections.OrderedDict):
+            keys = list(obj.keys())
+        else:
+            keys = range(len(obj))
+        flag = False
+        for key in keys:
+            flag |= _contain_x(obj[key], condition_func)
+        return flag
+    else:
         return False
-    return True
+
+
+def _is_state_dict(obj):
+    if isinstance(obj, dict):
+
+        def condition(obj):
+            return isinstance(obj, (core.Layer, Program, core.VarBase,
+                                    core.LoDTensor))
+
+        for key, value in obj.items():
+            if not isinstance(value, (core.VarBase, core.LoDTensor)):
+                if _contain_x(value, condition):
+                    return False
+        return True
+
+    return False
 
 
 def _transformed_from_varbase(obj):
@@ -346,6 +370,106 @@ def _ndarray_to_tensor(obj, return_numpy):
         return paddle.to_tensor(obj)
     else:
         return _to_LodTensor(obj)
+
+
+def _parsed_as_state_dict(obj):
+    if isinstance(obj, dict):
+
+        def condition(obj):
+            return isinstance(obj, (core.Layer, Program, core.VarBase,
+                                    core.LoDTensor))
+
+        for key, value in obj.items():
+            if not isinstance(value, (core.VarBase, core.LoDTensor)):
+                if _contain_x(obj, condition):
+                    return False
+        return True
+
+    return False
+
+
+def _parse_every_tensor(obj, condition_func, convert_func):
+    if condition_func(obj):
+        return convert_func(obj)
+    elif type(obj) in (dict, collections.OrderedDict, list):
+        if type(obj) == list:
+            keys = range(len(obj))
+        else:
+            keys = list(obj.keys())
+        for key in keys:
+            if condition_func(obj[key]):
+                obj[key] = convert_func(obj[key])
+            else:
+                obj[key] = _parse_every_tensor(obj[key], condition_func,
+                                               convert_func)
+        return obj
+    elif type(obj) == tuple:
+        return tuple(
+            _parse_every_tensor(list(obj), condition_func, convert_func))
+    else:
+        if isinstance(obj, collections.Iterable) and not isinstance(obj, (
+                str, np.ndarray, core.VarBase, core.LoDTensor)):
+            raise NotImplementedError(
+                "The iteratable objects supported are tuple, list, dict, OrderedDict, string. But received {}.".
+                format(type(obj)))
+        return obj
+
+
+def _parse_load_result(obj, return_numpy):
+    def tuple_to_tensor(obj):
+        return _tuple_to_tensor(obj, return_numpy=return_numpy)
+
+    def ndarray_to_tensor(obj):
+        return _ndarray_to_tensor(obj, return_numpy=return_numpy)
+
+    if _contain_x(obj, _transformed_from_varbase):
+        return _parse_every_tensor(obj, _transformed_from_varbase,
+                                   tuple_to_tensor)
+    else:
+        return _parse_every_tensor(obj, _transformed_from_lodtensor,
+                                   ndarray_to_tensor)
+
+
+def _save_lod_tensor(tensor, file_name):
+    if not tensor._is_initialized():
+        raise ValueError("The saved tensor is not initialized.")
+    _seek = core._save_lod_tensor(tensor, file_name)
+    # '_seek' is the end position of this tensor in the file.
+    return _seek
+
+
+def _load_lod_tensor(file_name):
+    temp_t = paddle.fluid.core.LoDTensor()
+    # '_seek' is the end position of this tensor in the file.
+    _seek = paddle.fluid.core._load_lod_tensor(temp_t, file_name)
+    return temp_t, _seek
+
+
+def _save_selected_rows(selected_rows, file_name):
+    # '_seek' is the end position of this SelectedRows in the file.
+    if not selected_rows.get_tensor()._is_initialized():
+        raise ValueError("The saved tensor is not initialized.")
+    _seek = core._save_selected_rows(selected_rows, file_name)
+    return _seek
+
+
+def _load_selected_rows(file_name):
+    temp_sr = core.SelectedRows()
+    # '_seek' is the end position of this SelectedRows in the file.
+    _seek = core._load_selected_rows(temp_sr, file_name)
+    return temp_sr, _seek
+
+
+def _save_binary_var(obj, path):
+    if isinstance(obj, core.LoDTensor):
+        _save_lod_tensor(obj, path)
+    elif isinstance(obj, core.SelectedRows):
+        _save_selected_rows(obj, path)
+    else:
+        # Since the concept of 'Tensor' is only exposed to users, the error message can only contain tensor instead of 'LoDTensor' or 'SelectedRows'
+        raise NotImplementedError(
+            "When use_binary_format = True, `paddle.save`  expected Tensor, but received {}.".
+            format(type(obj)))
 
 
 def save(obj, path, protocol=2, **configs):
@@ -446,23 +570,24 @@ def save(obj, path, protocol=2, **configs):
         raise TypeError(
             "Type of `use_binary_format` should be bool, but received {}.".
             format(type(config.use_binary_format)))
-
-    # `protocol` need to be used, `pickle_protocol` is a deprecated arg.
-    if config.pickle_protocol is not None:
-        protocol = config.pickle_protocol
-        warnings.warn(
-            "'pickle_protocol' is a deprecated argument. Please use 'protocol' instead."
-        )
-
-    if _use_legacy(obj):
-        if in_dygraph_mode():
-            _legacy_save(obj, path, protocol)
-        else:
-            _legacy_static_save(obj, path, protocol)
+    if config.use_binary_format:
+        _save_binary_var(obj, path)
     else:
-        # save single variable
-        with open(path, 'wb') as f:
-            _pickle_save(obj, f, protocol)
+        # `protocol` need to be used, `pickle_protocol` is a deprecated arg.
+        if config.pickle_protocol is not None:
+            protocol = config.pickle_protocol
+            warnings.warn(
+                "'pickle_protocol' is a deprecated argument. Please use 'protocol' instead."
+            )
+
+        if _is_state_dict(obj):
+            if in_dygraph_mode():
+                _legacy_save(obj, path, protocol)
+            else:
+                _legacy_static_save(obj, path, protocol)
+        else:
+            with open(path, 'wb') as f:
+                _pickle_save(obj, f, protocol)
 
 
 def _legacy_save(obj, path, protocol=2):
@@ -627,46 +752,51 @@ def load(path, **configs):
 
     if os.path.isfile(path):
         config = _parse_load_config(configs)
-        with open(path, 'rb') as f:
-            # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
-            if sys.platform == 'darwin' and sys.version_info.major == 3:
-                load_result = _pickle_loads_mac(path, f)
-            else:
-                load_result = pickle.load(f) if six.PY2 else pickle.load(
-                    f, encoding='latin1')
+        if six.PY2:
+            exception_type = KeyError
+        else:
+            exception_type = pickle.UnpicklingError
+        try:
+            with open(path, 'rb') as f:
+                # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
+                if sys.platform == 'darwin' and sys.version_info.major == 3:
+                    load_result = _pickle_loads_mac(path, f)
+                else:
+                    load_result = pickle.load(f) if six.PY2 else pickle.load(
+                        f, encoding='latin1')
 
-            # TODO(weixin):If `obj` is any object, the judgment condition should be more precise.
-            if isinstance(load_result, dict):
+                # TODO(weixin):If `obj` is any object, the judgment condition should be more precise.
                 if isinstance(load_result, dict):
                     load_result = _pack_loaded_dict(load_result)
-                # paddle2.0: paddle.save/load
-                if "StructuredToParameterName@@" in load_result:
+                    # paddle2.0: paddle.save/load
+                    if "StructuredToParameterName@@" in load_result:
 
-                    for key in load_result["StructuredToParameterName@@"]:
-                        load_result[key] = _ndarray_to_tensor(
-                            load_result[key], config.return_numpy)
+                        for key in load_result["StructuredToParameterName@@"]:
+                            load_result[key] = _ndarray_to_tensor(
+                                load_result[key], config.return_numpy)
 
-                    if not config.keep_name_table and "StructuredToParameterName@@" in load_result:
-                        del load_result["StructuredToParameterName@@"]
+                        if not config.keep_name_table and "StructuredToParameterName@@" in load_result:
+                            del load_result["StructuredToParameterName@@"]
+                    else:
+                        # paddle2.1 static.save/load
+                        load_result = _parse_load_result(load_result,
+                                                         config.return_numpy)
+
                 else:
-                    # paddle2.1 static.save/load
-                    for key in load_result:
-                        load_result[key] = _ndarray_to_tensor(
-                            load_result[key], config.return_numpy)
-
-            else:
-                # TODO(weixin): support complex objects such as layer.
-                # If `obj` is any object, the judgment condition should be more precise.
-                if _transformed_from_lodtensor(load_result):
-                    load_result = _ndarray_to_tensor(load_result,
+                    load_result = _parse_load_result(load_result,
                                                      config.return_numpy)
-                elif _transformed_from_varbase(load_result):
-                    load_result = _tuple_to_tensor(load_result,
-                                                   config.return_numpy)
-                else:
-                    raise NotImplementedError(
-                        'Only support tensor and state_dict, but received {}.'.
-                        format(type(load_result)))
+
+        except exception_type as msg_pickle:
+            try:
+                tensor, _ = _load_selected_rows(path)
+                return tensor
+            except:
+                try:
+                    tensor, _ = _load_lod_tensor(path)
+                    return tensor
+                except:
+                    raise ValueError(
+                        "`paddle.load` can not parse the file:{}.".format(path))
 
     else:
         load_result = _legacy_load(path, **configs)
