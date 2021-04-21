@@ -101,16 +101,15 @@ class PSLib(Fleet):
             # barrier_all for init_worker
             self._role_maker._barrier_all()
             # prepare for client to client communication
-            if not self._opt_info["use_ps_gpu"]:
-                if self._role_maker.is_worker():
-                    info = self._fleet_ptr.get_clients_info()
-                    all_info = self._role_maker._worker_gather(info[0])
-                    self._fleet_ptr.gather_clients(all_info)
-                    self._fleet_ptr.set_client2client_config(
-                        self._client2client_request_timeout_ms,
-                        self._client2client_connect_timeout_ms,
-                        self._client2client_max_retry)
-                    self._fleet_ptr.create_client2client_connection()
+            if self._role_maker.is_worker():
+                info = self._fleet_ptr.get_clients_info()
+                all_info = self._role_maker._worker_gather(info[0])
+                self._fleet_ptr.gather_clients(all_info)
+                self._fleet_ptr.set_client2client_config(
+                    self._client2client_request_timeout_ms,
+                    self._client2client_connect_timeout_ms,
+                    self._client2client_max_retry)
+                self._fleet_ptr.create_client2client_connection()
             # barrier for init model
             self._role_maker._barrier_worker()
             if self._role_maker.is_first_worker():
@@ -1120,14 +1119,14 @@ class DownpourOptimizer(DistributedOptimizer):
         fleet._main_programs = programs
         fleet._scopes = scopes
         if opt_info["use_ps_gpu"]:
-            from paddle.fluid.transpiler.collective import SingleProcessMultiThread
+            from paddle.fluid.transpiler.collective import MultiThread
             # check start program
 
             env = self.get_dist_env()
             if not isinstance(losses, list):
                 startup_programs = [startup_programs]
             for i in range(0, len(startup_programs)):
-                t = SingleProcessMultiThread()
+                t = MultiThread()
                 start_program = startup_programs[i]
                 main_program = programs[i]
                 t.transpile(
