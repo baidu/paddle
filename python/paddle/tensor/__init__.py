@@ -79,6 +79,7 @@ from .manipulation import broadcast_to  #DEFINE_ALIAS
 from .manipulation import expand_as  #DEFINE_ALIAS
 from .manipulation import tile  #DEFINE_ALIAS
 from .manipulation import flatten  #DEFINE_ALIAS
+from .manipulation import flatten_  #DEFINE_ALIAS
 from .manipulation import gather  #DEFINE_ALIAS
 from .manipulation import gather_nd  #DEFINE_ALIAS
 from .manipulation import reshape  #DEFINE_ALIAS
@@ -109,6 +110,7 @@ from .math import acos  #DEFINE_ALIAS
 from .math import asin  #DEFINE_ALIAS
 from .math import atan  #DEFINE_ALIAS
 from .math import ceil  #DEFINE_ALIAS
+from .math import ceil_  #DEFINE_ALIAS
 from .math import cos  #DEFINE_ALIAS
 from .math import tan  #DEFINE_ALIAS
 from .math import cosh  #DEFINE_ALIAS
@@ -121,23 +123,29 @@ from .math import cumsum  #DEFINE_ALIAS
 # from .math import elementwise_pow  #DEFINE_ALIAS
 # from .math import elementwise_sub  #DEFINE_ALIAS
 from .math import exp  #DEFINE_ALIAS
+from .math import exp_  #DEFINE_ALIAS
 from .math import floor  #DEFINE_ALIAS
+from .math import floor_  #DEFINE_ALIAS
 from .math import increment  #DEFINE_ALIAS
 from .math import log  #DEFINE_ALIAS
 from .math import multiplex  #DEFINE_ALIAS
 from .math import pow  #DEFINE_ALIAS
 from .math import reciprocal  #DEFINE_ALIAS
+from .math import reciprocal_  #DEFINE_ALIAS
 # from .math import reduce_max  #DEFINE_ALIAS
 # from .math import reduce_min  #DEFINE_ALIAS
 # from .math import reduce_prod  #DEFINE_ALIAS
 # from .math import reduce_sum  #DEFINE_ALIAS
 from .math import round  #DEFINE_ALIAS
+from .math import round_  #DEFINE_ALIAS
 from .math import rsqrt  #DEFINE_ALIAS
+from .math import rsqrt_  #DEFINE_ALIAS
 from .math import scale  #DEFINE_ALIAS
 from .math import sign  #DEFINE_ALIAS
 from .math import sin  #DEFINE_ALIAS
 from .math import sinh  #DEFINE_ALIAS
 from .math import sqrt  #DEFINE_ALIAS
+from .math import sqrt_  #DEFINE_ALIAS
 from .math import square  #DEFINE_ALIAS
 from .math import stanh  #DEFINE_ALIAS
 from .math import sum  #DEFINE_ALIAS

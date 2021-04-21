@@ -480,7 +480,7 @@ void BasicEngine::Execute() {
       }
 
       for (auto& pair : inplace_output_grad_var_list_) {
-        *pair.first = std::move(*pair.second);
+        *pair.first->MutableVar() = std::move(pair.second->Var());
       }
 
       // Step 2: Sum Gradient of This graph

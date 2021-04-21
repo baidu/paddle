@@ -124,6 +124,7 @@ from .tensor.manipulation import broadcast_to  #DEFINE_ALIAS
 from .tensor.manipulation import expand_as  #DEFINE_ALIAS
 from .tensor.manipulation import tile  #DEFINE_ALIAS
 from .tensor.manipulation import flatten  #DEFINE_ALIAS
+from .tensor.manipulation import flatten_  #DEFINE_ALIAS
 from .tensor.manipulation import gather  #DEFINE_ALIAS
 from .tensor.manipulation import gather_nd  #DEFINE_ALIAS
 from .tensor.manipulation import reshape  #DEFINE_ALIAS
@@ -154,6 +155,7 @@ from .tensor.math import acos  #DEFINE_ALIAS
 from .tensor.math import asin  #DEFINE_ALIAS
 from .tensor.math import atan  #DEFINE_ALIAS
 from .tensor.math import ceil  #DEFINE_ALIAS
+from .tensor.math import ceil_  #DEFINE_ALIAS
 from .tensor.math import cos  #DEFINE_ALIAS
 from .tensor.math import tan  #DEFINE_ALIAS
 from .tensor.math import cosh  #DEFINE_ALIAS
@@ -165,7 +167,9 @@ from .tensor.math import cumsum  #DEFINE_ALIAS
 # from .tensor.math import elementwise_pow  #DEFINE_ALIAS
 # from .tensor.math import elementwise_sub  #DEFINE_ALIAS
 from .tensor.math import exp  #DEFINE_ALIAS
+from .tensor.math import exp_  #DEFINE_ALIAS
 from .tensor.math import floor  #DEFINE_ALIAS
+from .tensor.math import floor_  #DEFINE_ALIAS
 from .tensor.math import increment  #DEFINE_ALIAS
 from .tensor.math import log  #DEFINE_ALIAS
 from .tensor.math import log2  #DEFINE_ALIAS
@@ -173,6 +177,7 @@ from .tensor.math import log10  #DEFINE_ALIAS
 from .tensor.math import multiplex  #DEFINE_ALIAS
 from .tensor.math import pow  #DEFINE_ALIAS
 from .tensor.math import reciprocal  #DEFINE_ALIAS
+from .tensor.math import reciprocal_  #DEFINE_ALIAS
 # from .tensor.math import reduce_max  #DEFINE_ALIAS
 # from .tensor.math import reduce_min  #DEFINE_ALIAS
 # from .tensor.math import reduce_prod  #DEFINE_ALIAS
@@ -180,12 +185,15 @@ from .tensor.math import reciprocal  #DEFINE_ALIAS
 from .tensor.math import all  #DEFINE_ALIAS
 from .tensor.math import any  #DEFINE_ALIAS
 from .tensor.math import round  #DEFINE_ALIAS
+from .tensor.math import round_  #DEFINE_ALIAS
 from .tensor.math import rsqrt  #DEFINE_ALIAS
+from .tensor.math import rsqrt_  #DEFINE_ALIAS
 from .tensor.math import scale  #DEFINE_ALIAS
 from .tensor.math import sign  #DEFINE_ALIAS
 from .tensor.math import sin  #DEFINE_ALIAS
 from .tensor.math import sinh  #DEFINE_ALIAS
 from .tensor.math import sqrt  #DEFINE_ALIAS
+from .tensor.math import sqrt_  #DEFINE_ALIAS
 from .tensor.math import square  #DEFINE_ALIAS
 from .tensor.math import stanh  #DEFINE_ALIAS
 from .tensor.math import sum  #DEFINE_ALIAS

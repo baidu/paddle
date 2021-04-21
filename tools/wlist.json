@@ -35,6 +35,10 @@
             "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
         },
         {
+            "name":"flatten_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
             "name":"scatter_",
             "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
         },
@@ -52,6 +56,38 @@
         },
         {
             "name":"tanh_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"ceil_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"floor_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"exp_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"reciprocal_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"round_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"sqrt_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"rsqrt_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"sigmoid_",
             "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
         }
     ],

@@ -31,8 +31,8 @@ from ..fluid.layers import unstack  #DEFINE_ALIAS
 from ..fluid.layers import scatter_nd  #DEFINE_ALIAS
 from ..fluid.layers import shard_index  #DEFINE_ALIAS
 from ..fluid import layers
+from ..fluid.dygraph.inplace_utils import inplace_apis_in_dygraph_only
 import paddle
-import warnings
 
 __all__ = [
     'cast',
@@ -41,6 +41,7 @@ __all__ = [
     'broadcast_to',
     'expand_as',
     'flatten',
+    'flatten_',
     'gather',
     'gather_nd',
     'reshape',
@@ -68,12 +69,6 @@ __all__ = [
     'roll',
     'tile',
 ]
-
-
-def _print_warning_in_static_mode(api_name):
-    warnings.warn(
-        "In static mode, {}_() is the same as {}() and does not perform inplace operation.".
-        format(api_name, api_name))
 
 
 def concat(x, axis=0, name=None):
@@ -284,6 +279,36 @@ def flatten(x, start_axis=0, stop_axis=-1, name=None):
         attrs={"start_axis": start_axis,
                "stop_axis": stop_axis})
     return out
+
+
+@inplace_apis_in_dygraph_only
+def flatten_(x, start_axis=0, stop_axis=-1, name=None):
+    """
+    Inplace version of ``flatten`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_tensor_flatten`.
+    """
+    if not (isinstance(x, Variable)):
+        raise ValueError("The input x should be a Tensor")
+
+    x_dim = len(x.shape)
+    if not (isinstance(start_axis, int)) or (
+            start_axis > x_dim - 1) or start_axis < -x_dim:
+        raise ValueError(
+            "The start_axis should be a int, and in range [-rank(x), rank(x))")
+    if not (isinstance(stop_axis, int)) or (
+            stop_axis > x_dim - 1) or stop_axis < -x_dim:
+        raise ValueError(
+            "The stop_axis should be a int, and in range [-rank(x), rank(x))")
+    if start_axis < 0:
+        start_axis = start_axis + x_dim
+    if stop_axis < 0:
+        stop_axis = stop_axis + x_dim
+    if start_axis > stop_axis:
+        raise ValueError("The stop_axis should be larger than stat_axis")
+
+    dy_out, _ = core.ops.flatten_contiguous_range_(x, 'start_axis', start_axis,
+                                                   'stop_axis', stop_axis)
+    return dy_out
 
 
 def roll(x, shifts, axis=None, name=None):
@@ -579,6 +604,7 @@ def squeeze(x, axis=None, name=None):
     return layers.squeeze(x, axis, name)
 
 
+@inplace_apis_in_dygraph_only
 def squeeze_(x, axis=None, name=None):
     """
     Inplace version of ``squeeze`` API, the output Tensor will be inplaced with input ``x``.
@@ -591,12 +617,8 @@ def squeeze_(x, axis=None, name=None):
     elif isinstance(axis, tuple):
         axis = list(axis)
 
-    if in_dygraph_mode():
-        out, _ = core.ops.squeeze2_(x, 'axes', axis)
-        return out
-
-    _print_warning_in_static_mode("squeeze")
-    return squeeze(x, axis, name)
+    out, _ = core.ops.squeeze2_(x, 'axes', axis)
+    return out
 
 
 def unique(x,
@@ -772,26 +794,23 @@ def unsqueeze(x, axis, name=None):
     return layers.unsqueeze(x, axis, name)
 
 
+@inplace_apis_in_dygraph_only
 def unsqueeze_(x, axis, name=None):
     """
     Inplace version of ``unsqueeze`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_paddle_tensor_unsqueeze`.
     """
-    if in_dygraph_mode():
-        if isinstance(axis, int):
-            axis = [axis]
-        elif isinstance(axis, Variable):
-            axis = axis.numpy().tolist()
-        elif isinstance(axis, (list, tuple)):
-            axis = [
-                item.numpy().item(0) if isinstance(item, Variable) else item
-                for item in axis
-            ]
-        out, _ = core.ops.unsqueeze2_(x, 'axes', axis)
-        return out
-
-    _print_warning_in_static_mode("unsqueeze")
-    return unsqueeze(x, axis, name)
+    if isinstance(axis, int):
+        axis = [axis]
+    elif isinstance(axis, Variable):
+        axis = axis.numpy().tolist()
+    elif isinstance(axis, (list, tuple)):
+        axis = [
+            item.numpy().item(0) if isinstance(item, Variable) else item
+            for item in axis
+        ]
+    out, _ = core.ops.unsqueeze2_(x, 'axes', axis)
+    return out
 
 
 def gather(x, index, axis=None, name=None):
@@ -1020,16 +1039,13 @@ def scatter(x, index, updates, overwrite=True, name=None):
     return out
 
 
+@inplace_apis_in_dygraph_only
 def scatter_(x, index, updates, overwrite=True, name=None):
     """
     Inplace version of ``scatter`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_paddle_tensor_scatter`.
     """
-    if in_dygraph_mode():
-        return core.ops.scatter_(x, index, updates, 'overwrite', overwrite)
-
-    _print_warning_in_static_mode("scatter")
-    return scatter(x, index, updates, overwrite, name)
+    return core.ops.scatter_(x, index, updates, 'overwrite', overwrite)
 
 
 def scatter_nd_add(x, index, updates, name=None):
@@ -1552,26 +1568,23 @@ def reshape(x, shape, name=None):
     return paddle.fluid.layers.reshape(x=x, shape=shape, name=name)
 
 
+@inplace_apis_in_dygraph_only
 def reshape_(x, shape, name=None):
     """
     Inplace version of ``reshape`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_paddle_tensor_reshape`.
     """
-    if in_dygraph_mode():
-        if isinstance(shape, (list, tuple)):
-            shape = [
-                item.numpy().item(0) if isinstance(item, Variable) else item
-                for item in shape
-            ]
-            out, _ = core.ops.reshape2_(x, None, 'shape', shape)
-            return out
-        elif isinstance(shape, Variable):
-            shape.stop_gradient = True
-            out, _ = core.ops.reshape2_(x, shape)
-            return out
-
-    _print_warning_in_static_mode("reshape")
-    return reshape(x, shape, name)
+    if isinstance(shape, (list, tuple)):
+        shape = [
+            item.numpy().item(0) if isinstance(item, Variable) else item
+            for item in shape
+        ]
+        out, _ = core.ops.reshape2_(x, None, 'shape', shape)
+        return out
+    elif isinstance(shape, Variable):
+        shape.stop_gradient = True
+        out, _ = core.ops.reshape2_(x, shape)
+        return out
 
 
 def gather_nd(x, index, name=None):

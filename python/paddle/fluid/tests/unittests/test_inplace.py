@@ -98,10 +98,14 @@ class TestInplace(unittest.TestCase):
 class TestDygraphInplace(unittest.TestCase):
     def setUp(self):
         self.init_data()
+        self.set_np_compare_func()
 
     def init_data(self):
-        self.input_var_numpy = np.random.rand(2, 3, 1)
+        self.input_var_numpy = np.random.uniform(-5, 5, [10, 20, 1])
         self.dtype = "float32"
+
+    def set_np_compare_func(self):
+        self.np_compare = np.array_equal
 
     def non_inplace_api_processing(self, var):
         return paddle.squeeze(var)
@@ -190,7 +194,7 @@ class TestDygraphInplace(unittest.TestCase):
             loss.backward()
             grad_var_a = var_a.grad
 
-        self.assertTrue(np.array_equal(grad_var_a_inplace, grad_var_a))
+        self.assertTrue(self.np_compare(grad_var_a_inplace, grad_var_a))
 
     def test_backward_success_2(self):
         # Although var_b is modified inplace after using it, it does not used in gradient computation.
@@ -225,7 +229,7 @@ class TestDygraphInplace(unittest.TestCase):
 
             loss.backward()
             grad_var_a = var_a.grad
-        self.assertTrue(np.array_equal(grad_var_a_inplace, grad_var_a))
+        self.assertTrue(self.np_compare(grad_var_a_inplace, grad_var_a))
 
 
 class TestDygraphInplaceUnsqueeze(TestDygraphInplace):
@@ -242,6 +246,14 @@ class TestDygraphInplaceReshape(TestDygraphInplace):
 
     def inplace_api_processing(self, var):
         return paddle.reshape_(var, [-1])
+
+
+class TestDygraphInplaceFlatten(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.flatten(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.flatten_(var)
 
 
 class TestDygraphInplaceScatter(TestDygraphInplace):
@@ -294,6 +306,77 @@ class TestDygraphInplaceTanh(TestDygraphInplace):
 
     def inplace_api_processing(self, var):
         return paddle.tanh_(var)
+
+
+class TestDygraphInplaceCeil(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.ceil(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.ceil_(var)
+
+
+class TestDygraphInplaceFloor(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.floor(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.floor_(var)
+
+
+class TestDygraphInplaceExp(TestDygraphInplace):
+    def set_np_compare_func(self):
+        self.np_compare = np.allclose
+
+    def non_inplace_api_processing(self, var):
+        return paddle.exp(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.exp_(var)
+
+
+class TestDygraphInplaceReciprocal(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.reciprocal(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.reciprocal_(var)
+
+
+class TestDygraphInplaceRound(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.round(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.round_(var)
+
+
+class TestDygraphInplaceSqrt(TestDygraphInplace):
+    def init_data(self):
+        self.input_var_numpy = np.random.uniform(0, 5, [10, 20, 1])
+        self.dtype = "float32"
+
+    def non_inplace_api_processing(self, var):
+        return paddle.sqrt(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.sqrt_(var)
+
+
+class TestDygraphInplaceRsqrt(TestDygraphInplaceSqrt):
+    def non_inplace_api_processing(self, var):
+        return paddle.rsqrt(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.rsqrt_(var)
+
+
+class TestDygraphInplaceSigmoid(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.sigmoid(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.sigmoid_(var)
 
 
 if __name__ == '__main__':
