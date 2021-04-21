@@ -107,10 +107,107 @@ class SoftmaxWithCrossEntropyXPUKernel : public framework::OpKernel<T> {
     }
   }
 };
+
+template <typename T>
+class SoftmaxWithCrossEntropyGradXPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& context) const override {
+    PADDLE_ENFORCE_EQ(
+        platform::is_xpu_place(context.GetPlace()), true,
+        platform::errors::PreconditionNotMet("This kernel only runs on XPU."));
+    const Tensor* softmax = context.Input<Tensor>("Softmax");
+    const Tensor* labels = context.Input<Tensor>("Label");
+    const Tensor* loss_grad =
+        context.Input<Tensor>(framework::GradVarName("Loss"));
+    Tensor* logits_grad =
+        context.Output<Tensor>(framework::GradVarName("Logits"));
+    const int rank = logits_grad->dims().size();
+    const int axis = CanonicalAxis(context.Attr<int>("axis"), rank);
+    PADDLE_ENFORCE_EQ(axis, rank - 1, platform::errors::InvalidArgument(
+                                          "axis should == rank - 1"));
+
+    const int n = SizeToAxis(axis, logits_grad->dims());
+    const int d = SizeFromAxis(axis, logits_grad->dims());
+    std::vector<int> softmax_dims = framework::vectorize<int>(softmax->dims());
+
+    if (logits_grad) {
+      logits_grad->mutable_data<float>(context.GetPlace());
+    }
+    Tensor softmax_grad;
+    softmax_grad.mutable_data<float>(softmax->dims(), context.GetPlace());
+
+    auto& dev_ctx =
+        context.template device_context<paddle::platform::XPUDeviceContext>();
+
+    // cross_entropy_grad
+    const bool soft_label = context.Attr<bool>("soft_label");
+    auto ignore_index = context.Attr<int>("ignore_index");
+    if (soft_label) {
+      int r = xpu::soft_cross_entropy_grad<float>(
+          dev_ctx.x_context(), softmax->data<float>(), labels->data<float>(),
+          loss_grad->data<float>(), softmax_grad.data<float>(), n, d);
+      PADDLE_ENFORCE_EQ(r, xpu::Error_t::SUCCESS,
+                        platform::errors::External(
+                            "XPU kernel error. soft_cross_entropy_grad "
+                            "execution not succeed, error code=%d, %s",
+                            r, XPUAPIErrorMsg[r]));
+    } else {
+      Tensor labels_int32;
+      labels_int32.mutable_data<int32_t>(context.GetPlace(),
+                                         labels->numel() * sizeof(int32_t));
+      int r = xpu::cast_v2<int64_t, int32_t>(
+          dev_ctx.x_context(), labels->data<int64_t>(),
+          labels_int32.data<int32_t>(), labels->numel());
+      PADDLE_ENFORCE_EQ(
+          r, xpu::Error_t::SUCCESS,
+          platform::errors::External("XPU kernel error. cast_v2 "
+                                     "execution not succeed, error code=%d, %s",
+                                     r, XPUAPIErrorMsg[r]));
+
+      Tensor match_x_cpu;
+      auto* match_x_data = match_x_cpu.mutable_data<T>(
+          framework::make_ddim({n}), platform::CPUPlace());
+      Tensor softmax_copy;
+      TensorCopySync(*softmax, platform::CPUPlace(), &softmax_copy);
+      Tensor label_copy;
+      TensorCopySync(*labels, platform::CPUPlace(), &label_copy);
+      auto* softmax_data = softmax_copy.data<T>();
+      auto* label_data = label_copy.data<int64_t>();
+      for (int i = 0; i < n; i++) {
+        T val = static_cast<T>(softmax_data[i * d + label_data[i]]);
+        match_x_data[i] = val;
+      }
+      Tensor match_x;
+      TensorCopySync(match_x_cpu, context.GetPlace(), &match_x);
+      r = xpu::hard_cross_entropy_grad<float, int32_t>(
+          dev_ctx.x_context(), labels_int32.data<int32_t>(), match_x.data<T>(),
+          loss_grad->data<float>(), softmax_grad.data<float>(), n, d,
+          ignore_index);
+      PADDLE_ENFORCE_EQ(r, xpu::Error_t::SUCCESS,
+                        platform::errors::External(
+                            "XPU kernel error. hard_cross_entropy_grad "
+                            "execution not succeed, error code=%d, %s",
+                            r, XPUAPIErrorMsg[r]));
+      dev_ctx.Wait();
+    }
+
+    // softmax_grad
+    int r = xpu::softmax_grad(dev_ctx.x_context(), softmax->data<float>(),
+                              softmax_grad.data<float>(),
+                              logits_grad->data<T>(), softmax_dims, axis);
+    PADDLE_ENFORCE_EQ(
+        r, xpu::Error_t::SUCCESS,
+        platform::errors::External("XPU kernel error. softmax_grad "
+                                   "execution not succeed, error code=%d, %s",
+                                   r, XPUAPIErrorMsg[r]));
+  }
+};
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
 REGISTER_OP_XPU_KERNEL(softmax_with_cross_entropy,
                        ops::SoftmaxWithCrossEntropyXPUKernel<float>);
+REGISTER_OP_XPU_KERNEL(softmax_with_cross_entropy_grad,
+                       ops::SoftmaxWithCrossEntropyGradXPUKernel<float>);
 #endif
