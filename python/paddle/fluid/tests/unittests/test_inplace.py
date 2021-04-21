@@ -288,12 +288,136 @@ class TestDygraphInplaceSoftmax(TestDygraphInplace):
         return paddle.nn.functional.softmax_(var)
 
 
+class TestDygraphInplaceRelu6(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.relu6(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.relu6_(var)
+
+
+class TestDygraphInplaceHardsigmoid(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.hardsigmoid(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.hardsigmoid_(var)
+
+
+class TestDygraphInplaceLeakyRelu(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.leaky_relu(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.leaky_relu_(var)
+
+
+class TestDygraphInplaceSoftmaxWithCrossEntropyForward(TestDygraphInplace):
+    def init_data(self):
+        self.input_var_numpy = np.random.rand(64, 100)
+        label_numpy = np.random.rand(64, 1).astype("int64")
+        self.label_var = paddle.to_tensor(label_numpy)
+        self.dtype = "float32"
+
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.softmax_with_cross_entropy(
+            var, self.label_var, return_softmax=True)[1]
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.softmax_with_cross_entropy_(
+            var, self.label_var, return_softmax=True)[1]
+
+    # grad_var of `Softmax` in non-inplace API is None.
+    # grad_var of `Softmax` in inplace API is grad_var of `Logits`.
+    def test_backward_success_1(self):
+        pass
+
+    def test_backward_success_2(self):
+        pass
+
+
+class TestDygraphInplaceSoftmaxWithCrossEntropyBackward(TestDygraphInplace):
+    def init_data(self):
+        self.input_var_numpy = np.random.rand(64, 100)
+        label_numpy = np.random.rand(64, 1).astype("int64")
+        self.label_var = paddle.to_tensor(label_numpy)
+        self.dtype = "float32"
+
+    def non_inplace_api_processing(self, var):
+        return paddle.nn.functional.softmax_with_cross_entropy(
+            var, self.label_var, return_softmax=False)
+
+    def inplace_api_processing(self, var):
+        return paddle.nn.functional.softmax_with_cross_entropy_(
+            var, self.label_var, return_softmax=False)
+
+    def test_inplace_api(self):
+        pass
+
+    def test_forward_version(self):
+        pass
+
+
 class TestDygraphInplaceTanh(TestDygraphInplace):
     def non_inplace_api_processing(self, var):
         return paddle.tanh(var)
 
     def inplace_api_processing(self, var):
         return paddle.tanh_(var)
+
+
+class TestDygraphInplaceClip(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.clip(var, 0.6, 1.5)
+
+    def inplace_api_processing(self, var):
+        return paddle.clip_(var, 0.6, 1.5)
+
+
+class TestDygraphInplaceScale(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.scale(var, scale=2.0, bias=3.0)
+
+    def inplace_api_processing(self, var):
+        return paddle.scale_(var, scale=2.0, bias=3.0)
+
+
+class TestDygraphInplaceAdd(TestDygraphInplace):
+    def init_data(self):
+        self.input_var_numpy = np.random.rand(2, 3, 4)
+        self.dtype = "float32"
+        input_var_numpy_2 = np.random.rand(2, 3, 4).astype(self.dtype)
+        self.input_var_2 = paddle.to_tensor(input_var_numpy_2)
+
+    def non_inplace_api_processing(self, var):
+        return paddle.add(var, self.input_var_2)
+
+    def inplace_api_processing(self, var):
+        return paddle.add_(var, self.input_var_2)
+
+
+class TestDygraphInplaceSubtract(TestDygraphInplaceAdd):
+    def non_inplace_api_processing(self, var):
+        return paddle.subtract(var, self.input_var_2)
+
+    def inplace_api_processing(self, var):
+        return paddle.subtract_(var, self.input_var_2)
+
+
+class TestDygraphInplaceAddN(TestDygraphInplace):
+    def non_inplace_api_processing(self, var):
+        return paddle.add_n(var)
+
+    def inplace_api_processing(self, var):
+        return paddle.add_n_(var)
+
+
+class TestDygraphInplaceAddNMultiInput(TestDygraphInplaceAdd):
+    def non_inplace_api_processing(self, var):
+        return paddle.add_n([var, self.input_var_2])
+
+    def inplace_api_processing(self, var):
+        return paddle.add_n_([var, self.input_var_2])
 
 
 if __name__ == '__main__':

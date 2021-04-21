@@ -51,7 +51,43 @@
             "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
         },
         {
+            "name":"relu6_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"hardsigmoid_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"leaky_relu_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"softmax_with_cross_entropy_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
             "name":"tanh_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"add_n_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"clip_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"scale_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"subtract_",
+            "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
+        },
+        {
+            "name":"add_",
             "annotation":"Inplace APIs don't need sample code. There is a special document introducing Inplace strategy"
         }
     ],

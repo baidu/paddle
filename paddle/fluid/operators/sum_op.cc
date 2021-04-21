@@ -295,6 +295,10 @@ class SumGradOpBaseMaker : public imperative::GradOpBaseMakerBase {
 
     if (!x_grads.empty()) {
       auto node = this->NewGradNode();
+      auto& inplace_map = this->GetInplaceMap();
+      if (!inplace_map.empty()) {
+        node->SetInplaceGradNameMap(inplace_map);
+      }
       node->reserve(x_grads.size());
       auto og = OutputGrad("Out");
       for (auto& x_grad : x_grads) {

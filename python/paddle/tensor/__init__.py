@@ -134,6 +134,7 @@ from .math import reciprocal  #DEFINE_ALIAS
 from .math import round  #DEFINE_ALIAS
 from .math import rsqrt  #DEFINE_ALIAS
 from .math import scale  #DEFINE_ALIAS
+from .math import scale_  #DEFINE_ALIAS
 from .math import sign  #DEFINE_ALIAS
 from .math import sin  #DEFINE_ALIAS
 from .math import sinh  #DEFINE_ALIAS
@@ -144,6 +145,7 @@ from .math import sum  #DEFINE_ALIAS
 from .math import tanh  #DEFINE_ALIAS
 from .math import tanh_  #DEFINE_ALIAS
 from .math import add_n  #DEFINE_ALIAS
+from .math import add_n_  #DEFINE_ALIAS
 from .math import max  #DEFINE_ALIAS
 from .math import maximum  #DEFINE_ALIAS
 from .math import min  #DEFINE_ALIAS
@@ -156,7 +158,9 @@ from .math import mod  #DEFINE_ALIAS
 from .math import floor_mod  #DEFINE_ALIAS
 from .math import multiply  #DEFINE_ALIAS
 from .math import add  #DEFINE_ALIAS
+from .math import add_  #DEFINE_ALIAS
 from .math import subtract  #DEFINE_ALIAS
+from .math import subtract_  #DEFINE_ALIAS
 from .math import atan  #DEFINE_ALIAS
 from .math import logsumexp  #DEFINE_ALIAS
 from .math import inverse  #DEFINE_ALIAS
@@ -166,6 +170,7 @@ from .math import log1p  #DEFINE_ALIAS
 from .math import erf  #DEFINE_ALIAS
 from .math import addmm  #DEFINE_ALIAS
 from .math import clip  #DEFINE_ALIAS
+from .math import clip_  #DEFINE_ALIAS
 from .math import trace  #DEFINE_ALIAS
 from .math import kron  #DEFINE_ALIAS
 from .math import isfinite  #DEFINE_ALIAS

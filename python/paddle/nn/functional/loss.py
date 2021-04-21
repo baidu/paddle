@@ -39,6 +39,8 @@ from ...fluid.framework import _varbase_creator
 from ...fluid.framework import Variable
 from paddle.utils import deprecated
 
+from ...tensor.manipulation import _print_warning_in_static_mode
+
 __all__ = [
     'binary_cross_entropy',
     'binary_cross_entropy_with_logits',
@@ -56,9 +58,38 @@ __all__ = [
     'sigmoid_focal_loss',
     'smooth_l1_loss',
     'softmax_with_cross_entropy',
+    'softmax_with_cross_entropy_',
     'square_error_cost',
     'ctc_loss',
 ]
+
+kIgnoreIndex = -100
+
+
+def softmax_with_cross_entropy_(logits,
+                                label,
+                                soft_label=False,
+                                ignore_index=kIgnoreIndex,
+                                numeric_stable_mode=True,
+                                return_softmax=False,
+                                axis=-1):
+    """
+    Inplace version of ``softmax_with_cross_entropy`` API, the output Tensor will be inplaced with input ``logits``.
+    Please refer to :ref:`api_nn_cn_softmax_with_cross_entropy`.
+    """
+    if in_dygraph_mode():
+        softmax, loss = core.ops.softmax_with_cross_entropy_(
+            logits, label, 'soft_label', soft_label, 'ignore_index',
+            ignore_index, 'numeric_stable_mode', numeric_stable_mode, 'axis',
+            axis)
+        if not return_softmax:
+            return loss
+        else:
+            return loss, softmax
+
+    _print_warning_in_static_mode("softmax_with_cross_entropy")
+    return softmax_with_cross_entropy(logits, label, soft_label, ignore_index,
+                                      numeric_stable_mode, return_softmax, axis)
 
 
 def binary_cross_entropy(input, label, weight=None, reduction='mean',

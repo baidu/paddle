@@ -408,7 +408,8 @@ void BasicEngine::Execute() {
             VLOG(10) << "create temporary var of " << var->Name()
                      << " for sum gradient within this graph!";
           } else if (!inplace_grad_name_map.empty() &&
-                     inplace_grad_name_map.count(pair.first)) {
+                     inplace_grad_name_map.count(pair.first) &&
+                     bwd_ins.count(inplace_grad_name_map.at(pair.first))) {
             // When calculate Inplace grad op, create a new output var.
             // If a tmp var has been created, there is no need to create it
             // again.

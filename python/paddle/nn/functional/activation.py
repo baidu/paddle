@@ -32,14 +32,17 @@ __all__ = [
     'hardshrink',
     'hardtanh',
     'hardsigmoid',
+    'hardsigmoid_',
     'hardswish',
     'leaky_relu',
+    'leaky_relu_',
     'log_sigmoid',
     'maxout',
     'prelu',
     'relu',
     'relu_',
     'relu6',
+    'relu6_',
     'selu',
     'softmax',
     'softmax_',
@@ -327,6 +330,18 @@ def hardsigmoid(x, slope=0.1666667, offset=0.5, name=None):
     return out
 
 
+def hardsigmoid_(x, slope=0.1666667, offset=0.5, name=None):
+    r"""
+    Inplace version of ``hardsigmoid`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_hardsigmoid`.
+    """
+    if in_dygraph_mode():
+        return core.ops.hard_sigmoid_(x, 'slope', slope, 'offset', offset)
+
+    _print_warning_in_static_mode("hardsigmoid")
+    return hardsigmoid(x, slope, offset, name)
+
+
 def hardswish(x, name=None):
     r"""
     hardswish activation
@@ -422,6 +437,18 @@ def leaky_relu(x, negative_slope=0.01, name=None):
         outputs={'Out': out},
         attrs={'alpha': negative_slope})
     return out
+
+
+def leaky_relu_(x, negative_slope=0.01, name=None):
+    r"""
+    Inplace version of ``leaky_relu`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_leaky_relu`.
+    """
+    if in_dygraph_mode():
+        return core.ops.leaky_relu_(x, 'alpha', negative_slope)
+
+    _print_warning_in_static_mode("leaky_relu")
+    return leaky_relu(x, negative_slope, name)
 
 
 def prelu(x, weight, name=None):
@@ -698,6 +725,19 @@ def relu6(x, name=None):
         outputs={'Out': out},
         attrs={'threshold': threshold})
     return out
+
+
+def relu6_(x, name=None):
+    """
+    Inplace version of ``relu6`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_relu6`.
+    """
+    if in_dygraph_mode():
+        threshold = 6.0
+        return core.ops.relu6_(x, 'threshold', threshold)
+
+    _print_warning_in_static_mode("relu6")
+    return relu6(x, name)
 
 
 def selu(x,
