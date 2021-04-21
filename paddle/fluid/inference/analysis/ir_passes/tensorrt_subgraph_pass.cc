@@ -96,7 +96,11 @@ std::string GenerateEngineKey(const std::set<std::string> &engine_inputs,
     engine_hash_key += name;
   }
   engine_hash_key += predictor_id;
+  std::cout << "engine_hash_key:\n";
+  std::cout << engine_hash_key << "\n";
   auto engine_key = std::to_string(std::hash<std::string>()(engine_hash_key));
+  std::cout << "engine_key:\n";
+  std::cout << engine_key << "\n";
   return engine_key;
 }
 

@@ -242,21 +242,21 @@ static std::string GetTrtEngineSerializedData(
   std::string trt_serialized_path =
       GetTrtEngineSerializedPath(model_opt_cache_dir, engine_key);
   if (FileExists(trt_serialized_path)) {
-    VLOG(3) << "Trt serialized file: " << trt_serialized_path
-            << "is found here";
-    std::ifstream infile(trt_serialized_path, std::ios::in);
+    std::cout << "Found TRT serialized file: " << trt_serialized_path << "\n";
+    std::ifstream infile(trt_serialized_path, std::ios::binary);
     std::stringstream buffer;
     buffer << infile.rdbuf();
     std::string trt_engine_serialized_data(buffer.str());
     return trt_engine_serialized_data;
   }
+  std::cout << "TRT serialized file not found.\n";
   return "";
 }
 
 static void SaveTrtEngineSerializedDataToFile(
     const std::string &trt_serialized_path,
     const std::string &engine_serialized_data) {
-  std::ofstream outfile(trt_serialized_path);
+  std::ofstream outfile(trt_serialized_path, std::ios::binary);
   outfile << engine_serialized_data;
   outfile.close();
 }
