@@ -18,4 +18,5 @@ namespace ops = paddle::operators;
 REGISTER_OP_CUDA_KERNEL(assign_value, ops::AssignValueKernel<bool>,
                         ops::AssignValueKernel<int>,
                         ops::AssignValueKernel<float>,
+                        ops::AssignValueKernel<double>,
                         ops::AssignValueKernel<int64_t>);

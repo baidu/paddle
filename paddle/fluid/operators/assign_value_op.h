@@ -48,7 +48,25 @@ typename std::enable_if<std::is_same<T, bool>::value>::type CopyVecotorToTensor(
 }
 
 template <typename T>
-typename std::enable_if<!std::is_same<T, bool>::value>::type
+typename std::enable_if<std::is_same<T, double>::value>::type
+CopyVecotorToTensor(const char* value_name, framework::Tensor* out,
+                    const framework::ExecutionContext& ctx) {
+  // If attribute value dtype is vector<double>, it will be converted to
+  // vector<float>.
+  auto values = ctx.Attr<std::vector<float>>(value_name);
+
+  double* array_ptr = new T[values.size()];
+  for (unsigned int i = 0; i < values.size(); i++) {
+    array_ptr[i] = static_cast<T>(values[i]);
+  }
+  framework::TensorFromArray(array_ptr, values.size(), ctx.device_context(),
+                             out);
+  delete[] array_ptr;
+}
+
+template <typename T>
+typename std::enable_if<!std::is_same<T, bool>::value &&
+                        !std::is_same<T, double>::value>::type
 CopyVecotorToTensor(const char* value_name, framework::Tensor* out,
                     const framework::ExecutionContext& ctx) {
   auto values = ctx.Attr<std::vector<T>>(value_name);
@@ -72,6 +90,9 @@ class AssignValueKernel : public framework::OpKernel<T> {
         break;
       case framework::proto::VarType::FP32:
         value_name = "fp32_values";
+        break;
+      case framework::proto::VarType::FP64:
+        value_name = "fp64_values";
         break;
       case framework::proto::VarType::INT64:
         value_name = "int64_values";

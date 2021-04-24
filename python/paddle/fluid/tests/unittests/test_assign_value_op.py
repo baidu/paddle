@@ -61,6 +61,12 @@ class TestAssignValueOp4(TestAssignValueOp):
         self.attrs["bool_values"] = [bool(v) for v in self.value.flat]
 
 
+class TestAssignValueOp5(TestAssignValueOp):
+    def init_data(self):
+        self.value = numpy.random.random(size=(2, 5)).astype(numpy.float64)
+        self.attrs["fp64_values"] = [float(v) for v in self.value.flat]
+
+
 class TestAssignApi(unittest.TestCase):
     def setUp(self):
         self.init_dtype()
@@ -80,9 +86,12 @@ class TestAssignApi(unittest.TestCase):
 
         exe = fluid.Executor(self.place)
         [fetched_x] = exe.run(main_program, feed={}, fetch_list=[x])
-        self.assertTrue(
-            numpy.array_equal(fetched_x, self.value),
-            "fetch_x=%s val=%s" % (fetched_x, self.value))
+        if self.dtype == 'float64':
+            numpy.testing.assert_allclose(fetched_x, self.value)
+        else:
+            self.assertTrue(
+                numpy.array_equal(fetched_x, self.value),
+                "fetch_x=%s val=%s" % (fetched_x, self.value))
         self.assertEqual(fetched_x.dtype, self.value.dtype)
 
 
@@ -106,6 +115,11 @@ class TestAssignApi4(TestAssignApi):
 
     def init_dtype(self):
         self.dtype = "bool"
+
+
+class TestAssignApi5(TestAssignApi):
+    def init_dtype(self):
+        self.dtype = "float64"
 
 
 if __name__ == '__main__':
