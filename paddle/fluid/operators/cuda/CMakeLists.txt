@@ -1,0 +1,8 @@
+if(WITH_GPU OR WITH_ROCM)
+  file(GLOB OP_CUDA_SOURCES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*_op.cu")
+  if(WITH_GPU)
+    nv_library(op_cuda_function SRCS ${OP_CUDA_SOURCES} DEPS eigen3)
+  elseif(WITH_ROCM)
+    hip_library(op_cuda_function SRCS ${OP_CUDA_SOURCES} DEPS eigen3)
+  endif()
+endif()

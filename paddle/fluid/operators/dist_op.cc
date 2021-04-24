@@ -19,11 +19,97 @@
 namespace paddle {
 namespace operators {
 
+template <typename T, int Rank>
+struct DistFunctor<Eigen::DefaultDevice, T, Rank> {
+  using Array = Eigen::DSizes<Eigen::DenseIndex, Rank>;
+  using InType = Eigen::TensorMap<
+      Eigen::Tensor<const T, Rank, Eigen::RowMajor, Eigen::DenseIndex>>;
+  using OutType =
+      Eigen::TensorMap<Eigen::Tensor<T, 1, Eigen::RowMajor, Eigen::DenseIndex>>;
+  static void Eval(const Eigen::DefaultDevice& dev, OutType out,
+                   const InType& x, const InType& y, const Array& x_bcasts,
+                   const Array& y_bcasts, float p) {
+    // p=0 means number of non-zero elements of (x-y)
+    // p=inf means the maximum of |x-y|
+    // p=-inf means the minimum of |x-y|
+    // otherwise, Lp-norm = pow(sum(pow(|x-y|, p)), 1/p)
+    if (p == 0) {
+      out.device(dev) = (x.broadcast(x_bcasts) != y.broadcast(y_bcasts))
+                            .template cast<T>()
+                            .sum();
+    } else if (p == INFINITY) {
+      out.device(dev) =
+          (x.broadcast(x_bcasts) - y.broadcast(y_bcasts)).abs().maximum();
+    } else if (p == -INFINITY) {
+      out.device(dev) =
+          (x.broadcast(x_bcasts) - y.broadcast(y_bcasts)).abs().minimum();
+    } else {
+      out.device(dev) = (x.broadcast(x_bcasts) - y.broadcast(y_bcasts))
+                            .abs()
+                            .pow(p)
+                            .sum()
+                            .pow(1.0 / p);
+    }
+  }
+};
+
+template <typename T, int Rank>
+struct DistGradFunctor<Eigen::DefaultDevice, T, Rank> {
+  using Array = Eigen::DSizes<Eigen::DenseIndex, Rank>;
+  using Array2 = Eigen::DSizes<Eigen::DenseIndex, Rank * 2>;
+  using InType = Eigen::TensorMap<
+      Eigen::Tensor<const T, Rank, Eigen::RowMajor, Eigen::DenseIndex>>;
+  using OutType = Eigen::TensorMap<
+      Eigen::Tensor<T, Rank, Eigen::RowMajor, Eigen::DenseIndex>>;
+
+  static void EvalX(const Eigen::DefaultDevice& dev, OutType out,
+                    const OutType& in, const Array& reduce_dims,
+                    const Array2& reshape_dims) {
+    out.device(dev) =
+        in.reshape(reshape_dims).sum(reduce_dims).reshape(out.dimensions());
+  }
+
+  static void EvalY(const Eigen::DefaultDevice& dev, OutType out,
+                    const OutType& in, const Array& reduce_dims,
+                    const Array2& reshape_dims) {
+    out.device(dev) =
+        -in.reshape(reshape_dims).sum(reduce_dims).reshape(out.dimensions());
+  }
+
+  static void EvalZ(const Eigen::DefaultDevice& dev, OutType grad,
+                    const InType& out_grad, const InType& x, const InType& y,
+                    const InType& out, const Array& x_bcasts,
+                    const Array& y_bcasts, const Array& out_bcasts, float p) {
+    auto x_minux_y = x.broadcast(x_bcasts) - y.broadcast(y_bcasts);
+    auto x_minux_y_abs = x_minux_y.abs();
+    auto sign = (x_minux_y > static_cast<T>(0)).template cast<T>() *
+                    static_cast<T>(1.0) +
+                (x_minux_y < static_cast<T>(0)).template cast<T>() *
+                    static_cast<T>(-1.0);
+
+    // 1: Lp-norm(z), z = x-y, compute dz
+    if (p == 0) {
+      grad.setZero();
+    } else if (p == INFINITY || p == -INFINITY) {
+      // p=inf or -inf, Lp-norm = |z_i|, the j-th element of dz tends to 0 if
+      // j!=i, or equals to sign(z_i) * dout if j=i.
+      grad.device(dev) =
+          (x_minux_y_abs == out.broadcast(out_bcasts)).template cast<T>() *
+          sign.eval() * out_grad.broadcast(out_bcasts);
+    } else {
+      // dz = pow(abs(x-y)/out, p-1) * sign(x-y) * dout
+      grad.device(dev) =
+          (x_minux_y_abs / out.broadcast(out_bcasts)).pow(p - 1) * sign.eval() *
+          out_grad.broadcast(out_bcasts);
+    }
+  }
+};
+
 class DistOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
-  void InferShape(framework::InferShapeContext *ctx) const override {
+  void InferShape(framework::InferShapeContext* ctx) const override {
     OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "X", "Dist");
     OP_INOUT_CHECK(ctx->HasInput("Y"), "Input", "Y", "Dist");
     OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "Dist");
@@ -72,7 +158,7 @@ class DistOpGrad : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
-  void InferShape(framework::InferShapeContext *ctx) const override {
+  void InferShape(framework::InferShapeContext* ctx) const override {
     auto x_dims = ctx->GetInputDim("X");
     auto y_dims = ctx->GetInputDim("Y");
     if (ctx->HasOutput(framework::GradVarName("X"))) {
@@ -117,3 +203,11 @@ REGISTER_OP_CPU_KERNEL(
 REGISTER_OP_CPU_KERNEL(
     dist_grad, ops::DistGradKernel<paddle::platform::CPUDeviceContext, float>,
     ops::DistGradKernel<paddle::platform::CPUDeviceContext, double>)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+REGISTER_OP_CUDA_KERNEL(
+    dist, ops::DistKernel<paddle::platform::CUDADeviceContext, float>,
+    ops::DistKernel<paddle::platform::CUDADeviceContext, double>);
+REGISTER_OP_CUDA_KERNEL(
+    dist_grad, ops::DistGradKernel<paddle::platform::CUDADeviceContext, float>,
+    ops::DistGradKernel<paddle::platform::CUDADeviceContext, double>);
+#endif
