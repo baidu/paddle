@@ -288,7 +288,9 @@ from .device import XPUPlace
 from .fluid.dygraph.base import enable_dygraph as disable_static  #DEFINE_ALIAS
 from .fluid.dygraph.base import disable_dygraph as enable_static  #DEFINE_ALIAS
 from .fluid.framework import in_dygraph_mode as in_dynamic_mode  #DEFINE_ALIAS
-from .fluid.layers import crop_tensor as crop  #DEFINE_ALIAS
+from .fluid.framework import get_flags as get_flags  #DEFINE_ALIAS
+from .fluid.framework import set_flags as set_flags  #DEFINE_ALIAS
+from .fluid.layers import crop_tensor as crop  #DEFINE_ALIASa
 
 from . import jit
 from . import static
