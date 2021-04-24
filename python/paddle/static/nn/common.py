@@ -73,23 +73,10 @@ def fc(x,
         out.data = [[0.83234344], [0.34936576]]
         out.shape = (1, 2, 1)
 
-        # Case 2, input is a list of tensor:
-        x0.data = [[[0.1, 0.2],
-                    [0.3, 0.4]]]
-        x0.shape = (1, 2, 2) # 1 is batch_size
-
-        x1.data = [[[0.1, 0.2, 0.3]]]
-        x1.shape = (1, 1, 3)
-
-        out = paddle.static.nn.fc(x=[x0, x1], size=2)
-
-        # Get the output:
-        out.data = [[0.18669507, 0.1893476]]
-        out.shape = (1, 2)
-
     Args:
-        x (Tensor|list of Tensor): A tensor or a list of tensor. The number of dimensions
-            of each tensor is at least 2. The data type should be float16, float32 or float64.
+        x (Tensor): A tensor. X should not be a list of tensor otherwise the parameter would
+            not be correct. The number of dimensions of each tensor is at least 2. 
+            The data type should be float16, float32 or float64.
         size (int): The number of output units in this layer, which also means the feature
             size of output tensor.
         num_flatten_dims (int, optional): The fc layer can accept an input tensor with more than
@@ -131,10 +118,11 @@ def fc(x,
           import paddle
           paddle.enable_static()
 
-          # When input is a single tensor
+          # input should be a single tensor
           x = paddle.static.data(name="x", shape=[1, 2, 2], dtype="float32")
           # x: [[[0.1 0.2]
           #      [0.3 0.4]]]
+
           out = paddle.static.nn.fc(
               x=x,
               size=1,
@@ -143,20 +131,11 @@ def fc(x,
               bias_attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Constant(value=1.0)))
           # out: [[[1.15]
           #        [1.35]]]
-
-          # When input is multiple tensors
-          x0 = paddle.static.data(name="x0", shape=[1, 2, 2], dtype="float32")
-          # x0: [[[0.1 0.2]
-          #       [0.3 0.4]]]
-          x1 = paddle.static.data(name="x1", shape=[1, 1, 3], dtype="float32")
-          # x1: [[[0.1 0.2 0.3]]]
-          out = paddle.static.nn.fc(
-              x=[x0, x1],
-              size=2,
-              weight_attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Constant(value=0.5)),
-              bias_attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Constant(value=1.0)))
-          # out: [[1.8 1.8]]
     """
+    if isinstance(x, list):
+        raise TypeError(
+            "the type of 'x' for fc API should be tensor, but received type of x: {}".
+            format(type(x)))
     return paddle.fluid.layers.fc(input=x,
                                   size=size,
                                   num_flatten_dims=num_flatten_dims,

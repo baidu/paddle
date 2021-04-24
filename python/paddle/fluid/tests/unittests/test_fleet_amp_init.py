@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
+
+import numpy as np
+
 import paddle
 import paddle.distributed.fleet.base.role_maker as role_maker
 import paddle.distributed.fleet as fleet
-import paddle.fluid as fluid
-import unittest
 import paddle.nn.functional as F
-import numpy as np
 
 paddle.enable_static()
 
@@ -34,7 +35,7 @@ def gen_data():
 def mlp(input_x, input_y, hid_dim=128, label_dim=2):
     fc_1 = paddle.static.nn.fc(x=input_x, size=hid_dim, activation='tanh')
     fc_2 = paddle.static.nn.fc(x=fc_1, size=hid_dim, activation='tanh')
-    prediction = paddle.static.nn.fc(x=[fc_2],
+    prediction = paddle.static.nn.fc(x=fc_2,
                                      size=label_dim,
                                      activation='softmax')
     cost = F.cross_entropy(input=prediction, label=input_y)
@@ -44,7 +45,7 @@ def mlp(input_x, input_y, hid_dim=128, label_dim=2):
 
 class TestFleetAMPInit(unittest.TestCase):
     def test_fleet_amp_init(self):
-        if not fluid.core.is_compiled_with_cuda():
+        if not paddle.is_compiled_with_cuda():
             return
 
         main_program = paddle.static.Program()
@@ -63,7 +64,7 @@ class TestFleetAMPInit(unittest.TestCase):
             optimizer = paddle.optimizer.Momentum(
                 learning_rate=0.001,
                 momentum=0.9,
-                weight_decay=fluid.regularizer.L2Decay(1e-4),
+                weight_decay=paddle.regularizer.L2Decay(1e-4),
                 multi_precision=True)
 
             optimizer = paddle.static.amp.decorate(optimizer)
@@ -85,7 +86,7 @@ class TestFleetAMPInit(unittest.TestCase):
                                fetch_list=[cost.name])
 
     def test_fleet_amp_meta_optimizer_init(self):
-        if not fluid.core.is_compiled_with_cuda():
+        if not paddle.is_compiled_with_cuda():
             return
 
         main_program = paddle.static.Program()
@@ -104,7 +105,7 @@ class TestFleetAMPInit(unittest.TestCase):
             optimizer = paddle.optimizer.Momentum(
                 learning_rate=0.001,
                 momentum=0.9,
-                weight_decay=fluid.regularizer.L2Decay(1e-4),
+                weight_decay=paddle.regularizer.L2Decay(1e-4),
                 multi_precision=True)
 
             strategy = paddle.distributed.fleet.DistributedStrategy()

@@ -13,11 +13,16 @@
 # limitations under the License.
 
 import unittest
-import paddle
+
 import numpy as np
+
+import paddle
 from op_test import OpTest
 import paddle.fluid as fluid
+from paddle.fluid.param_attr import ParamAttr
 from paddle.fluid import Program, program_guard, core
+
+paddle.enable_static()
 
 SEED = 2020
 
@@ -143,19 +148,16 @@ class TestFcOp_NumFlattenDims_NegOne(unittest.TestCase):
 
             with program_guard(main_program, startup_program):
                 input = np.random.random([2, 2, 25]).astype("float32")
-                x = fluid.layers.data(
-                    name="x",
-                    shape=[2, 2, 25],
-                    append_batch_size=False,
-                    dtype="float32")
+                x = paddle.static.data(
+                    name="x", shape=[2, 2, 25], dtype="float32")
 
                 out = paddle.static.nn.fc(x=x,
                                           size=1,
                                           num_flatten_dims=num_flatten_dims)
 
-            place = fluid.CPUPlace() if not core.is_compiled_with_cuda(
-            ) else fluid.CUDAPlace(0)
-            exe = fluid.Executor(place=place)
+            place = paddle.CPUPlace() if not core.is_compiled_with_cuda(
+            ) else paddle.CUDAPlace(0)
+            exe = paddle.static.Executor(place=place)
             exe.run(startup_program)
             out = exe.run(main_program, feed={"x": input}, fetch_list=[out])
 
@@ -183,10 +185,23 @@ class TestFCOpError(unittest.TestCase):
 
             def test_type():
                 # dtype must be float32 or float64
-                x2 = fluid.layers.data(name='x2', shape=[4], dtype='int32')
+                x2 = paddle.static.data(name='x2', shape=[4], dtype='int32')
                 fluid.layers.fc(input=x2, size=1)
 
             self.assertRaises(TypeError, test_type)
+
+            def test_static_fc_type():
+                # dtype must be float32 or float64
+                data_1 = paddle.static.data(
+                    name="x", shape=[8, 8], dtype="float32")
+                data_2 = paddle.static.data(
+                    name="x", shape=[8, 8], dtype="float32")
+
+                x = [data_1, data_2]
+
+                paddle.static.nn.fc(input=x, size=1)
+
+            self.assertRaises(TypeError, test_static_fc_type)
 
             # The input dtype of fc can be float16 in GPU, test for warning
             x3 = fluid.layers.data(name='x3', shape=[4], dtype='float16')
