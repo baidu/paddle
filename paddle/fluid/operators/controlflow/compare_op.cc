@@ -23,29 +23,6 @@ limitations under the License. */
 namespace paddle {
 namespace operators {
 
-template <typename Functor>
-class CompareOpKernel<platform::CPUDeviceContext, Functor>
-    : public framework::OpKernel<typename Functor::ELEM_TYPE> {
- public:
-  void Compute(const framework::ExecutionContext& context) const override {
-    using T = typename Functor::ELEM_TYPE;
-    using Tensor = framework::Tensor;
-
-    auto* x = context.Input<Tensor>("X");
-    auto* y = context.Input<Tensor>("Y");
-    auto* z = context.Output<Tensor>("Out");
-    int axis = context.Attr<int>("axis");
-
-    if (x->numel() == 1 && y->numel() == 1) {
-      bool* z_data = z->mutable_data<bool>(context.GetPlace());
-      z_data[0] = Functor()(x->data<T>()[0], y->data<T>()[0]);
-    } else {
-      ElementwiseComputeEx<Functor, platform::CPUDeviceContext, T, bool>(
-          context, x, y, axis, Functor(), z);
-    }
-  }
-};
-
 template <typename OpComment>
 class CompareOpProtoMaker : public framework::OpProtoAndCheckerMaker {
  public:
@@ -153,16 +130,22 @@ class CompareOp : public framework::OperatorWithKernel {
   REGISTER_COMPARE_OP_VERSION(op_type);
 
 REGISTER_COMPARE_OP(less_than, "Out = X < Y");
-REGISTER_COMPARE_KERNEL(less_than, CPU, paddle::operators::LessThanFunctor);
+REGISTER_COMPARE_KERNEL(less_than, CPU, paddle::operators::LessThanFunctor,
+                        paddle::operators::GreaterEqualFunctor);
 REGISTER_COMPARE_OP(less_equal, "Out = X <= Y");
-REGISTER_COMPARE_KERNEL(less_equal, CPU, paddle::operators::LessEqualFunctor);
+REGISTER_COMPARE_KERNEL(less_equal, CPU, paddle::operators::LessEqualFunctor,
+                        paddle::operators::GreaterThanFunctor);
 REGISTER_COMPARE_OP(greater_than, "Out = X > Y");
 REGISTER_COMPARE_KERNEL(greater_than, CPU,
-                        paddle::operators::GreaterThanFunctor);
+                        paddle::operators::GreaterThanFunctor,
+                        paddle::operators::LessEqualFunctor);
 REGISTER_COMPARE_OP(greater_equal, "Out = X >= Y");
 REGISTER_COMPARE_KERNEL(greater_equal, CPU,
-                        paddle::operators::GreaterEqualFunctor);
+                        paddle::operators::GreaterEqualFunctor,
+                        paddle::operators::LessThanFunctor);
 REGISTER_COMPARE_OP(equal, "Out = X == Y");
-REGISTER_COMPARE_KERNEL(equal, CPU, paddle::operators::EqualFunctor);
+REGISTER_COMPARE_KERNEL(equal, CPU, paddle::operators::EqualFunctor,
+                        paddle::operators::EqualFunctor);
 REGISTER_COMPARE_OP(not_equal, "Out = X != Y");
-REGISTER_COMPARE_KERNEL(not_equal, CPU, paddle::operators::NotEqualFunctor);
+REGISTER_COMPARE_KERNEL(not_equal, CPU, paddle::operators::NotEqualFunctor,
+                        paddle::operators::NotEqualFunctor);
