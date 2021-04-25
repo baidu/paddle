@@ -11,7 +11,7 @@ ARG WITH_AVX
 ENV WITH_GPU=${WITH_GPU:-ON}
 ENV WITH_AVX=${WITH_AVX:-ON}
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LD_LIBRARY_PATH=/usr/local/cuda-11.0/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
 
 ENV HOME /root
 # Add bash enhancements
@@ -36,27 +36,49 @@ RUN ln -s /usr/local/gcc-8.2/bin/gcc /usr/bin/gcc
 RUN ln -s /usr/local/gcc-8.2/bin/g++ /usr/bin/g++ 
 ENV PATH=/usr/local/gcc-8.2/bin:$PATH 
 
+# install cmake
+WORKDIR /home
+RUN wget -q https://cmake.org/files/v3.16/cmake-3.16.0-Linux-x86_64.tar.gz && tar -zxvf cmake-3.16.0-Linux-x86_64.tar.gz && rm cmake-3.16.0-Linux-x86_64.tar.gz
+ENV PATH=/home/cmake-3.16.0-Linux-x86_64/bin:$PATH
+
 RUN apt-get update && \
   apt-get install -y python2.7 python2.7-dev \
   python3.5 python3.5-dev \
   python3.6 python3.6-dev \
   python3.7 python3.7-dev \
-  python3.8 python3.8-dev python3.8-distutils && \
-  curl https://bootstrap.pypa.io/2.7/get-pip.py -o - | python2.7 && easy_install pip && \
-  curl https://bootstrap.pypa.io/3.5/get-pip.py -o - | python3.5 && easy_install pip && \
-  curl https://bootstrap.pypa.io/ez_setup.py -o - | python3.6 && easy_install pip && \
-  curl https://bootstrap.pypa.io/ez_setup.py -o - | python3.7 && easy_install pip && \
-  curl https://bootstrap.pypa.io/ez_setup.py -o - | python3.8 && easy_install pip && \
+  python3.8 python3.8-dev python3.8-distutils \
+  python3.9 python3.9-dev python3.9-distutils && \
   rm /usr/bin/python && ln -s /usr/bin/python2.7 /usr/bin/python && \
-  rm /usr/bin/python3 && ln -s /usr/bin/python3.5 /usr/bin/python3 && \
-  rm /usr/local/bin/pip && ln -s /usr/local/bin/pip2.7 /usr/local/bin/pip && \
-  rm /usr/local/bin/pip3 && ln -s /usr/local/bin/pip3.5 /usr/local/bin/pip3
+  rm /usr/bin/python3 && ln -s /usr/bin/python3.5 /usr/bin/python3
 
 
-# install cmake
 WORKDIR /home
-RUN wget -q https://cmake.org/files/v3.16/cmake-3.16.0-Linux-x86_64.tar.gz && tar -zxvf cmake-3.16.0-Linux-x86_64.tar.gz && rm cmake-3.16.0-Linux-x86_64.tar.gz
-ENV PATH=/home/cmake-3.16.0-Linux-x86_64/bin:$PATH
+RUN wget https://files.pythonhosted.org/packages/a7/e0/30642b9c2df516506d40b563b0cbd080c49c6b3f11a70b4c7a670f13a78b/setuptools-50.3.2.zip && apt-get -y install unzip && unzip setuptools-50.3.2.zip
+WORKDIR /home/setuptools-50.3.2
+RUN python3.9 setup.py build && python3.9 setup.py install && \
+  python3.8 setup.py build && python3.8 setup.py install && \
+  python3.7 setup.py build && python3.7 setup.py install && \
+  python3.6 setup.py build && python3.6 setup.py install && \
+  python3 setup.py build && python3 setup.py install
+WORKDIR /home
+RUN wget https://files.pythonhosted.org/packages/b0/d1/8acb42f391cba52e35b131e442e80deffbb8d0676b93261d761b1f0ef8fb/setuptools-40.6.2.zip && apt-get -y install unzip && unzip setuptools-40.6.2.zip
+WORKDIR /home/setuptools-40.6.2
+RUN python setup.py build && python setup.py install
+WORKDIR /home
+RUN wget https://files.pythonhosted.org/packages/28/af/2c76c8aa46ccdf7578b83d97a11a2d1858794d4be4a1610ade0d30182e8b/pip-20.0.1.tar.gz && tar -zxvf pip-20.0.1.tar.gz
+WORKDIR pip-20.0.1
+RUN python setup.py install && \
+  python3.9 setup.py install && \
+  python3.8 setup.py install && \
+  python3.7 setup.py install && \
+  python3.6 setup.py install && \
+  python3 setup.py install 
+
+WORKDIR /home
+RUN rm setuptools-40.6.2.zip setuptools-50.3.2.zip pip-20.0.1.tar.gz && \
+    rm -r setuptools-40.6.2 setuptools-50.3.2 pip-20.0.1
+RUN rm /usr/local/bin/pip && ln -s /usr/local/bin/pip2.7 /usr/local/bin/pip && \
+  rm /usr/local/bin/pip3 && ln -s /usr/local/bin/pip3.5 /usr/local/bin/pip3
 
 
 # remove them when apt-get support 2.27 and higher version
@@ -92,6 +114,8 @@ RUN pip3 --no-cache-dir install pre-commit==1.10.4 ipython==5.3.0 && \
     pip3.7 --no-cache-dir install ipykernel==4.6.0 wheel && \
     pip3.8 --no-cache-dir install pre-commit==1.10.4 ipython==5.3.0 && \
     pip3.8 --no-cache-dir install ipykernel==4.6.0 wheel && \
+    pip3.9 --no-cache-dir install pre-commit==1.10.4 ipython==5.3.0 && \
+    pip3.9 --no-cache-dir install ipykernel==4.6.0 wheel && \
     pip --no-cache-dir install pre-commit==1.10.4 ipython==5.3.0 && \
     pip --no-cache-dir install ipykernel==4.6.0 wheel 
 
@@ -100,6 +124,7 @@ RUN pip3 --no-cache-dir install pylint pytest astroid isort && \
     pip3.6 --no-cache-dir install pylint pytest astroid isort && \
     pip3.7 --no-cache-dir install pylint pytest astroid isort && \
     pip3.8 --no-cache-dir install pylint pytest astroid isort && \
+    pip3.9 --no-cache-dir install pylint pytest astroid isort && \
     pip --no-cache-dir install pylint pytest astroid isort
 
 COPY ./python/requirements.txt /root/
@@ -107,6 +132,7 @@ RUN pip3 --no-cache-dir install -r /root/requirements.txt && \
     pip3.6 --no-cache-dir install -r /root/requirements.txt && \
     pip3.7 --no-cache-dir install -r /root/requirements.txt && \
     pip3.8 --no-cache-dir install -r /root/requirements.txt && \
+    pip3.9 --no-cache-dir install -r /root/requirements.txt && \
     pip --no-cache-dir install -r /root/requirements.txt
 
 

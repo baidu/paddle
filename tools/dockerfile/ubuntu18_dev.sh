@@ -124,7 +124,7 @@ function main(){
   make_dockerfile
   install_gcc
   ref_whl
-  install_whl
+  
 }
 
 main $@
