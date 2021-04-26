@@ -106,7 +106,6 @@ class CheckFiniteAndUnscaleNPUKernel : public framework::OpKernel<T> {
       framework::TensorCopy(
           found_inf_tensor, ctx.GetPlace(),
           ctx.template device_context<platform::DeviceContext>(), found_inf);
-      ctx.template device_context<paddle::platform::NPUDeviceContext>().Wait();
     }
   }
 };

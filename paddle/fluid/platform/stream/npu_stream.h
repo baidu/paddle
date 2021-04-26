@@ -41,6 +41,27 @@ class NPUStream final {
     callback_manager_->AddCallback(callback);
   }
 
+  static void* ProcessCallback(void* arg) {
+    while (true) {
+      // timeout value is 100ms
+      (void)aclrtProcessReport(100);
+      if (*(static_cast<bool*>(arg)) == true) {
+        VLOG(4) << "Exit NPU callback function";
+        return reinterpret_cast<void*>(0);
+      }
+    }
+  }
+
+  // bool GetCallbackExecuteFlag() const {
+  //   return is_callback_exec_;
+  // }
+
+  // void SetCallbackExecuteFlag(bool callback_flag) {
+  //   is_callback_exec_ = callback_flag;
+  // }
+
+  // uint64_t GetCallbackThreadId() const { return callback_thread_id_; }
+
   template <typename Callback>
   void RecordEvent(aclrtEvent ev, Callback callback) const {
     callback();
@@ -65,6 +86,7 @@ class NPUStream final {
   Place place_;
   aclrtStream stream_{nullptr};
   std::unique_ptr<StreamCallbackManager<aclrtStream>> callback_manager_;
+  uint64_t callback_thread_id_;
 
   DISABLE_COPY_AND_ASSIGN(NPUStream);
 };

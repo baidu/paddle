@@ -17,6 +17,7 @@ limitations under the License. */
 #include "paddle/fluid/memory/allocation/allocator_strategy.h"
 #include "paddle/fluid/platform/init.h"
 #include "paddle/fluid/platform/npu_info.h"
+#include "paddle/fluid/platform/npu_instance.h"
 
 int main(int argc, char** argv) {
   paddle::memory::allocation::UseAllocatorStrategyGFlag();

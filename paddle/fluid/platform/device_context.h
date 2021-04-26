@@ -178,6 +178,8 @@ class NPUDeviceContext : public DeviceContext {
   /*! \brief  Return npu stream in the device context. */
   aclrtStream stream() const;
 
+  std::shared_ptr<stream::NPUStream> NPUstream() const;
+
   template <typename Callback>
   void AddStreamCallback(Callback&& callback) const {
     return stream_->AddCallback(callback);

@@ -167,8 +167,25 @@ void TensorFromVector(const std::vector<T>& src,
   // Since vector is on cpu, I think this function should be a "sync" operation,
   // so pass nullptr as stream to  memory::Copy().
   else if (platform::is_npu_place(dst_place)) {  // NOLINT
+    auto stream =
+        reinterpret_cast<const platform::NPUDeviceContext&>(ctx).stream();
+    src_place = platform::CPUPlace();
+    Tensor src_tensor(dst->type());
+    src_tensor.Resize({static_cast<int64_t>(src.size())});
+    auto src_tensor_ptr =
+        static_cast<void*>(src_tensor.mutable_data<T>(src_place));
+    // src_place = platform::CPUPlace();
+    memory::Copy(src_place, src_tensor_ptr, src_place, src_ptr, size);
     memory::Copy(BOOST_GET_CONST(platform::NPUPlace, dst_place), dst_ptr,
-                 src_place, src_ptr, size, nullptr);
+                 src_place, src_tensor_ptr, size, stream);
+    auto callback = [src_tensor, src_place]() {
+      VLOG(4) << "Run callback of var at place " << src_place
+              << " in TensorFromVector";
+    };
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(dst_place);
+    auto npu_stream =
+        static_cast<platform::NPUDeviceContext*>(dev_ctx)->NPUstream();
+    npu_stream->AddCallback(callback);
   }
 #endif
 }
@@ -207,8 +224,32 @@ inline void TensorFromVector(const std::vector<bool>& src,
 #endif
 #ifdef PADDLE_WITH_ASCEND_CL
   else if (platform::is_npu_place(dst_place)) {  // NOLINT
+    auto stream =
+        reinterpret_cast<const platform::NPUDeviceContext&>(ctx).stream();
+    src_place = platform::CPUPlace();
+    Tensor src_tensor(dst->type());
+    src_tensor.Resize({static_cast<int64_t>(src.size())});
+    auto src_tensor_ptr =
+        static_cast<void*>(src_tensor.mutable_data<bool>(src_place));
+    memory::Copy(src_place, src_tensor_ptr, src_place, src_ptr, size);
+    // Tensor* src_tensor;
+    // src_tensor->Resize({static_cast<int64_t>(src.size())});
+    // auto src_tensor_ptr =
+    // static_cast<void*>(src_tensor->mutable_data<bool>(src_place));
+    // memory::Copy(src_place, src_tensor_ptr,
+    //              src_place, src_ptr, size);
     memory::Copy(BOOST_GET_CONST(platform::NPUPlace, dst_place), dst_ptr,
-                 src_place, src_ptr, size, nullptr);
+                 src_place, src_tensor_ptr, size, stream);
+    auto callback = [src_tensor, src_place]() {
+      // VLOG(4) << "Run callback of var:" << src_tensor->Name() << " at place "
+      //         << src_place << " in memory::Copy.";
+      VLOG(4) << "Run callback of var at place " << src_place
+              << " in TensorFromVector";
+    };
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(dst_place);
+    auto npu_stream =
+        static_cast<platform::NPUDeviceContext*>(dev_ctx)->NPUstream();
+    npu_stream->AddCallback(callback);
   }
 #endif
   delete[] array;

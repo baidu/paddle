@@ -96,32 +96,27 @@ void FillNpuTensorWithConstant(Tensor *tensor, T val) {
   PADDLE_ENFORCE_EQ(
       platform::is_npu_place(tensor->place()), true,
       platform::errors::InvalidArgument("The tensor should be on NPUPlace."));
-  // do async for better performance
-  if (typeid(float) == typeid(T) || typeid(platform::float16) == typeid(T)) {
-    Tensor tmp(tensor->type());
-    tmp.Resize(tensor->dims());
-    tmp.mutable_data<T>(tensor->place());
-    auto stream = GetCurrentNPUStream(
-        BOOST_GET_CONST(platform::NPUPlace, tensor->place()).device);
-    platform::NPUMemsetAsync(tmp.data<void>(), 0, tmp.numel() * sizeof(T),
-                             stream);
-    auto runner = NpuOpRunner("Power", {tmp}, {*tensor},
-                              {{"power", static_cast<float>(1)},
-                               {"scale", static_cast<float>(0)},
-                               {"shift", static_cast<float>(val)}});
-    runner.Run(stream);
-  } else {
-    T *array = new T[tensor->numel()];
-    for (unsigned int i = 0; i < tensor->numel(); ++i) {
-      array[i] = static_cast<T>(val);
-    }
-    std::vector<T> vec(tensor->numel(), static_cast<T>(val));
-    // do sync copy
-    memory::Copy(BOOST_GET_CONST(platform::NPUPlace, tensor->place()),
-                 tensor->data<void>(), platform::CPUPlace(), array,
-                 tensor->numel() * sizeof(T), nullptr);
-    delete[] array;
+
+  auto stream = GetCurrentNPUStream(
+      BOOST_GET_CONST(platform::NPUPlace, tensor->place()).device);
+  auto src_place = platform::CPUPlace();
+  Tensor src_tensor(tensor->type());
+  src_tensor.Resize(tensor->dims());
+  auto src_tensor_ptr = static_cast<T *>(src_tensor.mutable_data<T>(src_place));
+  for (unsigned int i = 0; i < tensor->numel(); ++i) {
+    src_tensor_ptr[i] = static_cast<T>(val);
   }
+  memory::Copy(BOOST_GET_CONST(platform::NPUPlace, tensor->place()),
+               tensor->data<void>(), src_place, src_tensor_ptr,
+               tensor->numel() * sizeof(T), stream);
+  auto callback = [src_tensor, src_place]() {
+    VLOG(4) << "Run callback of var at place " << src_place
+            << " in FillNpuTensorWithConstant";
+  };
+  auto dev_ctx = platform::DeviceContextPool::Instance().Get(tensor->place());
+  auto npu_stream =
+      static_cast<platform::NPUDeviceContext *>(dev_ctx)->NPUstream();
+  npu_stream->AddCallback(callback);
 }
 
 }  // namespace operators

@@ -292,11 +292,27 @@ void SetTensorFromPyArrayT(
     platform::NPUDeviceGuard guard(
         BOOST_GET_CONST(platform::NPUPlace, tmp_place).device);
     auto dst = self->mutable_data<T>(place);
-    platform::NPUMemcpySync(dst, array.data(), array.nbytes(),
-                            ACL_MEMCPY_HOST_TO_DEVICE);
-    platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
-    auto &ctx = *pool.Get(place);
-    ctx.Wait();
+
+    auto src_place = platform::CPUPlace();
+    framework::Tensor src_tensor;
+    src_tensor.Resize(framework::make_ddim(dims));
+    auto src_tensor_ptr =
+        static_cast<void *>(src_tensor.mutable_data<T>(src_place));
+    // src_place = platform::CPUPlace();
+    std::memcpy(src_tensor_ptr, array.data(), array.nbytes());
+
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+    auto stream = static_cast<platform::NPUDeviceContext *>(dev_ctx)->stream();
+    platform::NPUMemcpyAsync(dst, array.data(), array.nbytes(),
+                             ACL_MEMCPY_HOST_TO_DEVICE, stream);
+
+    auto callback = [src_tensor, src_place]() {
+      VLOG(4) << "Run callback of var at place " << src_place
+              << " in SetTensorFromPyArrayT";
+    };
+    auto npu_stream =
+        static_cast<platform::NPUDeviceContext *>(dev_ctx)->NPUstream();
+    npu_stream->AddCallback(callback);
 #else
     PADDLE_THROW(platform::errors::PermissionDenied(
         "Cannot use NPUPlace in CPU/GPU/XPU version. "

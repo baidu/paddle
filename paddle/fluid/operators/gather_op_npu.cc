@@ -69,10 +69,21 @@ class GatherGradOpNPUKernel : public framework::OpKernel<T> {
     // step2: ZerosLike x in device
     Tensor zeroslike_xout(dx->type());
     zeroslike_xout.Resize(x->dims());
-    auto p = zeroslike_xout.mutable_data<T>(ctx.GetPlace());
+    // auto p = zeroslike_xout.mutable_data<T>(ctx.GetPlace());
+    zeroslike_xout.mutable_data<T>(ctx.GetPlace());
 
-    platform::NPUMemsetAsync(static_cast<void *>(p), 0,
-                             zeroslike_xout.numel() * sizeof(T), stream);
+    // platform::NPUMemsetAsync(static_cast<void *>(p), 0,
+    //                          zeroslike_xout.numel() * sizeof(T), stream);
+    auto &dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    int num = zeroslike_xout.numel();
+    auto dims = zeroslike_xout.dims();
+    std::vector<T> init;
+    for (int64_t i = 0; i < num; ++i) {
+      init.push_back(static_cast<T>(0));
+    }
+    TensorFromVector(init, dev_ctx, &zeroslike_xout);
+    zeroslike_xout.Resize(dims);
 
     // step3: scatter(x_grad)
     auto runner_scatter = NpuOpRunner(

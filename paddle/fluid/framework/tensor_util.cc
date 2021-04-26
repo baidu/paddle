@@ -114,6 +114,14 @@ void TensorCopy(const Tensor& src, const platform::Place& dst_place,
     memory::Copy(BOOST_GET_CONST(platform::NPUPlace, dst_place), dst_ptr,
                  BOOST_GET_CONST(platform::CPUPlace, src_place), src_ptr, size,
                  stream);
+    auto callback = [src, src_place]() {
+      VLOG(4) << "Run callback of var at place " << src_place
+              << " in TensorCopy";
+    };
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(dst_place);
+    auto npu_stream =
+        static_cast<platform::NPUDeviceContext*>(dev_ctx)->NPUstream();
+    npu_stream->AddCallback(callback);
   }
   else if (platform::is_npu_place(src_place) &&  // NOLINT
            platform::is_npu_place(dst_place)) {

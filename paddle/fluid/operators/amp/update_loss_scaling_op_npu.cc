@@ -35,9 +35,10 @@ void Update(const platform::NPUDeviceContext& ctx,
   auto stream = ctx.stream();
   if (found_inf_vec[0]) {
     // good_out_data = 0
-    auto g = good_out_tensor->mutable_data<int>(place);
-    platform::NPUMemsetAsync(static_cast<void*>(g), 0,
-                             good_out_tensor->numel() * sizeof(int), stream);
+    // auto g = good_out_tensor->mutable_data<int>(place);
+    // platform::NPUMemsetAsync(static_cast<void*>(g), 0,
+    //                          good_out_tensor->numel() * sizeof(int), stream);
+    FillNpuTensorWithConstant<int>(good_out_tensor, static_cast<int>(0));
     // bad_out_data = bad_in_data + 1
     Tensor factor_tensor(bad_out_tensor->type());
     factor_tensor.mutable_data<int>({1}, place);
@@ -71,15 +72,18 @@ void Update(const platform::NPUDeviceContext& ctx,
       }
 
       // bad_out_data = 0
-      auto b = bad_out_tensor->mutable_data<int>(place);
-      platform::NPUMemsetAsync(static_cast<void*>(b), 0,
-                               bad_out_tensor->numel() * sizeof(int), stream);
+      // auto b = bad_out_tensor->mutable_data<int>(place);
+      // platform::NPUMemsetAsync(static_cast<void*>(b), 0,
+      //                          bad_out_tensor->numel() * sizeof(int),
+      //                          stream);
+      FillNpuTensorWithConstant<int>(bad_out_tensor, static_cast<int>(0));
     }
   } else {
     // bad_out_data = 0
-    auto b = bad_out_tensor->mutable_data<int>(place);
-    platform::NPUMemsetAsync(static_cast<void*>(b), 0,
-                             bad_out_tensor->numel() * sizeof(int), stream);
+    // auto b = bad_out_tensor->mutable_data<int>(place);
+    // platform::NPUMemsetAsync(static_cast<void*>(b), 0,
+    //                          bad_out_tensor->numel() * sizeof(int), stream);
+    FillNpuTensorWithConstant<int>(bad_out_tensor, static_cast<int>(0));
 
     // good_out_data = good_in_data + 1
     Tensor factor_tensor(good_out_tensor->type());
@@ -113,9 +117,11 @@ void Update(const platform::NPUDeviceContext& ctx,
         runner_p4.Run(stream);
       }
       // good_out_data = 0
-      auto g = good_out_tensor->mutable_data<int>(place);
-      platform::NPUMemsetAsync(static_cast<void*>(g), 0,
-                               good_out_tensor->numel() * sizeof(int), stream);
+      // auto g = good_out_tensor->mutable_data<int>(place);
+      // platform::NPUMemsetAsync(static_cast<void*>(g), 0,
+      //                          good_out_tensor->numel() * sizeof(int),
+      //                          stream);
+      FillNpuTensorWithConstant<int>(good_out_tensor, static_cast<int>(0));
     }
   }
 }
@@ -145,7 +151,7 @@ class LazyZerosNPU {
                   const std::vector<bool> found_inf_vec,
                   const std::vector<const framework::Tensor*>& xs,
                   const std::vector<framework::Tensor*>& outs) const {
-    for (size_t i = 0; i < xs.size(); ++i) {
+    /*for (size_t i = 0; i < xs.size(); ++i) {
       auto* out = outs[i];
       if (found_inf_vec[0]) {
         VLOG(4) << "-- UpdateLossScaling: Find infinite grads. --";
@@ -155,6 +161,39 @@ class LazyZerosNPU {
         auto g = out->mutable_data<T>(place);
         platform::NPUMemsetAsync(static_cast<void*>(g), 0,
                                  out->numel() * sizeof(T), stream);
+      }
+    }*/
+    for (size_t i = 0; i < xs.size(); ++i) {
+      auto* out = outs[i];
+      // int num = out->numel();
+      if (found_inf_vec[0]) {
+        VLOG(1) << "-- UpdateLossScaling: Find infinite grads. --";
+        // auto out_dims = out->dims();
+        // std::vector<T> init;
+        // for (int64_t i = 0; i < num; ++i) {
+        //   init.push_back(static_cast<T>(0));
+        // }
+
+        // TensorFromVector(init, dev_ctx, out);
+        // out->Resize(out_dims);
+
+        // std::vector<int> axes;
+        // for (auto i = 0; i < out_dims.size(); ++i) {
+        //   axes.push_back(out_dims[i]);
+        // }
+
+        // Tensor value(out->type());
+        // auto place = dev_ctx.GetPlace();
+        // auto stream = dev_ctx.stream();
+        // value.mutable_data<T>({1}, place);
+        // FillNpuTensorWithConstant<T>(&value, static_cast<T>(0.0));
+        // auto runner =
+        //     NpuOpRunner("FillD", {value}, {*out}, {{"dims",
+        //     framework::vectorize(out_dims)}});
+
+        auto stream = dev_ctx.stream();
+        auto runner_zeros = NpuOpRunner("ZerosLike", {*out}, {*out});
+        runner_zeros.Run(stream);
       }
     }
   }

@@ -60,14 +60,25 @@ class LookupTableV2GradNPUKernel : public framework::OpKernel<T> {
         ctx.Input<framework::LoDTensor>(framework::GradVarName("Out"));
     auto *table_grad_t =
         ctx.Output<framework::LoDTensor>(framework::GradVarName("W"));
-    auto *p = table_grad_t->mutable_data<T>(ctx.GetPlace());
+    // auto *p = table_grad_t->mutable_data<T>(ctx.GetPlace());
+    table_grad_t->mutable_data<T>(ctx.GetPlace());
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
 
-    platform::NPUMemsetAsync(static_cast<void *>(p), 0,
-                             table_grad_t->numel() * sizeof(T), stream);
+    // platform::NPUMemsetAsync(static_cast<void *>(p), 0,
+    //                          table_grad_t->numel() * sizeof(T), stream);
+    auto &dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    int num = table_grad_t->numel();
+    auto dims = table_grad_t->dims();
+    std::vector<T> init;
+    for (int64_t i = 0; i < num; ++i) {
+      init.push_back(static_cast<T>(0));
+    }
+    TensorFromVector(init, dev_ctx, table_grad_t);
+    table_grad_t->Resize(dims);
 
     // NOTE(zhiqiu): It seems in cann 20.1, the first input and output
     // can be different tensor, but in cann 20.2+, it does inplace operation.

@@ -134,22 +134,6 @@ class NPUDeviceGuard {
   int prev_id_{-1};
 };
 
-class AclInstance {
- public:
-  // NOTE(zhiiu): Commonly, exception in destructor is not recommended, so
-  // no PADDLE_ENFORCE here, call acl API directly.
-  ~AclInstance();
-  AclInstance(const AclInstance &o) = delete;
-  const AclInstance &operator=(const AclInstance &o) = delete;
-  static AclInstance &Instance();
-  void Finalize();
-
- private:
-  // forbid calling default constructor
-  AclInstance();
-  std::vector<int> devices_;
-};
-
 }  // namespace platform
 }  // namespace paddle
 

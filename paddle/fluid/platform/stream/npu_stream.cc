@@ -20,6 +20,8 @@ namespace paddle {
 namespace platform {
 namespace stream {
 
+static bool is_callback_exec_ = false;
+
 bool NPUStream::Init(const Place& place) {
   PADDLE_ENFORCE_EQ(is_npu_place(place), true,
                     platform::errors::InvalidArgument(
@@ -28,6 +30,11 @@ bool NPUStream::Init(const Place& place) {
   NPUDeviceGuard guard(BOOST_GET_CONST(NPUPlace, place_).device);
   PADDLE_ENFORCE_NPU_SUCCESS(aclrtCreateStream(&stream_));
   callback_manager_.reset(new StreamCallbackManager<aclrtStream>(stream_));
+  is_callback_exec_ = false;
+  (void)pthread_create(&callback_thread_id_, nullptr, *ProcessCallback,
+                       &is_callback_exec_);
+  PADDLE_ENFORCE_NPU_SUCCESS(aclrtSubscribeReport(
+      static_cast<uint64_t>(callback_thread_id_), stream_));
   VLOG(3) << "NPUStream Init stream: " << stream_;
   return true;
 }
@@ -36,6 +43,9 @@ void NPUStream::Destroy() {
   NPUDeviceGuard guard(BOOST_GET_CONST(NPUPlace, place_).device);
   Wait();
   WaitCallback();
+  is_callback_exec_ = true;
+  PADDLE_ENFORCE_NPU_SUCCESS(aclrtUnSubscribeReport(
+      static_cast<uint64_t>(callback_thread_id_), stream_));
   if (stream_) {
     PADDLE_ENFORCE_NPU_SUCCESS(aclrtDestroyStream(stream_));
   }
