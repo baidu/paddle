@@ -27,7 +27,7 @@ import paddle.fluid.framework as framework
 import paddle.compat as cpt
 
 from paddle.fluid.transpiler.details.program_utils import delete_ops
-from paddle.fluid.incubate.fleet.parameter_server.ir.public import _get_optimize_ops
+from paddle.fluid.incubate.fleet.parameter_server.ir.public import _get_optimize_ops, _is_opt_role_op
 from paddle.fluid.incubate.fleet.parameter_server.ir.public import _get_lr_ops
 from paddle.fluid.incubate.fleet.parameter_server.ir.public import get_sparse_tablenames
 from paddle.fluid.incubate.fleet.parameter_server.mode import DistributedMode
@@ -453,8 +453,15 @@ def find_heter_ops(program, default_device="cpu"):
     current_default_block_ops = []
     current_heter_device = default_device
     is_heter = False
+
+    optimizer_op = []
     for op in block.ops:
         if _is_heter_op(op, current_heter_device, default_device):
+            # check if op is optimizer
+            if _is_opt_role_op(op):
+                optimizer_op.append(op)
+                continue
+
             # for gpu/xpu-op
             is_heter = True
 
@@ -508,6 +515,27 @@ def find_heter_ops(program, default_device="cpu"):
             "No heterogeneous OP was found in your program , "
             " please using fluid.device_guard() to run OPs on different device.")
 
+    if len(optimizer_op) != 0:
+        # In geo mode
+        block_vars_detail = find_block_joints(
+            origin_porgram, program_block_ops, heter_ops)
+        for idx, op in enumerate(optimizer_op):
+            target_index = -1
+            weight_var = op.input('Param')[0]
+            grad_var = op.input('Grad')[0]
+            print("weight_var: {}, grad_var: {}".format(weight_var, grad_var))
+            for idx, sub_block in enumerate(block_vars_detail):
+                if (weight_var in sub_block['persistables']) and (grad_var in sub_block['persistables']):
+                    target_index = idx
+                    break
+            assert target_index != -1
+            program_block_ops[target_index].append(op)
+            op_device = op.attr("op_device")
+            if op_device == default_device:
+                default_ops[target_index].append(op)
+            else:
+                heter_ops['gpu'][target_index].append(op)
+
     total_heter_ops = 0
     heter_blocks = 0
     for device in heter_ops.keys():
@@ -518,6 +546,12 @@ def find_heter_ops(program, default_device="cpu"):
     print(
         "There are {} OPs in your main_program, and contains {} heter-OPs which is made up of {} heter-blocks.".
         format(len(block.ops), total_heter_ops, heter_blocks))
+
+    for idx, p in enumerate(program_block_ops):
+        print("-------{}------".format(idx))
+        for op in p:
+            print("{} op: {} ".format(idx, op))
+
     return origin_porgram, heter_ops, default_ops, program_block_ops
 
 
@@ -552,7 +586,8 @@ def create_heter_program(program, config, heter_program, heter_ops,
             block_append_op(heter_program, program, heter_block, op)
 
         entrance_vars = block_var_detail[index]["entrance"]
-        add_vars_by_var_list(entrance_vars, program, heter_program, heter_block)
+        add_vars_by_var_list(entrance_vars, program,
+                             heter_program, heter_block)
         exit_vars = block_var_detail[index]["exit"]
         add_vars_by_var_list(exit_vars, program, heter_program, heter_block)
 
@@ -565,23 +600,33 @@ def create_heter_program(program, config, heter_program, heter_ops,
         first_op_index = 0
 
         # add send op
-        send_grad_var_list = send_grad_var_list + add_heter_send_op(
-            program, heter_program, heter_block, block_var_detail[index])
+        if config.is_geo_mode():
+            send_grad_var_list = send_grad_var_list + \
+                add_heter_geo_send_var(
+                    program, heter_program, heter_block, block_var_detail[index])
+        else:
+            send_grad_var_list = send_grad_var_list + add_heter_send_op(
+                program, heter_program, heter_block, block_var_detail[index])
+
+    if config.is_geo_mode():
+        index = heter_program.num_blocks - 1
+        dummy_input = heter_program.block(index).create_var(name="LOCAL_STEP")
+        dummy_output = heter_program.block(index).create_var(
+            name=framework.generate_control_dev_var_name())
+        heter_block.append_op(
+            type="send",
+            inputs={"X": dummy_input},
+            outputs={"Out": dummy_output},
+            attrs={
+                "send_varnames": ["LOCAL_STEP"],
+                "table_id": 0,
+                RPC_OP_ROLE_ATTR_NAME: RPC_OP_ROLE_ATTR_VALUE
+            })
 
     # add step conter
     send_input_vars = []
     dummy_output = []
     pserver_endpoints = config.get_ps_endpoints()
-    # optimizer_block[-1].append_op(
-    #     type="send",
-    #     inputs={"X": send_input_vars},
-    #     outputs={"Out": dummy_output},
-    #     attrs={
-    #         "send_varnames": [STEP_COUNTER],
-    #         "merge_add": True,
-    #         "use_send_handler": False,
-    #         "endpoints": pserver_endpoints
-    #     })
 
     # add info in listen&serv
     attrs = {
@@ -626,6 +671,8 @@ def create_trainer_program(program, config, heter_ops, block_var_detail):
     #     d) remove send op which related var@grad is not in trainer program
     # 2. check every op's device
     static_var = []
+    for idx, val in enumerate(block_var_detail):
+        print("---idx: {}, detail: {}".format(idx, val))
     for device in heter_ops.keys():
         for heter_block_index in sorted(heter_ops[device]):
             static_var += replace_ops_by_communicate_op(
@@ -682,6 +729,7 @@ def remove_trainer_send_op(program, config, heter_block_index,
     persistables = block_var_detaile[heter_block_index]["persistables"]
     need_remove_send_op = []
     need_remove_grad_var = []
+
     for op in find_send_op(program):
         input_list, _ = find_op_input_output(program,
                                              program.global_block(), op)
@@ -690,10 +738,27 @@ def remove_trainer_send_op(program, config, heter_block_index,
             if origin_var_name in persistables:
                 need_remove_send_op.append(op)
                 need_remove_grad_var.append(var_name)
+
     need_remove_send_op = list(set(need_remove_send_op))
     delete_ops(program.global_block(), need_remove_send_op)
     for grad_var_name in need_remove_grad_var:
         config.remove_var_pair_by_grad(grad_var_name)
+        input_list, _ = find_op_input_output(program,
+                                             program.global_block(), op)
+
+
+def add_heter_geo_send_var(program, heter_program, block, block_var_detail):
+    send_grad_var_list = []
+    for persistable_var in block_var_detail["persistables"]:
+        if "@GRAD" not in persistable_var:
+            continue
+        if "GRAD" != persistable_var.split("@")[-1]:
+            continue
+        origin_var_name = persistable_var.split("@")[0]
+        if origin_var_name not in persistable_var:
+            continue
+        send_grad_var_list.append(persistable_var)
+    return send_grad_var_list
 
 
 def add_heter_send_op(program, heter_program, block, block_var_detail):
@@ -707,16 +772,10 @@ def add_heter_send_op(program, heter_program, block, block_var_detail):
                 send_op_dict[var] = op
         return send_op_dict
 
-    # send_Op = { inputs{'X':[]},
-    #             outputs{'Out':dummy_output},
-    #             attrs{'send_varnames'"[]",
-    #                   'is_sparse':int,
-    #                   'table_id':int } }
     send_grad_var_list = []
     send_op_dict = _get_send_op_dict()
     table_dict = {}
     for persistable_var in block_var_detail["persistables"]:
-        # check var_name ==  var@GRAD
         if "@GRAD" not in persistable_var:
             continue
         if "GRAD" != persistable_var.split("@")[-1]:
@@ -1037,6 +1096,28 @@ def insert_recv_slice_op(program, block, index, var_name, var_shape, dtype,
 
 
 def deleter_trainer_useless_var(config, program, static_var):
+    if config.is_geo_mode():
+        # In geo mode
+        # trainer do FF->BP->OPTIM->SEND
+        # it has var: var <-> var@Grad
+        # Delete useless send var
+        porgram_useful_var_list = []
+        for op in program.global_block().ops:
+            input_var_list, output_var_list = find_op_input_output(
+                program, program.global_block(), op)
+            op_var_list = list(set(input_var_list).union(set(output_var_list)))
+            porgram_useful_var_list = list(
+                set(porgram_useful_var_list).union(set(op_var_list)))
+        porgram_useful_var_list += static_var
+        program_useless_var_list = list(
+            set(get_vars_name_in_block(program.global_block())).difference(
+                set(porgram_useful_var_list)))
+        for var in program_useless_var_list:
+            if "@GRAD" in var:
+                config.remove_var_pair_by_grad(var)
+            program.global_block()._remove_var(var)
+        return
+
     if config.role_maker._is_first_worker():
         return []
     static_var = list(set(static_var))

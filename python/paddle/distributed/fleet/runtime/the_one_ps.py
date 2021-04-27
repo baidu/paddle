@@ -188,7 +188,8 @@ class CommonAccessor:
                     shape = self.get_shard(total_dims, pserver_num, pserver_id)
             dims.append(shape)
 
-            initializer = self.get_initializer_attr(param.name, startup_program)
+            initializer = self.get_initializer_attr(
+                param.name, startup_program)
             initializers.append(initializer)
 
         for (attr_varname, type_) in attr_varnames:
@@ -491,6 +492,14 @@ class TheOnePSRuntime(RuntimeBase):
         send_ctx = self.compiled_strategy.get_the_one_send_context(
             split_dense_table=self.role_maker._is_heter_parameter_server_mode,
             ep_list=endpoints)
+
+        if self.role_maker._is_heter_parameter_server_mode:
+            origin_send_ctx = send_ctx
+            send_ctx = self.compiled_strategy.get_heter_send_context(
+                origin_send_ctx)
+            dense_map = self.compiled_strategy.get_heter_recv_context(
+                origin_send_ctx)
+
         trainer_config = self.async_strategy.get_trainer_runtime_config()
 
         debug = bool(int(os.getenv("PSERVER_DEBUG", "0")))
@@ -498,8 +507,10 @@ class TheOnePSRuntime(RuntimeBase):
         if debug:
             print("worker: \n{}".format(proto_txt))
             print("communicator send_ctx:")
+            print("--send_ctx--")
             for key in send_ctx:
                 print("{}: {}".format(key, send_ctx[key]))
+            print("--dense_map--")
             for key in dense_map:
                 print("{}: {}".format(key, dense_map[key]))
 
@@ -534,7 +545,7 @@ class TheOnePSRuntime(RuntimeBase):
         ) and self.role_maker._is_heter_parameter_server_mode:
             # for ps-heter mode load all parameters on first_worker
             init_params = self.compiled_strategy.get_the_one_recv_context(
-                split_dense_table=True, use_origin_program=True)
+                split_dense_table=True)
         else:
             init_params = dense_map
 
@@ -555,7 +566,8 @@ class TheOnePSRuntime(RuntimeBase):
             # for ps-heter mode, wait heter worker ready
             if self.role_maker._is_heter_parameter_server_mode and self.role_maker._is_worker(
             ):
-                wait_server_ready(self.role_maker._get_heter_worker_endpoints())
+                wait_server_ready(
+                    self.role_maker._get_heter_worker_endpoints())
 
                 self._heter_client = HeterClient(
                     self.role_maker._get_heter_worker_endpoints(),
@@ -685,7 +697,6 @@ class TheOnePSRuntime(RuntimeBase):
 
         def _get_tables():
             send_ctx = self.compiled_strategy.get_the_one_send_context(
-                use_origin_program=True,
                 split_dense_table=self.role_maker.
                 _is_heter_parameter_server_mode)
 
@@ -801,7 +812,8 @@ class TheOnePSRuntime(RuntimeBase):
         from paddle.fluid.incubate.fleet.parameter_server.ir.public import get_sparse_tablenames
 
         dist_varnames = get_sparse_tablenames(self.origin_main_program, True)
-        sparse_varnames = get_sparse_tablenames(self.origin_main_program, False)
+        sparse_varnames = get_sparse_tablenames(
+            self.origin_main_program, False)
 
         distributed_varnames = dist_varnames + sparse_varnames
 
@@ -911,12 +923,10 @@ class TheOnePSRuntime(RuntimeBase):
 
         denses = self.compiled_strategy.get_the_one_recv_context(
             is_dense=True,
-            split_dense_table=self.role_maker._is_heter_parameter_server_mode,
-            use_origin_program=True)
+            split_dense_table=self.role_maker._is_heter_parameter_server_mode)
         sparses = self.compiled_strategy.get_the_one_recv_context(
             is_dense=False,
-            split_dense_table=self.role_maker._is_heter_parameter_server_mode,
-            use_origin_program=True)
+            split_dense_table=self.role_maker._is_heter_parameter_server_mode)
 
         sparse_varnames = self._save_sparse_params(executor, dirname, sparses,
                                                    main_program, mode)

@@ -163,7 +163,6 @@ class CompileTimeStrategy(object):
         self._build_var_distributed()
 
         self.tensor_table_dict = {}
-
         # for heter-ps save variables
         self.origin_merged_variables_pairs = list(self.merged_variables_pairs)
         self.origin_merged_dense_pairs = list(self.merged_dense_pairs)
@@ -324,6 +323,11 @@ class CompileTimeStrategy(object):
                 op_type)
         return related_var_names
 
+    def create_origin_send_ctx(self, split_dense_table):
+        return self.get_the_one_send_context(
+            use_origin_program=True,
+            split_dense_table=split_dense_table)
+
     def build_ctx(self,
                   vars,
                   mapping,
@@ -377,154 +381,6 @@ class CompileTimeStrategy(object):
                           trainer_id, aggregate, is_sparse, is_distributed)
         return ctx
 
-    def get_trainer_send_context(self):
-        send_ctx = {}
-        distibuted_varnames = get_sparse_tablenames(self.origin_main_program,
-                                                    True)
-
-        if not self.is_geo_mode():
-            for merged in self.merged_dense_pairs:
-                grad = merged[1]
-                ctx = self.build_ctx(grad, self.grad_var_mapping, True, False,
-                                     True)
-                send_ctx[ctx.var_name()] = ctx
-
-            for merged in self.merged_sparse_pairs:
-                param = merged[0]
-                grad = merged[1]
-
-                param_name = param.merged_var.name
-
-                is_distributed = True if param_name in distibuted_varnames else False
-
-                ctx = self.build_ctx(grad, self.grad_var_mapping, True, True,
-                                     True, is_distributed)
-                send_ctx[ctx.var_name()] = ctx
-
-            if self.is_async_mode():
-                name, ctx = self._step_ctx()
-                send_ctx[name] = ctx
-        else:
-            for pairs in self.origin_sparse_pairs:
-                param, grad = pairs
-                param_name = param.name
-                is_distributed = True if param_name in distibuted_varnames else False
-
-                param_ctx = self.build_ctx(param, self.param_var_mapping, False,
-                                           True, True, is_distributed)
-                grad_ctx = self.build_ctx(grad, self.grad_var_mapping, True,
-                                          True, True, is_distributed)
-
-                ctx = CommContext(param_ctx.var_name(),
-                                  param_ctx.split_varnames(),
-                                  param_ctx.split_endpoints(),
-                                  param_ctx.sections(),
-                                  grad_ctx.origin_varnames(),
-                                  param_ctx.trainer_id(),
-                                  param_ctx.aggregate(),
-                                  param_ctx.is_sparse(),
-                                  param_ctx.is_distributed())
-
-                send_ctx[ctx.var_name()] = ctx
-            name, ctx = self._step_ctx()
-            send_ctx[name] = ctx
-        return send_ctx
-
-    def get_communicator_send_context(self):
-        send_ctx = {}
-        distibuted_varnames = get_sparse_tablenames(self.origin_main_program,
-                                                    True)
-
-        if self.is_geo_mode():
-            for pairs in self.merged_dense_pairs:
-                param = pairs[0]
-                ctx = self.build_ctx(param, self.param_var_mapping, False,
-                                     False, True)
-                send_ctx[ctx.var_name()] = ctx
-
-            for pairs in self.merged_sparse_pairs:
-                param = pairs[0]
-                param_name = param.merged_var.name
-                is_distributed = True if param_name in distibuted_varnames else False
-
-                ctx = self.build_ctx(param, self.param_var_mapping, False, True,
-                                     True, is_distributed)
-                send_ctx[ctx.var_name()] = ctx
-            name, ctx = self._step_ctx()
-            send_ctx[name] = ctx
-        else:
-            for merged in self.merged_dense_pairs:
-                grad = merged[1]
-                ctx = self.build_ctx(grad, self.grad_var_mapping, True, False,
-                                     True)
-                send_ctx[ctx.var_name()] = ctx
-
-            for merged in self.merged_sparse_pairs:
-                param, grad = merged
-                param_name = param.merged_var.name
-
-                is_distributed = True if param_name in distibuted_varnames else False
-
-                ctx = self.build_ctx(grad, self.grad_var_mapping, True, True,
-                                     True, is_distributed)
-                send_ctx[ctx.var_name()] = ctx
-
-            name, ctx = self._step_ctx()
-            send_ctx[name] = ctx
-        return send_ctx
-
-    def get_communicator_recv_context(self,
-                                      recv_type=1,
-                                      use_origin_program=False):
-        # recv_type
-        # 1 : DENSE 2. SPARSE 3. DISTRIBUTED 4. ALL
-        distibuted_varnames = get_sparse_tablenames(self.origin_main_program,
-                                                    True)
-        sparse_varnames = []
-        for pairs in self.origin_sparse_pairs:
-            param, grad = pairs
-            sparse_varnames.append(param.name)
-
-        dense_recv_ctx = {}
-        sparse_recv_ctx = {}
-        distributed_recv_ctx = {}
-
-        variables_pairs = self.merged_variables_pairs if not use_origin_program else self.origin_merged_variables_pairs
-        for merged in variables_pairs:
-            params = merged[0]
-            if params.merged_var.name in sparse_varnames:
-                continue
-
-            ctx = self.build_ctx(params, self.param_var_mapping, False, False,
-                                 False, False)
-            dense_recv_ctx[ctx.var_name()] = ctx
-
-        for pairs in self.origin_sparse_pairs:
-            param, grad = pairs
-
-            if param.name in distibuted_varnames:
-                ctx = self.build_ctx(param, self.param_var_mapping, False, True,
-                                     False, True)
-                distributed_recv_ctx[ctx.var_name()] = ctx
-            else:
-                ctx = self.build_ctx(param, self.param_var_mapping, False, True,
-                                     False, False)
-                sparse_recv_ctx[ctx.var_name()] = ctx
-
-        if recv_type == 1:
-            return dense_recv_ctx
-        if recv_type == 2:
-            return sparse_recv_ctx
-        if recv_type == 3:
-            return distributed_recv_ctx
-        if recv_type == 4:
-            dense_recv_ctx.update(sparse_recv_ctx)
-            dense_recv_ctx.update(distributed_recv_ctx)
-            return dense_recv_ctx
-        assert ValueError(
-            "recv_type can only be 1/2/3/4, 1 : DENSE 2. SPARSE 3. DISTRIBUTED 4. ALL"
-        )
-
     def get_the_one_trainer_send_context(self, split_dense_table):
         if self.is_geo_mode():
             send_ctx = {}
@@ -570,6 +426,7 @@ class CompileTimeStrategy(object):
                                split_dense_table=False):
         if len(merged_dense_pairs) < 1:
             return idx
+
         if not split_dense_table:
             origin_varnames = []
             var_numel = 0
@@ -606,7 +463,6 @@ class CompileTimeStrategy(object):
 
     def get_the_one_send_context(self,
                                  split_dense_table=False,
-                                 use_origin_program=False,
                                  ep_list=None):
         if ep_list is None:
             ep_list = ["127.0.0.1:6071"]
@@ -614,8 +470,8 @@ class CompileTimeStrategy(object):
         trainer_id = self.get_role_id()
         idx = 0
 
-        merged_dense_pairs = self.origin_merged_dense_pairs if use_origin_program else self.merged_dense_pairs
-        merged_sparse_pairs = self.origin_merged_sparse_pairs if use_origin_program else self.merged_sparse_pairs
+        merged_dense_pairs = self.origin_merged_dense_pairs
+        merged_sparse_pairs = self.origin_merged_sparse_pairs
 
         idx += self.get_dense_send_context(send_ctx, idx, merged_dense_pairs,
                                            trainer_id, split_dense_table)
@@ -654,13 +510,12 @@ class CompileTimeStrategy(object):
 
     def get_the_one_recv_context(self,
                                  is_dense=True,
-                                 split_dense_table=False,
-                                 use_origin_program=False):
+                                 split_dense_table=False):
         recv_id_maps = {}
+
         if is_dense:
             send_ctx = self.get_the_one_send_context(
-                split_dense_table=split_dense_table,
-                use_origin_program=use_origin_program)
+                split_dense_table=split_dense_table)
             for idx, (name, ctx) in enumerate(send_ctx.items()):
                 if ctx.is_sparse():
                     continue
@@ -676,6 +531,55 @@ class CompileTimeStrategy(object):
                 recv_id_maps[ctx.table_id()] = param_names
         else:
             send_ctx = self.get_the_one_send_context()
+            for idx, (name, ctx) in enumerate(send_ctx.items()):
+                if not ctx.is_sparse():
+                    continue
+
+                origin_grad_varnames = ctx.origin_varnames()
+
+                param_names = []
+                for grad_varname in origin_grad_varnames:
+                    param_name = self.grad_name_to_param_name[grad_varname]
+                    param_names.append(param_name)
+                recv_id_maps[ctx.table_id()] = param_names
+        return recv_id_maps
+
+    def get_heter_send_context(self, origin_send_ctx):
+        merged_dense_pairs = self.merged_dense_pairs
+        merged_sparse_pairs = self.merged_sparse_pairs
+        send_ctx = {}
+
+        for merged in merged_dense_pairs:
+            grad = merged[1]
+            grad_name = grad.merged_var.name
+            send_ctx[grad_name] = origin_send_ctx[grad_name]
+
+        for merged in merged_sparse_pairs:
+            param, grad = merged
+            grad_name = grad.merged_var.name
+            send_ctx[grad_name] = origin_send_ctx[grad_name]
+
+        return send_ctx
+
+    def get_heter_recv_context(self, origin_ctx, is_dense=True):
+        recv_id_maps = {}
+        send_ctx = self.get_heter_send_context(origin_ctx)
+
+        if is_dense:
+            for idx, (name, ctx) in enumerate(send_ctx.items()):
+                if ctx.is_sparse():
+                    continue
+                if ctx.is_tensor_table():
+                    continue
+
+                origin_grad_varnames = ctx.origin_varnames()
+
+                param_names = []
+                for grad_varname in origin_grad_varnames:
+                    param_name = self.grad_name_to_param_name[grad_varname]
+                    param_names.append(param_name)
+                recv_id_maps[ctx.table_id()] = param_names
+        else:
             for idx, (name, ctx) in enumerate(send_ctx.items()):
                 if not ctx.is_sparse():
                     continue
@@ -1191,7 +1095,8 @@ def _get_lr_sheduler_program(lr_sheduler, lr_param_dict, lr_decay_steps):
 
     if isinstance(lr_sheduler, ExponentialDecay):
         with fluid.program_guard(decay_main_program, decay_startup_program):
-            lr = exponential_decay(1.0, lr_decay_steps, lr_sheduler.gamma, True)
+            lr = exponential_decay(1.0, lr_decay_steps,
+                                   lr_sheduler.gamma, True)
             lr_name = lr.name
             logging.warn(
                 "ExponentialDecay is set, staircase = True, global learning rate decay step is [ %d ], Change decay steps as follow: \n"
@@ -1207,7 +1112,8 @@ def _get_lr_sheduler_program(lr_sheduler, lr_param_dict, lr_decay_steps):
                          lr_sheduler.warmup_steps)
     elif isinstance(lr_sheduler, NaturalExpDecay):
         with fluid.program_guard(decay_main_program, decay_startup_program):
-            lr = natural_exp_decay(1.0, lr_decay_steps, lr_sheduler.gamma, True)
+            lr = natural_exp_decay(1.0, lr_decay_steps,
+                                   lr_sheduler.gamma, True)
             lr_name = lr.name
             logging.warn(
                 "NaturalExpDecay is set, staircase = True, global learning rate decay step is [ %d ], Change decay steps as follow: \n"

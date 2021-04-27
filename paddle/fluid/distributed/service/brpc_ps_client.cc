@@ -715,25 +715,39 @@ std::future<int32_t> BrpcPsClient::push_dense_raw_gradient(
   auto *accessor = table_accessor(table_id);
   uint32_t num_per_shard =
       dense_dim_per_shard(accessor->fea_dim(), request_call_num);
+  VLOG(1) << "push_dense_raw_gradient "
+          << " request_call_num: " << request_call_num
+          << " num_per_shard: " << num_per_shard;
+  VLOG(1) << "push_dense_raw_gradient "
+          << " table_id: " << table_id
+          << " total_send_data_size: " << total_send_data_size
+          << " _client_id: " << _client_id;
   for (size_t i = 0; i < request_call_num; ++i) {
     closure->request(i)->set_cmd_id(PS_PUSH_DENSE_TABLE);
     closure->request(i)->set_table_id(table_id);
     closure->request(i)->set_client_id(_client_id);
+    VLOG(1) << "push_dense_raw_gradient "
+            << " request_num " << i << " finish set closure";
     auto *push_data = closure->request(i)->mutable_data();
     push_data->clear();
     push_data->resize(sizeof(uint32_t) + num_per_shard * sizeof(float));
+    VLOG(1) << "push_dense_raw_gradient "
+            << " request_num " << i << " finish set push_data";
     char *push_data_ptr = const_cast<char *>(push_data->data());
     memcpy(push_data_ptr, &num_per_shard, sizeof(uint32_t));
     memcpy(push_data_ptr + sizeof(uint32_t),
            total_send_data + i * num_per_shard, num_per_shard * sizeof(float));
-    VLOG(1) << "push_dense_raw_gradient finish memcpy";
+    VLOG(1) << "push_dense_raw_gradient finish memcpy"
+            << " table_id: " << table_id;
     // closure->cntl(i)->set_request_compress_type(
     //     (brpc::CompressType)FLAGS_pserver_communicate_compress_type);
     PsService_Stub rpc_stub(get_dense_channel(i));
-    VLOG(1) << "push_dense_raw_gradient get_dense_channel " << i;
+    VLOG(1) << "push_dense_raw_gradient get_dense_channel " << i
+            << " table_id: " << table_id;
     rpc_stub.service(closure->cntl(i), closure->request(i),
                      closure->response(i), closure);
-    VLOG(1) << "push_dense_raw_gradient async service " << i;
+    VLOG(1) << "push_dense_raw_gradient async service " << i
+            << " table_id: " << table_id;
   }
   return fut;
 }

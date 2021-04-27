@@ -98,7 +98,7 @@ class ParameterServerOptimizer(MetaOptimizerBase):
                 _startup = worker.delet_extra_optimizes_pass(_startup,
                                                              compiled_config)
 
-                # for startup program
+            # for startup program
             _startup = worker.fake_init_ops_pass(_startup, compiled_config)
             if use_ps_gpu:
                 _main = worker.ps_gpu_pass(_main)
@@ -115,25 +115,26 @@ class ParameterServerOptimizer(MetaOptimizerBase):
 
             compiled_config.set_origin_ps_main_program(_main)
             compiled_config.set_origin_ps_startup_program(_startup)
-            # for heter program
-            if self.role_maker._is_heter_parameter_server_mode:
-                from paddle.fluid.incubate.fleet.parameter_server.ir import heter_trainer_pass as heter_worker
-                if self.role_maker._is_heter_worker():
-                    # for heter worker
-                    _main = heter_worker.split_heter_worker_ops_pass(
-                        _main, compiled_config)
-                else:
-                    # for default worker
-                    _main = heter_worker.split_trainer_ops_pass(_main,
-                                                                compiled_config)
-                # for startup change
-                _startup = heter_worker.delete_startup_useless_ops_var_pass(
-                    _startup, _main, compiled_config)
         else:
             _main = worker.append_send_ops_pass(_main, compiled_config)
             _startup = _startup
             compiled_config.set_origin_ps_main_program(_main)
             compiled_config.set_origin_ps_startup_program(_startup)
+
+        # for heter program
+        if self.role_maker._is_heter_parameter_server_mode:
+            from paddle.fluid.incubate.fleet.parameter_server.ir import heter_trainer_pass as heter_worker
+            if self.role_maker._is_heter_worker():
+                # for heter worker
+                _main = heter_worker.split_heter_worker_ops_pass(
+                    _main, compiled_config)
+            else:
+                # for default worker
+                _main = heter_worker.split_trainer_ops_pass(_main,
+                                                            compiled_config)
+            # for startup change
+            _startup = heter_worker.delete_startup_useless_ops_var_pass(
+                _startup, _main, compiled_config)
 
         launch_barrier = self.user_defined_strategy.a_sync_configs[
             "launch_barrier"]
