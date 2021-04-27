@@ -21,11 +21,12 @@ namespace operators {
 template <typename T, typename MT>
 __global__ void AdamKernelREG(MT beta1, MT beta2, MT epsilon, MT beta1_pow_,
                               MT beta2_pow_, const MT* moment1, MT* moment1_out,
-                              const MT* moment2, MT* moment2_out, const MT* lr_,
+                              const MT* moment2, MT* moment2_out, const MT* lr_, MT weight_decay, MT lr_ratio,
                               const T* grad, const T* param, T* param_out,
                               const MT* master_param, MT* master_param_out,
                               int ndim) {
-  MT lr = *lr_;
+  MT lr = *lr_ * lr_ratio;
+  MT lr_orig = lr;
   MT beta1_pow = beta1_pow_;
   MT beta2_pow = beta2_pow_;
 
@@ -41,6 +42,7 @@ __global__ void AdamKernelREG(MT beta1, MT beta2, MT epsilon, MT beta1_pow_,
     MT mom2 = moment2[id];
     mom1 = beta1 * mom1 + (static_cast<MT>(1.0) - beta1) * g;
     mom2 = beta2 * mom2 + (static_cast<MT>(1.0) - beta2) * g * g;
+    p -= lr_orig * weight_decay * p;
     p -= lr * (mom1 /
                (sqrt(mom2) + epsilon * sqrt(static_cast<MT>(1.0) - beta2_pow)));
 
@@ -57,11 +59,12 @@ template <typename T, typename MT>
 __global__ void AdamKernelMEM(MT beta1, MT beta2, MT epsilon,
                               const MT* beta1_pow_, const MT* beta2_pow_,
                               const MT* moment1, MT* moment1_out,
-                              const MT* moment2, MT* moment2_out, const MT* lr_,
+                              const MT* moment2, MT* moment2_out, const MT* lr_, MT weight_decay, MT lr_ratio,
                               const T* grad, const T* param, T* param_out,
                               const MT* master_param, MT* master_param_out,
                               int ndim) {
-  MT lr = *lr_;
+  MT lr = *lr_ * lr_ratio;
+  MT lr_orig = lr;
   MT beta1_pow = *beta1_pow_;
   MT beta2_pow = *beta2_pow_;
 
@@ -77,6 +80,7 @@ __global__ void AdamKernelMEM(MT beta1, MT beta2, MT epsilon,
     MT mom2 = static_cast<MT>(moment2[id]);
     mom1 = beta1 * mom1 + (static_cast<MT>(1.0) - beta1) * g;
     mom2 = beta2 * mom2 + (static_cast<MT>(1.0) - beta2) * g * g;
+    p -= lr_orig * weight_decay * p;
     p -= lr * (mom1 /
                (sqrt(mom2) + epsilon * sqrt(static_cast<MT>(1.0) - beta2_pow)));
 
@@ -100,11 +104,12 @@ template <typename T, typename MT>
 __global__ void SparseAdamCUDAKernelREG(
     MT beta1, MT beta2, MT epsilon, const MT beta1_pow, const MT beta2_pow,
     const MT* mom1_, MT* mom1_out_, const MT* mom2_, MT* mom2_out_,
-    const MT* lr_, const T* grad_, const T* param_, T* param_out_,
+    const MT* lr_, MT weight_decay, const T* grad_, const T* param_, T* param_out_,
     const MT* master_param, MT* master_param_out, const int64_t* rows_,
     int64_t row_numel, int64_t row_count, bool lazy_mode, int ndim) {
   int id = blockIdx.x * blockDim.x + threadIdx.x;
   MT lr = *lr_;
+  MT lr_orig = lr;
   lr *= sqrt(static_cast<MT>(1.0) - beta2_pow) /
         (static_cast<MT>(1.0) - beta1_pow);
 
@@ -122,6 +127,7 @@ __global__ void SparseAdamCUDAKernelREG(
                  : static_cast<MT>(0);
       mom1 = beta1 * mom1 + (static_cast<MT>(1.0) - beta1) * g;
       mom2 = beta2 * mom2 + (static_cast<MT>(1.0) - beta2) * g * g;
+      p -= lr_orig * weight_decay * p;
       p -= lr * (mom1 / (sqrt(mom2) +
                          epsilon * sqrt(static_cast<MT>(1.0) - beta2_pow)));
 
@@ -155,6 +161,8 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
         ctx.Attr<int64_t>("min_row_size_to_use_multithread");
     bool lazy_mode = ctx.Attr<bool>("lazy_mode");
     MPDType epsilon = static_cast<MPDType>(ctx.Attr<float>("epsilon"));
+    MPDType weight_decay = static_cast<MPDType>(ctx.Attr<float>("weight_decay"));
+    MPDType lr_ratio = static_cast<MPDType>(ctx.Attr<float>("lr_ratio"));
     auto* param = ctx.Input<LoDTensor>("Param");
     auto* grad_var = ctx.InputVar("Grad");
     auto* mom1 = ctx.Input<LoDTensor>("Moment1");
@@ -242,7 +250,7 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
             mom1_out->mutable_data<MPDType>(ctx.GetPlace()),
             mom2->data<MPDType>(),
             mom2_out->mutable_data<MPDType>(ctx.GetPlace()),
-            lr->data<MPDType>(), grad->data<T>(), param->data<T>(),
+            lr->data<MPDType>(), weight_decay, lr_ratio, grad->data<T>(), param->data<T>(),
             param_out->mutable_data<T>(ctx.GetPlace()), master_in_data,
             master_out_data, param->numel());
         // Cpu update
@@ -257,7 +265,7 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
             mom1_out->mutable_data<MPDType>(ctx.GetPlace()),
             mom2->data<MPDType>(),
             mom2_out->mutable_data<MPDType>(ctx.GetPlace()),
-            lr->data<MPDType>(), grad->data<T>(), param->data<T>(),
+            lr->data<MPDType>(), weight_decay, lr_ratio, grad->data<T>(), param->data<T>(),
             param_out->mutable_data<T>(ctx.GetPlace()), master_in_data,
             master_out_data, param->numel());
         // Update with gpu
@@ -315,7 +323,7 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
             mom1_out->mutable_data<MPDType>(ctx.GetPlace()),
             mom2->data<MPDType>(),
             mom2_out->mutable_data<MPDType>(ctx.GetPlace()),
-            lr->data<MPDType>(), grad_data, param->data<T>(),
+            lr->data<MPDType>(), weight_decay, grad_data, param->data<T>(),
             param_out->mutable_data<T>(ctx.GetPlace()), master_in_data,
             master_out_data, rows, row_numel, grad_merge.rows().size(),
             lazy_mode, ndim);
@@ -325,13 +333,14 @@ class AdamOpCUDAKernel : public framework::OpKernel<T> {
         beta2_pow_out->mutable_data<MPDType>(platform::CPUPlace())[0] =
             beta2 * beta2_pow->data<MPDType>()[0];
       } else {
+        VLOG(0) << "never should come here!!!!!!!!!!!!!!!!";
         SparseAdamFunctor<T, GPUAdam, MPDType> functor(
             beta1, beta2, epsilon, beta1_pow->data<MPDType>(),
             beta2_pow->data<MPDType>(), mom1->data<MPDType>(),
             mom1_out->mutable_data<MPDType>(ctx.GetPlace()),
             mom2->data<MPDType>(),
             mom2_out->mutable_data<MPDType>(ctx.GetPlace()),
-            lr->data<MPDType>(), grad_data, param->data<T>(),
+            lr->data<MPDType>(), weight_decay, grad_data, param->data<T>(),
             param_out->mutable_data<T>(ctx.GetPlace()), master_in_data,
             master_out_data, rows, row_numel, grad_merge.rows().size(),
             lazy_mode);

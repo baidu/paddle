@@ -135,7 +135,7 @@ class Adam(Optimizer):
                  beta2=0.999,
                  epsilon=1e-8,
                  parameters=None,
-                 weight_decay=None,
+                 weight_decay=0.0,
                  grad_clip=None,
                  lazy_mode=False,
                  multi_precision=False,

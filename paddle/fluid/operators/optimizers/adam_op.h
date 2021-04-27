@@ -75,6 +75,8 @@ class AdamFunctor<T, GPUAdam> {
   const T* moment2_;
   T* moment2_out_;
   const T* lr_;
+  T weight_decay_;
+  T lr_ratio_;
   const T* grad_;
   const T* param_;
   T* param_out_;
@@ -82,7 +84,7 @@ class AdamFunctor<T, GPUAdam> {
  public:
   AdamFunctor(T beta1, T beta2, T epsilon, const T* beta1_pow,
               const T* beta2_pow, const T* mom1, T* mom1_out, const T* mom2,
-              T* mom2_out, const T* lr, const T* grad, const T* param,
+              T* mom2_out, const T* lr, T weight_decay, T lr_ratio, const T* grad, const T* param,
               T* param_out)
       : beta1_(beta1),
         beta2_(beta2),
@@ -94,6 +96,8 @@ class AdamFunctor<T, GPUAdam> {
         moment2_(mom2),
         moment2_out_(mom2_out),
         lr_(lr),
+        weight_decay_(weight_decay),
+        lr_ratio_(lr_ratio),
         grad_(grad),
         param_(param),
         param_out_(param_out) {}
@@ -103,10 +107,12 @@ class AdamFunctor<T, GPUAdam> {
     T g = grad_[i];
     T mom1 = moment1_[i];
     T mom2 = moment2_[i];
-    T lr = *lr_;
+    T lr = *lr_ * lr_ratio_;
     T beta1_pow = *beta1_pow_;
     T beta2_pow = *beta2_pow_;
     T p = param_[i];
+
+    p -= lr * weight_decay_ * p;
 
     // Calculation
     lr *= sqrt(1 - beta2_pow) / (1 - beta1_pow);
@@ -136,6 +142,8 @@ class AdamFunctor<T, CPUAdam> {
   const T* moment2_;
   T* moment2_out_;
   const T* lr_;
+  T weight_decay_;
+  T lr_ratio_;
   const T* grad_;
   const T* param_;
   T* param_out_;
@@ -143,7 +151,7 @@ class AdamFunctor<T, CPUAdam> {
  public:
   AdamFunctor(T beta1, T beta2, T epsilon, const T* beta1_pow,
               const T* beta2_pow, const T* mom1, T* mom1_out, const T* mom2,
-              T* mom2_out, const T* lr, const T* grad, const T* param,
+              T* mom2_out, const T* lr, T weight_decay, T lr_ratio, const T* grad, const T* param,
               T* param_out)
       : beta1_(beta1),
         beta2_(beta2),
@@ -155,6 +163,8 @@ class AdamFunctor<T, CPUAdam> {
         moment2_(mom2),
         moment2_out_(mom2_out),
         lr_(lr),
+        weight_decay_(weight_decay),
+        lr_ratio_(lr_ratio),
         grad_(grad),
         param_(param),
         param_out_(param_out) {}
@@ -176,16 +186,18 @@ class AdamFunctor<T, CPUAdam> {
     Eigen::Map<Eigen::Array<T, 1, Eigen::Dynamic>> moment2_out{
         moment2_out_, static_cast<Eigen::Index>(numel)};
 
-    T lr = *lr_;
+    T lr = *lr_ * lr_ratio_;
     T beta1_pow = *beta1_pow_;
     T beta2_pow = *beta2_pow_;
+
+    param_out = lr * (1. - weight_decay_) * param;
 
     // Calculation
     lr *= sqrt(1 - beta2_pow) / (1 - beta1_pow);
 
     moment1_out = beta1_ * mom1 + (1 - beta1_) * g;
     moment2_out = beta2_ * mom2 + (1 - beta2_) * g * g;
-    param_out = param -
+    param_out = param_out -
                 lr * (moment1_out /
                       (moment2_out.sqrt() + epsilon_ * sqrt(1 - beta2_pow)));
   }
@@ -208,6 +220,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
   const MT* moment2_;
   MT* moment2_out_;
   const MT* lr_;
+  MT weight_decay_;
   const T* grad_;
   const T* param_;
   T* param_out_;
@@ -222,7 +235,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
  public:
   SparseAdamFunctor(MT beta1, MT beta2, MT epsilon, const MT* beta1_pow,
                     const MT* beta2_pow, const MT* mom1, MT* mom1_out,
-                    const MT* mom2, MT* mom2_out, const MT* lr, const T* grad,
+                    const MT* mom2, MT* mom2_out, const MT* lr, MT weight_decay, const T* grad,
                     const T* param, T* param_out, const MT* master_param,
                     MT* master_param_out, const int64_t* rows,
                     int64_t row_numel, int64_t row_count, bool lazy_mode)
@@ -236,6 +249,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
         moment2_(mom2),
         moment2_out_(mom2_out),
         lr_(lr),
+        weight_decay_(weight_decay),
         grad_(grad),
         param_(param),
         param_out_(param_out),
@@ -254,6 +268,9 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
     MT beta1_pow = *beta1_pow_;
     MT beta2_pow = *beta2_pow_;
     MT p = master_param_ ? master_param_[i] : static_cast<MT>(param_[i]);
+
+
+    p -= lr * weight_decay_ * p;
 
     // Calculation
     lr *= sqrt(static_cast<MT>(1.0) - beta2_pow) /
@@ -301,6 +318,7 @@ class SparseAdamFunctor<T, CPUAdam, T> {
   const T* moment2_;
   T* moment2_out_;
   const T* lr_;
+  T weight_decay_;
   const T* grad_;
   const T* param_;
   T* param_out_;
@@ -312,7 +330,7 @@ class SparseAdamFunctor<T, CPUAdam, T> {
  public:
   SparseAdamFunctor(T beta1, T beta2, T epsilon, const T* beta1_pow,
                     const T* beta2_pow, const T* mom1, T* mom1_out,
-                    const T* mom2, T* mom2_out, const T* lr, const T* grad,
+                    const T* mom2, T* mom2_out, const T* lr, T weight_decay, const T* grad,
                     const T* param, T* param_out, const int64_t* rows,
                     int64_t row_numel, int64_t row_count, bool lazy_mode)
       : beta1_(beta1),
@@ -325,6 +343,7 @@ class SparseAdamFunctor<T, CPUAdam, T> {
         moment2_(mom2),
         moment2_out_(mom2_out),
         lr_(lr),
+        weight_decay_(weight_decay),
         grad_(grad),
         param_(param),
         param_out_(param_out),
@@ -346,6 +365,7 @@ class SparseAdamFunctor<T, CPUAdam, T> {
 
     mom1 = beta1_ * mom1 + (1 - beta1_) * g;
     mom2 = beta2_ * mom2 + (1 - beta2_) * g * g;
+    p -= lr * weight_decay_ * p;
     p -= lr * (mom1 / (sqrt(mom2) + epsilon_ * sqrt(1 - beta2_pow)));
 
     // Write back to global memory
@@ -378,6 +398,7 @@ class SparseAdamFunctor<T, CPUAdam, T> {
           mom1 = beta1_ * mom1;
           mom2 = beta2_ * mom2;
 
+          p -= lr * weight_decay_ * p;
           p -= lr * (mom1 / (sqrt(mom2) + epsilon_));
           // Write back to global memory
           moment1_out_[i * row_numel_ + k] = mom1;
@@ -412,6 +433,8 @@ class AdamOpKernel : public framework::OpKernel<T> {
     auto* mom1 = ctx.Input<LoDTensor>("Moment1");
     auto* mom2 = ctx.Input<LoDTensor>("Moment2");
     auto* lr = ctx.Input<LoDTensor>("LearningRate");
+    T weight_decay = static_cast<T>(ctx.Attr<float>("weight_decay"));
+    T lr_ratio = static_cast<T>(ctx.Attr<float>("lr_ratio"));
 
     auto* beta1_pow = ctx.Input<LoDTensor>("Beta1Pow");
     auto* beta2_pow = ctx.Input<LoDTensor>("Beta2Pow");
@@ -463,7 +486,7 @@ class AdamOpKernel : public framework::OpKernel<T> {
           beta1, beta2, epsilon, beta1_pow->data<T>(), beta2_pow->data<T>(),
           mom1->data<T>(), mom1_out->mutable_data<T>(ctx.GetPlace()),
           mom2->data<T>(), mom2_out->mutable_data<T>(ctx.GetPlace()),
-          lr->data<T>(), grad->data<T>(), param->data<T>(),
+          lr->data<T>(), weight_decay, lr_ratio, grad->data<T>(), param->data<T>(),
           param_out->mutable_data<T>(ctx.GetPlace()));
       functor(param->numel());
       beta1_pow_out->mutable_data<T>(ctx.GetPlace())[0] =
@@ -505,12 +528,13 @@ class AdamOpKernel : public framework::OpKernel<T> {
       const T* grad_data = grad_tensor.template data<T>();
       const int64_t* rows = grad_merge.rows().Data(ctx.GetPlace());
       auto row_numel = grad_tensor.numel() / grad_merge.rows().size();
-
+      
+      VLOG(0) << "never should come here!!!!!!!!!!!!!!!!";
       SparseAdamFunctor<T, CPUAdam> functor(
           beta1, beta2, epsilon, beta1_pow->data<T>(), beta2_pow->data<T>(),
           mom1->data<T>(), mom1_out->mutable_data<T>(ctx.GetPlace()),
           mom2->data<T>(), mom2_out->mutable_data<T>(ctx.GetPlace()),
-          lr->data<T>(), grad_data, param->data<T>(),
+          lr->data<T>(), weight_decay, grad_data, param->data<T>(),
           param_out->mutable_data<T>(ctx.GetPlace()), rows, row_numel,
           grad_merge.rows().size(), lazy_mode);
       // update beta1 and beta2
