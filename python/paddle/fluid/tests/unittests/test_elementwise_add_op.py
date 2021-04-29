@@ -408,13 +408,19 @@ class TestElementwiseAddOpError(unittest.TestCase):
             self.assertRaises(TypeError, fluid.layers.elementwise_add, x2, y2)
 
 
-class TestAddOp(unittest.TestCase):
+class TestAddApi(unittest.TestCase):
+    def setUp(self):
+        self._executed_api()
+
+    def _executed_api(self):
+        self.add = paddle.add
+
     def test_name(self):
         with fluid.program_guard(fluid.Program()):
             x = fluid.data(name="x", shape=[2, 3], dtype="float32")
             y = fluid.data(name='y', shape=[2, 3], dtype='float32')
 
-            y_1 = paddle.add(x, y, name='add_res')
+            y_1 = self.add(x, y, name='add_res')
             self.assertEqual(('add_res' in y_1.name), True)
 
     def test_declarative(self):
@@ -428,7 +434,7 @@ class TestAddOp(unittest.TestCase):
 
             x = fluid.data(name="x", shape=[3], dtype='float32')
             y = fluid.data(name="y", shape=[3], dtype='float32')
-            z = paddle.add(x, y)
+            z = self.add(x, y)
 
             place = fluid.CPUPlace()
             exe = fluid.Executor(place)
@@ -442,10 +448,76 @@ class TestAddOp(unittest.TestCase):
             np_y = np.array([1, 5, 2]).astype('float64')
             x = fluid.dygraph.to_variable(np_x)
             y = fluid.dygraph.to_variable(np_y)
-            z = paddle.add(x, y)
+            z = self.add(x, y)
             np_z = z.numpy()
             z_expected = np.array([3., 8., 6.])
             self.assertEqual((np_z == z_expected).all(), True)
+
+
+class TestAddInplaceApi(TestAddApi):
+    def _executed_api(self):
+        self.add = paddle.add_
+
+
+class TestAddInplaceBroadcastSuccess(unittest.TestCase):
+    def init_data(self):
+        self.x_numpy = np.random.rand(2, 3, 4).astype('float')
+        self.y_numpy = np.random.rand(3, 4).astype('float')
+
+    def test_broadcast_success(self):
+        paddle.disable_static()
+        self.init_data()
+
+        x = paddle.to_tensor(self.x_numpy)
+        y = paddle.to_tensor(self.y_numpy)
+
+        inplace_result = paddle.add_(x, y)
+        numpy_result = self.x_numpy + self.y_numpy
+        self.assertEqual((inplace_result.numpy() == numpy_result).all(), True)
+        paddle.enable_static()
+
+
+class TestAddInplaceBroadcastSuccess2(TestAddInplaceBroadcastSuccess):
+    def init_data(self):
+        self.x_numpy = np.random.rand(1, 2, 3, 1).astype('float')
+        self.y_numpy = np.random.rand(3, 1).astype('float')
+
+
+class TestAddInplaceBroadcastSuccess3(TestAddInplaceBroadcastSuccess):
+    def init_data(self):
+        self.x_numpy = np.random.rand(2, 3, 1, 5).astype('float')
+        self.y_numpy = np.random.rand(1, 3, 1, 5).astype('float')
+
+
+class TestAddInplaceBroadcastError(unittest.TestCase):
+    def init_data(self):
+        self.x_numpy = np.random.rand(3, 4).astype('float')
+        self.y_numpy = np.random.rand(2, 3, 4).astype('float')
+
+    def test_broadcast_errors(self):
+        paddle.disable_static()
+        self.init_data()
+
+        x = paddle.to_tensor(self.x_numpy)
+        y = paddle.to_tensor(self.y_numpy)
+
+        def broadcast_shape_error():
+            paddle.add_(x, y)
+
+        self.assertRaises(ValueError, broadcast_shape_error)
+        paddle.enable_static()
+
+
+class TestAddInplaceBroadcastError2(TestAddInplaceBroadcastError):
+    def init_data(self):
+        self.x_numpy = np.random.rand(2, 1, 4).astype('float')
+        self.y_numpy = np.random.rand(2, 3, 4).astype('float')
+
+
+class TestAddInplaceBroadcastError3(TestAddInplaceBroadcastError):
+    def init_data(self):
+        self.x_numpy = np.random.rand(5, 2, 1, 4).astype('float')
+        self.y_numpy = np.random.rand(2, 3, 4).astype('float')
 
 
 class TestComplexElementwiseAddOp(OpTest):

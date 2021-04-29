@@ -13,10 +13,11 @@
 # limitations under the License.
 
 from ...fluid.layers import sigmoid  # noqa: F401
+from ...fluid.layers import sigmoid_  # noqa: F401
 from ...tensor.math import tanh  # noqa: F401
 from ...tensor.math import tanh_  # noqa: F401
 
-from ...tensor.manipulation import _print_warning_in_static_mode
+from ...fluid.dygraph.inplace_utils import inplace_apis_in_dygraph_only
 from ...tensor.manipulation import chunk
 from ...tensor.math import multiply
 
@@ -73,17 +74,13 @@ def elu(x, alpha=1.0, name=None):
     return out
 
 
+@inplace_apis_in_dygraph_only
 def elu_(x, alpha=1.0, name=None):
     r"""
     Inplace version of ``elu`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_nn_cn_elu`.
     """
-
-    if in_dygraph_mode():
-        return core.ops.elu_(x, 'alpha', alpha)
-
-    _print_warning_in_static_mode("elu")
-    return elu(x, alpha, name)
+    return core.ops.elu_(x, 'alpha', alpha)
 
 
 def gelu(x, approximate=False, name=None):
@@ -294,6 +291,15 @@ def hardsigmoid(x, slope=0.1666667, offset=0.5, name=None):
     return out
 
 
+@inplace_apis_in_dygraph_only
+def hardsigmoid_(x, slope=0.1666667, offset=0.5, name=None):
+    r"""
+    Inplace version of ``hardsigmoid`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_hardsigmoid`.
+    """
+    return core.ops.hard_sigmoid_(x, 'slope', slope, 'offset', offset)
+
+
 def hardswish(x, name=None):
     r"""
     hardswish activation
@@ -389,6 +395,15 @@ def leaky_relu(x, negative_slope=0.01, name=None):
         outputs={'Out': out},
         attrs={'alpha': negative_slope})
     return out
+
+
+@inplace_apis_in_dygraph_only
+def leaky_relu_(x, negative_slope=0.01, name=None):
+    r"""
+    Inplace version of ``leaky_relu`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_leaky_relu`.
+    """
+    return core.ops.leaky_relu_(x, 'alpha', negative_slope)
 
 
 def prelu(x, weight, name=None):
@@ -501,17 +516,13 @@ def relu(x, name=None):
     return out
 
 
+@inplace_apis_in_dygraph_only
 def relu_(x, name=None):
     """
     Inplace version of ``relu`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_nn_cn_relu`.
     """
-
-    if in_dygraph_mode():
-        return core.ops.relu_(x)
-
-    _print_warning_in_static_mode("relu")
-    return relu(x, name)
+    return core.ops.relu_(x)
 
 
 def log_sigmoid(x, name=None):
@@ -665,6 +676,16 @@ def relu6(x, name=None):
         outputs={'Out': out},
         attrs={'threshold': threshold})
     return out
+
+
+@inplace_apis_in_dygraph_only
+def relu6_(x, name=None):
+    """
+    Inplace version of ``relu6`` API, the output Tensor will be inplaced with input ``x``.
+    Please refer to :ref:`api_nn_cn_relu6`.
+    """
+    threshold = 6.0
+    return core.ops.relu6_(x, 'threshold', threshold)
 
 
 def selu(x,
@@ -912,21 +933,16 @@ def softmax(x, axis=-1, dtype=None, name=None):
     return outs_softmax
 
 
+@inplace_apis_in_dygraph_only
 def softmax_(x, axis=-1, dtype=None, name=None):
     r"""
     Inplace version of ``softmax`` API, the output Tensor will be inplaced with input ``x``.
     Please refer to :ref:`api_nn_cn_softmax`.
     """
-
     if (dtype is not None) and (not isinstance(dtype, core.VarDesc.VarType)):
         dtype = convert_np_dtype_to_dtype_(dtype)
     use_cudnn = True
-
-    if in_dygraph_mode():
-        return core.ops.softmax_(x, 'axis', axis, 'use_cudnn', use_cudnn)
-
-    _print_warning_in_static_mode("softmax")
-    return softmax(x, axis, dtype, name)
+    return core.ops.softmax_(x, 'axis', axis, 'use_cudnn', use_cudnn)
 
 
 def softplus(x, beta=1, threshold=20, name=None):

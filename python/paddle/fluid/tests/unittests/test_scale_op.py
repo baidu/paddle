@@ -17,9 +17,11 @@ from __future__ import print_function
 import unittest
 import numpy as np
 from op_test import OpTest
+import paddle
 import paddle.fluid as fluid
 import paddle.fluid.core as core
 from paddle.fluid.op import Operator
+from paddle.static import Program, program_guard
 
 
 class TestScaleOp(OpTest):
@@ -166,6 +168,54 @@ class TestScaleFp16OpSelectedRows(TestScaleOpSelectedRows):
         place = core.CUDAPlace(0)
         if core.is_float16_supported(place):
             self.check_with_place(place, 'in', 'in')
+
+
+class TestScaleApiStatic(unittest.TestCase):
+    def setUp(self):
+        self._executed_api()
+
+    def _executed_api(self):
+        self.scale = paddle.scale
+
+    def test_api(self):
+        paddle.enable_static()
+        input = np.random.random([2, 25]).astype("float32")
+        main_prog = Program()
+        with program_guard(main_prog, Program()):
+            x = paddle.static.data(name="x", shape=[2, 25], dtype="float32")
+            out = self.scale(x, scale=2.0, bias=3.0)
+
+        exe = paddle.static.Executor(place=paddle.CPUPlace())
+        out = exe.run(main_prog, feed={"x": input}, fetch_list=[out])
+        self.assertEqual(np.array_equal(out[0], input * 2.0 + 3.0), True)
+
+
+class TestScaleInplaceApiStatic(TestScaleApiStatic):
+    def _executed_api(self):
+        self.scale = paddle.scale_
+
+
+class TestScaleApiDygraph(unittest.TestCase):
+    def setUp(self):
+        self._executed_api()
+
+    def _executed_api(self):
+        self.scale = paddle.scale
+
+    def test_api(self):
+        paddle.disable_static()
+        input = np.random.random([2, 25]).astype("float32")
+
+        x = paddle.to_tensor(input)
+        out = self.scale(x, scale=2.0, bias=3.0)
+
+        self.assertEqual(np.array_equal(out.numpy(), input * 2.0 + 3.0), True)
+        paddle.enable_static()
+
+
+class TestScaleInplaceApiDygraph(TestScaleApiDygraph):
+    def _executed_api(self):
+        self.scale = paddle.scale_
 
 
 if __name__ == "__main__":

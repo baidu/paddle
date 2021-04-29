@@ -25,7 +25,8 @@ from ..layer_helper import LayerHelper
 from ..data_feeder import check_variable_and_dtype
 
 __all__ = [
-    'generate_layer_fn', 'generate_activation_fn', 'autodoc', 'templatedoc'
+    'generate_layer_fn', 'generate_activation_fn', 'generate_inplace_fn',
+    'autodoc', 'templatedoc'
 ]
 
 
@@ -280,6 +281,37 @@ def generate_activation_fn(op_type):
         additional_args_lines=[
             "name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`."
         ])
+    return func
+
+
+def generate_inplace_fn(inplace_op_type):
+    """Register the Python layer for an Inplace Operator without Attribute.
+
+    Args:
+       inplace_op_type: The name of the inplace operator to be created.
+
+    This function takes in the inplace operator type (sigmoid_, exp_ , ceil_ etc) and
+    creates the operator functionality.
+
+    """
+    origin_op_type = inplace_op_type[:-1]
+
+    def func(x, name=None):
+        if in_dygraph_mode():
+            op = getattr(core.ops, inplace_op_type)
+            return op(x)
+
+        warnings.warn(
+            "In static mode, {}() is the same as {}() and does not perform inplace operation.".
+            format(inplace_op_type, origin_op_type))
+        return generate_activation_fn(origin_op_type)(x, name)
+
+    func.__name__ = inplace_op_type
+    func.__doc__ = """
+Inplace version of ``{0}`` API, the output Tensor will be inplaced with input ``x``.
+Please refer to :ref:`api_fluid_layers_{1}`.
+""".format(origin_op_type, origin_op_type)
+
     return func
 
 

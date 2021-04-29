@@ -14,7 +14,7 @@
 
 from __future__ import print_function
 import os
-from .layer_function_generator import generate_layer_fn, generate_activation_fn, add_sample_code
+from .layer_function_generator import generate_layer_fn, generate_activation_fn, generate_inplace_fn, add_sample_code
 from .. import core
 from ..framework import convert_np_dtype_to_dtype_, Variable
 from ..data_feeder import convert_dtype, check_variable_and_dtype, check_type, check_dtype
@@ -55,6 +55,18 @@ __unary_func__ = [
     'square',
 ]
 
+__inplace_activations_noattr__ = ['sigmoid_', ]
+
+__inplace_unary_func__ = [
+    'exp_',
+    'sqrt_',
+    'rsqrt_',
+    'ceil_',
+    'floor_',
+    'round_',
+    'reciprocal_',
+]
+
 __all__ = []
 
 for _OP in set(__all__):
@@ -69,6 +81,8 @@ globals()['_elementwise_div'] = generate_layer_fn('elementwise_div')
 
 __all__ += __activations_noattr__
 __all__ += __unary_func__
+__all__ += __inplace_activations_noattr__
+__all__ += __inplace_unary_func__
 
 for _OP in set(__activations_noattr__):
     _new_OP = _OP
@@ -84,6 +98,23 @@ for _OP in set(__unary_func__):
     if _OP in __deprecated_func_name__:
         _new_OP = __deprecated_func_name__[_OP]
     func = generate_activation_fn(_OP)
+    func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(func)
+    globals()[_OP] = func
+
+for _OP in set(__inplace_activations_noattr__):
+    _new_OP = _OP
+    if _OP in __deprecated_func_name__:
+        _new_OP = __deprecated_func_name__[_OP]
+    func = generate_inplace_fn(_OP)
+    func = deprecated(
+        since="2.0.0", update_to="paddle.nn.functional.%s" % (_new_OP))(func)
+    globals()[_OP] = func
+
+for _OP in set(__inplace_unary_func__):
+    _new_OP = _OP
+    if _OP in __deprecated_func_name__:
+        _new_OP = __deprecated_func_name__[_OP]
+    func = generate_inplace_fn(_OP)
     func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(func)
     globals()[_OP] = func
 
