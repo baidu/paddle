@@ -763,13 +763,17 @@ void Reducer::MarkGroupReady(size_t group_index) {
     // otherwise the main thread will continue to run when an exception is
     // thrown in comm_pool_.
     comm_pool_->enqueue([&] {
-      auto dev_id = BOOST_GET_CONST(platform::XPUPlace, place_).device;
-      platform::SetXPUDeviceId(dev_id);
-      FusedAllReduceSchedule(run_order, group, next_group_);
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        comm_op_count_ -= 1;  // lock
-        cv_.notify_all();
+      try {
+        auto dev_id = BOOST_GET_CONST(platform::XPUPlace, place_).device;
+        platform::SetXPUDeviceId(dev_id);
+        FusedAllReduceSchedule(run_order, group);
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          comm_op_count_ -= 1;  // lock
+          cv_.notify_all();
+        }
+      } catch (...) {
+        exception_.Catch(std::current_exception());
       }
     });
 #elif defined(PADDLE_WITH_RCCL) || defined(PADDLE_WITH_NCCL)
