@@ -21,14 +21,30 @@ namespace paddle {
 namespace framework {
 namespace ir {
 
-Graph::Graph(const ProgramDesc &program) : program_(program) {
-  auto var_nodes = InitFromProgram(program_);
+Graph::Graph(const ProgramDesc &program)
+    : Graph(program, 0, program.Block(0).AllOps().size()) {}
+
+Graph::Graph(const ProgramDesc &program, int64_t start_op_index,
+             int64_t end_op_index)
+    : program_(program) {
+  auto var_nodes = InitFromProgram(program_, start_op_index, end_op_index);
   ResolveHazard(var_nodes);
 }
 
 std::map<std::string, std::vector<ir::Node *>> Graph::InitFromProgram(
-    const ProgramDesc &program) {
+    const ProgramDesc &program, int64_t start_op_index, int64_t end_op_index) {
   VLOG(3) << "block in program:" << program_.Size();
+  PADDLE_ENFORCE_GE(start_op_index, 0,
+                    platform::errors::InvalidArgument(
+                        "Required start_op_index >= 0, but received "
+                        "start_op_index = ",
+                        start_op_index));
+  PADDLE_ENFORCE_GE(end_op_index, start_op_index,
+                    platform::errors::InvalidArgument(
+                        "Required end_op_index >= start_op_index, but received "
+                        "end_op_index: %d < start_op_index: %d",
+                        end_op_index, start_op_index));
+
   std::unordered_map<std::string, VarDesc *> all_vars;
   // var nodes for each var name, will have multiple versions in SSA
   std::map<std::string, std::vector<ir::Node *>> var_nodes;
@@ -37,8 +53,15 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromProgram(
   }
 
   auto not_visited_vars = all_vars;
+  auto all_ops = program.Block(0).AllOps();
+  PADDLE_ENFORCE_LE(
+      end_op_index, all_ops.size(),
+      platform::errors::InvalidArgument(
+          "Required end_op_index <= %d, but received %d", end_op_index));
 
-  for (auto *op : program.Block(0).AllOps()) {
+  for (auto i = start_op_index; i < end_op_index; ++i) {
+    auto *op = all_ops[i];
+    VLOG(3) << "create OpNode by " << op->Type();
     ir::Node *node = CreateOpNode(op);
     // For input args, reuse the same var name if it was created before.
     // Otherwise, create a new one.
@@ -88,18 +111,30 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromProgram(
     }
   }
 
-  for (auto &pair : not_visited_vars) {
-    const auto &var_name = pair.first;
-    auto *var_desc = pair.second;
-    if (var_name != kEmptyVarName) {
-      VLOG(10) << "Create isolated var node " << var_name;
-      var_nodes[var_name].push_back(CreateVarNode(var_desc));
+  // TODO(Aurelius84): Should we create an  isolate var in @to_static? Skip it
+  // now.
+  if (end_op_index < static_cast<int64_t>(all_ops.size()) ||
+      start_op_index > 0) {
+    is_partial_ = true;
+  }
+  if (!is_partial_) {
+    for (auto &pair : not_visited_vars) {
+      const auto &var_name = pair.first;
+      auto *var_desc = pair.second;
+      if (var_name != kEmptyVarName) {
+        VLOG(10) << "Create isolated var node " << var_name;
+        var_nodes[var_name].push_back(CreateVarNode(var_desc));
+      }
     }
   }
 
   Set<const std::vector<OpDesc *>>(
       details::kStaleProgramOpDescs,
-      new std::vector<OpDesc *>(program.Block(0).AllOps()));
+      new std::vector<OpDesc *>(all_ops.begin() + start_op_index,
+                                all_ops.begin() + end_op_index));
+  VLOG(3)
+      << "kStaleProgramOpDescs.size: "
+      << Get<const std::vector<OpDesc *>>(details::kStaleProgramOpDescs).size();
   return var_nodes;
 }
 

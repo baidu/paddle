@@ -107,6 +107,7 @@ class SkipMemOptVarsGuard {
         auto iter = map.find(var);
         if (iter != map.end() &&
             !iter->second->IsSkippedAllMemoryOptimization()) {
+          VLOG(3) << "Set skip memory optimzation of " << var;
           iter->second->SetSkipAllMemoryOptimization(true);
           skip_vars_.emplace_back(iter->second.get());
         }

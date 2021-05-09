@@ -19,6 +19,7 @@
 
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/controlflow/conditional_block_op.h"
+#include "paddle/fluid/operators/controlflow/op_variant.h"
 
 namespace paddle {
 namespace framework {
@@ -39,8 +40,8 @@ void PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
 
 void PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
     const framework::ProgramDesc &program,
-    const std::vector<framework::OperatorBase *> &ifelse_ops,
-    const std::vector<framework::OperatorBase *> &ifelse_grad_ops);
+    const std::vector<OpVariant> &ifelse_ops,
+    const std::vector<OpVariant> &ifelse_grad_ops);
 
 }  // namespace operators
 }  // namespace paddle

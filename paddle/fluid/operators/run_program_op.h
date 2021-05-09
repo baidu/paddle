@@ -23,11 +23,10 @@ limitations under the License. */
 #include <utility>
 #include <vector>
 
-#include "paddle/fluid/framework/executor.h"
-#include "paddle/fluid/framework/executor_cache.h"
 #include "paddle/fluid/framework/op_desc.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
+#include "paddle/fluid/framework/parallel_executor.h"
 #include "paddle/fluid/framework/program_desc.h"
 #include "paddle/fluid/framework/scope.h"
 #include "paddle/fluid/framework/var_type_traits.h"
@@ -43,6 +42,7 @@ namespace operators {
 
 using StepScopeVar = std::vector<framework::Scope *>;
 using BlockDesc = framework::BlockDesc;
+using ProgramDesc = framework::ProgramDesc;
 
 using Variable = framework::Variable;
 using LoDTensor = framework::LoDTensor;
@@ -154,9 +154,54 @@ static void ShareVarsFromScope(const std::vector<Variable *> &vars,
                                         "RunProgram(Grad)Op'"
                                         "s internal scope.",
                                         var_names[i]));
+    VLOG(3) << "Found " << var_names[i] << " in " << scope << ", it is " << var;
     CheckOutputVarStatus(*var, *vars[i], var_names[i]);
+    VLOG(3) << "checkout done";
     VariableShare(*var, vars[i]);
   }
+}
+/*
+ * NOTE(Aurelius84): In ParallelExecutor, memory optimized pass will be applied.
+ * To
+ * avoid eagerly deleting last alive variables which are necessary in backward
+ * program,
+ * we firstly parse these variable names as skip_eager_vars. While executing
+ * pe.run
+ * skip_eager_vars are used to skip memory optimization.
+ *
+ * Variables satisfying the following rules are considered as skip_eager_var:
+ *
+ *   1. it is an output var in run_program_op
+ *   2. it is an input var used in backward_op
+ */
+static std::vector<std::string> ParseVarNamesNeededInBackward(
+    const ProgramDesc &program, int64_t forward_op_nums,
+    const std::vector<std::string> &output_var_names) {
+  // step 1: all out_vars are skip_eager_var
+  for (auto &var_name : output_var_names) {
+    VLOG(3) << "skip output var name: " << var_name;
+  }
+  std::vector<std::string> skip_eager_vars(output_var_names);
+  std::unordered_set<std::string> visited_vars;
+
+  auto all_ops = program.Block(0).AllOps();
+  // Between forward and backward op, there are many fill_constant_ops
+  size_t backward_op_start_index =
+      forward_op_nums + (output_var_names.size() * 2);
+
+  for (auto i = backward_op_start_index; i < all_ops.size(); ++i) {
+    framework::OpDesc *op = all_ops[i];
+    VLOG(3) << "Parse skip_eager_var with op: " << op->Type();
+    for (auto &in_var_name : op->InputArgumentNames()) {
+      if (!visited_vars.count(in_var_name)) {
+        skip_eager_vars.push_back(in_var_name);
+        visited_vars.insert(in_var_name);
+      }
+    }
+  }
+  VLOG(3) << "Found skip_eager_vars: " << skip_eager_vars.size();
+
+  return skip_eager_vars;
 }
 
 }  // namespace details
@@ -193,9 +238,6 @@ class RunProgramOpKernel : public framework::OpKernel<T> {
             "The OutScope of RunProgramGradOp should only hold one scope."));
 
     // Step 2. prepare executor and init persistable variables
-    framework::Executor exe(ctx.GetPlace());
-    auto exe_ctx = framework::GetExecutorInfoFromCache(
-        exe, ctx, {output_var_names}, /*is_grad=*/false);
 
     // NOTE(Aurelius84): While training some models, forward can be called many
     // times and then apply backpropagation all at once, such as Reinforcement
@@ -211,11 +253,41 @@ class RunProgramOpKernel : public framework::OpKernel<T> {
     details::ShareVarsIntoScope(input_vars, input_var_names, &scope);
     details::ShareVarsIntoScope(param_vars, param_names, &scope);
 
-    // Step 3. run ops
-    exe.RunPartialPreparedContext(exe_ctx.get(), &scope, start_op_index,
-                                  end_op_index, /*create_local_scope=*/false,
-                                  /*create_vars=*/true,
-                                  /*keep_kids=*/!is_test);
+    if (end_op_index > start_op_index) {
+      framework::BuildStrategy build_strategy;
+      framework::ExecutionStrategy execution_strategy;
+      execution_strategy.skip_drop_scope_ = true;
+      if (platform::is_cpu_place(ctx.GetPlace())) {
+        execution_strategy.use_device_ = platform::DeviceType::CPU;
+        execution_strategy.num_threads_ = 2;
+      } else if (platform::is_gpu_place(ctx.GetPlace())) {
+        execution_strategy.use_device_ = platform::DeviceType::CUDA;
+        execution_strategy.num_threads_ = 4;
+      } else {
+        execution_strategy.use_device_ = platform::DeviceType::XPU;
+        execution_strategy.num_threads_ = 1;
+      }
+      auto *program = ctx.Attr<BlockDesc *>("global_block")->Program();
+      auto graph = std::make_unique<framework::ir::Graph>(
+          *program, start_op_index, end_op_index);
+
+      framework::ParallelExecutor pe(ctx.GetPlace(),      // places
+                                     &scope,              // global_scope
+                                     execution_strategy,  // exec_strategy
+                                     build_strategy,      // build_strategy
+                                     graph.get());
+
+      // TODO(Aurelius84): make it only call once
+      pe.SkipMemoryReuse(/*scope_idx*/ 0, input_var_names);
+
+      // Step 3. run ops
+      VLOG(3) << "start to call pe.Run()...";
+      auto skip_eager_vars = details::ParseVarNamesNeededInBackward(
+          *program, end_op_index, output_var_names);
+      pe.RunWithoutFetch(skip_eager_vars);
+
+      VLOG(3) << "successfully to call pe.Run()...";
+    }
 
     // Step 4. Get Output
     details::ShareVarsFromScope(output_vars, output_var_names, &scope);
@@ -284,21 +356,50 @@ class RunProgramGradOpKernel : public framework::OpKernel<T> {
 
     auto &scope = *(global_inner_scope->kids().front());
 
-    // Step 2. prepare executor and scope
-    framework::Executor exe(ctx.GetPlace());
-    auto exe_ctx = framework::GetExecutorInfoFromCache(
-        exe, ctx, {input_grad_var_names, param_grad_names},
-        /*is_grad=*/true);
+    if (end_op_index > start_op_index) {
+      // Step 2. prepare executor and scope
+      framework::BuildStrategy build_strategy;
+      framework::ExecutionStrategy execution_strategy;
+      execution_strategy.skip_drop_scope_ = true;
+      if (platform::is_cpu_place(ctx.GetPlace())) {
+        execution_strategy.use_device_ = platform::DeviceType::CPU;
+        execution_strategy.num_threads_ = 2;
+      } else if (platform::is_gpu_place(ctx.GetPlace())) {
+        execution_strategy.use_device_ = platform::DeviceType::CUDA;
+        execution_strategy.num_threads_ = 4;
+      } else {
+        execution_strategy.use_device_ = platform::DeviceType::XPU;
+        execution_strategy.num_threads_ = 1;
+      }
 
-    details::ShareVarsIntoScope(output_grad_vars, output_grad_var_names,
-                                &scope);
-    // Debug info: scope info when run end
-    VLOG(3) << framework::GenScopeTreeDebugInfo(out_scope_vec->front());
+      auto *program = ctx.Attr<BlockDesc *>("global_block")->Program();
+      auto graph = std::make_unique<framework::ir::Graph>(
+          *program, start_op_index, end_op_index);
 
-    // Step 3. run ops
-    exe.RunPartialPreparedContext(exe_ctx.get(), &scope, start_op_index,
-                                  end_op_index, /*create_local_scope=*/false,
-                                  /*create_vars=*/true, /*keep_kids=*/false);
+      framework::ParallelExecutor pe(ctx.GetPlace(),      // places
+                                     &scope,              // global_scope
+                                     execution_strategy,  // exec_strategy
+                                     build_strategy,      // build_strategy
+                                     graph.get());
+
+      // TODO(Aurelius84): make it only call once
+      pe.SkipMemoryReuse(/*scope_idx*/ 0, output_grad_var_names);
+
+      details::ShareVarsIntoScope(output_grad_vars, output_grad_var_names,
+                                  &scope);
+      // Debug info: scope info when run end
+      VLOG(3) << framework::GenScopeTreeDebugInfo(out_scope_vec->front());
+
+      std::vector<std::string> skip_eager_vars(input_grad_var_names);
+      skip_eager_vars.insert(skip_eager_vars.end(), param_grad_names.begin(),
+                             param_grad_names.end());
+
+      // Step 3. run ops
+      // TODO(Aurelius84): Skip fetch_tensor overhead and just run all ops.
+      VLOG(3) << "start to call pe.Run()...";
+      pe.RunWithoutFetch(/*skip_eager_vars*/ skip_eager_vars);
+      VLOG(3) << "successfully to call pe.Run()...";
+    }
 
     // Step 4. get outputs
     details::ShareVarsFromScope(input_grad_vars, input_grad_var_names, &scope);

@@ -358,7 +358,8 @@ class TestResnet(unittest.TestCase):
     def test_in_static_mode_mkldnn(self):
         paddle.fluid.set_flags({'FLAGS_use_mkldnn': True})
         try:
-            train(to_static=True)
+            if paddle.fluid.core.is_compiled_with_mkldnn():
+                train(to_static=True)
         finally:
             paddle.fluid.set_flags({'FLAGS_use_mkldnn': False})
 

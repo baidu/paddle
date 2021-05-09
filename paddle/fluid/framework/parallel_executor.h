@@ -60,6 +60,12 @@ class ParallelExecutor {
                             const BuildStrategy &build_strategy,
                             ir::Graph *graph);
 
+  // NOTE(Aurelius84): Construct a PE running on single device.
+  explicit ParallelExecutor(const platform::Place &place, Scope *scope,
+                            const ExecutionStrategy &exec_strategy,
+                            const BuildStrategy &build_strategy,
+                            ir::Graph *graph);
+
   ~ParallelExecutor();
 
   size_t DeviceCount() const;
@@ -83,6 +89,11 @@ class ParallelExecutor {
 
   FetchResultType Run(const std::vector<std::string> &fetch_tensors,
                       bool return_merged = true);
+
+  void RunWithoutFetch(const std::vector<std::string> &skip_eager_vars);
+
+  void SkipMemoryReuse(size_t scope_idx,
+                       const std::vector<std::string> &skip_vars);
 
   const ir::Graph &Graph() const;
 

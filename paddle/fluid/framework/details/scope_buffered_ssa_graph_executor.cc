@@ -67,7 +67,8 @@ FetchResultType ScopeBufferedSSAGraphExecutor::Run(
     }
   };
 
-  if (strategy_.num_iteration_per_drop_scope_ == 1) {
+  if (strategy_.skip_drop_scope_ ||
+      strategy_.num_iteration_per_drop_scope_ == 1) {
     exe_run_func();
   } else {
     scope_monitor_.Apply(exe_run_func, fetch_tensors.size() > 0);
@@ -82,8 +83,9 @@ FetchResultType ScopeBufferedSSAGraphExecutor::Run(
   }
 
   ++drop_scope_counter_;
-  if (drop_scope_counter_ == strategy_.num_iteration_per_drop_scope_ ||
-      DropScopeOrNot()) {
+  if (!strategy_.skip_drop_scope_ &&
+      (drop_scope_counter_ == strategy_.num_iteration_per_drop_scope_ ||
+       DropScopeOrNot())) {
     DropLocalExeScopes();
   }
 

@@ -21,14 +21,16 @@ namespace paddle {
 namespace framework {
 namespace ir {
 
+using OpVariant = operators::OpVariant;
+
 class ConditionalOpEagerDeletionPass : public Pass {
  protected:
   void ApplyImpl(Graph *graph) const override {
     auto all_ops = ir::FilterByNodeWrapper<details::OpHandleBase>(*graph);
 
     // Find all conditional_op and conditional_grad_op
-    std::unordered_map<size_t, std::pair<std::vector<OperatorBase *>,
-                                         std::vector<OperatorBase *>>>
+    std::unordered_map<
+        size_t, std::pair<std::vector<OpVariant>, std::vector<OpVariant>>>
         target_ops;
     for (auto *op : all_ops) {
       auto compute_op = dynamic_cast<details::ComputationOpHandle *>(op);
@@ -40,6 +42,32 @@ class ConditionalOpEagerDeletionPass : public Pass {
       } else if (compute_op->Name() == "conditional_block_grad") {
         target_ops[compute_op->GetScopeIdx()].second.emplace_back(
             compute_op->GetOp());
+      }
+    }
+
+    if (graph->IsConstructedByPartialProgram()) {
+      PADDLE_ENFORCE_LE(
+          target_ops.size(), 1,
+          "Unsupport multi device if graph is constructed by partial program.");
+      size_t scope_idx = 0;
+      auto &ifelse_ops = target_ops[scope_idx].first;
+      auto &ifelse_grad_ops = target_ops[scope_idx].second;
+
+      auto all_ops = graph->OriginProgram().Block(0).AllOps();
+      if (ifelse_ops.empty()) {
+        for (auto *op : all_ops) {
+          if (op->Type() == "conditional_block") {
+            ifelse_ops.emplace_back(op);
+          }
+        }
+      } else if (ifelse_grad_ops.empty()) {
+        for (auto *op : all_ops) {
+          if (op->Type() == "conditional_block_grad") {
+            ifelse_grad_ops.emplace_back(op);
+          }
+        }
+      } else {
+        PADDLE_THROW("One of ifelse_ops or ifelse_grad_ops should be empty.");
       }
     }
 
