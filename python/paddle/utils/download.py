@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import os
 import sys
+import stat
 import os.path as osp
 import shutil
 import requests
@@ -121,7 +122,8 @@ def get_path_from_url(url,
                       root_dir,
                       md5sum=None,
                       check_exist=True,
-                      decompress=True):
+                      decompress=True,
+                      use_wget=False):
     """ Download from given url to root_dir.
     if file or directory specified by url is exists under
     root_dir, return the path directly, otherwise download
@@ -150,7 +152,7 @@ def get_path_from_url(url,
         logger.info("Found {}".format(fullpath))
     else:
         if ParallelEnv().current_endpoint in unique_endpoints:
-            fullpath = _download(url, root_dir, md5sum)
+            fullpath = _download(url, root_dir, md5sum, use_wget)
         else:
             while not os.path.exists(fullpath):
                 time.sleep(1)
@@ -163,7 +165,67 @@ def get_path_from_url(url,
     return fullpath
 
 
-def _download(url, path, md5sum=None):
+def git_clone_from_url(
+        git_url,
+        repo_dir,
+        branch=None,
+        md5sum=None,
+        check_exist=True, ):
+    """ Download from given git_url to repo_dir.
+    if file or directory specified by git_url is exists in
+    repo_dir, return the path directly, otherwise download
+    from url and decompress it, return the path.
+
+    Args:
+        git_url (str): clone url, 
+        repo_dir (str): root dir for downloading,
+        branch (str): checkout to branch, default branch if given None
+        md5sum (str): md5 sum of download package
+        check_exist (bool): check_exist
+    Returns:
+        str: a local path to save downloaded models & weights & datasets.
+    """
+
+    from paddle.fluid.dygraph.parallel import ParallelEnv
+
+    fullpath = repo_dir
+
+    unique_endpoints = _get_unique_endpoints(ParallelEnv().trainer_endpoints[:])
+    if osp.exists(fullpath) and check_exist and _md5check(fullpath, md5sum):
+        logger.info("Found {}".format(fullpath))
+    else:
+        if ParallelEnv().current_endpoint in unique_endpoints:
+            fullpath = _git_clone(git_url, fullpath, branch)
+        else:
+            while not os.path.exists(fullpath):
+                time.sleep(1)
+
+    return fullpath
+
+
+def _remove_if_exists(path):
+    if os.path.exists(path):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def _git_clone(url, repo_dir, branch):
+
+    if branch is None:
+        command = 'git clone {} {}'.format(url, repo_dir)
+    else:
+        command = 'git clone -b {} {} {}'.format(branch, url, repo_dir)
+
+    r = os.system(command)
+
+    if r != 0:
+        _remove_if_exists(repo_dir)
+        raise RuntimeError('{} failed.'.format(command))
+
+    _remove_if_exists(os.path.join(repo_dir, '.git'))
+    return repo_dir
+
+
+def _download(url, path, md5sum=None, use_wget=False):
     """
     Download from url, save to path.
 
@@ -186,26 +248,33 @@ def _download(url, path, md5sum=None):
 
         logger.info("Downloading {} from {}".format(fname, url))
 
-        req = requests.get(url, stream=True)
-        if req.status_code != 200:
-            raise RuntimeError("Downloading from {} failed with code "
-                               "{}!".format(url, req.status_code))
-
         # For protecting download interupted, download to
         # tmp_fullname firstly, move tmp_fullname to fullname
         # after download finished
         tmp_fullname = fullname + "_tmp"
-        total_size = req.headers.get('content-length')
-        with open(tmp_fullname, 'wb') as f:
-            if total_size:
-                with tqdm(total=(int(total_size) + 1023) // 1024) as pbar:
+
+        if use_wget:
+            r = os.system('wget {} -O {} '.format(url, tmp_fullname))
+            if r != 0:
+                raise RuntimeError("Downloading from {} failed with code,"
+                                   "{}!".format(url, r))
+        else:
+            req = requests.get(url, stream=True)
+            if req.status_code != 200:
+                raise RuntimeError("Downloading from {} failed with code "
+                                   "{}!".format(url, req.status_code))
+            total_size = req.headers.get('content-length')
+            with open(tmp_fullname, 'wb') as f:
+                if total_size:
+                    with tqdm(total=(int(total_size) + 1023) // 1024) as pbar:
+                        for chunk in req.iter_content(chunk_size=1024):
+                            f.write(chunk)
+                            pbar.update(1)
+                else:
                     for chunk in req.iter_content(chunk_size=1024):
-                        f.write(chunk)
-                        pbar.update(1)
-            else:
-                for chunk in req.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
+                        if chunk:
+                            f.write(chunk)
+
         shutil.move(tmp_fullname, fullname)
 
     return fullname
