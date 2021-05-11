@@ -70,6 +70,13 @@ class TestDownload(unittest.TestCase):
         for url in urls:
             get_path_from_url(url, root_dir='./test')
 
+    def test_retry_exception(self, ):
+        with self.assertRaises(RuntimeError):
+            from paddle.utils.download import _download
+            _download(
+                'www.baidu.com',
+                './test', )
+
 
 if __name__ == '__main__':
     unittest.main()
