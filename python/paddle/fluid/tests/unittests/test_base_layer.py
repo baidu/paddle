@@ -341,7 +341,7 @@ class TestLayerTo(unittest.TestCase):
         self.linear.register_buffer("buf_name", buffer, persistable=True)
 
         sublayer = paddle.nn.Conv1D(3, 2, 3)
-        self.linear.add_sublayer(1, sublayer)
+        self.linear.add_sublayer("1", sublayer)
 
     def test_to_api(self):
         self.linear.to(dtype='double')
@@ -351,8 +351,8 @@ class TestLayerTo(unittest.TestCase):
                          paddle.fluid.core.VarDesc.VarType.FP64)
         self.assertTrue(
             np.allclose(self.linear.weight.grad.numpy(), self.new_grad))
-        self.assertTrue(self.linear.weight._grad_ivar().dtype,
-                        paddle.fluid.core.VarDesc.VarType.FP64)
+        self.assertEqual(self.linear.weight._grad_ivar().dtype,
+                         paddle.fluid.core.VarDesc.VarType.FP64)
 
         self.linear.to()
         self.assertEqual(self.linear.weight.dtype,
@@ -361,8 +361,10 @@ class TestLayerTo(unittest.TestCase):
                          paddle.fluid.core.VarDesc.VarType.FP64)
         self.assertTrue(
             np.allclose(self.linear.weight.grad.numpy(), self.new_grad))
-        self.assertTrue(self.linear.weight._grad_ivar().dtype,
-                        paddle.fluid.core.VarDesc.VarType.FP64)
+        self.assertEqual(self.linear.weight._grad_ivar().dtype,
+                         paddle.fluid.core.VarDesc.VarType.FP64)
+        for p in self.linear.parameters():
+            self.assertTrue(isinstance(p, paddle.fluid.framework.ParamBase))
 
         if paddle.fluid.is_compiled_with_cuda():
             self.linear.to(device=paddle.CUDAPlace(0))
@@ -384,6 +386,8 @@ class TestLayerTo(unittest.TestCase):
             ))
             self.assertEqual(
                 self.linear.weight._grad_ivar().place.gpu_device_id(), 0)
+            for p in self.linear.parameters():
+                self.assertTrue(isinstance(p, paddle.fluid.framework.ParamBase))
 
         self.linear.to(device=paddle.CPUPlace())
         self.assertTrue(self.linear.weight.place.is_cpu_place())

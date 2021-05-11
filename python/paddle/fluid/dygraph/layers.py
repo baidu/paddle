@@ -34,7 +34,7 @@ from .base import program_desc_tracing_guard, param_guard
 from paddle.fluid import framework
 from ..param_attr import ParamAttr
 from paddle.fluid.executor import Executor, global_scope
-from paddle.fluid.framework import in_dygraph_mode
+from paddle.fluid.framework import in_dygraph_mode, ParamBase
 from paddle.fluid.framework import _current_expected_place as _get_device
 from paddle.fluid.dygraph import no_grad
 import paddle.utils.deprecated as deprecated
@@ -1336,7 +1336,11 @@ class Layer(core.Layer):
                     param_applied = func(param, device, dtype, blocking)
                     assert param.is_leaf
                     param_applied.stop_gradient = param.stop_gradient
-                    self._parameters[key] = param_applied
+                    state = copy.deepcopy(self.__dict__)
+                    new_param = ParamBase(param_applied.shape,
+                                          param_applied.dtype, **state)
+                    new_param.copy_(param_applied, True)
+                    self._parameters[key] = new_param
 
                 if param.grad is not None:
                     with no_grad():
