@@ -15,6 +15,7 @@ import copy
 import paddle
 from paddle.fluid.framework import core
 from paddle.fluid import compiler
+from paddle.static import BuildStrategy
 from .meta_optimizer_base import MetaOptimizerBase
 from ..base.private_helper_function import wait_server_ready
 import logging
@@ -146,6 +147,17 @@ class GraphExecutionOptimizer(MetaOptimizerBase):
             dist_strategy.fuse_all_reduce_ops
         local_build_strategy.nccl_comm_num = \
             dist_strategy.nccl_comm_num
+
+        gradient_scale_configs = self.user_defined_strategy.gradient_scale_configs
+        scale_strategys = {
+            'avg': BuildStrategy.GradientScaleStrategy.CoeffNumDevice,
+            'sum': BuildStrategy.GradientScaleStrategy.One,
+            'customized': BuildStrategy.GradientScaleStrategy.Customized,
+        }
+        assert gradient_scale_configs['scale_strategy'] in scale_strategys, \
+                "gradient_scale_configs.scale_strategy must be 'avg', 'sum' or 'customized'"
+        local_build_strategy.gradient_scale_strategy = \
+                scale_strategys[gradient_scale_configs['scale_strategy']]
 
         if self.user_defined_strategy.recompute == True:
             logging.warn(

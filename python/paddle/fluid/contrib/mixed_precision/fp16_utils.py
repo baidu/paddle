@@ -272,6 +272,10 @@ def _need_keep_fp32(op, unsupported_op_list, use_fp16_guard):
         # they must be executed in fp32 calculation pattern.
         return True
 
+    if op.attr('op_role') == int(
+            core.op_proto_and_checker_maker.OpRole.LRSched):
+        return True
+
     # process ops about learning rate
     in_out_arg_names = []
     in_out_arg_names.extend(list(op.input_arg_names))

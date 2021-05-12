@@ -118,6 +118,16 @@ message ExecutionStrategy {
   optional bool use_thread_barrier = 4 [ default = false ];
 }
 
+message GradientScaleConfig {
+  // Optional value ['avg', 'sum', 'customized']
+  // If avg, loss@grad will be divided by the number of devices,
+  // that is, the gradient will be accumulated and averaged among
+  // multiple devices.
+  // Else if sum, the gradient will accumulated among multiple
+  // devices.
+  optional string scale_strategy = 1 [ default = 'avg' ];
+}
+
 message AsyncConfig {
   optional int32 k_steps = 1 [ default = -1 ];
   optional int32 max_merge_var_num = 2 [ default = 1 ];
@@ -191,6 +201,7 @@ message DistributedStrategy {
   optional TensorParallelConfig tensor_parallel_configs = 113;
   optional BuildStrategy build_strategy = 201;
   optional ExecutionStrategy execution_strategy = 202;
+  optional GradientScaleConfig gradient_scale_configs = 203;
 }
 
 message DistributedJobInfo {

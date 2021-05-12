@@ -255,6 +255,19 @@ class DistributedStrategy(object):
                         f.name).extend(getattr(strategy, f.name))
 
     @property
+    def gradient_scale_configs(self):
+        """
+        """
+        return get_msg_dict(self.strategy.gradient_scale_configs)
+
+    @gradient_scale_configs.setter
+    @is_strict_auto
+    def gradient_scale_configs(self, config):
+        check_configs_key(self.strategy.gradient_scale_configs, config,
+                          'gradient_scale_configs')
+        assign_configs_value(self.strategy.gradient_scale_configs, config)
+
+    @property
     def a_sync(self):
         """
         Indicating whether we are using asynchronous stocastic gradient descent updates
