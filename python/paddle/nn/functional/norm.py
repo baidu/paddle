@@ -159,19 +159,11 @@ def batch_norm(x,
           batch_norm_out = paddle.nn.functional.batch_norm(x, rm, rv, w, b)
           print(batch_norm_out)
     """
-    assert len(x.shape) >= 2, "input dim must be larger than 1"
 
     # input ad out must share the memory
     mean_out = running_mean
     variance_out = running_var
 
-    true_data_format = ['NC', 'NCL', 'NCHW', 'NCDHW', 'NLC', 'NHWC', 'NDHWC']
-    if data_format not in true_data_format:
-        raise ValueError(
-            "data_format must be one of 'NC', 'NCL', 'NCHW', 'NCDHW', "
-            "'NLC', 'NHWC', 'NDHWC' but receive {}".format(data_format))
-
-    data_format = 'NCHW' if data_format[1] == 'C' else 'NHWC'
 
     if use_global_stats == None:
         use_global_stats = not training
@@ -188,9 +180,18 @@ def batch_norm(x,
         batch_norm_out, _, _, _, _, _ = core.ops.batch_norm(
             x, weight, bias, running_mean, running_var, mean_out, variance_out,
             *attrs)
-        return dygraph_utils._append_activation_in_dygraph(
-            batch_norm_out, act=None)
+        return batch_norm_out
 
+    assert len(x.shape) >= 2, "input dim must be larger than 1"
+    true_data_format = ['NC', 'NCL', 'NCHW', 'NCDHW', 'NLC', 'NHWC', 'NDHWC']
+
+    if data_format not in true_data_format:
+        raise ValueError(
+            "data_format must be one of 'NC', 'NCL', 'NCHW', 'NCDHW', "
+            "'NLC', 'NHWC', 'NDHWC' but receive {}".format(data_format))
+
+    data_format = 'NCHW' if data_format[1] == 'C' else 'NHWC'
+    
     check_variable_and_dtype(x, 'input', ['float16', 'float32', 'float64'],
                              'BatchNorm')
 
