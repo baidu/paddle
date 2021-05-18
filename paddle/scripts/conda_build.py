@@ -135,10 +135,16 @@ python setup.py install
     - cudatoolkit>=10.2, <10.3
     - cudnn>=7.6, <7.7
     """
+
+        self.cuda110 = r"""
+    - cudatoolkit>=11.0, <11.1
+    - cudnn>=8.0, <8.1
+    """
         self.cuda_info = [(self.cuda90, "cuda9.0", ".post90"),
                           (self.cuda100, "cuda10.0", ".post100"),
                           (self.cuda101, "cuda10.1", ".post101"),
-                          (self.cuda102, "cuda10.2", "")]
+                          (self.cuda102, "cuda10.2", ""),
+                          (self.cuda110, "cuda11.0", ".post110")]
         self.py_str = ["py27", "py35", "py36", "py37", "py38"]
         self.pip_end = ".whl --no-deps"
         self.pip_prefix_linux = "pip install /package/paddlepaddle"
@@ -269,6 +275,8 @@ def conda_build(paddle_version, var):
         for i in range(len(var.python_version)):
             for cuda_str in var.cuda_info:
                 post = cuda_str[2]
+                if post == ".post110":
+                    continue
                 blt_var = var.pip_prefix_windows + var.pip_gpu + paddle_version + post + var.windows_pip[
                     i] + var.pip_end
                 name = var.py_str[i] + "_gpu_" + cuda_str[1] + "_windows"
