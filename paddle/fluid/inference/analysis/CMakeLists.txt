@@ -59,14 +59,7 @@ function(inference_analysis_test TARGET)
 endfunction(inference_analysis_test)
 
 
-if (NOT APPLE AND NOT WIN32)
-  inference_analysis_test(test_analyzer
-    SRCS analyzer_tester.cc
-    EXTRA_DEPS reset_tensor_array paddle_inference_shared
-    ARGS --inference_model_dir=${WORD2VEC_MODEL_DIR})
-elseif(WIN32)
-    inference_analysis_test(test_analyzer
-      SRCS analyzer_tester.cc
-      EXTRA_DEPS reset_tensor_array paddle_inference_api
-      ARGS --inference_model_dir=${WORD2VEC_MODEL_DIR})
-endif()
+inference_analysis_test(test_analyzer
+  SRCS analyzer_tester.cc
+  EXTRA_DEPS reset_tensor_array paddle_inference_api
+  ARGS --inference_model_dir=${WORD2VEC_MODEL_DIR})
