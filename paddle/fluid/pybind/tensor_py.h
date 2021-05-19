@@ -122,6 +122,43 @@ struct npy_format_descriptor<paddle::platform::complex128> {
   static constexpr auto name = _("complext128");
 };
 
+// we register paddle::platform::complex64 as numpy.complex64.
+template <>
+struct npy_format_descriptor<paddle::platform::complex<float>> {
+  static py::dtype dtype() {
+    handle ptr = npy_api::get().PyArray_DescrFromType_(NPY_COMPLEX64);
+    return reinterpret_borrow<py::dtype>(ptr);
+  }
+
+  static std::string format() {
+    // Note: "F" represents complex64.
+    // Details at:
+    // https://stackoverflow.com/questions/13997087/what-are-the-available-datatypes-for-dtype-with-numpys-loadtxt-an-genfromtx
+    // for k, v in np.sctypeDict.iteritems():
+    //     print '{0:14s} : {1:40s}'.format(str(k), v)
+    return "F";
+  }
+  static constexpr auto name = _("complext64");
+};
+
+template <>
+struct npy_format_descriptor<paddle::platform::complex<double>> {
+  static py::dtype dtype() {
+    handle ptr = npy_api::get().PyArray_DescrFromType_(NPY_COMPLEX128);
+    return reinterpret_borrow<py::dtype>(ptr);
+  }
+
+  static std::string format() {
+    // Note: "D" represents complex128.
+    // Details at:
+    // https://stackoverflow.com/questions/13997087/what-are-the-available-datatypes-for-dtype-with-numpys-loadtxt-an-genfromtx
+    // for k, v in np.sctypeDict.iteritems():
+    //     print '{0:14s} : {1:40s}'.format(str(k), v)
+    return "D";
+  }
+  static constexpr auto name = _("complext128");
+};
+
 }  // namespace detail
 }  // namespace pybind11
 
@@ -170,6 +207,8 @@ DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::float16);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::bfloat16);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::complex64);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::complex128);
+DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::complex<float>);
+DECLARE_VALID_DTYPE_TO_PY_ARRAY(platform::complex<double>);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(float);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(double);
 DECLARE_VALID_DTYPE_TO_PY_ARRAY(bool);
@@ -191,6 +230,10 @@ inline std::string TensorDTypeToPyDTypeStr(
     } else if (std::is_same<T, platform::complex64>::value) {               \
       return "F";                                                           \
     } else if (std::is_same<T, platform::complex128>::value) {              \
+      return "D";                                                           \
+    } else if (std::is_same<T, platform::complex<float>>::value) {          \
+      return "F";                                                           \
+    } else if (std::is_same<T, platform::complex<double>>::value) {         \
       return "D";                                                           \
     } else {                                                                \
       constexpr auto kIsValidDType = ValidDTypeToPyArrayChecker<T>::kValue; \
@@ -367,12 +410,14 @@ void SetTensorFromPyArray(framework::Tensor *self, const py::object &obj,
   } else if (py::isinstance<py::array_t<paddle::platform::float16>>(array)) {
     SetTensorFromPyArrayT<paddle::platform::float16, P>(self, array, place,
                                                         zero_copy);
-  } else if (py::isinstance<py::array_t<paddle::platform::complex64>>(array)) {
-    SetTensorFromPyArrayT<paddle::platform::complex64, P>(self, array, place,
-                                                          zero_copy);
-  } else if (py::isinstance<py::array_t<paddle::platform::complex128>>(array)) {
-    SetTensorFromPyArrayT<paddle::platform::complex128, P>(self, array, place,
-                                                           zero_copy);
+  } else if (py::isinstance<py::array_t<paddle::platform::complex<float>>>(
+                 array)) {
+    SetTensorFromPyArrayT<paddle::platform::complex<float>, P>(
+        self, array, place, zero_copy);
+  } else if (py::isinstance<py::array_t<paddle::platform::complex<double>>>(
+                 array)) {
+    SetTensorFromPyArrayT<paddle::platform::complex<double>, P>(
+        self, array, place, zero_copy);
   } else if (py::isinstance<py::array_t<uint16_t>>(array)) {
     // since there is still no support for bfloat16 in NumPy,
     // uint16 is used for casting bfloat16

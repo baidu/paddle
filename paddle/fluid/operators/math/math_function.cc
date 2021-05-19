@@ -47,6 +47,10 @@ template struct SetConstant<platform::CPUDeviceContext, bool>;
 template struct SetConstant<platform::CPUDeviceContext, uint8_t>;
 template struct SetConstant<platform::CPUDeviceContext, platform::complex64>;
 template struct SetConstant<platform::CPUDeviceContext, platform::complex128>;
+template struct SetConstant<platform::CPUDeviceContext,
+                            platform::complex<float>>;
+template struct SetConstant<platform::CPUDeviceContext,
+                            platform::complex<double>>;
 
 #ifdef PADDLE_WITH_XPU
 template struct SetConstant<platform::XPUDeviceContext, platform::float16>;
@@ -59,6 +63,10 @@ template struct SetConstant<platform::XPUDeviceContext, int64_t>;
 template struct SetConstant<platform::XPUDeviceContext, bool>;
 template struct SetConstant<platform::XPUDeviceContext, platform::complex64>;
 template struct SetConstant<platform::XPUDeviceContext, platform::complex128>;
+template struct SetConstant<platform::XPUDeviceContext,
+                            platform::complex<float>>;
+template struct SetConstant<platform::XPUDeviceContext,
+                            platform::complex<double>>;
 #endif
 
 #define DEFINE_CPU_TRANS(RANK)                                                \
@@ -74,6 +82,10 @@ template struct SetConstant<platform::XPUDeviceContext, platform::complex128>;
   template struct Transpose<platform::CPUDeviceContext, int16_t, RANK>;       \
   template struct Transpose<platform::CPUDeviceContext, uint8_t, RANK>;       \
   template struct Transpose<platform::CPUDeviceContext, int8_t, RANK>;        \
+  template struct Transpose<platform::CPUDeviceContext,                       \
+                            platform::complex<float>, RANK>;                  \
+  template struct Transpose<platform::CPUDeviceContext,                       \
+                            platform::complex<double>, RANK>;                 \
   template struct Transpose<platform::CPUDeviceContext, platform::complex64,  \
                             RANK>;                                            \
   template struct Transpose<platform::CPUDeviceContext, platform::complex128, \
@@ -130,6 +142,8 @@ DEFINE_CPU_TRANS_NORMAL(uint8_t);
 DEFINE_CPU_TRANS_NORMAL(int8_t);
 DEFINE_CPU_TRANS_NORMAL(platform::complex64);
 DEFINE_CPU_TRANS_NORMAL(platform::complex128);
+DEFINE_CPU_TRANS_NORMAL(platform::complex<float>);
+DEFINE_CPU_TRANS_NORMAL(platform::complex<double>);
 
 struct TensorSetConstantCPU {
   TensorSetConstantCPU(framework::Tensor* tensor, float value)

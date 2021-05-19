@@ -163,6 +163,11 @@ static void PrintNanInf(const T* value, const size_t numel, int print_num,
                               omp_in)
 #pragma omp declare reduction(+ : paddle::platform::complex128 : omp_out += \
                               omp_in)
+#pragma omp declare reduction(+ : paddle::platform::complex < \
+                                  float > : omp_out += omp_in)
+#pragma omp declare reduction(+ : paddle::platform::complex < \
+                                  double > : omp_out += omp_in)
+
 #endif
 
 template <typename T>
@@ -268,12 +273,69 @@ void CheckNanInf<paddle::platform::complex128>(
         op_type));
   }
 }
+
+template <>
+void CheckNanInf<paddle::platform::complex<float>>(
+    const paddle::platform::complex<float>* value, const size_t numel,
+    int print_num, const std::string& op_type, const std::string& var_name) {
+  float real_sum = 0.0f;
+#pragma omp parallel for reduction(+ : real_sum)
+  for (size_t i = 0; i < numel; ++i) {
+    real_sum += (value[i].real - value[i].real);
+  }
+
+  float imag_sum = 0.0f;
+#pragma omp parallel for reduction(+ : imag_sum)
+  for (size_t i = 0; i < numel; ++i) {
+    imag_sum += (value[i].imag - value[i].imag);
+  }
+
+  if (std::isnan(real_sum) || std::isinf(real_sum) || std::isnan(imag_sum) ||
+      std::isinf(imag_sum)) {
+    // hot fix for compile failed in gcc4.8
+    // here also need print detail info of nan or inf later
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "There are `nan` or `inf` in tensor (%s) of operator (%s).", var_name,
+        op_type));
+  }
+}
+
+template <>
+    void CheckNanInf<paddle::platform::complex<double>>>
+    (const paddle::platform::complex<double>* value, const size_t numel,
+     int print_num, const std::string& op_type, const std::string& var_name) {
+  double real_sum = 0.0;
+#pragma omp parallel for reduction(+ : real_sum)
+  for (size_t i = 0; i < numel; ++i) {
+    real_sum += (value[i].real - value[i].real);
+  }
+
+  double imag_sum = 0.0;
+#pragma omp parallel for reduction(+ : imag_sum)
+  for (size_t i = 0; i < numel; ++i) {
+    imag_sum += (value[i].imag - value[i].imag);
+  }
+
+  if (std::isnan(real_sum) || std::isinf(real_sum) || std::isnan(imag_sum) ||
+      std::isinf(imag_sum)) {
+    // hot fix for compile failed in gcc4.8
+    // here also need print detail info of nan or inf later
+    PADDLE_THROW(platform::errors::PreconditionNotMet(
+        "There are `nan` or `inf` in tensor (%s) of operator (%s).", var_name,
+        op_type));
+  }
+}
+
 #endif
 
 template <>
 template <typename T>
 void TensorCheckerVisitor<platform::CPUDeviceContext>::apply(
-    typename std::enable_if<std::is_floating_point<T>::value>::type*) const {
+    typename std::enable_if<
+        std::is_floating_point<T>::value ||
+        std::is_same<T, ::paddle::platform::complex<float>>::value ||
+        std::is_same<T, ::paddle::platform::complex<double>>::value>::type*)
+    const {
   // use env strategy control in future, -1=print_all.
   int print_num = 3;
   CheckNanInf(tensor_.data<T>(), tensor_.numel(), print_num, op_type_,

@@ -43,6 +43,10 @@ template struct SetConstant<platform::CUDADeviceContext, int64_t>;
 template struct SetConstant<platform::CUDADeviceContext, bool>;
 template struct SetConstant<platform::CUDADeviceContext, platform::complex64>;
 template struct SetConstant<platform::CUDADeviceContext, platform::complex128>;
+template struct SetConstant<platform::CUDADeviceContext,
+                            platform::complex<float>>;
+template struct SetConstant<platform::CUDADeviceContext,
+                            platform::complex<double>>;
 
 #define DEFINE_GPU_TRANS(RANK)                                             \
   template struct Transpose<platform::CUDADeviceContext, float, RANK>;     \
@@ -52,6 +56,10 @@ template struct SetConstant<platform::CUDADeviceContext, platform::complex128>;
   template struct Transpose<platform::CUDADeviceContext, int8_t, RANK>;    \
   template struct Transpose<platform::CUDADeviceContext, int32_t, RANK>;   \
   template struct Transpose<platform::CUDADeviceContext, int64_t, RANK>;   \
+  template struct Transpose<platform::CUDADeviceContext,                   \
+                            paddle::platform::complex<float>, RANK>;       \
+  template struct Transpose<platform::CUDADeviceContext,                   \
+                            paddle::platform::complex<double>, RANK>;      \
   template struct Transpose<platform::CUDADeviceContext, complex64, RANK>; \
   template struct Transpose<platform::CUDADeviceContext, complex128, RANK>;
 
@@ -145,6 +153,8 @@ DEFINE_GPU_TRANS_NORMAL(uint8_t);
 DEFINE_GPU_TRANS_NORMAL(int8_t);
 DEFINE_GPU_TRANS_NORMAL(complex64);
 DEFINE_GPU_TRANS_NORMAL(complex128);
+DEFINE_GPU_TRANS_NORMAL(paddle::platform::complex<float>);
+DEFINE_GPU_TRANS_NORMAL(paddle::platform::complex<double>);
 
 struct TensorSetConstantGPU {
   TensorSetConstantGPU(const platform::DeviceContext& context,

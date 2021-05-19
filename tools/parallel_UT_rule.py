@@ -421,6 +421,7 @@ CPU_PARALLEL_JOB = [
     'buffered_allocator_test',
     'broadcast_op_test',
     'bfloat16_test',
+    'complex_test',
     'beam_search_decode_op_test',
     'auto_growth_best_fit_allocator_test',
     'assign_op_test',

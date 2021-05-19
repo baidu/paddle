@@ -15,6 +15,7 @@
 #pragma once
 
 #include "paddle/fluid/platform/bfloat16.h"
+#include "paddle/fluid/platform/complex.h"
 #include "paddle/fluid/platform/complex128.h"
 #include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/float16.h"
@@ -27,6 +28,8 @@ namespace Eigen {
 using complex64 = paddle::platform::complex64;
 using complex128 = paddle::platform::complex128;
 using float16 = paddle::platform::float16;
+template <typename T>
+using complex = paddle::platform::complex<T>;
 
 template <typename T>
 struct NumTraits;
@@ -85,6 +88,50 @@ struct NumTraits<complex64> : GenericNumTraits<std::complex<float>> {
 
 template <>
 struct NumTraits<complex128> : GenericNumTraits<std::complex<double>> {
+  typedef double Real;
+  typedef typename NumTraits<double>::Literal Literal;
+  enum {
+    IsComplex = 1,
+    RequireInitialization = NumTraits<double>::RequireInitialization,
+    ReadCost = 2 * NumTraits<double>::ReadCost,
+    AddCost = 2 * NumTraits<Real>::AddCost,
+    MulCost = 4 * NumTraits<Real>::MulCost + 2 * NumTraits<Real>::AddCost
+  };
+
+  EIGEN_DEVICE_FUNC
+  static inline Real epsilon() { return NumTraits<Real>::epsilon(); }
+  EIGEN_DEVICE_FUNC
+  static inline Real dummy_precision() {
+    return NumTraits<Real>::dummy_precision();
+  }
+  EIGEN_DEVICE_FUNC
+  static inline int digits10() { return NumTraits<Real>::digits10(); }
+};
+
+template <>
+struct NumTraits<complex<float>> : GenericNumTraits<std::complex<float>> {
+  typedef float Real;
+  typedef typename NumTraits<float>::Literal Literal;
+  enum {
+    IsComplex = 1,
+    RequireInitialization = NumTraits<float>::RequireInitialization,
+    ReadCost = 2 * NumTraits<float>::ReadCost,
+    AddCost = 2 * NumTraits<Real>::AddCost,
+    MulCost = 4 * NumTraits<Real>::MulCost + 2 * NumTraits<Real>::AddCost
+  };
+
+  EIGEN_DEVICE_FUNC
+  static inline Real epsilon() { return NumTraits<Real>::epsilon(); }
+  EIGEN_DEVICE_FUNC
+  static inline Real dummy_precision() {
+    return NumTraits<Real>::dummy_precision();
+  }
+  EIGEN_DEVICE_FUNC
+  static inline int digits10() { return NumTraits<Real>::digits10(); }
+};
+
+template <>
+struct NumTraits<complex<double>> : GenericNumTraits<std::complex<double>> {
   typedef double Real;
   typedef typename NumTraits<double>::Literal Literal;
   enum {
@@ -351,6 +398,138 @@ HOSTDEVICE inline complex128 pow(const complex128& a, const complex128& b) {
 
 template <>
 HOSTDEVICE inline double abs(const complex128& a) {
+  return paddle::platform::abs(a);
+}
+
+//////////// complex<float> methods /////////////
+
+template <>
+HOSTDEVICE inline bool(isnan)(const complex<float>& a) {
+  return (paddle::platform::isnan)(a);
+}
+
+template <>
+HOSTDEVICE inline bool(isinf)(const complex<float>& a) {
+  return (paddle::platform::isinf)(a);
+}
+
+template <>
+HOSTDEVICE inline bool(isfinite)(const complex<float>& a) {
+  return (paddle::platform::isfinite)(a);
+}
+
+template <>
+HOSTDEVICE inline complex<float> exp(const complex<float>& a) {
+  float com = ::expf(a.real);
+  float res_real = com * ::cosf(a.imag);
+  float res_imag = com * ::sinf(a.imag);
+  return complex<float>(res_real, res_imag);
+}
+
+template <>
+HOSTDEVICE inline complex<float> log(const complex<float>& a) {
+  return paddle::platform::log(a);
+}
+
+template <>
+HOSTDEVICE inline complex<float> tanh(const complex<float>& a) {
+  return paddle::platform::tanh(a);
+}
+
+template <>
+HOSTDEVICE inline complex<float> sqrt(const complex<float>& a) {
+  return paddle::platform::sqrt(a);
+}
+
+template <>
+HOSTDEVICE inline complex<float> ceil(const complex<float>& a) {
+  return complex<float>(::ceilf(a.real), ::ceilf(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<float> floor(const complex<float>& a) {
+  return complex<float>(::floorf(a.real), ::floor(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<float> round(const complex<float>& a) {
+  return complex<float>(::roundf(a.real), ::roundf(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<float> pow(const complex<float>& a,
+                                     const complex<float>& b) {
+  return paddle::platform::pow(a, b);
+}
+
+template <>
+HOSTDEVICE inline float abs(const complex<float>& a) {
+  return paddle::platform::abs(a);
+}
+
+//////////// complex<double> methods /////////////
+
+template <>
+HOSTDEVICE inline bool(isnan)(const complex<double>& a) {
+  return (paddle::platform::isnan)(a);
+}
+
+template <>
+HOSTDEVICE inline bool(isinf)(const complex<double>& a) {
+  return (paddle::platform::isinf)(a);
+}
+
+template <>
+HOSTDEVICE inline bool(isfinite)(const complex<double>& a) {
+  return (paddle::platform::isfinite)(a);
+}
+
+template <>
+HOSTDEVICE inline complex<double> exp(const complex<double>& a) {
+  double com = ::expf(a.real);
+  double res_real = com * ::cosf(a.imag);
+  double res_imag = com * ::sinf(a.imag);
+  return complex<double>(res_real, res_imag);
+}
+
+template <>
+HOSTDEVICE inline complex<double> log(const complex<double>& a) {
+  return paddle::platform::log(a);
+}
+
+template <>
+HOSTDEVICE inline complex<double> tanh(const complex<double>& a) {
+  return paddle::platform::tanh(a);
+}
+
+template <>
+HOSTDEVICE inline complex<double> sqrt(const complex<double>& a) {
+  return paddle::platform::sqrt(a);
+}
+
+template <>
+HOSTDEVICE inline complex<double> ceil(const complex<double>& a) {
+  return complex<double>(::ceilf(a.real), ::ceilf(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<double> floor(const complex<double>& a) {
+  return complex<double>(::floorf(a.real), ::floor(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<double> round(const complex<double>& a) {
+  return complex<double>(::roundf(a.real), ::roundf(a.imag));
+}
+
+template <>
+HOSTDEVICE inline complex<double> pow(const complex<double>& a,
+                                      const complex<double>& b) {
+  return paddle::platform::pow(a, b);
+}
+
+template <>
+HOSTDEVICE inline double abs(const complex<double>& a) {
   return paddle::platform::abs(a);
 }
 

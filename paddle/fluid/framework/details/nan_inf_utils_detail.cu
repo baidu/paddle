@@ -123,7 +123,11 @@ __global__ void CheckNanInfKernel(const T* value, const size_t numel,
 template <>
 template <typename T>
 void TensorCheckerVisitor<platform::CUDADeviceContext>::apply(
-    typename std::enable_if<std::is_floating_point<T>::value>::type*) const {
+    typename std::enable_if<
+        std::is_floating_point<T>::value ||
+        std::is_same<T, ::paddle::platform::complex<float>>::value ||
+        std::is_same<T, ::paddle::platform::complex<double>>::value>::type*)
+    const {
   int print_num = 3;
 
   auto* dev_ctx = reinterpret_cast<platform::CUDADeviceContext*>(

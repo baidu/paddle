@@ -28,6 +28,13 @@ namespace framework {
 namespace {  // NOLINT
 template <typename T>
 constexpr uint8_t GetDLDataTypeCode() {
+  if (std::is_same<T, platform::complex<float>>::value ||
+      std::is_same<T, platform::complex<double>>::value ||
+      std::is_same<T, platform::complex64>::value ||
+      std::is_same<T, platform::complex128>::value) {
+    return static_cast<uint8_t>(5);
+  }
+
   return std::is_same<platform::float16, T>::value ||
                  std::is_floating_point<T>::value
              ? static_cast<uint8_t>(kDLFloat)

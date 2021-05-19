@@ -18,6 +18,7 @@ limitations under the License. */
 
 #include "paddle/fluid/framework/framework.pb.h"
 #include "paddle/fluid/platform/bfloat16.h"
+#include "paddle/fluid/platform/complex.h"
 #include "paddle/fluid/platform/complex128.h"
 #include "paddle/fluid/platform/complex64.h"
 #include "paddle/fluid/platform/eigen_ext.h"
@@ -30,6 +31,8 @@ struct bfloat16;
 struct complex128;
 struct complex64;
 struct float16;
+template <typename T>
+struct complex;
 }  // namespace platform
 }  // namespace paddle
 
@@ -61,6 +64,10 @@ struct DataTypeTrait<void> {
   _ForEachDataTypeHelper_(callback, uint8_t, UINT8);                           \
   _ForEachDataTypeHelper_(callback, int16_t, INT16);                           \
   _ForEachDataTypeHelper_(callback, int8_t, INT8);                             \
+  _ForEachDataTypeHelper_(callback, ::paddle::platform::complex<float>,        \
+                          COMPLEX64);                                          \
+  _ForEachDataTypeHelper_(callback, ::paddle::platform::complex<double>,       \
+                          COMPLEX128);                                         \
   _ForEachDataTypeHelper_(callback, ::paddle::platform::complex64, COMPLEX64); \
   _ForEachDataTypeHelper_(callback, ::paddle::platform::complex128, COMPLEX128);
 
@@ -69,6 +76,10 @@ struct DataTypeTrait<void> {
   _ForEachDataTypeHelper_(callback, double, FP64);                             \
   _ForEachDataTypeHelper_(callback, int, INT32);                               \
   _ForEachDataTypeHelper_(callback, int64_t, INT64);                           \
+  _ForEachDataTypeHelper_(callback, ::paddle::platform::complex<float>,        \
+                          COMPLEX64);                                          \
+  _ForEachDataTypeHelper_(callback, ::paddle::platform::complex<double>,       \
+                          COMPLEX128);                                         \
   _ForEachDataTypeHelper_(callback, ::paddle::platform::complex64, COMPLEX64); \
   _ForEachDataTypeHelper_(callback, ::paddle::platform::complex128, COMPLEX128);
 
