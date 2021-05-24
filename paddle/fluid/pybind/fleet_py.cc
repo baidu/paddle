@@ -28,6 +28,7 @@ limitations under the License. */
 #include <string>
 #include <vector>
 
+#include "paddle/fluid/distributed/common/sparse_sharding_merge.h"
 #include "paddle/fluid/distributed/communicator_common.h"
 #include "paddle/fluid/distributed/fleet.h"
 #include "paddle/fluid/distributed/index_dataset/index_sampler.h"
@@ -48,6 +49,7 @@ using paddle::distributed::GraphNode;
 using paddle::distributed::GraphPyServer;
 using paddle::distributed::GraphPyClient;
 using paddle::distributed::FeatureNode;
+using paddle::distributed::ShardingMerge;
 
 namespace paddle {
 namespace pybind {
@@ -83,6 +85,12 @@ void BindPSHost(py::module* m) {
       .def("to_uint64", &distributed::PSHost::serialize_to_uint64)
       .def("from_uint64", &distributed::PSHost::parse_from_uint64)
       .def("to_string", &distributed::PSHost::to_string);
+}
+
+void BindSparseShardingTools(py::module* m) {
+  py::class_<ShardingMerge>(*m, "ShardingMerge")
+      .def(py::init<>())
+      .def("merge", &ShardingMerge::Merge);
 }
 
 void BindCommunicatorContext(py::module* m) {
