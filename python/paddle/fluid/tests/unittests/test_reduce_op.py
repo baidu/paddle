@@ -37,6 +37,21 @@ class TestSumOp(OpTest):
         self.check_grad(['X'], 'Out')
 
 
+class TestSumOp_fp16(OpTest):
+    def setUp(self):
+        self.op_type = "reduce_sum"
+        self.inputs = {'X': np.random.random((5, 6, 10)).astype("float16")}
+        self.outputs = {'Out': self.inputs['X'].sum(axis=0)}
+
+    def test_check_output(self):
+        self.check_output(atol=5e-2)
+
+    # Because of the precision fp16, max_relative_error
+    # should be 0.15 here.
+    def test_check_grad(self):
+        self.check_grad(['X'], 'Out', max_relative_error=0.15)
+
+
 class TestSumOp5D(OpTest):
     def setUp(self):
         self.op_type = "reduce_sum"

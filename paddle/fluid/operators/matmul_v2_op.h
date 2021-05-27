@@ -38,7 +38,10 @@ template <typename T>
 struct IdentityFunctor {
   HOSTDEVICE explicit inline IdentityFunctor() {}
 
-  HOSTDEVICE inline T operator()(const T& x) const { return x; }
+  template <typename T2>
+  HOSTDEVICE inline T2 operator()(const T2& x) const {
+    return x;
+  }
 };
 
 template <typename DeviceContext, typename T>
