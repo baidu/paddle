@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from .optimizer import Optimizer
-from ..fluid import core
-from ..fluid import framework
+from ..fluid import core, framework, layers
+from ..fluid import unique_name
 from ..fluid.framework import Variable
+from ..fluid.layer_helper import LayerHelper
 
 __all__ = []
 
@@ -66,6 +68,7 @@ class Lamb(Optimizer):
             ( :ref:`api_paddle_fluid_clip_ClipGradByGlobalNorm` , :ref:`api_paddle_fluid_clip_ClipGradByNorm` ,
             :ref:`api_paddle_fluid_clip_ClipGradByValue` ). If you want better convergence, it is recommended
             to use :ref:`api_paddle_fluid_clip_ClipGradByGlobalNorm` . Default None, meaning there is no gradient clipping.
+        multi_precision (bool, optional): Whether to use multi-precision during weight updating. Default is false.
         name(str|None): For detailed information, please refer to
             :ref:`api_guide_Name` . Usually name is no need to set and None by default.
     Examples:
@@ -98,6 +101,7 @@ class Lamb(Optimizer):
                  parameters=None,
                  grad_clip=None,
                  exclude_from_weight_decay_fn=None,
+                 multi_precision=False,
                  name=None):
         assert learning_rate is not None
         assert beta1 is not None
@@ -115,28 +119,89 @@ class Lamb(Optimizer):
         self._epsilon = epsilon
         self._lamb_weight_decay = lamb_weight_decay
         self._exclude_from_weight_decay_fn = exclude_from_weight_decay_fn
+        self._multi_precision = multi_precision
+        self._master_weights = {}
+
+    def _create_master_weight(self, param):
+        assert isinstance(self.helper, LayerHelper)
+
+        var_name = param.name + "_fp32_master"
+        var_name = unique_name.generate(var_name)
+        var = layers.create_global_var(
+            name=var_name,
+            shape=param.shape,
+            value=0,
+            dtype='float32',
+            persistable=True)
+        block = self.helper.startup_program.global_block()
+        block.append_op(
+            type="cast",
+            inputs={"X": [param]},
+            outputs={"Out": [var]},
+            attrs={
+                "in_dtype": param.dtype,
+                "out_dtype": core.VarDesc.VarType.FP32
+            })
+        self._master_weights[param.name] = var
+        return var
+
+    def _add_moments_pows(self, p):
+        acc_dtype = p.dtype
+        if acc_dtype == core.VarDesc.VarType.FP16:
+            acc_dtype = core.VarDesc.VarType.FP32
+        # Create accumulator tensors for first and second moments
+        self._add_accumulator(self._moment1_acc_str, p)
+        self._add_accumulator(self._moment2_acc_str, p)
+        self._add_accumulator(
+            name=self._beta1_pow_acc_str,
+            param=p,
+            fill_value=0.9 if isinstance(self._beta1, Variable) \
+                    else self._beta1,
+            shape=[1],
+            type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+        self._add_accumulator(
+            name=self._beta2_pow_acc_str,
+            param=p,
+            fill_value=0.999 if isinstance(self._beta2, Variable) \
+                    else self._beta2,
+            shape=[1],
+            type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
 
     def _create_accumulators(self, block, parameters):
         assert isinstance(block, framework.Block)
 
         # Create accumulator tensors for first and second moments
         for p in parameters:
-            self._add_accumulator(self._moment1_acc_str, p)
-            self._add_accumulator(self._moment2_acc_str, p)
-            self._add_accumulator(
-                name=self._beta1_pow_acc_str,
-                param=p,
-                fill_value=0.9 if isinstance(self._beta1, Variable) \
-                        else self._beta1,
-                shape=[1],
-                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
-            self._add_accumulator(
-                name=self._beta2_pow_acc_str,
-                param=p,
-                fill_value=0.999 if isinstance(self._beta2, Variable) \
-                        else self._beta2,
-                shape=[1],
-                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+            if self._multi_precision and p.dtype == core.VarDesc.VarType.FP16:
+                master_p = self._create_master_weight(p)
+                self._add_moments_pows(master_p)
+                continue
+            if p.dtype == core.VarDesc.VarType.FP16 and not self._multi_precision:
+                warnings.warn(
+                    "Accumulating with FP16 in optimizer can lead to poor accuracy or slow convergence."
+                    "Consider using multi_precision=True option of the Momentum optimizer."
+                )
+            self._add_moments_pows(p)
+
+    def _get_accumulator(self, name, param):
+        """Utility function to fetch an accumulator for a parameter
+        Args:
+            name: name of the accumulator
+            param: parameter variable for which accumulator is to be fetched
+        Returns:
+            accumulator variable for the parameter
+        """
+        if self._name is not None:
+            name = self._name + "_" + name
+        find_master = self._multi_precision and param.dtype == core.VarDesc.VarType.FP16
+        target_param = self._master_weights[
+            param.name] if find_master else param
+        target_name = target_param.name
+        if (name not in self._accumulators or
+                target_name not in self._accumulators[name]):
+            raise Exception("Accumulator {} does not exist for parameter {}".
+                            format(name, target_name))
+        return self._accumulators[name][target_name]
 
     def _append_optimize_op(self, block, param_and_grad):
         assert isinstance(block, framework.Block)
@@ -150,6 +215,10 @@ class Lamb(Optimizer):
                                               param_and_grad[0])
         beta2_pow_acc = self._get_accumulator(self._beta2_pow_acc_str,
                                               param_and_grad[0])
+        find_master = self._multi_precision and param_and_grad[
+            0].dtype == core.VarDesc.VarType.FP16
+        master_weight = (self._master_weights[param_and_grad[0].name]
+                         if find_master else None)
 
         if self._exclude_from_weight_decay_fn is not None \
             and self._exclude_from_weight_decay_fn(param_and_grad[0]):
@@ -190,6 +259,10 @@ class Lamb(Optimizer):
             "epsilon": self._epsilon,
             "weight_decay": weight_decay
         }
+
+        if find_master:
+            inputs["MasterParam"] = master_weight
+            outputs["MasterParamOut"] = master_weight
 
         lamb_op = block.append_op(
             type=self.type,

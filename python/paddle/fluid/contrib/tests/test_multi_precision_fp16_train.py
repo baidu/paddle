@@ -73,7 +73,10 @@ def resnet_cifar10(input, depth=32):
     return pool
 
 
-def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
+def train(use_pure_fp16=True,
+          use_nesterov=False,
+          use_adam=False,
+          use_lamb=False):
     classdim = 10
     data_shape = [3, 32, 32]
     BATCH_SIZE = 32
@@ -101,6 +104,12 @@ def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
                 learning_rate=0.001,
                 epsilon=1e-8,
                 weight_decay=0.0,
+                multi_precision=True)
+        elif use_lamb:
+            optimizer = paddle.optimizer.Lamb(
+                learning_rate=0.001,
+                epsilon=1e-8,
+                lamb_weight_decay=0.0,
                 multi_precision=True)
         else:
             optimizer = paddle.optimizer.Momentum(
@@ -169,9 +178,11 @@ class TestImageMultiPrecision(unittest.TestCase):
         if not fluid.core.is_compiled_with_cuda():
             return
 
-        def do_test(use_nesterov=False, use_adam=False):
+        def do_test(use_nesterov=False, use_adam=False, use_lamb=False):
             if use_adam:
                 suffix = "use Adam"
+            elif use_lamb:
+                suffix = "use_Lamb"
             else:
                 suffix = "with Nesterov" if use_nesterov else "without Nesterov"
             with self.scope_prog_guard():
@@ -180,14 +191,16 @@ class TestImageMultiPrecision(unittest.TestCase):
                 train_loss_fp16, test_loss_fp16 = train(
                     use_pure_fp16=True,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    use_adam=use_adam,
+                    use_lamb=use_lamb)
             with self.scope_prog_guard():
                 print("-----------------FP32 Train {}-----------------".format(
                     suffix))
                 train_loss_fp32, test_loss_fp32 = train(
                     use_pure_fp16=False,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    use_adam=use_adam,
+                    use_lamb=use_lamb)
 
             self.assertTrue(
                 np.allclose(
@@ -209,6 +222,7 @@ class TestImageMultiPrecision(unittest.TestCase):
         do_test(use_nesterov=False)
         do_test(use_nesterov=True)
         do_test(use_adam=True)
+        do_test(use_lamb=True)
 
     @contextlib.contextmanager
     def scope_prog_guard(self):

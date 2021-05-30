@@ -13,8 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/optimizers/lamb_op.h"
+#include "paddle/fluid/platform/float16.h"
 
 namespace ops = paddle::operators;
+namespace plat = paddle::platform;
+
 REGISTER_OP_CUDA_KERNEL(
     lamb, ops::LambOpKernel<paddle::platform::CUDADeviceContext, float>,
-    ops::LambOpKernel<paddle::platform::CUDADeviceContext, double>);
+    ops::LambOpKernel<paddle::platform::CUDADeviceContext, double>,
+    ops::LambOpKernel<paddle::platform::CUDADeviceContext, plat::float16>);

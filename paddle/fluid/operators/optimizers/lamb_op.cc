@@ -152,14 +152,18 @@ class LambOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput("Moment2", "(Tensor) Input second moment.");
     AddInput("Beta1Pow", "(Tensor) Input beta1 power accumulator.");
     AddInput("Beta2Pow", "(Tensor) Input beta2 power accumulator.");
+    AddInput("MasterParam", "FP32 master weight for AMP.").AsDispensable();
 
     AddOutput("ParamOut", "(Tensor) Output parameter.");
     AddOutput("Moment1Out", "(Tensor) Output first moment.");
     AddOutput("Moment2Out", "(Tensor) Output second moment.");
-    AddOutput("Beta1PowOut", "(Tensor) Output beta1 power accumulator")
+    AddOutput("Beta1PowOut", "(Tensor) Output beta1 power accumulator");
+    AddOutput("Beta2PowOut", "(Tensor) Output beta2 power accumulator");
+    AddOutput("MasterParamOut",
+              "The updated FP32 master weight for AMP. "
+              "It shared memory with Input(MasterParam).")
         .AsDispensable();
-    AddOutput("Beta2PowOut", "(Tensor) Output beta2 power accumulator")
-        .AsDispensable();
+
     AddAttr<float>("weight_decay", "(float) Weight decay rate.");
     AddAttr<float>("beta1",
                    "(float, default 0.9) The exponential decay rate for the "
@@ -173,6 +177,10 @@ class LambOpMaker : public framework::OpProtoAndCheckerMaker {
                    "(float, default 1.0e-6) "
                    "Constant for numerical stability.")
         .SetDefault(1.0e-6f);
+    AddAttr<bool>("multi_precision",
+                  "(bool, default false) "
+                  "Whether to use multi-precision during weight updating.")
+        .SetDefault(false);
 
     AddComment(R"DOC(
 LAMB (Layer-wise Adaptive Moments optimizer for Batching training) Optimizer.
@@ -213,13 +221,20 @@ REGISTER_OP_CPU_KERNEL(
     ops::LambOpKernel<paddle::platform::CPUDeviceContext, double>);
 
 /* ==========================  register checkpoint ===========================*/
+
 REGISTER_OP_VERSION(lamb)
     .AddCheckpoint(
-        R"ROC(Upgrade lamb, add two new outputs [Beta1PowOut] and [Beta2PowOut].)ROC",
+        R"ROC(Upgrade lamb add 1 attribute [multi_precision],
+              1 new input [MasterParam] and 3 new outputs [Beta1PowOut],
+              [Beta2PowOut] and [MasterParamOut].)ROC",
         paddle::framework::compatible::OpVersionDesc()
-            .NewInput("Beta1PowOut",
-                      "The Output beta1 power accumulator. 'Beta1PowOut' is "
-                      "dispensable.")
-            .NewInput("Beta2PowOut",
-                      "The Output beta2 power accumulator. 'Beta2PowOut' is "
-                      "dispensable."));
+            .NewAttr(
+                "multi_precision",
+                "(bool) Whether to use multi-precision during weight updating.",
+                false)
+            .NewInput("MasterParam", "FP32 master weight for AMP.")
+            .NewOutput("MasterParamOut",
+                       "The updated FP32 master weight for AMP. "
+                       "It shared memory with Input(MasterParam).")
+            .NewOutput("Beta1PowOut", "Output beta1 power accumulator")
+            .NewOutput("Beta2PowOut", "Output beta2 power accumulator"));
