@@ -18,8 +18,10 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/framework/var_type_traits.h"
+#include "paddle/fluid/operators/amp/fp16_type_traits.h"
 #include "paddle/fluid/operators/jit/kernels.h"
 #include "paddle/fluid/platform/bfloat16.h"
+#include "paddle/fluid/platform/float16.h"
 
 namespace paddle {
 namespace operators {
@@ -31,8 +33,11 @@ struct sgd_dense_param_kernel {
   void operator()() const {}
 };
 
-// LodTensor
 template <typename T>
+using MultiPrecisionType = typename details::MPTypeTrait<T>::Type;
+
+// LodTensor
+template <typename T, typename MT>
 struct sgd_dense_param_kernel<
     T, framework::VarTypeTrait<framework::LoDTensor>::kId> {
   void operator()(const framework::ExecutionContext &ctx) const {
@@ -44,7 +49,7 @@ struct sgd_dense_param_kernel<
 
     const auto sz = param_out->numel();
     jit::sgd_attr_t attr(1, sz, 1, sz, 1);
-    const T *lr = learning_rate->data<T>();
+    const MT *lr = learning_rate->data<MT>();
     const T *param_data = param->data<T>();
     const T *grad_data = grad->data<T>();
     int64_t rows_idx = 0;
@@ -58,7 +63,7 @@ struct sgd_dense_param_kernel<
 };
 
 // SelectedRows
-template <typename T>
+template <typename T, typename MT>
 struct sgd_dense_param_kernel<
     T, framework::VarTypeTrait<framework::SelectedRows>::kId> {
   void operator()(const framework::ExecutionContext &ctx) const {
@@ -146,7 +151,7 @@ struct sgd_dense_param_kernel<
   }
 };
 
-template <typename T>
+template <typename T, typename MT>
 void sgd_op_invoke_dense_param_kernel(const framework::ExecutionContext &ctx) {
   const auto *param = ctx.Input<framework::Tensor>("Param");
   auto *param_out = ctx.Output<framework::Tensor>("ParamOut");
@@ -229,6 +234,8 @@ void sgd_op_invoke_dense_param_kernel(const framework::ExecutionContext &ctx) {
 
 template <typename DeviceContext, typename T>
 class SGDOpKernel : public framework::OpKernel<T> {
+  using MPDType = MultiPrecisionType<T>;
+
  public:
   void Compute(const framework::ExecutionContext &ctx) const override;
 };
@@ -238,10 +245,36 @@ class SGDOpKernel<platform::CPUDeviceContext, T>
     : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
+    const bool multi_precision = ctx.Attr<bool>("multi_precision");
     const auto *learning_rate = ctx.Input<framework::Tensor>("LearningRate");
+    using MT = MultiPrecisionType<T>;
+    MT mu = static_cast<MT>(ctx.Attr<float>("mu"));
+    MT rescale_grad = static_cast<MT>(ctx.Attr<float>("rescale_grad"));
 
     const auto *param_var = ctx.InputVar("Param");
     const auto *grad_var = ctx.InputVar("Grad");
+
+    const framework::Tensor *master_param = nullptr;
+    framework::Tensor *master_param_out = nullptr;
+    if (multi_precision) {
+      bool has_master =
+          ctx.HasInput("MasterParam") && ctx.HasOutput("MasterParamOut");
+      PADDLE_ENFORCE_EQ(has_master, true,
+                        platform::errors::InvalidArgument(
+                            "The Input(MasterParam) and Output(MasterParamOut) "
+                            "should not be null when "
+                            "the attr `multi_precision` is true"));
+      master_param = ctx.Input<framework::Tensor>("MasterParam");
+      master_param_out = ctx.Output<framework::Tensor>("MasterParamOut");
+    }
+
+    param_out->mutable_data<T>(ctx.GetPlace());
+    velocity_out->mutable_data<MT>(ctx.GetPlace());
+    const MT *master_in_data =
+        multi_precision ? master_param->data<MT>() : nullptr;
+    MT *master_out_data =
+        multi_precision ? master_param_out->mutable_data<MT>(ctx.GetPlace())
+                        : nullptr;
 
     if (param_var->IsType<framework::LoDTensor>()) {
       detail::sgd_op_invoke_dense_param_kernel<T>(ctx);
@@ -270,8 +303,9 @@ class SGDOpKernel<platform::CPUDeviceContext, T>
               "[%s]",
               param_row_width, grad_row_width));
 
-      const auto *lr = learning_rate->data<T>();
-      const auto *grad_data = grad.value().data<T>();
+      const auto *lr = learning_rate->data<MPDType>();
+      const auto *grad_data =
+          static_cast<MT>(grad.value().data<T>()) * rescale_grad_;
       auto *out_data = param_out->mutable_value()->data<T>();
       for (size_t i = 0; i < grad.rows().size(); i++) {
         int64_t id_index = param_out->AutoGrownIndex(grad.rows()[i], false);

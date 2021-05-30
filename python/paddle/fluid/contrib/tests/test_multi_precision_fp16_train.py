@@ -73,7 +73,7 @@ def resnet_cifar10(input, depth=32):
     return pool
 
 
-def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
+def train(use_pure_fp16=True, use_nesterov=False, optimizer_type=None):
     classdim = 10
     data_shape = [3, 32, 32]
     BATCH_SIZE = 32
@@ -96,19 +96,22 @@ def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
         # Test program
         test_program = train_program.clone(for_test=True)
 
-        if use_adam:
+        if optimizer_type == 'AdamW':
             optimizer = paddle.optimizer.AdamW(
                 learning_rate=0.001,
                 epsilon=1e-8,
                 weight_decay=0.0,
                 multi_precision=True)
-        else:
+        elif optimizer_type == 'Momentum':
             optimizer = paddle.optimizer.Momentum(
                 learning_rate=0.001,
                 momentum=0.9,
                 use_nesterov=use_nesterov,
                 weight_decay=fluid.regularizer.L2Decay(1e-4),
                 multi_precision=use_pure_fp16)
+        elif optimizer_type == 'SGD':
+            optimizer = paddle.optimizer.SGD(learning_rate=0.001,
+                                             multi_precision=use_pure_fp16)
 
         if use_pure_fp16:
             optimizer = paddle.static.amp.decorate(
@@ -169,25 +172,27 @@ class TestImageMultiPrecision(unittest.TestCase):
         if not fluid.core.is_compiled_with_cuda():
             return
 
-        def do_test(use_nesterov=False, use_adam=False):
-            if use_adam:
-                suffix = "use Adam"
-            else:
-                suffix = "with Nesterov" if use_nesterov else "without Nesterov"
+        def do_test(use_nesterov=False, optimizer_type='Adamw'):
+            if optimizer_type == 'Adamw':
+                suffix = "use AdamW"
+            elif optimizer_type == 'Momentum':
+                suffix = "Momentum with Nesterov " if use_nesterov else "Momentum without Nesterov"
+            elif optimizer_type == "SGD":
+                suffix = 'SGD'
             with self.scope_prog_guard():
                 print("-----------------FP16 Train {}-----------------".format(
                     suffix))
                 train_loss_fp16, test_loss_fp16 = train(
                     use_pure_fp16=True,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    optimizer_type=optimizer_type)
             with self.scope_prog_guard():
                 print("-----------------FP32 Train {}-----------------".format(
                     suffix))
                 train_loss_fp32, test_loss_fp32 = train(
                     use_pure_fp16=False,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    optimizer_type=optimizer_type)
 
             self.assertTrue(
                 np.allclose(
@@ -206,9 +211,10 @@ class TestImageMultiPrecision(unittest.TestCase):
                     equal_nan=True),
                 msg='Failed to test in pure FP16.')
 
-        do_test(use_nesterov=False)
-        do_test(use_nesterov=True)
-        do_test(use_adam=True)
+        #do_test(use_nesterov=False, optimizer_type='Momentum')
+        #do_test(use_nesterov=True, optimizer_type='Momentum')
+        #do_test(optimizer_type='AdamW')
+        do_test(optimizer_type='SGD')
 
     @contextlib.contextmanager
     def scope_prog_guard(self):
