@@ -14,8 +14,10 @@
 
 import unittest
 
+import paddle
 from paddle.utils.download import get_weights_path_from_url
 from paddle.utils.download import get_path_from_url
+from paddle.utils.download import git_clone_from_url
 
 
 class TestDownload(unittest.TestCase):

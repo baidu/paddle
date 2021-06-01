@@ -21,6 +21,8 @@ import sys
 import os.path as osp
 import shutil
 import requests
+import subprocess
+import functools
 import hashlib
 import tarfile
 import zipfile
@@ -161,6 +163,96 @@ def get_path_from_url(url,
             fullpath = _decompress(fullpath)
 
     return fullpath
+
+
+def git_clone_from_url(
+        git_url,
+        repo_dir,
+        branch=None,
+        md5sum=None,
+        check_exist=True, ):
+    """ Download from given git_url to repo_dir.
+    if file or directory specified by git_url is exists in
+    repo_dir, return the path directly, otherwise download
+    from url and decompress it, return the path.
+    Args:
+        git_url (str): clone url, 
+        repo_dir (str): root dir for downloading,
+        branch (str): checkout to branch, default branch if given None
+        md5sum (str): md5 sum of download package
+        check_exist (bool): check_exist
+    Returns:
+        str: a local path to save downloaded models & weights & datasets.
+    """
+
+    from paddle.fluid.dygraph.parallel import ParallelEnv
+
+    fullpath = repo_dir
+
+    unique_endpoints = _get_unique_endpoints(ParallelEnv().trainer_endpoints[:])
+    if osp.exists(fullpath) and check_exist and _md5check(fullpath, md5sum):
+        logger.info("Found {}".format(fullpath))
+    else:
+        if ParallelEnv().current_endpoint in unique_endpoints:
+            fullpath = _git_clone(git_url, fullpath, branch)
+        else:
+            while not os.path.exists(fullpath):
+                time.sleep(0.5)
+
+    return fullpath
+
+
+def retry(times, delay=1, exceptions=Exception):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            _e = None
+            for i in range(times):
+                if i > 0:
+                    _e = None
+                    time.sleep(delay)
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    _e = e
+
+            if _e is not None:
+                raise RuntimeError('Retry failed with exception {}!'.format(
+                    str(_e)))
+
+        return wrapper
+
+    return decorator
+
+
+def _remove_if_exists(path):
+    if os.path.exists(path):
+        if os.path.isfile(path):
+            os.remove(path)
+        else:
+            shutil.rmtree(path, ignore_errors=True)
+
+
+@retry(times=3, delay=0.5)
+def _git_clone(url, repo_dir, branch):
+
+    if branch is None:
+        command = 'git clone {} {}'.format(url, repo_dir)
+    else:
+        command = 'git clone -b {} {} {}'.format(branch, url, repo_dir)
+
+    # r = os.system(command)
+    subprc = subprocess.Popen(
+        command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _ = subprc.communicate()
+
+    # if r != 0:
+    if subprc.returncode != 0:
+        _remove_if_exists(repo_dir)
+        raise RuntimeError('{} failed.'.format(command))
+
+    _remove_if_exists(os.path.join(repo_dir, '.git'))
+    return repo_dir
 
 
 def _download(url, path, md5sum=None):
