@@ -52,6 +52,55 @@ framework::proto::OpDesc PrepareOpDesc(
   desc.Flush();
   return *desc.Proto();
 }
+ConvElementwiseAdd2ActFusePass::ConvElementwiseAdd2ActFusePass(){
+AddOpCompat(OpCompat("conv2d"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End();
+
+  AddOpCompat(OpCompat("elementwise_add"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddInput("Out")
+      .IsTensor()
+      .End();
+
+  AddOpCompat(OpCompat("conv2d_fusion"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("ResidualData")
+      .IsTensor()
+      .End()
+
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+
+      .AddAttr("activation")
+      .End()
+      .AddAttr("is_test")
+      .End()
+      .AddAttr("use_cudnn")
+      .End();
+};
+
 
 void ConvElementwiseAdd2ActFusePass::ApplyImpl(ir::Graph* graph) const {
   const std::string pattern_name = "conv_elementwise_add2_act_fuse";
@@ -66,6 +115,12 @@ void ConvElementwiseAdd2ActFusePass::ApplyImpl(ir::Graph* graph) const {
 
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
+
     GET_NODES;
 
     auto base_op_desc = *conv_op->Op()->Proto();
@@ -89,6 +144,10 @@ void ConvElementwiseAdd2ActFusePass::ApplyImpl(ir::Graph* graph) const {
                                       act_op_type, act_op_out);
     framework::OpDesc new_op_desc(new_op_proto, nullptr);
 
+    if (!IsCompat(new_op_desc)) {
+      LOG(WARNING) << "Fc fuse pass in out fc op compat failed.";
+      return;
+    }
     // Create a new node for the fused op.
     auto* new_conv_op = graph->CreateOpNode(&new_op_desc);
 
