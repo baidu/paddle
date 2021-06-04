@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/operators/math/tree2col.h"
+
 #include <deque>
 #include <stack>
 
@@ -40,7 +41,7 @@ std::vector<TreeNode> Tree2ColUtil::construct_patch(
       if (!visited[v] && static_cast<int>(u.get_depth()) + 1 < max_depth) {
         visited[v] = true;
         stack.push(TreeNode(v, i, sz, u.get_depth() + 1));
-        patch.push_back(TreeNode(v, i + 1, sz, u.get_depth() + 1));
+        patch.emplace_back(v, i + 1, sz, u.get_depth() + 1);
         end = false;
       }
     }

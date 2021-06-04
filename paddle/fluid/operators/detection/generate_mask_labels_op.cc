@@ -9,10 +9,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#include <math.h>
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/detection/bbox_util.h"
@@ -114,7 +115,7 @@ static inline void ExpandMaskTarget(const platform::CPUDeviceContext& ctx,
                                     const Tensor& mask_class_labels,
                                     const int resolution, const int num_classes,
                                     Tensor* mask_targets) {
-  const uint8_t* masks_data = masks.data<uint8_t>();
+  const auto* masks_data = masks.data<uint8_t>();
   int64_t num_mask = masks.dims()[0];
   const int* mask_class_labels_data = mask_class_labels.data<int>();
   const int M = resolution * resolution;
@@ -143,8 +144,8 @@ std::vector<Tensor> SampleMaskForOneImage(
     const int resolution, const framework::LoD& segm_length) {
   // Prepare the mask targets by associating one gt mask to each training roi
   // that has a fg (non-bg) class label.
-  const int64_t gt_size = static_cast<int64_t>(gt_classes.dims()[0]);
-  const int64_t roi_size = static_cast<int64_t>(rois.dims()[0]);
+  const auto gt_size = static_cast<int64_t>(gt_classes.dims()[0]);
+  const auto roi_size = static_cast<int64_t>(rois.dims()[0]);
   const int* gt_classes_data = gt_classes.data<int>();
   const int* is_crowd_data = is_crowd.data<int>();
   const int* label_int32_data = label_int32.data<int>();
@@ -210,7 +211,7 @@ std::vector<Tensor> SampleMaskForOneImage(
     Gather<int>(label_int32_data, 1, fg_inds.data(), fg_inds.size(),
                 mask_class_labels.data<int>());
 
-    uint8_t* masks_data = masks.mutable_data<uint8_t>(
+    auto* masks_data = masks.mutable_data<uint8_t>(
         {fg_num, resolution * resolution}, ctx.GetPlace());
 
     // Find overlap between all foreground rois and the bounding boxes
@@ -339,7 +340,7 @@ class GenerateMaskLabelsKernel : public framework::OpKernel<T> {
         platform::errors::InvalidArgument(
             "GenerateMaskLabelsOp gt_segms needs 3 level of LoD"));
 
-    int64_t n = static_cast<int64_t>(gt_classes->lod().back().size() - 1);
+    auto n = static_cast<int64_t>(gt_classes->lod().back().size() - 1);
     PADDLE_ENFORCE_EQ(
         gt_segms->lod()[0].size() - 1, n,
         platform::errors::InvalidArgument(

@@ -60,8 +60,7 @@ class PrintOp : public framework::OperatorBase {
                                             Output("Out")));
 
     auto &in_tensor = in_var->Get<framework::LoDTensor>();
-    framework::LoDTensor *out_tensor =
-        out_var->GetMutable<framework::LoDTensor>();
+    auto *out_tensor = out_var->GetMutable<framework::LoDTensor>();
 
     PrintValue(place, Inputs("In").front(), in_tensor);
     framework::TensorCopy(in_tensor, place, out_tensor);
@@ -175,10 +174,8 @@ REGISTER_OPERATOR(print, ops::PrintOp, ops::PrintOpProtoAndCheckMaker,
                   ops::PrintOpGradientMaker<paddle::imperative::OpBase>,
                   ops::PrintOpInferShape, ops::PrintOpVarTypeInference);
 
-REGISTER_OP_VERSION(print)
-    .AddCheckpoint(
-        R"ROC(Upgrade print add a new attribute [print_tensor_layout] to "
+REGISTER_OP_VERSION(print).AddCheckpoint(
+    R"ROC(Upgrade print add a new attribute [print_tensor_layout] to "
              "contorl whether to print tensor's layout.)ROC",
-        paddle::framework::compatible::OpVersionDesc().NewAttr(
-            "print_tensor_layout", "Whether to print the tensor's layout.",
-            true));
+    paddle::framework::compatible::OpVersionDesc().NewAttr(
+        "print_tensor_layout", "Whether to print the tensor's layout.", true));

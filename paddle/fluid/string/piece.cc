@@ -14,8 +14,8 @@
 
 #include "paddle/fluid/string/piece.h"
 
-#include <string.h>
 #include <algorithm>
+#include <cstring>
 #define CHAR_POINTER_CMP(a, b) \
   do {                         \
     if (!a && !b) return 0;    \
@@ -26,14 +26,16 @@
 namespace paddle {
 namespace string {
 
-Piece::Piece() : data_(NULL), size_(0) {}
+Piece::Piece() : data_(nullptr), size_(0) {}
 
 Piece::Piece(const char* d, size_t n) : data_(d), size_(n) {
-  if (d == NULL && n != 0)
+  if (d == nullptr && n != 0)
     throw std::invalid_argument("Piece requires len to be 0 for NULL data");
 }
 
-Piece::Piece(const char* s) : data_(s) { size_ = (s == NULL) ? 0 : strlen(s); }
+Piece::Piece(const char* s) : data_(s) {
+  size_ = (s == nullptr) ? 0 : strlen(s);
+}
 
 Piece::Piece(const std::string& s) : data_(s.data()), size_(s.size()) {}
 
@@ -71,26 +73,28 @@ bool operator<=(Piece x, Piece y) { return Compare(x, y) <= 0; }
 bool operator>=(Piece x, Piece y) { return Compare(x, y) >= 0; }
 
 bool HasPrefix(Piece s, Piece x) {
-  return !x.len() ? true : ((s.len() >= x.len()) &&
-                            (memcmp(s.data(), x.data(), x.len()) == 0));
+  return !x.len() ? true
+                  : ((s.len() >= x.len()) &&
+                     (memcmp(s.data(), x.data(), x.len()) == 0));
 }
 
 bool HasSuffix(Piece s, Piece x) {
-  return !x.len() ? true : ((s.len() >= x.len()) &&
-                            (memcmp(s.data() + (s.len() - x.len()), x.data(),
-                                    x.len()) == 0));
+  return !x.len()
+             ? true
+             : ((s.len() >= x.len()) && (memcmp(s.data() + (s.len() - x.len()),
+                                                x.data(), x.len()) == 0));
 }
 
 Piece SkipPrefix(Piece s, size_t n) {
   if (n > s.len())
     throw std::invalid_argument("Skip distance larger than Piece length");
-  return Piece(s.data() + n, s.len() - n);
+  return {s.data() + n, s.len() - n};
 }
 
 Piece SkipSuffix(Piece s, size_t n) {
   if (n > s.len())
     throw std::invalid_argument("Skip distance larger than Piece length");
-  return Piece(s.data(), s.len() - n);
+  return {s.data(), s.len() - n};
 }
 
 Piece TrimPrefix(Piece s, Piece x) {
@@ -133,7 +137,7 @@ size_t RFind(Piece s, char c, size_t pos) {
 Piece SubStr(Piece s, size_t pos, size_t n) {
   if (pos > s.len()) pos = s.len();
   if (n > s.len() - pos) n = s.len() - pos;
-  return Piece(s.data() + pos, n);
+  return {s.data() + pos, n};
 }
 
 std::ostream& operator<<(std::ostream& o, Piece piece) {

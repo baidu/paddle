@@ -48,7 +48,7 @@ class FCFunctor<platform::CPUDeviceContext, T> {
     } else {
       blas.MatMul(M, N, K, X, W, Y);
     }
-    if (B == NULL) {
+    if (B == nullptr) {
       if (padding_weights) {
 #ifdef PADDLE_WITH_MKLML
 #pragma omp parallel for
@@ -63,12 +63,11 @@ class FCFunctor<platform::CPUDeviceContext, T> {
       return;
     }
     auto compute =
-        relu
-            ? jit::KernelFuncs<jit::VAddReluTuple<T>,
-                               platform::CPUPlace>::Cache()
-                  .At(N)
-            : jit::KernelFuncs<jit::VAddTuple<T>, platform::CPUPlace>::Cache()
-                  .At(N);
+        relu ? jit::KernelFuncs<jit::VAddReluTuple<T>,
+                                platform::CPUPlace>::Cache()
+                   .At(N)
+             : jit::KernelFuncs<jit::VAddTuple<T>, platform::CPUPlace>::Cache()
+                   .At(N);
 #ifdef PADDLE_WITH_MKLML
 #pragma omp parallel for
 #endif

@@ -30,13 +30,7 @@ MemoryBlock::Desc::Desc(MemoryBlock::Type t, size_t i, size_t s, size_t ts,
       left_buddy(l),
       right_buddy(r) {}
 
-MemoryBlock::Desc::Desc()
-    : type(MemoryBlock::INVALID_CHUNK),
-      index(0),
-      size(0),
-      total_size(0),
-      left_buddy(nullptr),
-      right_buddy(nullptr) {}
+MemoryBlock::Desc::Desc() {}
 
 namespace {
 

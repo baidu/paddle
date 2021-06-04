@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include "paddle/fluid/operators/inplace_abn_op.h"
+
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/operators/batch_norm_op.h"
 
 namespace paddle {
@@ -61,7 +63,7 @@ class InplaceABNGradOp : public paddle::operators::BatchNormGradOp {
  public:
   using paddle::operators::BatchNormGradOp::BatchNormGradOp;
 
-  void InferShape(framework::InferShapeContext* ctx) const {
+  void InferShape(framework::InferShapeContext* ctx) const override {
     // check input
     OP_INOUT_CHECK(ctx->HasInput("Scale"), "Input", "Scale", "InplaceABNGrad");
     OP_INOUT_CHECK(ctx->HasInput(framework::GradVarName("Y")), "Input",
@@ -202,8 +204,9 @@ class InplaceABNKernel
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto* x = ctx.Input<Tensor>("X");
     auto* y = ctx.Output<Tensor>("Y");
-    PADDLE_ENFORCE_EQ(x, y, platform::errors::InvalidArgument(
-                                "X and Y not inplaced in inplace mode"));
+    PADDLE_ENFORCE_EQ(x, y,
+                      platform::errors::InvalidArgument(
+                          "X and Y not inplaced in inplace mode"));
     auto activation =
         GetInplaceABNActivationType(ctx.Attr<std::string>("activation"));
     auto& place = *ctx.template device_context<DeviceContext>().eigen_device();

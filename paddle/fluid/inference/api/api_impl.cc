@@ -12,13 +12,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/inference/api/api_impl.h"
+
 #include <glog/logging.h>
+
 #include <memory>
 #include <sstream>
 #include <string>
 
 #include "paddle/fluid/framework/feed_fetch_method.h"
-#include "paddle/fluid/inference/api/api_impl.h"
 #include "paddle/fluid/inference/api/helper.h"
 #include "paddle/fluid/platform/cpu_helper.h"
 #include "paddle/fluid/platform/profiler.h"
@@ -89,10 +91,10 @@ bool NativePaddlePredictor::Init(
                                 "The sub_scope should not be nullptr."));
   } else {
     paddle::framework::InitDevices();
-    scope_.reset(new paddle::framework::Scope());
+    scope_ = std::make_shared<paddle::framework::Scope>();
   }
 
-  executor_.reset(new paddle::framework::Executor(place_));
+  executor_ = std::make_unique<paddle::framework::Executor>(place_);
 
   // Initialize the inference program
   if (!config_.model_dir.empty()) {
@@ -337,8 +339,9 @@ bool NativePaddlePredictor::GetFetch(std::vector<PaddleTensor> *outputs,
 }
 
 template <>
-std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
-    NativeConfig, PaddleEngineKind::kNative>(const NativeConfig &config) {
+std::unique_ptr<PaddlePredictor>
+CreatePaddlePredictor<NativeConfig, PaddleEngineKind::kNative>(
+    const NativeConfig &config) {
   // TODO(NHZlX): Should add the link to the doc of
   // paddle_infer::CreatePredictor<paddle_infer::Config>
   VLOG(3) << "create NativePaddlePredictor";
@@ -356,7 +359,7 @@ std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
     std::vector<std::string> flags;
     if (config.fraction_of_gpu_memory >= 0.0f ||
         config.fraction_of_gpu_memory <= 0.95f) {
-      flags.push_back("dummpy");
+      flags.emplace_back("dummpy");
       std::string flag = "--fraction_of_gpu_memory_to_use=" +
                          num2str<float>(config.fraction_of_gpu_memory);
       flags.push_back(flag);

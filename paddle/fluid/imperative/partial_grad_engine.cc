@@ -24,6 +24,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/imperative/gradient_accumulator.h"
 #include "paddle/fluid/imperative/layer.h"
 #include "paddle/fluid/imperative/op_base.h"
@@ -327,11 +328,11 @@ class GradientAccumulationInfo {
         grad_var_ = std::make_shared<VarBase>(true, mapped_grad_var_->Name());
         grad_var_->SetOverridedStopGradient(false);
         if (sort_gradient_) {
-          accumulator_.reset(
-              new SortedGradientAccumulator(grad_var_->SharedVar().get()));
+          accumulator_ = std::make_unique<SortedGradientAccumulator>(
+              grad_var_->SharedVar().get());
         } else {
-          accumulator_.reset(
-              new EagerGradientAccumulator(grad_var_->SharedVar().get()));
+          accumulator_ = std::make_unique<EagerGradientAccumulator>(
+              grad_var_->SharedVar().get());
         }
         accumulator_->IncreaseRefCnt();
       }
@@ -984,8 +985,8 @@ void PartialGradTask::PrepareInitialGradientAccumulators(const OpBase *op) {
       auto &accumulator = grad_accumulators_[var.get()];
 
       if (!accumulator) {
-        accumulator.reset(new GradientAccumulationInfo(
-            var, FLAGS_sort_sum_gradient, create_graph_));
+        accumulator = std::make_unique<GradientAccumulationInfo>(
+            var, FLAGS_sort_sum_gradient, create_graph_);
       }
 
       accumulator->IncreaseTotalRefCnt();

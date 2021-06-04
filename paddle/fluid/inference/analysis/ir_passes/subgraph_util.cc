@@ -176,8 +176,8 @@ void RenameAndGetOutputs(
         }
       }
       in_var->clear_arguments();
-      for (size_t k = 0; k < replaced_names.size(); k++) {
-        in_var->add_arguments(replaced_names[k]);
+      for (auto &replaced_name : replaced_names) {
+        in_var->add_arguments(replaced_name);
       }
     }
     var2id.clear();
@@ -220,8 +220,8 @@ void RenameAndGetOutputs(
         replaced_names.push_back(arg_value_with_id);
       }
       out_var->clear_arguments();
-      for (size_t k = 0; k < replaced_names.size(); k++) {
-        out_var->add_arguments(replaced_names[k]);
+      for (auto &replaced_name : replaced_names) {
+        out_var->add_arguments(replaced_name);
       }
     }
   }

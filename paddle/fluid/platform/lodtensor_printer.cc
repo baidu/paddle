@@ -33,7 +33,7 @@ void PrintVar(framework::Scope* scope, const std::string& var_name,
     VLOG(0) << "Variable Name " << var_name << " does not exist in your scope";
     return;
   }
-  framework::LoDTensor* tensor = var->GetMutable<framework::LoDTensor>();
+  auto* tensor = var->GetMutable<framework::LoDTensor>();
   if (tensor == nullptr) {
     VLOG(0) << "tensor of variable " << var_name
             << " does not exist in your scope";

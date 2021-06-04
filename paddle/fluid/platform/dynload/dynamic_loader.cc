@@ -76,7 +76,7 @@ namespace platform {
 namespace dynload {
 
 struct PathNode {
-  PathNode() {}
+  PathNode() = default;
   std::string path = "";
 };
 

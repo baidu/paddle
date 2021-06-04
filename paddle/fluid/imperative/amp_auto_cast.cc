@@ -30,21 +30,21 @@ AmpOperators::AmpOperators()
       unsupported_fp16_ops_(new std::unordered_set<std::string>()) {
   auto& all_kernels = framework::OperatorWithKernel::AllOpKernels();
   auto fp16_dtype = framework::proto::VarType::FP16;
-  for (auto it = all_kernels.begin(); it != all_kernels.end(); it++) {
+  for (auto& all_kernel : all_kernels) {
     bool supported = false;
-    for (auto& kernel_type : it->second) {
+    for (auto& kernel_type : all_kernel.second) {
       if (platform::is_gpu_place(kernel_type.first.place_) &&
           kernel_type.first.data_type_ == fp16_dtype) {
         supported = true;
       }
     }
     if (!supported) {
-      unsupported_fp16_ops_->insert(it->first);
+      unsupported_fp16_ops_->insert(all_kernel.first);
     }
   }
 }
 
-AmpOperators::~AmpOperators() {}
+AmpOperators::~AmpOperators() = default;
 
 AmpOperators& AmpOperators::Instance() {
   static AmpOperators instance;

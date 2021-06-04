@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/operators/reduce_ops/reduce_mean_op.h"
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -88,8 +89,8 @@ DECLARE_NO_NEED_BUFFER_VARS_INFERER(ReduceMeanGradNoNeedBufferVarInferer, "X");
 
 class __reduce_meanMaker__ : public ops::ReduceOpMaker {
  protected:
-  virtual std::string GetName() const { return "reduce_mean"; }
-  virtual std::string GetOpType() const { return "Reduce reduce_mean"; }
+  std::string GetName() const override { return "reduce_mean"; }
+  std::string GetOpType() const override { return "Reduce reduce_mean"; }
 };
 
 REGISTER_OPERATOR(reduce_mean, ops::ReduceOp, __reduce_meanMaker__,

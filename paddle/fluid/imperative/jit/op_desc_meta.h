@@ -25,9 +25,8 @@ namespace jit {
 
 class OpDescMeta {
  public:
-  OpDescMeta(const std::string &type, const NameVarBaseMap &inputs,
-             const NameVarBaseMap &outputs,
-             const framework::AttributeMap &attrs);
+  OpDescMeta(std::string type, const NameVarBaseMap &inputs,
+             const NameVarBaseMap &outputs, framework::AttributeMap attrs);
 
   const std::string &Type() const;
 

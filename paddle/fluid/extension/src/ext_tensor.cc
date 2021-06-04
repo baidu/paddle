@@ -35,9 +35,9 @@ struct CastDataTypeFunctor {
 
 template <typename InType>
 struct CastDataType {
-  CastDataType(const framework::Tensor &in, framework::Tensor *out,
+  CastDataType(framework::Tensor in, framework::Tensor *out,
                const platform::DeviceContext *ctx)
-      : in_(in), out_(out), ctx_(ctx) {}
+      : in_(std::move(in)), out_(out), ctx_(ctx) {}
   const framework::Tensor in_;
   framework::Tensor *out_;
   const platform::DeviceContext *ctx_;

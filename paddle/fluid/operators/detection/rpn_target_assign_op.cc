@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include <random>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/detection/bbox_util.h"
 #include "paddle/fluid/operators/math/math_function.h"
@@ -370,8 +371,8 @@ class RpnTargetAssignKernel : public framework::OpKernel<T> {
                           "RpnTargetAssignOp is_crowd needs 1 level of LoD. "
                           "But received level of LoD is [%d], LoD is [%s].",
                           is_crowd->lod().size(), is_crowd->lod()));
-    int64_t anchor_num = static_cast<int64_t>(anchor->dims()[0]);
-    int64_t batch_num = static_cast<int64_t>(gt_boxes->lod().back().size() - 1);
+    auto anchor_num = static_cast<int64_t>(anchor->dims()[0]);
+    auto batch_num = static_cast<int64_t>(gt_boxes->lod().back().size() - 1);
 
     int rpn_batch_size_per_im = context.Attr<int>("rpn_batch_size_per_im");
     float rpn_straddle_thresh = context.Attr<float>("rpn_straddle_thresh");
@@ -907,8 +908,8 @@ class RetinanetTargetAssignKernel : public framework::OpKernel<T> {
             "LoD level is :%d.",
             is_crowd->lod().size()));
 
-    int64_t anchor_num = static_cast<int64_t>(anchor->dims()[0]);
-    int64_t batch_num = static_cast<int64_t>(gt_boxes->lod().back().size() - 1);
+    auto anchor_num = static_cast<int64_t>(anchor->dims()[0]);
+    auto batch_num = static_cast<int64_t>(gt_boxes->lod().back().size() - 1);
 
     float positive_overlap = context.Attr<float>("positive_overlap");
     float negative_overlap = context.Attr<float>("negative_overlap");

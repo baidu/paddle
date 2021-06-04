@@ -49,7 +49,7 @@ class SelectOutputOp : public framework::OperatorBase {
     auto &dev_ctx = *pool.Get(dev_place);
 
     auto &mask = scope.FindVar(Input("Mask"))->Get<framework::LoDTensor>();
-    size_t output_branch = static_cast<size_t>(GetBranchNumber(mask));
+    auto output_branch = static_cast<size_t>(GetBranchNumber(mask));
 
     const std::vector<std::string> &out_names = Outputs("Out");
     PADDLE_ENFORCE_LT(

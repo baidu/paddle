@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/empty_op.h"
+
 #include "paddle/fluid/framework/op_registry.h"
 
 namespace paddle {
@@ -65,8 +66,7 @@ class EmptyOp : public framework::OperatorWithKernel {
     } else if (context->HasInputs("ShapeTensorList")) {
       std::vector<int> out_dims;
       auto dims_list = context->GetInputsDim("ShapeTensorList");
-      for (size_t i = 0; i < dims_list.size(); ++i) {
-        auto& dims = dims_list[i];
+      for (auto& dims : dims_list) {
         PADDLE_ENFORCE_EQ(dims, framework::make_ddim({1}),
                           platform::errors::InvalidArgument(
                               "The shape of Tensor in list must be [1]. "

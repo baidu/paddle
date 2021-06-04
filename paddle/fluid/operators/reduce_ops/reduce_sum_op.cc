@@ -95,8 +95,8 @@ class ReduceSumVarTypeInference : public paddle::framework::VarTypeInference {
 
 class ReduceSumOpMaker : public ops::ReduceOpMaker {
  protected:
-  virtual std::string GetName() const { return "reduce_sum"; }
-  virtual std::string GetOpType() const { return "Reduce reduce_sum"; }
+  std::string GetName() const override { return "reduce_sum"; }
+  std::string GetOpType() const override { return "Reduce reduce_sum"; }
 };
 
 REGISTER_OPERATOR(reduce_sum, ops::ReduceOp, ReduceSumOpMaker,
@@ -109,8 +109,9 @@ REGISTER_OPERATOR(reduce_sum_grad, ops::ReduceGradOp,
                   ops::ReduceSumGradNoNeedBufferVarInferer);
 
 REGISTER_OP_CPU_KERNEL(
-    reduce_sum, ops::ReduceKernel<paddle::platform::CPUDeviceContext, bool,
-                                  ops::SumFunctor>,
+    reduce_sum,
+    ops::ReduceKernel<paddle::platform::CPUDeviceContext, bool,
+                      ops::SumFunctor>,
     ops::ReduceKernel<paddle::platform::CPUDeviceContext, float,
                       ops::SumFunctor>,
     ops::ReduceKernel<paddle::platform::CPUDeviceContext, double,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/memory/allocation/best_fit_allocator.h"
+
 #include <cmath>
 
 #include "paddle/fluid/platform/enforce.h"
@@ -97,7 +98,7 @@ void BestFitAllocator::InsertFreeNode(const ListIt& it) {
   free_map.insert({it->size_, it});
 }
 void BestFitAllocator::EraseFreeNode(const ListIt& it) {
-  size_t pos = static_cast<size_t>(HighestBitPos(it->size_));
+  auto pos = static_cast<size_t>(HighestBitPos(it->size_));
   auto& free_map = free_chunks_[pos];
   auto map_it = free_map.find(it->size_);
   while (map_it->second != it && map_it != free_map.end()) {

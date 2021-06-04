@@ -14,14 +14,16 @@
 
 #include "paddle/fluid/imperative/jit/op_desc_meta.h"
 
+#include <utility>
+
 namespace paddle {
 namespace imperative {
 namespace jit {
 
-OpDescMeta::OpDescMeta(const std::string &type, const NameVarBaseMap &inputs,
+OpDescMeta::OpDescMeta(std::string type, const NameVarBaseMap &inputs,
                        const NameVarBaseMap &outputs,
-                       const framework::AttributeMap &attrs)
-    : type_(type), attrs_(attrs) {
+                       framework::AttributeMap attrs)
+    : type_(std::move(type)), attrs_(std::move(attrs)) {
   auto *proto = framework::OpInfoMap::Instance().GetNullable(type_);
   if (proto && proto->Checker()) {
     proto->Checker()->Check(&attrs_);

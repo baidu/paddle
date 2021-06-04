@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 limitations under the License. */
 
 #include <glog/logging.h>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/detection/nms_util.h"
 
@@ -55,18 +56,19 @@ class MultiClassNMSOp : public framework::OperatorWithKernel {
                             ". But received rank = %d",
                             box_dims.size()));
       if (score_size == 3) {
-        PADDLE_ENFORCE_EQ(
-            box_dims[2] == 4 || box_dims[2] == 8 || box_dims[2] == 16 ||
-                box_dims[2] == 24 || box_dims[2] == 32,
-            true, platform::errors::InvalidArgument(
-                      "The last dimension of Input"
-                      "(BBoxes) must be 4 or 8, "
-                      "represents the layout of coordinate "
-                      "[xmin, ymin, xmax, ymax] or "
-                      "4 points: [x1, y1, x2, y2, x3, y3, x4, y4] or "
-                      "8 points: [xi, yi] i= 1,2,...,8 or "
-                      "12 points: [xi, yi] i= 1,2,...,12 or "
-                      "16 points: [xi, yi] i= 1,2,...,16"));
+        PADDLE_ENFORCE_EQ(box_dims[2] == 4 || box_dims[2] == 8 ||
+                              box_dims[2] == 16 || box_dims[2] == 24 ||
+                              box_dims[2] == 32,
+                          true,
+                          platform::errors::InvalidArgument(
+                              "The last dimension of Input"
+                              "(BBoxes) must be 4 or 8, "
+                              "represents the layout of coordinate "
+                              "[xmin, ymin, xmax, ymax] or "
+                              "4 points: [x1, y1, x2, y2, x3, y3, x4, y4] or "
+                              "8 points: [xi, yi] i= 1,2,...,8 or "
+                              "12 points: [xi, yi] i= 1,2,...,12 or "
+                              "16 points: [xi, yi] i= 1,2,...,16"));
         PADDLE_ENFORCE_EQ(
             box_dims[1], score_dims[2],
             platform::errors::InvalidArgument(
@@ -159,9 +161,8 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
     while (sorted_indices.size() != 0) {
       const int idx = sorted_indices.front().second;
       bool keep = true;
-      for (size_t k = 0; k < selected_indices->size(); ++k) {
+      for (int kept_idx : *selected_indices) {
         if (keep) {
-          const int kept_idx = (*selected_indices)[k];
           T overlap = T(0.);
           // 4: [xmin ymin xmax ymax]
           if (box_size == 4) {
@@ -243,8 +244,7 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
           sdata = score_slice.data<T>();
         }
         const std::vector<int>& label_indices = it.second;
-        for (size_t j = 0; j < label_indices.size(); ++j) {
-          int idx = label_indices[j];
+        for (int idx : label_indices) {
           score_index_pairs.push_back(
               std::make_pair(sdata[idx], std::make_pair(label, idx)));
         }
@@ -256,9 +256,9 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
 
       // Store the new indices.
       std::map<int, std::vector<int>> new_indices;
-      for (size_t j = 0; j < score_index_pairs.size(); ++j) {
-        int label = score_index_pairs[j].second.first;
-        int idx = score_index_pairs[j].second.second;
+      for (auto& score_index_pair : score_index_pairs) {
+        int label = score_index_pair.second.first;
+        int idx = score_index_pair.second.second;
         new_indices[label].push_back(idx);
       }
       if (scores_size == 2) {
@@ -301,8 +301,7 @@ class MultiClassNMSKernel : public framework::OpKernel<T> {
         sdata = scores_data + label * predict_dim;
       }
 
-      for (size_t j = 0; j < indices.size(); ++j) {
-        int idx = indices[j];
+      for (int idx : indices) {
         odata[count * out_dim] = label;  // label
         const T* bdata;
         if (scores_size == 3) {

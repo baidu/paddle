@@ -118,8 +118,7 @@ class BipartiteMatchKernel : public framework::OpKernel<T> {
           if (match_indices[j] != -1) {
             continue;
           }
-          for (size_t k = 0; k < row_pool.size(); ++k) {
-            int m = row_pool[k];
+          for (int m : row_pool) {
             // distance is 0 between m-th row and j-th column
             if (dist_data[m * col + j] < kEPS) {
               continue;

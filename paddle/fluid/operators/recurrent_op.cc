@@ -308,7 +308,7 @@ RecurrentGradOp::RecurrentGradOp(const std::string &type,
 void RecurrentGradOp::RunImpl(const framework::Scope &scope,
                               const platform::Place &place) const {
   bool has_state = Attr<bool>(kHasStates);
-  const size_t seq_len = static_cast<size_t>(GetSequenceLength(scope));
+  const auto seq_len = static_cast<size_t>(GetSequenceLength(scope));
 
   // get device context from pool
   platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
@@ -320,9 +320,10 @@ void RecurrentGradOp::RunImpl(const framework::Scope &scope,
   framework::Executor executor(place);
   auto *block = Attr<framework::BlockDesc *>(kStepBlock);
   auto *program = block->Program();
-  auto ctx = executor.Prepare(
-      *program, block->ID(), Attr<std::vector<std::string>>(
-                                 kSkipEagerDeletionVars) /*skip_ref_cnt_vars*/);
+  auto ctx =
+      executor.Prepare(*program, block->ID(),
+                       Attr<std::vector<std::string>>(
+                           kSkipEagerDeletionVars) /*skip_ref_cnt_vars*/);
 
   for (size_t step_id = 0; step_id < seq_len; ++step_id) {
     size_t seq_offset = reverse ? step_id : seq_len - step_id - 1;
@@ -374,7 +375,7 @@ void RecurrentGradOp::RunImpl(const framework::Scope &scope,
 
           VLOG(10) << " RNN link " << cur_grad << " from " << ex_grad;
           auto *cur_grad_var = cur_scope.Var(cur_grad);
-          framework::LoDTensor *cur_grad_tensor =
+          auto *cur_grad_tensor =
               cur_grad_var->GetMutable<framework::LoDTensor>();
           cur_grad_tensor->ShareDataWith(ex_grad_tensor);
         }
@@ -385,19 +386,19 @@ void RecurrentGradOp::RunImpl(const framework::Scope &scope,
     //   outside::output[seq_offset: seq_offset + 1] = inside::output
     executor.CreateVariables(ctx->prog_, &cur_scope, ctx->block_id_);
     if (step_id > 0) {
-      LinkTensorWithCallback(scope, Outputs(kInputGrads), cur_scope,
-                             GradVarLists(Inputs(kInputs)),
-                             [&](const framework::LoDTensor &src_tensor,
-                                 framework::LoDTensor *dst_tensor) {
-                               if (src_tensor.memory_size() ==
-                                   0) {  // Inside Gradient is not created.
-                                 return;
-                               }
-                               framework::Tensor src_slice =
-                                   src_tensor.Slice(seq_offset, seq_offset + 1);
-                               dst_tensor->ShareDataWith(src_slice);
-                             },
-                             true /*is_backward*/);
+      LinkTensorWithCallback(
+          scope, Outputs(kInputGrads), cur_scope, GradVarLists(Inputs(kInputs)),
+          [&](const framework::LoDTensor &src_tensor,
+              framework::LoDTensor *dst_tensor) {
+            if (src_tensor.memory_size() ==
+                0) {  // Inside Gradient is not created.
+              return;
+            }
+            framework::Tensor src_slice =
+                src_tensor.Slice(seq_offset, seq_offset + 1);
+            dst_tensor->ShareDataWith(src_slice);
+          },
+          true /*is_backward*/);
     }
 
     VLOG(5) << "Recurrent memory linking finished ";
@@ -601,7 +602,8 @@ if reverse is True
       |          |          |         |
       v          v          v         v
       o          o          o         o
-)DOC").SetDefault(false);
+)DOC")
+        .SetDefault(false);
     AddAttr<bool>(RecurrentBase::kIsTrain, "").SetDefault(true);
     AddAttr<std::vector<std::string>>(RecurrentBase::kSkipEagerDeletionVars,
                                       "Vars that would skip eager deletion."
@@ -660,14 +662,16 @@ class RecurrentGradOpShapeInference : public framework::InferShapeBase {
           ctx->Attrs()
               .Get<std::vector<std::string>>(RecurrentBase::kExStates)
               .size(),
-          0, platform::errors::InvalidArgument("The Attr(%s) should be empty.",
-                                               RecurrentBase::kExStates));
+          0,
+          platform::errors::InvalidArgument("The Attr(%s) should be empty.",
+                                            RecurrentBase::kExStates));
       PADDLE_ENFORCE_EQ(
           ctx->Attrs()
               .Get<std::vector<std::string>>(RecurrentBase::kStates)
               .size(),
-          0, platform::errors::InvalidArgument("The Attr(%s) should be empty.",
-                                               RecurrentBase::kStates));
+          0,
+          platform::errors::InvalidArgument("The Attr(%s) should be empty.",
+                                            RecurrentBase::kStates));
     }
 
     PADDLE_ENFORCE_EQ(
@@ -699,9 +703,10 @@ class RecurrentGradOpShapeInference : public framework::InferShapeBase {
     if (ctx->HasInputs(RecurrentBase::kParameters)) {
       PADDLE_ENFORCE_EQ(
           ctx->HasOutputs(framework::GradVarName(RecurrentBase::kParameters)),
-          true, platform::errors::InvalidArgument(
-                    "The output of(%s) should not be empty.",
-                    framework::GradVarName(RecurrentBase::kParameters)));
+          true,
+          platform::errors::InvalidArgument(
+              "The output of(%s) should not be empty.",
+              framework::GradVarName(RecurrentBase::kParameters)));
       ctx->SetOutputsDim(framework::GradVarName(RecurrentBase::kParameters),
                          ctx->GetInputsDim(RecurrentBase::kParameters));
     }

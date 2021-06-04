@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include "paddle/fluid/operators/reader/buffered_reader.h"
+
+#include <utility>
+
 #include "paddle/fluid/platform/profiler.h"
 
 namespace paddle {
@@ -31,11 +34,11 @@ BufferedReader::~BufferedReader() {
 }
 
 BufferedReader::BufferedReader(
-    const std::shared_ptr<framework::ReaderBase> &reader,
-    const platform::Place &place, size_t buffer_size, bool pin_memory)
+    const std::shared_ptr<framework::ReaderBase> &reader, platform::Place place,
+    size_t buffer_size, bool pin_memory)
     : framework::DecoratedReader(reader),
       thread_pool_(1),
-      place_(place),
+      place_(std::move(place)),
       buffer_size_(buffer_size),
       pin_memory_(pin_memory) {
   VLOG(1) << "BufferedReader";

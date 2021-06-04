@@ -13,9 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/flip_op.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
@@ -94,7 +96,7 @@ class FlipOp : public framework::OperatorWithKernel {
   }
 
   framework::OpKernelType GetExpectedKernelType(
-      const framework::ExecutionContext& ctx) const {
+      const framework::ExecutionContext& ctx) const override {
     framework::LibraryType library = framework::LibraryType::kPlain;
     framework::DataLayout layout = framework::DataLayout::kAnyLayout;
     int customized_type_value =
@@ -156,10 +158,9 @@ REGISTER_OP_CPU_KERNEL(
     ops::FlipKernel<paddle::platform::CPUDeviceContext, bool>);
 
 /* ==========================  register checkpoint ===========================*/
-REGISTER_OP_VERSION(flip)
-    .AddCheckpoint(
-        R"ROC(Upgrade flip, add new attr [axis] and delete attr [dims].)ROC",
-        paddle::framework::compatible::OpVersionDesc()
-            .NewAttr("axis", "The added attr 'axis' doesn't set default value.",
-                     boost::none)
-            .DeleteAttr("dims", "The attr 'dims' is deleted."));
+REGISTER_OP_VERSION(flip).AddCheckpoint(
+    R"ROC(Upgrade flip, add new attr [axis] and delete attr [dims].)ROC",
+    paddle::framework::compatible::OpVersionDesc()
+        .NewAttr("axis", "The added attr 'axis' doesn't set default value.",
+                 boost::none)
+        .DeleteAttr("dims", "The attr 'dims' is deleted."));

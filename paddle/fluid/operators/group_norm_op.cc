@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/group_norm_op.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -138,7 +139,7 @@ class GroupNormOpMaker : public framework::OpProtoAndCheckerMaker {
                   groups));
         });
     AddAttr<std::string>("data_layout",
-                         "An optional string from: \"NHWC\", \"NCHW\". ")
+                         R"(An optional string from: "NHWC", "NCHW". )")
         .SetDefault("NCHW");
     AddComment(R"DOC(
 Group Normalization

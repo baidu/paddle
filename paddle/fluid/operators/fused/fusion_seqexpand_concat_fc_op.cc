@@ -13,7 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/fused/fusion_seqexpand_concat_fc_op.h"
+
 #include <string>
+
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/cpu_vec.h"
 #include "paddle/fluid/operators/math/fc.h"
@@ -48,8 +50,9 @@ void FusionSeqExpandConcatFCOp::InferShape(
   for (size_t i = 1; i < ins_dims.size(); ++i) {
     sum += ins_dims[i][1];
   }
-  PADDLE_ENFORCE_EQ(sum, w_dims[0], platform::errors::InvalidArgument(
-                                        "FC height should be sum of all inputs "
+  PADDLE_ENFORCE_EQ(
+      sum, w_dims[0],
+      platform::errors::InvalidArgument("FC height should be sum of all inputs "
                                         "width, but received FC height is: %d, "
                                         "sum of all inputs width is: %d.",
                                         w_dims[0], sum));
@@ -214,7 +217,7 @@ class FusionSeqExpandConcatFCOpKernel : public framework::OpKernel<T> {
     auto& dev_ctx = ctx.template device_context<platform::CPUDeviceContext>();
     math::FCFunctor<DeviceContext, T> fc;
     fc(dev_ctx, total_T, D, M0, ref_in_data, w_data, out_data,
-       b ? b->data<T>() : NULL);
+       b ? b->data<T>() : nullptr);
     w_data = w_data + M0 * D;
     // first write on
     blas.MatMul(N, D, M1, in1_data, w_data, fc_out_data);

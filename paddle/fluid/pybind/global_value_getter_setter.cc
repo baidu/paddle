@@ -132,11 +132,13 @@ class PYBIND11_HIDDEN GlobalVarGetterSetterRegistry {
 
  private:
   struct VarInfo {
-    VarInfo(bool is_public, const Getter &getter)
-        : is_public(is_public), getter(getter) {}
+    VarInfo(bool is_public, Getter getter)
+        : is_public(is_public), getter(std::move(getter)) {}
 
-    VarInfo(bool is_public, const Getter &getter, const Setter &setter)
-        : is_public(is_public), getter(getter), setter(setter) {}
+    VarInfo(bool is_public, Getter getter, Setter setter)
+        : is_public(is_public),
+          getter(std::move(getter)),
+          setter(std::move(setter)) {}
 
     const bool is_public;
     const Getter getter;
@@ -249,7 +251,7 @@ class GlobalVarGetterSetterRegistryHelper {
         var_names_(SplitVarNames(var_names)) {}
 
   template <typename... Args>
-  void Register(Args &&... args) const {
+  void Register(Args &&...args) const {
     Impl<0, sizeof...(args) == 1, Args...>::Register(
         is_public_, is_writable_, var_names_, std::forward<Args>(args)...);
   }
@@ -281,7 +283,7 @@ class GlobalVarGetterSetterRegistryHelper {
   struct Impl {
     static void Register(bool is_public, bool is_writable,
                          const std::vector<std::string> &var_names, T &&var,
-                         Args &&... args) {
+                         Args &&...args) {
       PADDLE_ENFORCE_EQ(kIdx + 1 + sizeof...(args), var_names.size(),
                         platform::errors::InvalidArgument(
                             "Argument number not match name number"));

@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/analysis/analyzer.h"
+
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/inference/analysis/passes/passes.h"
 #include "paddle/fluid/string/pretty_log.h"
 
@@ -22,7 +24,7 @@ namespace paddle {
 namespace inference {
 namespace analysis {
 
-Analyzer::Analyzer() {}
+Analyzer::Analyzer() = default;
 
 void Analyzer::Run(Argument *argument) { RunAnalysis(argument); }
 

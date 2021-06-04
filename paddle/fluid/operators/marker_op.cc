@@ -39,7 +39,7 @@ class MarkerOp : public framework::OperatorWithKernel {
 
 class MarkerOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
-  void Make() {
+  void Make() override {
     AddAttr<std::string>("marker_role",
                          "(string, default forward)forward or backward,"
                          " mark different stages of porcess.")

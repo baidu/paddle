@@ -12,12 +12,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/operators/math/sequence_pooling.h"
+
 #include <string>
 
 #include "paddle/fluid/operators/jit/kernels.h"
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
-#include "paddle/fluid/operators/math/sequence_pooling.h"
 
 namespace paddle {
 namespace operators {
@@ -222,7 +223,7 @@ class LastSeqPoolFunctor {
     int seq_num = static_cast<int>(lod.size()) - 1;
     for (int i = 0; i < seq_num; ++i) {
       // Calculate the length of each sequence
-      int64_t seq_len = static_cast<int64_t>(lod[i + 1] - lod[i]);
+      auto seq_len = static_cast<int64_t>(lod[i + 1] - lod[i]);
       if (seq_len == 0) {
         for (int j = 0; j < item_size; ++j) {
           out_data[j] = pad_value;
@@ -255,7 +256,7 @@ class FirstSeqPoolFunctor {
     int seq_num = static_cast<int>(lod.size()) - 1;
     for (int i = 0; i < seq_num; ++i) {
       // Calculate the length of each sequence
-      int64_t seq_len = static_cast<int64_t>(lod[i + 1] - lod[i]);
+      auto seq_len = static_cast<int64_t>(lod[i + 1] - lod[i]);
       if (seq_len == 0) {
         for (int j = 0; j < item_size; ++j) {
           out_data[j] = pad_value;
@@ -291,7 +292,7 @@ class SumSeqPoolGradFunctor {
     T* in_g_data = in_grad->mutable_data<T>(context.GetPlace());
     auto blas = math::GetBlas<platform::CPUDeviceContext, T>(context);
     for (int i = 0; i < static_cast<int>(lod.size()) - 1; ++i) {
-      int64_t h = static_cast<int64_t>(lod[i + 1] - lod[i]);
+      auto h = static_cast<int64_t>(lod[i + 1] - lod[i]);
       if (h == 0) continue;
       int64_t in_offset = lod[i] * in_w;
       const T* out_pos = out_g_data + i * out_w;
@@ -374,7 +375,7 @@ class SequencePoolFunctor<platform::CPUDeviceContext, T> {
       }
       Tensor in_t =
           input.Slice(static_cast<int>(lod[i]), static_cast<int>(lod[i + 1]));
-      int64_t h = static_cast<int64_t>(lod[i + 1] - lod[i]);
+      auto h = static_cast<int64_t>(lod[i + 1] - lod[i]);
       auto in_e = EigenMatrix<T>::From(in_t, framework::make_ddim({h, w}));
       auto out_e = EigenVector<T>::Flatten(out_t);
       if (pooltype == "AVERAGE") {
@@ -427,7 +428,7 @@ class SequencePoolGradFunctor<platform::CPUDeviceContext, T> {
       auto in_g_t = in_grad->Slice(static_cast<int>(lod[i]),
                                    static_cast<int>(lod[i + 1]));
       auto out_g_t = out_grad.Slice(i, i + 1);
-      int64_t h = static_cast<int64_t>(lod[i + 1] - lod[i]);
+      auto h = static_cast<int64_t>(lod[i + 1] - lod[i]);
       int64_t w = in_grad->numel() / in_grad->dims()[0];
       auto in_g_e = EigenMatrix<T>::From(in_g_t, {h, w});
       auto out_g_e = EigenMatrix<T>::From(out_g_t, {1, w});

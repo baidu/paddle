@@ -144,7 +144,7 @@ class PreparedOp {
   PreparedOp(const framework::OperatorBase& op,
              const framework::RuntimeContext& ctx,
              const framework::OpKernelType& kernel_type,
-             const framework::OperatorWithKernel::OpKernelFunc& func,
+             framework::OperatorWithKernel::OpKernelFunc func,
              platform::DeviceContext* dev_ctx);
 
   static PreparedOp Prepare(const NameVarMap<VarBase>& ins,

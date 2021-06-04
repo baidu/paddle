@@ -40,7 +40,7 @@ class CPUReadFileKernel : public framework::OpKernel<T> {
     std::vector<int64_t> out_shape = {file_size};
     out->Resize(framework::make_ddim(out_shape));
 
-    uint8_t* data = out->mutable_data<T>(ctx.GetPlace());
+    auto* data = out->mutable_data<T>(ctx.GetPlace());
 
     input.read(reinterpret_cast<char*>(data), file_size);
   }

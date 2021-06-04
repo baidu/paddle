@@ -14,6 +14,8 @@
 
 #include "paddle/fluid/imperative/prepared_operator.h"
 
+#include <utility>
+
 #include "paddle/fluid/framework/data_type_transform.h"
 #include "paddle/fluid/imperative/infer_shape_context.h"
 
@@ -75,12 +77,12 @@ static void HandleComplexGradToRealGrad(const NameVarMap<VarType>& outs) {
 PreparedOp::PreparedOp(const framework::OperatorBase& op,
                        const framework::RuntimeContext& ctx,
                        const framework::OpKernelType& kernel_type,
-                       const framework::OperatorWithKernel::OpKernelFunc& func,
+                       framework::OperatorWithKernel::OpKernelFunc func,
                        platform::DeviceContext* dev_ctx)
     : op_(op),
       ctx_(ctx),
       kernel_type_(kernel_type),
-      func_(func),
+      func_(std::move(func)),
       dev_ctx_(dev_ctx) {}
 
 template <typename VarType>

@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/memory/detail/buddy_allocator.h"
+
 #include <algorithm>
 
 #include "gflags/gflags.h"
@@ -277,7 +278,7 @@ BuddyAllocator::PoolSet::iterator BuddyAllocator::RefillPool(
 BuddyAllocator::PoolSet::iterator BuddyAllocator::FindExistChunk(size_t size) {
   size_t index = 0;
 
-  while (1) {
+  while (true) {
     auto it = pool_.lower_bound(IndexSizeAddress(index, size, nullptr));
 
     // no match chunk memory

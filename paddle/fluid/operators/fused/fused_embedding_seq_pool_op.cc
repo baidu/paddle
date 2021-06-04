@@ -13,7 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/fused/fused_embedding_seq_pool_op.h"
+
 #include <memory>
+
 #include "paddle/fluid/framework/var_type_inference.h"
 
 namespace paddle {
@@ -31,7 +33,7 @@ class FusedEmbeddingSeqPoolOp : public framework::OperatorWithKernel {
                    "FusedEmbeddingSeqPool");
     auto table_dims = ctx->GetInputDim("W");
     auto ids_dims = ctx->GetInputDim("Ids");
-    const std::string& combiner = ctx->Attrs().Get<std::string>("combiner");
+    const auto& combiner = ctx->Attrs().Get<std::string>("combiner");
 
     PADDLE_ENFORCE_EQ(table_dims.size(), 2,
                       platform::errors::InvalidArgument(

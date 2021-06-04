@@ -12,13 +12,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/platform/profiler.h"
+
+#include <memory>
 #include <mutex>  // NOLINT
 #include <random>
 #include <string>
+#include <utility>
 
 #include "paddle/fluid/platform/device_tracer.h"
 #include "paddle/fluid/platform/enforce.h"
-#include "paddle/fluid/platform/profiler.h"
 #include "paddle/fluid/platform/profiler_helper.h"
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/fluid/platform/dynload/nvtx.h"
@@ -34,10 +37,10 @@ MemEvenRecorder MemEvenRecorder::recorder;
 Event::Event(EventType type, std::string name, uint32_t thread_id,
              EventRole role, std::string attr)
     : type_(type),
-      name_(name),
+      name_(std::move(name)),
       thread_id_(thread_id),
       role_(role),
-      attr_(attr) {
+      attr_(std::move(attr)) {
   cpu_ns_ = GetTimeInNsec();
 }
 
@@ -106,8 +109,7 @@ void MemEvenRecorder::PushMemRecord(const void *ptr, const Place &place,
   PADDLE_ENFORCE_EQ(events.count(ptr), 0,
                     platform::errors::InvalidArgument(
                         "The Place can't exist in the stage of PushMemRecord"));
-  events.emplace(ptr, std::unique_ptr<RecordMemEvent>(
-                          new MemEvenRecorder::RecordMemEvent(place, size)));
+  events.emplace(ptr, std::make_unique<RecordMemEvent>(place, size));
 }
 
 void MemEvenRecorder::PopMemRecord(const void *ptr, const Place &place) {
@@ -126,9 +128,8 @@ void MemEvenRecorder::Flush() {
   address_memevent_.clear();
 }
 
-MemEvenRecorder::RecordMemEvent::RecordMemEvent(const Place &place,
-                                                size_t bytes)
-    : place_(place),
+MemEvenRecorder::RecordMemEvent::RecordMemEvent(Place place, size_t bytes)
+    : place_(std::move(place)),
       bytes_(bytes),
       start_ns_(PosixInNsec()),
       alloc_in_(CurAnnotationName()) {
@@ -149,7 +150,7 @@ MemEvenRecorder::RecordMemEvent::~RecordMemEvent() {
 
 RecordRPCEvent::RecordRPCEvent(const std::string &name) {
   if (FLAGS_enable_rpc_profiler) {
-    event_.reset(new platform::RecordEvent(name));
+    event_ = std::make_unique<platform::RecordEvent>(name);
   }
 }
 
@@ -230,13 +231,11 @@ void ResetProfiler() {
   GetDeviceTracer()->Reset();
   MemEvenRecorder::Instance().Flush();
   std::lock_guard<std::mutex> guard(g_all_event_lists_mutex);
-  for (auto it = g_all_event_lists.begin(); it != g_all_event_lists.end();
-       ++it) {
-    (*it)->Clear();
+  for (auto &g_all_event_list : g_all_event_lists) {
+    g_all_event_list->Clear();
   }
-  for (auto it = g_all_mem_event_lists.begin();
-       it != g_all_mem_event_lists.end(); ++it) {
-    (*it)->Clear();
+  for (auto &g_all_mem_event_list : g_all_mem_event_lists) {
+    g_all_mem_event_list->Clear();
   }
 }
 
@@ -276,9 +275,8 @@ void DisableProfiler(EventSortingKey sorted_key,
 std::vector<std::vector<Event>> GetAllEvents() {
   std::lock_guard<std::mutex> guard(g_all_event_lists_mutex);
   std::vector<std::vector<Event>> result;
-  for (auto it = g_all_event_lists.begin(); it != g_all_event_lists.end();
-       ++it) {
-    result.emplace_back((*it)->Reduce());
+  for (auto &g_all_event_list : g_all_event_lists) {
+    result.emplace_back(g_all_event_list->Reduce());
   }
   return result;
 }
@@ -294,8 +292,8 @@ std::string OpName(const framework::VariableNameMap &name_map,
     return "";
 
   std::string ret = type_name + "%";
-  for (auto it = name_map.begin(); it != name_map.end(); it++) {
-    auto name_outputs = it->second;
+  for (const auto &it : name_map) {
+    auto name_outputs = it.second;
     if (!name_outputs.empty()) {
       ret = ret + name_outputs[0];
       break;

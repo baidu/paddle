@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/fluid/inference/capi_exp/pd_utils.h"
+
 #include <string>
 
 #include "paddle/fluid/inference/api/paddle_inference_api.h"
-#include "paddle/fluid/inference/capi_exp/pd_utils.h"
 #include "paddle/fluid/inference/capi_exp/utils_internal.h"
 #include "paddle/fluid/platform/enforce.h"
 
@@ -68,7 +69,7 @@ ONE_DIM_ARRAY_UTILS_FUNC_IMPL(size_t, Size, size_t)
 #undef DESTROY_ONE_DIM_ARRAY
 
 void PD_OneDimArrayCstrDestroy(__pd_take PD_OneDimArrayCstr* array) {
-  if (array != NULL) {
+  if (array != nullptr) {
     if (array->size != 0) {
       for (size_t index = 0; index < array->size; ++index) {
         delete[] array->data[index];
@@ -82,9 +83,9 @@ namespace paddle_infer {
 
 __pd_give PD_OneDimArrayCstr* CvtVecToOneDimArrayCstr(
     const std::vector<std::string>& vec) {
-  PD_OneDimArrayCstr* array = new PD_OneDimArrayCstr;
+  auto* array = new PD_OneDimArrayCstr;
   array->size = vec.size();
-  array->data = vec.empty() ? NULL : new char*[vec.size()];
+  array->data = vec.empty() ? nullptr : new char*[vec.size()];
   for (size_t index = 0u; index < vec.size(); ++index) {
     array->data[index] = new char[vec[index].size() + 1];
     memcpy(array->data[index], vec[index].c_str(), vec[index].size() + 1);

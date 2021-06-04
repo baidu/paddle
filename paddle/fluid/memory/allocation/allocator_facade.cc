@@ -14,6 +14,8 @@
 
 #include "paddle/fluid/memory/allocation/allocator_facade.h"
 
+#include <utility>
+
 #include "gflags/gflags.h"
 #include "paddle/fluid/memory/allocation/allocator.h"
 #include "paddle/fluid/memory/allocation/allocator_strategy.h"
@@ -209,7 +211,8 @@ class AllocatorFacadePrivate {
 
   class ZeroSizeAllocator : public Allocator {
    public:
-    explicit ZeroSizeAllocator(platform::Place place) : place_(place) {}
+    explicit ZeroSizeAllocator(platform::Place place)
+        : place_(std::move(place)) {}
 
     bool IsAllocThreadSafe() const override { return true; }
 
@@ -282,7 +285,7 @@ class AllocatorFacadePrivate {
 AllocatorFacade::AllocatorFacade() : m_(new AllocatorFacadePrivate()) {}
 // delete m_ may cause core dump when the destructor of python in conflict with
 // cpp.
-AllocatorFacade::~AllocatorFacade() {}
+AllocatorFacade::~AllocatorFacade() = default;
 
 AllocatorFacade& AllocatorFacade::Instance() {
   static AllocatorFacade instance;

@@ -39,9 +39,9 @@ struct DequantizeFunctor<platform::CPUDeviceContext, T> {
   void operator()(const platform::CPUDeviceContext& dev_ctx,
                   const framework::Tensor* in, const framework::Tensor* scale,
                   float max_range, framework::Tensor* out) {
-    const float* scale_factor = scale->data<float>();
+    const auto* scale_factor = scale->data<float>();
     const T* input_data = in->data<T>();
-    float* output_data = out->mutable_data<float>(dev_ctx.GetPlace());
+    auto* output_data = out->mutable_data<float>(dev_ctx.GetPlace());
     int ind = in->numel();
     for (size_t i = 0; i < (unsigned)ind; i++) {
       output_data[i] = scale_factor[0] * input_data[i] / max_range;
@@ -68,7 +68,7 @@ class DequantizeMaxAbsOp : public framework::OperatorWithKernel {
   }
 
   framework::OpKernelType GetExpectedKernelType(
-      const framework::ExecutionContext& ctx) const {
+      const framework::ExecutionContext& ctx) const override {
     auto data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
     auto type = framework::OpKernelType(data_type, ctx.device_context());
     return type;

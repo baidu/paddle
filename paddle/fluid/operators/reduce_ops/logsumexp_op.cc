@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/operators/reduce_ops/logsumexp_op.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -74,13 +75,13 @@ class LogsumexpOp : public framework::OperatorWithKernel {
     } else {
       auto dims_vector = vectorize(x_dims);
       if (keepdim) {
-        for (size_t i = 0; i < axis.size(); ++i) {
-          dims_vector[axis[i]] = 1;
+        for (int axi : axis) {
+          dims_vector[axi] = 1;
         }
       } else {
         const int kDelFlag = -1;
-        for (size_t i = 0; i < axis.size(); ++i) {
-          dims_vector[axis[i]] = kDelFlag;
+        for (int axi : axis) {
+          dims_vector[axi] = kDelFlag;
         }
         dims_vector.erase(
             std::remove(dims_vector.begin(), dims_vector.end(), kDelFlag),

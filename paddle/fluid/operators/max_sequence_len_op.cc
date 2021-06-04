@@ -46,7 +46,7 @@ class MaxSeqenceLenOp : public framework::OperatorBase {
         scope.FindVar(Input("RankTable"))->Get<framework::LoDRankTable>();
     auto *out =
         scope.FindVar(Output("Out"))->GetMutable<framework::LoDTensor>();
-    int64_t *out_ptr = out->mutable_data<int64_t>({1}, platform::CPUPlace());
+    auto *out_ptr = out->mutable_data<int64_t>({1}, platform::CPUPlace());
     *out_ptr = rank_table.items()[0].length;
   }
 };

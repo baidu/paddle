@@ -159,7 +159,7 @@ class ReorderLoDTensorByRankTableBase : public framework::OperatorBase {
 
     if (out_lod.empty()) {
       for (size_t i = 0; i < item.lod.size(); ++i) {
-        out_lod.push_back(std::vector<size_t>({0}));
+        out_lod.emplace_back(std::vector<size_t>({0}));
       }
     }
 
@@ -254,7 +254,7 @@ class ReorderLoDTensorByRankGradOp : public ReorderLoDTensorByRankTableBase {
     std::vector<std::pair<size_t, size_t>> offsets;
     offsets.reserve(rank_table.items().size());
     for (size_t i = 0; i < rank_table.items().size(); ++i) {
-      offsets.push_back({i, rank_table.items()[i].index});
+      offsets.emplace_back(i, rank_table.items()[i].index);
     }
 
     // offsets.sort(key=lambda x: x[1])

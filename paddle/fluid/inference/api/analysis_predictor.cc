@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/api/analysis_predictor.h"
+
 #include <glog/logging.h>
+
 #include <algorithm>
 #include <fstream>
 #include <memory>
@@ -21,6 +23,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/extension/include/ext_op_meta_info.h"
 #include "paddle/fluid/framework/feed_fetch_method.h"
 #include "paddle/fluid/framework/feed_fetch_type.h"
@@ -59,9 +62,9 @@ namespace paddle {
 
 using inference::Singleton;
 #if PADDLE_WITH_TENSORRT
-using inference::tensorrt::TRTInt8Calibrator;
 using inference::tensorrt::TRTCalibratorEngine;
 using inference::tensorrt::TRTCalibratorEngineManager;
+using inference::tensorrt::TRTInt8Calibrator;
 #endif
 
 namespace {
@@ -192,7 +195,7 @@ bool AnalysisPredictor::PrepareScope(
   } else {
     paddle::framework::InitDevices();
     // TODO(wilber): we need to release memory occupied by weights.
-    scope_.reset(new paddle::framework::Scope());
+    scope_ = std::make_shared<paddle::framework::Scope>();
     status_is_cloned_ = false;
   }
   sub_scope_ = &scope_->NewScope();
@@ -267,7 +270,7 @@ bool AnalysisPredictor::CreateExecutor() {
   } else {
     place_ = paddle::platform::CPUPlace();
   }
-  executor_.reset(new paddle::framework::NaiveExecutor(place_));
+  executor_ = std::make_unique<paddle::framework::NaiveExecutor>(place_);
   return true;
 }
 bool AnalysisPredictor::PrepareExecutor() {
@@ -586,8 +589,8 @@ void AnalysisPredictor::OptimizeInferenceProgram() {
       platform::errors::InvalidArgument("The argument scope should be valid."));
   VLOG(5) << "to prepare executor";
   ARGUMENT_CHECK_FIELD((&argument_), ir_analyzed_program);
-  inference_program_.reset(
-      new framework::ProgramDesc(argument_.ir_analyzed_program()));
+  inference_program_ =
+      std::make_shared<framework::ProgramDesc>(argument_.ir_analyzed_program());
   // The config and argument take a lot of storage,
   // when the predictor settings are complete, we release these stores.
   argument_.PartiallyRelease();
@@ -596,12 +599,13 @@ void AnalysisPredictor::OptimizeInferenceProgram() {
 }
 
 template <>
-std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
-    AnalysisConfig, PaddleEngineKind::kAnalysis>(const AnalysisConfig &config) {
+std::unique_ptr<PaddlePredictor>
+CreatePaddlePredictor<AnalysisConfig, PaddleEngineKind::kAnalysis>(
+    const AnalysisConfig &config) {
   // TODO(NHZlX): Should add the link to the doc of
   // paddle_infer::CreatePredictor<paddle_infer::Config>
   if (config.glog_info_disabled()) {
-    FLAGS_logtostderr = 1;
+    FLAGS_logtostderr = true;
     FLAGS_minloglevel = 2;  // GLOG_ERROR
   }
   VLOG(3) << "create AnalysisConfig";
@@ -631,7 +635,7 @@ std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
           platform::errors::InvalidArgument(
               "Invalid device id (%d). The device id should be greater than 0.",
               config.gpu_device_id()));
-      gflags.push_back("dummy");
+      gflags.emplace_back("dummy");
 
       float fraction_of_gpu_memory = config.fraction_of_gpu_memory_for_pool();
       if (fraction_of_gpu_memory > 0.95f) {
@@ -647,7 +651,7 @@ std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
                            std::to_string(fraction_of_gpu_memory);
         VLOG(3) << "set flag: " << flag;
         gflags.push_back(flag);
-        gflags.push_back("--cudnn_deterministic=True");
+        gflags.emplace_back("--cudnn_deterministic=True");
       }
 
 // TODO(wilber): jetson tx2 may fail to run the model due to insufficient memory
@@ -660,7 +664,7 @@ std::unique_ptr<PaddlePredictor> CreatePaddlePredictor<
       // TODO(Shixiaowei02): Add a mandatory scheme to use the thread local
       // allocator when multi-stream is enabled.
       if (config.thread_local_stream_enabled()) {
-        gflags.push_back("--allocator_strategy=thread_local");
+        gflags.emplace_back("--allocator_strategy=thread_local");
         process_level_allocator_enabled = false;
       } else {
         process_level_allocator_enabled = true;
@@ -922,7 +926,7 @@ bool AnalysisPredictor::LoadProgramDesc() {
   } else {
     proto.ParseFromString(config_.prog_file());
   }
-  inference_program_.reset(new framework::ProgramDesc(proto));
+  inference_program_ = std::make_shared<framework::ProgramDesc>(proto);
   return true;
 }
 
@@ -1277,12 +1281,11 @@ PredictorPool::PredictorPool(const Config &config, size_t size) {
           "The predictor pool size should be greater than 1, but it's (%d)",
           size));
   Config copy_config(config);
-  main_pred_.reset(new Predictor(config));
+  main_pred_ = std::make_shared<Predictor>(config);
   for (size_t i = 0; i < size - 1; i++) {
     if (config.tensorrt_engine_enabled()) {
       Config config_tmp(copy_config);
-      preds_.push_back(
-          std::move(std::unique_ptr<Predictor>(new Predictor(config_tmp))));
+      preds_.push_back(std::move(std::make_unique<Predictor>(config_tmp)));
     } else {
       preds_.push_back(std::move(main_pred_->Clone()));
     }

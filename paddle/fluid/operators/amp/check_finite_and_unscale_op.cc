@@ -91,7 +91,7 @@ Otherwise, FoundInfinite will be 0 (False).
 template <typename T>
 class CheckFiniteAndUnscaleCpuKernel : public framework::OpKernel<T> {
  public:
-  void Compute(const framework::ExecutionContext& ctx) const {
+  void Compute(const framework::ExecutionContext& ctx) const override {
     auto& dev_ctx = ctx.template device_context<platform::CPUDeviceContext>();
     const auto xs = ctx.MultiInput<framework::Tensor>("X");
     const auto* scale = ctx.Input<framework::Tensor>("Scale");

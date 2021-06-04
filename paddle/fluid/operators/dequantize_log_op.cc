@@ -39,9 +39,9 @@ struct DequantizeFunctor<platform::CPUDeviceContext, T> {
   void operator()(const platform::CPUDeviceContext& dev_ctx,
                   const framework::Tensor* in, const framework::Tensor* dict,
                   framework::Tensor* out) {
-    const float* dict_data = dict->data<float>();
+    const auto* dict_data = dict->data<float>();
     const T* input_data = in->data<T>();
-    float* output_data = out->mutable_data<float>(dev_ctx.GetPlace());
+    auto* output_data = out->mutable_data<float>(dev_ctx.GetPlace());
     int ind = in->numel();
     for (size_t i = 0; i < (unsigned)ind; i++) {
       if (input_data[i] < 0) {
@@ -76,7 +76,7 @@ class DequantizeLogOp : public framework::OperatorWithKernel {
   }
 
   framework::OpKernelType GetExpectedKernelType(
-      const framework::ExecutionContext& ctx) const {
+      const framework::ExecutionContext& ctx) const override {
     auto data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
     auto type = framework::OpKernelType(data_type, ctx.device_context());
     return type;

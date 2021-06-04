@@ -15,6 +15,7 @@ limitations under the License. */
 #include "paddle/fluid/operators/math/segment_pooling.h"
 
 #include <string>
+
 #include "paddle/fluid/framework/eigen.h"
 
 namespace paddle {
@@ -30,7 +31,7 @@ class SegmentPoolFunctor<platform::CPUDeviceContext, T, IndexT> {
                   const framework::Tensor& segments, framework::Tensor* output,
                   framework::Tensor* index,
                   const std::string pooltype = "SUM") {
-    const IndexT* segment_ids = segments.data<IndexT>();
+    const auto* segment_ids = segments.data<IndexT>();
     auto curent_id = segment_ids[0];
     int64_t last_idx = 0;
     int64_t w = input.numel() / input.dims()[0];
@@ -85,7 +86,7 @@ class SegmentPoolGradFunctor<platform::CPUDeviceContext, T, IndexT> {
                   const framework::Tensor& segments, framework::Tensor* in_grad,
                   const framework::Tensor* index = nullptr,
                   const std::string pooltype = "SUM") {
-    const IndexT* segment_ids = segments.data<IndexT>();
+    const auto* segment_ids = segments.data<IndexT>();
     auto& place = *context.eigen_device();
     auto curent_id = segment_ids[0];
     int64_t last_idx = 0;
