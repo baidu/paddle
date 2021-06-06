@@ -397,6 +397,22 @@ static int _PySlice_GetIndices(PySliceObject *r, Py_ssize_t length,
   return 0;
 }
 
+static bool AllElementIsBoolean(PyObject *input) {
+  PADDLE_ENFORCE_EQ(
+      PyTuple_Check(input), true,
+      platform::errors::InvalidArgument("the _index is not tuple"));
+
+  const int size = PyTuple_GET_SIZE(input);
+
+  for (int idx = 0; idx < size; ++idx) {
+    PyObject *item = PyTuple_GetItem(input, idx);
+    if (!PyBool_Check(item)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static void ParseIndexingSlice(framework::LoDTensor *tensor, PyObject *_index,
                                std::vector<int> *slice_axes,
                                std::vector<int> *slice_starts,
@@ -408,17 +424,46 @@ static void ParseIndexingSlice(framework::LoDTensor *tensor, PyObject *_index,
   // types.
   // Ellipsis and None are not supported yet.
   // wrap to tuple
-  PyObject *index = !PyTuple_Check(_index) ? PyTuple_Pack(1, _index) : _index;
+  PyObject *index = PyTuple_Check(_index) ? _index : PyTuple_Pack(1, _index);
+
   PADDLE_ENFORCE_EQ(
       tensor->IsInitialized(), true,
       platform::errors::InvalidArgument("tensor has not been initialized"));
   const auto &shape = tensor->dims();
-  const int rank = shape.size();
   const int size = PyTuple_GET_SIZE(index);
+
+  // if all input is Boolean, then take asl masks of the first dim of tensor.
+  if (AllElementIsBoolean(index)) {
+    PADDLE_ENFORCE_EQ(size, shape.at(0),
+                      platform::errors::InvalidArgument(
+                          "the input boolean size (%d) is not equal the length "
+                          "of first dimension of tensor (%d)",
+                          size, shape.at(0)));
+
+    for (int idx = 0; idx < size; ++idx) {
+      PyObject *item = PyTuple_GetItem(index, idx);
+
+      // infer_flags->push_back(1);
+      if (item == Py_True) {
+        int start = idx;
+
+        slice_axes->push_back(0);
+        slice_starts->push_back(start);
+        slice_ends->push_back(start + 1);
+        slice_strides->push_back(1);
+        // decrease_axis->push_back(0);
+      }
+    }
+
+    return;
+  }
+
+  const int rank = shape.size();
   PADDLE_ENFORCE_EQ(
       size <= rank, true,
       platform::errors::InvalidArgument(
           "too many indices (%d) for tensor of dimension %d", size, rank));
+
   for (int dim = 0; dim < size; ++dim) {
     PyObject *slice_item = PyTuple_GetItem(index, dim);
     PADDLE_ENFORCE_EQ(PyCheckInteger(slice_item) || PySlice_Check(slice_item),

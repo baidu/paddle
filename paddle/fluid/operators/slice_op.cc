@@ -114,7 +114,8 @@ class SliceOp : public framework::OperatorWithKernel {
         out_dims[axes[i]] = -1;
       } else {
         // infer out_dim shape
-        dim_value = out_dims[axes[i]];
+        dim_value = in_dims[axes[i]];
+
         if (dim_value > 0) {
           start = starts[i] < 0 ? (starts[i] + dim_value) : starts[i];
           end = ends[i] < 0 ? (ends[i] + dim_value) : ends[i];
@@ -133,7 +134,12 @@ class SliceOp : public framework::OperatorWithKernel {
                                 "end should greater than start, but received "
                                 "end = %d, start = %d.",
                                 ends[i], starts[i]));
-          out_dims[axes[i]] = end - start;
+          // if true, then it is the first time to set value
+          if (out_dims[axes[i]] == in_dims[axes[i]]) {
+            out_dims[axes[i]] = end - start;
+          } else {
+            out_dims[axes[i]] += (end - start);
+          }
         }
       }
     }
