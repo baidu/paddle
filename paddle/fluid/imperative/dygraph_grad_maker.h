@@ -28,6 +28,15 @@
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/macros.h"
 
+extern uint64_t time_TracedGradOp_attr;
+extern uint64_t time_TracedGradOp_in;
+extern uint64_t time_TracedGradOp_out;
+extern uint64_t time_find_in;
+extern uint64_t time_find_out;
+extern uint64_t time_find_in_grad;
+extern uint64_t time_find_out_grad;
+extern uint64_t lala_start_time;
+
 namespace paddle {
 namespace imperative {
 
@@ -41,6 +50,14 @@ class TracedVarList : public std::vector<std::shared_ptr<T>> {
  public:
   using BaseClass::BaseClass;
 };
+
+inline uint64_t GetPosixInUsec3() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec);
+}
+class tmpclass3;
+extern tmpclass3 aaaa;
 
 class GradOpBaseMakerBase {
  public:
@@ -61,22 +78,38 @@ class GradOpBaseMakerBase {
 
   TracedVarList<VarBase, TracedVarRole::kBackward> InputGrad(
       const std::string& name, bool drop_empty_grad = true) const {
-    return GetVarBaseList<TracedVarRole::kBackward>(name, /*is_input=*/true);
+    lala_start_time = GetPosixInUsec3();
+    auto ret =
+        GetVarBaseList<TracedVarRole::kBackward>(name, /*is_input=*/true);
+    time_find_in_grad = GetPosixInUsec3() - lala_start_time + time_find_in_grad;
+    return ret;
   }
 
   TracedVarList<VarBase, TracedVarRole::kBackward> OutputGrad(
       const std::string& name) const {
-    return GetVarBaseList<TracedVarRole::kBackward>(name, /*is_input=*/false);
+    lala_start_time = GetPosixInUsec3();
+    auto ret =
+        GetVarBaseList<TracedVarRole::kBackward>(name, /*is_input=*/false);
+    time_find_out_grad =
+        GetPosixInUsec3() - lala_start_time + time_find_out_grad;
+    return ret;
   }
 
   TracedVarList<VarBase, TracedVarRole::kForward> Input(
       const std::string& name) const {
-    return GetVarBaseList<TracedVarRole::kForward>(name, /*is_input=*/true);
+    lala_start_time = GetPosixInUsec3();
+    auto ret = GetVarBaseList<TracedVarRole::kForward>(name, /*is_input=*/true);
+    time_find_in = GetPosixInUsec3() - lala_start_time + time_find_in;
+    return ret;
   }
 
   TracedVarList<VarBase, TracedVarRole::kForward> Output(
       const std::string& name) const {
-    return GetVarBaseList<TracedVarRole::kForward>(name, /*is_input=*/false);
+    lala_start_time = GetPosixInUsec3();
+    auto ret =
+        GetVarBaseList<TracedVarRole::kForward>(name, /*is_input=*/false);
+    time_find_out = GetPosixInUsec3() - lala_start_time + time_find_out;
+    return ret;
   }
 
   static TracedVarList<VarBase, TracedVarRole::kForward> EmptyInput() {
@@ -223,7 +256,7 @@ class TracedGradOp {
     if (vars.empty()) {
       return;
     }
-
+    lala_start_time = GetPosixInUsec3();
     if (kRole == TracedVarRole::kBackward) {
       for (auto& var : vars) {
         if (var && !var->OverridedStopGradient()) {
@@ -243,6 +276,8 @@ class TracedGradOp {
       op_->SetInput(name, std::move(var_wrappers),
                     kRole == TracedVarRole::kBackward);
     }
+    time_TracedGradOp_in =
+        GetPosixInUsec3() - lala_start_time + time_TracedGradOp_in;
   }
 
   template <TracedVarRole kRole>
@@ -251,7 +286,7 @@ class TracedGradOp {
     if (vars.empty()) {
       return;
     }
-
+    lala_start_time = GetPosixInUsec3();
     if (kRole == TracedVarRole::kBackward) {
       if (vars.size() == 1 && vars.front()->OverridedStopGradient()) {
         return;
@@ -273,6 +308,8 @@ class TracedGradOp {
       op_->SetOutput(name, std::move(var_wrappers),
                      kRole == TracedVarRole::kBackward);
     }
+    time_TracedGradOp_out =
+        GetPosixInUsec3() - lala_start_time + time_TracedGradOp_out;
   }
 
   std::string Type() const { return op_->Type(); }
@@ -282,7 +319,10 @@ class TracedGradOp {
   const framework::OperatorBase& InnerOp() const { return op_->InnerOp(); }
 
   void SetAttrMap(const framework::AttributeMap& attrs) {
-    return op_->SetAttrMap(attrs);
+    lala_start_time = GetPosixInUsec3();
+    op_->SetAttrMap(attrs);
+    time_TracedGradOp_attr =
+        GetPosixInUsec3() - lala_start_time + time_TracedGradOp_attr;
   }
 
   void SetAttr(const std::string& name, const framework::Attribute& v) {

@@ -26,8 +26,51 @@
 #ifdef PADDLE_WITH_MKLDNN
 #include "paddle/fluid/platform/mkldnn_helper.h"
 #endif
+#include "paddle/fluid/imperative/dygraph_grad_maker.h"
 
 DECLARE_bool(use_mkldnn);
+
+uint64_t time_TracedGradOp_attr = 0;
+uint64_t time_TracedGradOp_in = 0;
+uint64_t time_TracedGradOp_out = 0;
+uint64_t time_find_in = 0;
+uint64_t time_find_out = 0;
+uint64_t time_find_in_grad = 0;
+uint64_t time_find_out_grad = 0;
+uint64_t lala_start_time = 0;
+
+uint64_t start_time4 = 0;
+uint64_t time_maker_createnode = 0;
+uint64_t time_maker_inplace = 0;
+uint64_t time_maker_apply = 0;
+uint64_t time_maker_tracegradop = 0;
+
+class tmpclass3 {
+ public:
+  tmpclass3() {}
+  ~tmpclass3() {
+    // std::cout << "before1: " << before_TraceOp1 << "before2: " <<
+    // before_TraceOp2 << "before3: " << before_TraceOp3 << "before4: " <<
+    // before_TraceOp4 << ", ing: " << ing_TraceOp << ", python: " <<
+    // python_time << std::endl;
+    std::cout << "time_TracedGradOp_attr " << time_TracedGradOp_attr
+              << std::endl;
+    std::cout << "time_TracedGradOp_in " << time_TracedGradOp_in << std::endl;
+    std::cout << "time_TracedGradOp_out " << time_TracedGradOp_out << std::endl;
+    std::cout << "time_find_in " << time_find_in << std::endl;
+    std::cout << "time_find_out " << time_find_out << std::endl;
+    std::cout << "time_find_in_grad " << time_find_in_grad << std::endl;
+    std::cout << "time_find_out_grad " << time_find_out_grad << std::endl;
+
+    std::cout << "time_maker_createnode " << time_maker_createnode << std::endl;
+    std::cout << "time_maker_inplace " << time_maker_inplace << std::endl;
+    std::cout << "time_maker_tracegradop " << time_maker_tracegradop
+              << std::endl;
+    std::cout << "time_maker_apply " << time_maker_apply << std::endl;
+  }
+  int a;
+};
+tmpclass3 aaaa;
 
 namespace paddle {
 namespace imperative {
@@ -443,6 +486,38 @@ void ClearNoNeedBufferInputs(OpBase* op) {
   }
 }
 
+inline uint64_t GetPosixInUsec4() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec);
+}
+
+uint64_t time_maker = 0;
+uint64_t time_clear_noneedbuffer = 0;
+uint64_t start_time2 = 0;
+uint64_t start_time3 = 0;
+uint64_t time_opbase_setattr = 0;
+uint64_t time_opbase_setin = 0;
+uint64_t time_opbase_setout = 0;
+class tmpclass1 {
+ public:
+  tmpclass1() {}
+  ~tmpclass1() {
+    // std::cout << "before1: " << before_TraceOp1 << "before2: " <<
+    // before_TraceOp2 << "before3: " << before_TraceOp3 << "before4: " <<
+    // before_TraceOp4 << ", ing: " << ing_TraceOp << ", python: " <<
+    // python_time << std::endl;
+    std::cout << "time_maker " << time_maker << std::endl;
+    std::cout << "time_clear_noneedbuffer " << time_clear_noneedbuffer
+              << std::endl;
+    std::cout << "time_opbase_setattr " << time_opbase_setattr << std::endl;
+    std::cout << "time_opbase_setin " << time_opbase_setin << std::endl;
+    std::cout << "time_opbase_setout " << time_opbase_setout << std::endl;
+  }
+  int a;
+};
+tmpclass1 aaa;
+
 std::shared_ptr<GradOpNode> CreateGradOpNode(
     const framework::OperatorBase& op, const NameVarBaseMap& ins,
     const NameVarBaseMap& outs, const framework::AttributeMap& attrs,
@@ -452,19 +527,47 @@ std::shared_ptr<GradOpNode> CreateGradOpNode(
   if (!info.dygraph_grad_op_maker_) {
     return nullptr;
   }
-
+  start_time3 = GetPosixInUsec4();
   auto grad_node =
       info.dygraph_grad_op_maker_(op.Type(), ins, outs, attrs, inplace_map);
+  time_maker = GetPosixInUsec4() - start_time3 + time_maker;
   if (grad_node && !grad_node->empty()) {
     for (auto& grad_op : *grad_node) {
+      start_time3 = GetPosixInUsec4();
       grad_op.SetId(OpBase::GenerateUniqueId());
       grad_op.SetPlace(place);
       ClearNoNeedBufferInputs(&grad_op);
+      time_clear_noneedbuffer =
+          GetPosixInUsec4() - start_time3 + time_clear_noneedbuffer;
     }
     return grad_node;
   } else {
     return nullptr;
   }
+}
+
+void OpBase::SetAttrMap(const framework::AttributeMap& attrs) {
+  start_time2 = GetPosixInUsec4();
+  attrs_ = attrs;
+  time_opbase_setattr = GetPosixInUsec4() - start_time2 + time_opbase_setattr;
+}
+
+void OpBase::SetInput(const std::string& name, VariableWrapperList vars,
+                      bool is_grad) {
+  start_time2 = GetPosixInUsec4();
+  auto& in_vars = ins_[name];
+  *(in_vars.MutableVarList()) = std::move(vars);
+  in_vars.SetIsGrad(is_grad);
+  time_opbase_setin = GetPosixInUsec4() - start_time2 + time_opbase_setin;
+}
+
+void OpBase::SetOutput(const std::string& name, VariableWrapperList vars,
+                       bool is_grad) {
+  start_time2 = GetPosixInUsec4();
+  auto& out_vars = outs_[name];
+  *(out_vars.MutableVarList()) = std::move(vars);
+  out_vars.SetIsGrad(is_grad);
+  time_opbase_setout = GetPosixInUsec4() - start_time2 + time_opbase_setout;
 }
 
 }  // namespace imperative

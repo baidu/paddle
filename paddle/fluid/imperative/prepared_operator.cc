@@ -16,6 +16,10 @@
 
 #include "paddle/fluid/framework/data_type_transform.h"
 #include "paddle/fluid/imperative/infer_shape_context.h"
+uint64_t opbase_run_2 = 0;
+uint64_t opbase_run_3 = 0;
+// extern uint64_t opbase_run_2;
+// extern uint64_t opbase_run_3;
 
 namespace paddle {
 namespace imperative {
@@ -157,6 +161,12 @@ PreparedOp PreparedOp::Prepare(const NameVarMap<VariableWrapper>& ins,
   return PrepareImpl<VariableWrapper>(ins, outs, op, place, attrs);
 }
 
+inline uint64_t GetPosixInUsec2() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec);
+}
+
 template <typename VarType>
 static void PreparedOpRunImpl(
     const framework::OperatorBase& op, const framework::RuntimeContext& ctx,
@@ -172,9 +182,10 @@ static void PreparedOpRunImpl(
   static_cast<const framework::OperatorWithKernel&>(op).InferShape(
       &infer_shape_ctx);
 
+  opbase_run_2 = GetPosixInUsec2();
   func(DygraphExecutionContext<VarType>(op, scope, *dev_ctx, ctx, ins, outs,
                                         attrs));
-
+  opbase_run_3 = GetPosixInUsec2();
   /**
    * [ Why need handle complex gradient to real gradient? ]
    *

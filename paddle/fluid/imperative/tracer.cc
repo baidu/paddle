@@ -27,6 +27,23 @@ DECLARE_bool(use_mkldnn);
 DECLARE_string(tracer_mkldnn_ops_on);
 DECLARE_string(tracer_mkldnn_ops_off);
 
+uint64_t time_create_op = 0;
+uint64_t time_checker = 0;
+uint64_t time_amp = 0;
+uint64_t time_before_kernel = 0;
+uint64_t time_after_kernel = 0;
+uint64_t time_kernel = 0;
+uint64_t time_create_gradop = 0;
+uint64_t python_time = 0;
+uint64_t start_time = 0;
+uint64_t start_time_python = 0;
+uint64_t opbase_run_1 = 0;
+// uint64_t opbase_run_2 = 0;
+// uint64_t opbase_run_3 = 0;
+extern uint64_t opbase_run_2;
+extern uint64_t opbase_run_3;
+uint64_t opbase_run_4 = 0;
+
 namespace paddle {
 namespace imperative {
 
@@ -130,10 +147,55 @@ paddle::framework::GarbageCollector* Tracer::MutableGarbageCollectorIfNotExists(
   return gcs_.at(place).get();
 }
 
+inline uint64_t GetPosixInUsec() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec);
+}
+
+class tmpclass {
+ public:
+  tmpclass() {}
+  ~tmpclass() {
+    // std::cout << "before1: " << before_TraceOp1 << "before2: " <<
+    // before_TraceOp2 << "before3: " << before_TraceOp3 << "before4: " <<
+    // before_TraceOp4 << ", ing: " << ing_TraceOp << ", python: " <<
+    // python_time << std::endl;
+    std::cout << "time_create_op " << time_create_op << std::endl;
+    std::cout << "time_checker " << time_checker << std::endl;
+    std::cout << "time_amp " << time_amp << std::endl;
+    std::cout << "time_before_kernel " << time_before_kernel << std::endl;
+    std::cout << "time_after_kernel " << time_after_kernel << std::endl;
+    std::cout << "time_kernel " << time_kernel << std::endl;
+    std::cout << "time_create_gradop " << time_create_gradop << std::endl;
+    std::cout << "python_time " << python_time << std::endl;
+  }
+  int a;
+};
+tmpclass a;
+int run_times = 0;
+
 void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
                      const NameVarBaseMap& outs, framework::AttributeMap attrs,
                      const platform::Place& place, bool trace_backward,
                      const std::map<std::string, std::string>& inplace_map) {
+  if (run_times < 100) {
+    time_create_op = 0;
+    time_checker = 0;
+    time_amp = 0;
+    time_before_kernel = 0;
+    time_after_kernel = 0;
+    time_kernel = 0;
+    time_create_gradop = 0;
+    python_time = 0;
+    start_time = 0;
+    start_time_python = 0;
+    run_times++;
+  }
+  if (start_time_python != 0) {
+    python_time = GetPosixInUsec() - start_time_python + python_time;
+  }
+
   platform::RecordEvent op_type_record_event(type);
   platform::ScopedFlushDenormal flush;
   VLOG(1) << "Trace Op: " << type;
@@ -150,18 +212,25 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
       attrs["use_mkldnn"] = !is_off;
     }
   }
+
+  start_time = GetPosixInUsec();
   auto op = framework::OpRegistry::CreateOp(type, {}, {}, {}, false);
+  time_create_op = GetPosixInUsec() - start_time + time_create_op;
+  start_time = GetPosixInUsec();
   const auto& op_info = op->Info();
   auto* attr_checker = op_info.Checker();
   if (attr_checker) {
     attr_checker->Check(&attrs, true);
   }
+  time_checker = GetPosixInUsec() - start_time + time_checker;
 
+  start_time = GetPosixInUsec();
   NameVarBaseMap new_ins = ins;
   if (enable_autocast_) {
     VLOG(5) << "Auto mixed precision run operator: " << type;
     new_ins = AutoCastInputs(type, ins);
   }
+  time_amp = GetPosixInUsec() - start_time + time_amp;
 
   try {
     if (platform::is_gpu_place(place)) {
@@ -180,8 +249,12 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
           "PaddlePaddle should compile with XPU if use XPUPlace."));
 #endif
     }
-
+    opbase_run_1 = GetPosixInUsec();
     OpBase::Run(*op, new_ins, outs, attrs, place);
+    opbase_run_4 = GetPosixInUsec();
+    time_before_kernel = opbase_run_2 - opbase_run_1 + time_before_kernel;
+    time_after_kernel = opbase_run_4 - opbase_run_3 + time_after_kernel;
+    time_kernel = opbase_run_3 - opbase_run_2 + time_kernel;
   } catch (platform::EnforceNotMet& exception) {
     framework::AppendErrorOpHint(type, &exception);
     throw std::move(exception);
@@ -203,11 +276,14 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
     program_desc_tracer_->InsertOp(type, new_ins, outs, attrs);
   }
 
+  start_time = GetPosixInUsec();
   if (ComputeRequiredGrad(new_ins, outs, trace_backward)) {
     CreateGradOpNode(*op, new_ins, outs, attrs, place, inplace_map);
   } else {
     VLOG(3) << "No Grad to track for Op: " << type;
   }
+  time_create_gradop = GetPosixInUsec() - start_time + time_create_gradop;
+  start_time_python = GetPosixInUsec();
 }
 
 void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,

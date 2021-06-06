@@ -27,6 +27,12 @@ limitations under the License. */
 #include "paddle/fluid/imperative/layer.h"
 #include "paddle/fluid/imperative/type_defs.h"
 
+extern uint64_t start_time4;
+extern uint64_t time_maker_createnode;
+extern uint64_t time_maker_inplace;
+extern uint64_t time_maker_apply;
+extern uint64_t time_maker_tracegradop;
+
 namespace paddle {
 namespace framework {
 
@@ -213,6 +219,12 @@ class SingleGradOpMaker<OpDesc> : public GradOpDescMakerBase {
   virtual void Apply(GradOpPtr<OpDesc> op) const = 0;
 };
 
+inline uint64_t GetPosixInUsec5() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec);
+}
+
 template <>
 class SingleGradOpMaker<imperative::OpBase>
     : public imperative::GradOpBaseMakerBase {
@@ -220,15 +232,25 @@ class SingleGradOpMaker<imperative::OpBase>
   using GradOpBaseMakerBase::GradOpBaseMakerBase;
 
   std::shared_ptr<imperative::GradOpNode> operator()() const final {
+    start_time4 = GetPosixInUsec5();
     auto node = this->NewGradNode();
+    time_maker_createnode =
+        GetPosixInUsec5() - start_time4 + time_maker_createnode;
+    start_time4 = GetPosixInUsec5();
     auto& inplace_map = this->GetInplaceMap();
     if (!inplace_map.empty()) {
       node->SetInplaceGradNameMap(inplace_map);
     }
+    time_maker_inplace = GetPosixInUsec5() - start_time4 + time_maker_inplace;
     {
+      start_time4 = GetPosixInUsec5();
       imperative::TracedGradOp traced_grad_op(node);
+      time_maker_tracegradop =
+          GetPosixInUsec5() - start_time4 + time_maker_tracegradop;
       try {
+        start_time4 = GetPosixInUsec5();
         this->Apply(&traced_grad_op);
+        time_maker_apply = GetPosixInUsec5() - start_time4 + time_maker_apply;
       } catch (platform::EnforceNotMet& exception) {
         framework::AppendErrorOpHint(traced_grad_op.Type(), &exception);
         throw std::move(exception);

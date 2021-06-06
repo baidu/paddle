@@ -84,20 +84,12 @@ class OpBase {
   }
 
   void SetInput(const std::string& name, VariableWrapperList vars,
-                bool is_grad) {
-    auto& in_vars = ins_[name];
-    *(in_vars.MutableVarList()) = std::move(vars);
-    in_vars.SetIsGrad(is_grad);
-  }
+                bool is_grad);
 
   void SetOutput(const std::string& name, VariableWrapperList vars,
-                 bool is_grad) {
-    auto& out_vars = outs_[name];
-    *(out_vars.MutableVarList()) = std::move(vars);
-    out_vars.SetIsGrad(is_grad);
-  }
+                 bool is_grad);
 
-  void SetAttrMap(const framework::AttributeMap& attrs) { attrs_ = attrs; }
+  void SetAttrMap(const framework::AttributeMap& attrs);
 
   void SetAttr(const std::string& name, const framework::Attribute& v) {
     attrs_[name] = v;

@@ -48,6 +48,7 @@ limitations under the License. */
 #include "paddle/fluid/pybind/pybind_boost_headers.h"
 #include "paddle/fluid/pybind/tensor_py.h"
 
+extern uint64_t start_time_python;
 namespace paddle {
 namespace pybind {
 
@@ -1732,6 +1733,7 @@ void BindImperative(py::module *m_ptr) {
          bool retain_graph, const imperative::Tracer &tracer) {
         auto *engine = tracer.GetEngine();
         engine->Init(tensors, grad_tensors, retain_graph);
+        start_time_python = 0;
         VLOG(3) << "Start backward";
         engine->Execute();
         VLOG(3) << "Finish backward";

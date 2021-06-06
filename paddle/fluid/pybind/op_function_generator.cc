@@ -173,7 +173,7 @@ std::set<std::string> inplace_op_duplicable_ins_set = {
 
 // clang-format off
 const char* OUT_INITIALIZER_TEMPLATE =
-    R"({"%s", {std::shared_ptr<imperative::VarBase>(new imperative::VarBase(tracer->GenerateUniqueName()))}})";
+    R"({"%s", {std::shared_ptr<imperative::VarBase>(new imperative::VarBase(tracer->GenerateUniqueName()), VarBaseDeleter)}})";
 const char* OUT_DUPLICABLE_INITIALIZER_TEMPLATE = R"({"%s", ConstructDuplicableOutput(%s)})";
 
 const char* INPUT_INITIALIZER_TEMPLATE = R"({"%s", {%s}})";
@@ -570,7 +570,8 @@ int main(int argc, char* argv[]) {
   ascend_ptr->InitGEForUT();
 #endif
 
-  std::vector<std::string> headers{"\"paddle/fluid/imperative/tracer.h\""};
+  std::vector<std::string> headers{"\"paddle/fluid/imperative/tracer.h\"",
+                                   "\"paddle/fluid/pybind/varbase_deleter.h\""};
 
   std::ofstream out(argv[1], std::ios::out);
 
