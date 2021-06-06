@@ -40,12 +40,21 @@ class BipartiteMatchOp : public framework::OperatorWithKernel {
             "Output(ColToRowMatchDist) of BipartiteMatch should not be null."));
 
     auto dims = ctx->GetInputDim("DistMat");
-    PADDLE_ENFORCE_EQ(dims.size(), 2,
+    PADDLE_ENFORCE_EQ(dims.size() == 2UL || dims.size() == 3UL, true,
                       platform::errors::InvalidArgument(
-                          "The rank of Input(DistMat) must be 2."));
+                          "Expected the rank of Input(DistMat) must be 2 or 3. "
+                          "But received %d.",
+                          dims.size()));
 
-    ctx->SetOutputDim("ColToRowMatchIndices", dims);
-    ctx->SetOutputDim("ColToRowMatchDist", dims);
+    if (dims.size() == 3UL) {
+      ctx->SetOutputDim("ColToRowMatchIndices",
+                        framework::make_ddim({dims[0], dims[2]}));
+      ctx->SetOutputDim("ColToRowMatchDist",
+                        framework::make_ddim({dims[0], dims[2]}));
+    } else {
+      ctx->SetOutputDim("ColToRowMatchIndices", dims);
+      ctx->SetOutputDim("ColToRowMatchDist", dims);
+    }
   }
 
  protected:
@@ -192,41 +201,77 @@ class BipartiteMatchKernel : public framework::OpKernel<T> {
 
     auto& dev_ctx = context.device_context<platform::CPUDeviceContext>();
 
-    auto col = dist_mat->dims()[1];
+    auto col = dist_mat->dims()[dist_mat->dims().size() - 1];
 
-    int64_t n = dist_mat->lod().size() == 0UL
-                    ? 1
-                    : static_cast<int64_t>(dist_mat->lod().back().size() - 1);
-    if (dist_mat->lod().size()) {
+    if (dist_mat->dims().size() == 3UL) {
+      // new version for DistMat Tensor [N, P, M]
       PADDLE_ENFORCE_EQ(
-          dist_mat->lod().size(), 1UL,
-          platform::errors::InvalidArgument("Only support 1 level of LoD."));
-    }
-    match_indices->mutable_data<int>({n, col}, context.GetPlace());
-    match_dist->mutable_data<T>({n, col}, context.GetPlace());
+          dist_mat->lod().size(), 0UL,
+          platform::errors::InvalidArgument(
+              "When the input dimension is 3, "
+              "The type of input should be Tensor, not LoDTensor. "));
 
-    math::SetConstant<platform::CPUDeviceContext, int> iset;
-    iset(dev_ctx, match_indices, static_cast<int>(-1));
-    math::SetConstant<platform::CPUDeviceContext, T> tset;
-    tset(dev_ctx, match_dist, static_cast<T>(0));
+      int64_t batch_size = dist_mat->dims()[0];
 
-    int* indices = match_indices->data<int>();
-    T* dist = match_dist->data<T>();
-    auto type = context.Attr<std::string>("match_type");
-    auto threshold = context.Attr<float>("dist_threshold");
-    if (n == 1) {
-      BipartiteMatch(*dist_mat, indices, dist);
-      if (type == "per_prediction") {
-        ArgMaxMatch(*dist_mat, indices, dist, threshold);
+      match_indices->mutable_data<int>({batch_size, col}, context.GetPlace());
+      match_dist->mutable_data<T>({batch_size, col}, context.GetPlace());
+
+      math::SetConstant<platform::CPUDeviceContext, int> iset;
+      iset(dev_ctx, match_indices, static_cast<int>(-1));
+      math::SetConstant<platform::CPUDeviceContext, T> tset;
+      tset(dev_ctx, match_dist, static_cast<T>(0));
+
+      int* indices = match_indices->data<int>();
+      T* dist = match_dist->data<T>();
+      auto type = context.Attr<std::string>("match_type");
+      auto threshold = context.Attr<float>("dist_threshold");
+
+      framework::DDim one_ins_shape = {dist_mat->dims()[1],
+                                       dist_mat->dims()[2]};
+      for (int64_t i = 0; i < batch_size; ++i) {
+        Tensor one_ins = dist_mat->Slice(i, i + 1).Resize(one_ins_shape);
+        BipartiteMatch(one_ins, indices + i * col, dist + i * col);
+        if (type == "per_prediction") {
+          ArgMaxMatch(one_ins, indices + i * col, dist + i * col, threshold);
+        }
       }
     } else {
-      auto lod = dist_mat->lod().back();
-      for (size_t i = 0; i < lod.size() - 1; ++i) {
-        if (lod[i + 1] > lod[i]) {
-          Tensor one_ins = dist_mat->Slice(lod[i], lod[i + 1]);
-          BipartiteMatch(one_ins, indices + i * col, dist + i * col);
-          if (type == "per_prediction") {
-            ArgMaxMatch(one_ins, indices + i * col, dist + i * col, threshold);
+      // old version for LoDTensor
+      int64_t n = dist_mat->lod().size() == 0UL
+                      ? 1
+                      : static_cast<int64_t>(dist_mat->lod().back().size() - 1);
+      if (dist_mat->lod().size()) {
+        PADDLE_ENFORCE_EQ(
+            dist_mat->lod().size(), 1UL,
+            platform::errors::InvalidArgument("Only support 1 level of LoD."));
+      }
+      match_indices->mutable_data<int>({n, col}, context.GetPlace());
+      match_dist->mutable_data<T>({n, col}, context.GetPlace());
+
+      math::SetConstant<platform::CPUDeviceContext, int> iset;
+      iset(dev_ctx, match_indices, static_cast<int>(-1));
+      math::SetConstant<platform::CPUDeviceContext, T> tset;
+      tset(dev_ctx, match_dist, static_cast<T>(0));
+
+      int* indices = match_indices->data<int>();
+      T* dist = match_dist->data<T>();
+      auto type = context.Attr<std::string>("match_type");
+      auto threshold = context.Attr<float>("dist_threshold");
+      if (n == 1) {
+        BipartiteMatch(*dist_mat, indices, dist);
+        if (type == "per_prediction") {
+          ArgMaxMatch(*dist_mat, indices, dist, threshold);
+        }
+      } else {
+        auto lod = dist_mat->lod().back();
+        for (size_t i = 0; i < lod.size() - 1; ++i) {
+          if (lod[i + 1] > lod[i]) {
+            Tensor one_ins = dist_mat->Slice(lod[i], lod[i + 1]);
+            BipartiteMatch(one_ins, indices + i * col, dist + i * col);
+            if (type == "per_prediction") {
+              ArgMaxMatch(one_ins, indices + i * col, dist + i * col,
+                          threshold);
+            }
           }
         }
       }
@@ -240,7 +285,8 @@ class BipartiteMatchOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput(
         "DistMat",
         "(LoDTensor or Tensor) this input is a 2-D LoDTensor with shape "
-        "[K, M]. It is pair-wise distance matrix between the entities "
+        "[K, M] or 3-D Tensor with shape [B, P, M], where K = B * P. "
+        "It is pair-wise distance matrix between the entities "
         "represented by each row and each column. For example, assumed one "
         "entity is A with shape [K], another entity is B with shape [M]. The "
         "DistMat[i][j] is the distance between A[i] and B[j]. The bigger "
@@ -250,7 +296,7 @@ class BipartiteMatchOpMaker : public framework::OpProtoAndCheckerMaker {
         "entities.");
     AddAttr<std::string>(
         "match_type",
-        "(string, default: per_prediction) "
+        "(string, default: bipartite) "
         "The type of matching method, should be 'bipartite' or "
         "'per_prediction', 'bipartite' by default.")
         .SetDefault("bipartite")

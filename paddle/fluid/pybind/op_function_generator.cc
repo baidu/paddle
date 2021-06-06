@@ -65,6 +65,7 @@ std::map<std::string, std::set<std::string>> op_ins_map = {
     {"box_coder", {"PriorBox", "PriorBoxVar", "TargetBox"}},
     {"momentum", {"Param", "Grad", "Velocity", "LearningRate"}},
     {"rnn", {"Input", "PreState", "WeightList", "SequenceLength"}},
+    {"target_assign", {"X", "MatchIndices", "NegIndices"}},
 };
 
 // NOTE(zhiqiu): Like op_ins_map.
