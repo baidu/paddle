@@ -12,9 +12,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#include <string>
-
 #include "paddle/fluid/operators/optimizers/sgd_op.h"
+
+#include <string>
 
 namespace paddle {
 namespace operators {
@@ -72,7 +72,7 @@ class SGDOp : public framework::OperatorWithKernel {
 
   framework::OpKernelType GetKernelTypeForVar(
       const std::string &var_name, const framework::Tensor &tensor,
-      const framework::OpKernelType &expected_kernel_type) const {
+      const framework::OpKernelType &expected_kernel_type) const override {
     if (var_name == "LearningRate") {
       return framework::OpKernelType(tensor.type(), tensor.place(),
                                      tensor.layout());
@@ -88,10 +88,11 @@ class SGDOpInferVarType : public framework::VarTypeInference {
     auto in_var_type = ctx->GetInputType("Param");
     PADDLE_ENFORCE_EQ(in_var_type == framework::proto::VarType::SELECTED_ROWS ||
                           in_var_type == framework::proto::VarType::LOD_TENSOR,
-                      true, platform::errors::InvalidArgument(
-                                "The input Var's type should be LoDtensor or "
-                                "SelectedRows, but the received type is %s",
-                                in_var_type));
+                      true,
+                      platform::errors::InvalidArgument(
+                          "The input Var's type should be LoDtensor or "
+                          "SelectedRows, but the received type is %s",
+                          in_var_type));
 
     ctx->SetOutputType("ParamOut", in_var_type, framework::ALL_ELEMENTS);
   }

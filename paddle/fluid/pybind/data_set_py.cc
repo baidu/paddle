@@ -24,6 +24,7 @@ limitations under the License. */
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/text_format.h"
 #include "paddle/fluid/framework/async_executor.h"
@@ -46,12 +47,12 @@ namespace pybind {
 class IterableDatasetWrapper {
  public:
   IterableDatasetWrapper(framework::Dataset *dataset,
-                         const std::vector<std::string> &slots,
-                         const std::vector<platform::Place> &places,
-                         size_t batch_size, bool drop_last)
+                         std::vector<std::string> slots,
+                         std::vector<platform::Place> places, size_t batch_size,
+                         bool drop_last)
       : dataset_(dataset),
-        slots_(slots),
-        places_(places),
+        slots_(std::move(slots)),
+        places_(std::move(places)),
         batch_size_(batch_size),
         drop_last_(drop_last) {
 #if defined _WIN32

@@ -108,7 +108,7 @@ class BeamSearchFunctor<platform::CPUDeviceContext, T> {
    * The basic items help to sort.
    */
   struct Item {
-    Item() {}
+    Item() = default;
     Item(size_t offset, size_t id, float score)
         : offset(offset), id(id), score(score) {}
     // offset in the higher lod level.

@@ -56,11 +56,11 @@ class MeshgridOp : public framework::OperatorWithKernel {
       const framework::ExecutionContext& ctx) const override {
     auto inputs = ctx.MultiInput<Tensor>("X");
     auto input_data_type = framework::proto::VarType::Type(0);
-    bool flag = 0;
+    bool flag = false;
     for (auto* input : inputs) {
       if (input->IsInitialized() && input->numel() > 0) {
         input_data_type = input->type();
-        flag = 1;
+        flag = true;
         break;
       }
     }

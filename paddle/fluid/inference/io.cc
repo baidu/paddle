@@ -17,6 +17,7 @@ limitations under the License. */
 #include <algorithm>
 #include <fstream>
 #include <vector>
+
 #include "paddle/fluid/framework/block_desc.h"
 #include "paddle/fluid/framework/feed_fetch_type.h"
 #include "paddle/fluid/framework/op_registry.h"
@@ -74,7 +75,7 @@ void LoadPersistables(framework::Executor* executor, framework::Scope* scope,
                       bool model_from_memory = false) {
   const framework::BlockDesc& global_block = main_program.Block(0);
 
-  framework::ProgramDesc* load_program = new framework::ProgramDesc();
+  auto* load_program = new framework::ProgramDesc();
   framework::BlockDesc* load_block = load_program->MutableBlock(0);
   std::vector<std::string> paramlist;
 

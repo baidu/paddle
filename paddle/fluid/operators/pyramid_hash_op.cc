@@ -13,8 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include <xxhash.h>
+
 #include <algorithm>
 #include <cmath>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/search_compute.h"
 
@@ -215,9 +217,8 @@ class CPUPyramidHashOPKernel : public framework::OpKernel<T> {
   bool should_use_term(math::bloomfilter* _filter,
                        math::bloomfilter* _black_filter, const float* word_repr,
                        int len) const {
-    return (!_filter ||
-            1 == math::bloomfilter_get(_filter, word_repr,
-                                       len * sizeof(float))) &&
+    return (!_filter || 1 == math::bloomfilter_get(_filter, word_repr,
+                                                   len * sizeof(float))) &&
            (!_black_filter ||
             0 == math::bloomfilter_get(_black_filter, word_repr,
                                        len * sizeof(float)));
@@ -260,7 +261,7 @@ class CPUPyramidHashOPKernel : public framework::OpKernel<T> {
     int _pyramid_layer = ctx.Attr<int>("pyramid_layer");
     int _is_training = ctx.Attr<int>("is_training");
     int seed = ctx.Attr<int>("seed");
-    unsigned int _seed = (unsigned int)seed;
+    auto _seed = (unsigned int)seed;
     int _rand_len = ctx.Attr<int>("rand_len");
     int _space_len = ctx.Attr<int>("space_len");
     float _drop_out_percent = ctx.Attr<float>("drop_out_percent");
@@ -269,7 +270,7 @@ class CPUPyramidHashOPKernel : public framework::OpKernel<T> {
     const auto* bottom_data_ori = bottom->data<int32_t>();
     auto* buff = ctx.Output<LoDTensor>("X_Temp_Out");
     buff->Resize(framework::make_ddim({bottom->dims()[0], bottom->dims()[1]}));
-    float* bottom_data = buff->mutable_data<float>(ctx.GetPlace());
+    auto* bottom_data = buff->mutable_data<float>(ctx.GetPlace());
     for (int i = 0; i < bottom->dims()[0]; i++) {
       bottom_data[i] = bottom_data_ori[i];
     }
@@ -280,8 +281,8 @@ class CPUPyramidHashOPKernel : public framework::OpKernel<T> {
     top_offset.resize(offset.size());
     top_offset[0] = 0;
 
-    math::bloomfilter* _filter = NULL;
-    math::bloomfilter* _black_filter = NULL;
+    math::bloomfilter* _filter = nullptr;
+    math::bloomfilter* _black_filter = nullptr;
     if (use_filter) {
       if (white_list_len != 0) {
         _filter = (math::bloomfilter*)_blobs_1->data<float>();

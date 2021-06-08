@@ -64,8 +64,8 @@ class CreatePyReaderOp : public framework::OperatorBase {
     auto& ranks = Attr<std::vector<int>>("ranks");
     int shape_start_index = 0;
     std::vector<framework::DDim> dims;
-    for (size_t i = 0; i < ranks.size(); ++i) {
-      int shape_end_index = shape_start_index + ranks[i];
+    for (int rank : ranks) {
+      int shape_end_index = shape_start_index + rank;
       auto shape = std::vector<int>(shape_concat.begin() + shape_start_index,
                                     shape_concat.begin() + shape_end_index);
       dims.push_back(framework::make_ddim(shape));
@@ -75,16 +75,15 @@ class CreatePyReaderOp : public framework::OperatorBase {
     // Converts VarType from int to enum
     auto& dtype_int = Attr<std::vector<int>>("dtypes");
     std::vector<framework::proto::VarType::Type> var_types;
-    for (size_t i = 0; i < dtype_int.size(); ++i) {
-      var_types.push_back(
-          static_cast<framework::proto::VarType::Type>(dtype_int[i]));
+    for (int i : dtype_int) {
+      var_types.push_back(static_cast<framework::proto::VarType::Type>(i));
     }
 
     // Converts need_check_feed from int to bool
     auto& need_check_feed_int = Attr<std::vector<int>>("need_check_feed");
     std::vector<bool> need_check_feed;
-    for (size_t i = 0; i < need_check_feed_int.size(); ++i) {
-      need_check_feed.push_back(static_cast<bool>(need_check_feed_int[i]));
+    for (int i : need_check_feed_int) {
+      need_check_feed.push_back(static_cast<bool>(i));
     }
     auto py_reader =
         std::make_shared<PyReader>(queue, dims, var_types, need_check_feed);

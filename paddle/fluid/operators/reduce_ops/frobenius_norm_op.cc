@@ -53,8 +53,8 @@ class FrobeniusNormOpGradMaker : public framework::SingleGradOpMaker<T> {
 
 class FrobeniusNormOpMaker : public ops::ReduceOpMaker {
  protected:
-  virtual std::string GetName() const { return "frobenius_norm"; }
-  virtual std::string GetOpType() const { return "Reduce frobenius_norm"; }
+  std::string GetName() const override { return "frobenius_norm"; }
+  std::string GetOpType() const override { return "Reduce frobenius_norm"; }
 };
 
 REGISTER_OPERATOR(frobenius_norm, ops::ReduceOp, FrobeniusNormOpMaker,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/analysis/ir_pass_manager.h"
+
 #include <map>
 #include <memory>
 #include <string>
@@ -20,6 +21,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/ir/fuse_pass_base.h"
 #include "paddle/fluid/framework/ir/graph.h"
 #include "paddle/fluid/framework/scope.h"
@@ -29,13 +31,13 @@
 namespace paddle {
 namespace inference {
 namespace analysis {
-using string::PrettyLogEndl;
 using string::PrettyLog;
+using string::PrettyLogEndl;
 using string::Style;
 
 IRPassManager::IRPassManager(Argument *argument) {
   ARGUMENT_CHECK_FIELD(argument, main_program);
-  graph_ = std::unique_ptr<Graph>(new Graph(argument->main_program()));
+  graph_ = std::make_unique<Graph>(argument->main_program());
   if (argument->Has("scope")) {
     auto *scope_ptr = argument->scope_ptr();
     PADDLE_ENFORCE_NOT_NULL(scope_ptr,
@@ -198,10 +200,10 @@ void IRPassManager::CreatePasses(Argument *argument,
     disable_logs_ = argument->disable_logs();
     if (pass_name == "fc_fuse_pass") {
       pass->Set("use_gpu", new bool(argument->use_gpu()));
-      bool fc_mkldnn_pass = 0;
+      bool fc_mkldnn_pass = false;
       for (const std::string &pass_n : passes) {
         if (pass_n == "fc_mkldnn_pass") {
-          fc_mkldnn_pass = 1;
+          fc_mkldnn_pass = true;
         }
       }
       bool use_fc_padding = !fc_mkldnn_pass && argument->use_fc_padding();

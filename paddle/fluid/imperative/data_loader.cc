@@ -16,10 +16,11 @@
 
 #include "paddle/fluid/imperative/data_loader.h"
 
-#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 #include <csignal>
+#include <cstdlib>
 
 #include "glog/logging.h"
 #include "paddle/fluid/memory/allocation/mmap_allocator.h"

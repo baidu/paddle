@@ -13,7 +13,9 @@
  limitations under the License. */
 
 #include "paddle/fluid/operators/tdm_child_op.h"
+
 #include <vector>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/math/sampler.h"
 #include "paddle/fluid/platform/enforce.h"
@@ -22,7 +24,7 @@ namespace paddle {
 namespace operators {
 class TDMChildOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
-  void Make() {
+  void Make() override {
     AddInput("X",
              "X(Tensor), dtype support int32/int64, X variable is the "
              "node id of TDM-Tree");

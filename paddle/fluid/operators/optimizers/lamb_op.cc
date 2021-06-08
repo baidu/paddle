@@ -13,7 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/optimizers/lamb_op.h"
+
 #include <string>
+
 #include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
@@ -121,14 +123,14 @@ class LambOp : public framework::OperatorWithKernel {
   }
 
   framework::OpKernelType GetExpectedKernelType(
-      const framework::ExecutionContext &ctx) const {
+      const framework::ExecutionContext &ctx) const override {
     auto input_data_type =
         OperatorWithKernel::IndicateVarDataType(ctx, "Param");
     return framework::OpKernelType(input_data_type, ctx.GetPlace());
   }
   framework::OpKernelType GetKernelTypeForVar(
       const std::string &var_name, const framework::Tensor &tensor,
-      const framework::OpKernelType &expected_kernel_type) const {
+      const framework::OpKernelType &expected_kernel_type) const override {
     if (var_name == "Beta1Pow" || var_name == "Beta2Pow") {
       return expected_kernel_type;
     } else {
@@ -213,13 +215,12 @@ REGISTER_OP_CPU_KERNEL(
     ops::LambOpKernel<paddle::platform::CPUDeviceContext, double>);
 
 /* ==========================  register checkpoint ===========================*/
-REGISTER_OP_VERSION(lamb)
-    .AddCheckpoint(
-        R"ROC(Upgrade lamb, add two new outputs [Beta1PowOut] and [Beta2PowOut].)ROC",
-        paddle::framework::compatible::OpVersionDesc()
-            .NewInput("Beta1PowOut",
-                      "The Output beta1 power accumulator. 'Beta1PowOut' is "
-                      "dispensable.")
-            .NewInput("Beta2PowOut",
-                      "The Output beta2 power accumulator. 'Beta2PowOut' is "
-                      "dispensable."));
+REGISTER_OP_VERSION(lamb).AddCheckpoint(
+    R"ROC(Upgrade lamb, add two new outputs [Beta1PowOut] and [Beta2PowOut].)ROC",
+    paddle::framework::compatible::OpVersionDesc()
+        .NewInput("Beta1PowOut",
+                  "The Output beta1 power accumulator. 'Beta1PowOut' is "
+                  "dispensable.")
+        .NewInput("Beta2PowOut",
+                  "The Output beta2 power accumulator. 'Beta2PowOut' is "
+                  "dispensable."));

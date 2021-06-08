@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include "paddle/fluid/pybind/inference_api.h"
+
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+
 #include <cstring>
 #include <functional>
 #include <iostream>
@@ -26,6 +28,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/inference/api/analysis_predictor.h"
 #include "paddle/fluid/inference/api/helper.h"
 #include "paddle/fluid/inference/api/paddle_inference_api.h"
@@ -269,13 +272,12 @@ void BindInferenceApi(py::module *m) {
          &paddle::CreatePaddlePredictor<AnalysisConfig>, py::arg("config"));
   m->def("create_paddle_predictor",
          &paddle::CreatePaddlePredictor<NativeConfig>, py::arg("config"));
-  m->def("create_predictor", [](const paddle_infer::Config &config)
-                                 -> std::unique_ptr<paddle_infer::Predictor> {
-                                   auto pred =
-                                       std::unique_ptr<paddle_infer::Predictor>(
-                                           new paddle_infer::Predictor(config));
-                                   return std::move(pred);
-                                 });
+  m->def("create_predictor",
+         [](const paddle_infer::Config &config)
+             -> std::unique_ptr<paddle_infer::Predictor> {
+           auto pred = std::make_unique<paddle_infer::Predictor>(config);
+           return std::move(pred);
+         });
   m->def("paddle_dtype_size", &paddle::PaddleDtypeSize);
   m->def("paddle_tensor_to_bytes", &SerializePDTensorToBytes);
   m->def("get_version", &paddle_infer::GetVersion);
@@ -340,12 +342,12 @@ void BindPaddleBuf(py::module *m) {
            })
       .def("int64_data",
            [](PaddleBuf &self) -> std::vector<int64_t> {
-             int64_t *data = static_cast<int64_t *>(self.data());
+             auto *data = static_cast<int64_t *>(self.data());
              return {data, data + self.length() / sizeof(*data)};
            })
       .def("int32_data",
            [](PaddleBuf &self) -> std::vector<int32_t> {
-             int32_t *data = static_cast<int32_t *>(self.data());
+             auto *data = static_cast<int32_t *>(self.data());
              return {data, data + self.length() / sizeof(*data)};
            })
       .def("length", &PaddleBuf::length);
@@ -549,11 +551,12 @@ void BindAnalysisConfig(py::module *m) {
            [](AnalysisConfig &self, const std::string &pass) {
              self.pass_builder()->DeletePass(pass);
            })
-      .def("pass_builder",
-           [](AnalysisConfig &self) {
-             return dynamic_cast<PaddlePassBuilder *>(self.pass_builder());
-           },
-           py::return_value_policy::reference);
+      .def(
+          "pass_builder",
+          [](AnalysisConfig &self) {
+            return dynamic_cast<PaddlePassBuilder *>(self.pass_builder());
+          },
+          py::return_value_policy::reference);
 }
 
 #ifdef PADDLE_WITH_MKLDNN

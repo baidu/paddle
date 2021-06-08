@@ -14,6 +14,7 @@
 
 #include "paddle/fluid/memory/allocation/locked_allocator.h"
 
+#include <memory>
 #include <mutex>  // NOLINT
 
 #include "paddle/fluid/platform/enforce.h"
@@ -33,7 +34,7 @@ LockedAllocator::LockedAllocator(
       platform::errors::InvalidArgument(
           "Underlying allocator of LockedAllocator is NULL"));
   if (!underlying_allocator_->IsAllocThreadSafe()) {
-    mtx_.reset(new std::mutex());
+    mtx_ = std::make_unique<std::mutex>();
   }
 }
 

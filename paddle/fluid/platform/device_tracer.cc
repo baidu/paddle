@@ -12,6 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/platform/device_tracer.h"
+
 #include <deque>
 #include <forward_list>
 #include <fstream>
@@ -20,7 +22,6 @@ limitations under the License. */
 #include <thread>  // NOLINT
 
 #include "glog/logging.h"
-#include "paddle/fluid/platform/device_tracer.h"
 
 namespace paddle {
 namespace platform {
@@ -248,7 +249,9 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
             }
             break;
           }
-          default: { break; }
+          default: {
+            break;
+          }
         }
       } else if (status == CUPTI_ERROR_MAX_LIMIT_REACHED) {
         // Seems not an error in this case.
@@ -277,13 +280,13 @@ void initCuptiCbidStr();
 
 class DeviceTracerImpl : public DeviceTracer {
  public:
-  DeviceTracerImpl() : enabled_(false) {
+  DeviceTracerImpl() {
 #ifdef PADDLE_WITH_CUPTI
     initCuptiCbidStr();
 #endif
   }
 
-  void AddAnnotation(uint32_t id, Event *event) {
+  void AddAnnotation(uint32_t id, Event *event) override {
 #ifdef PADDLE_WITH_SW
     std::forward_list<std::pair<uint32_t, Event *>> *local_correlations_pairs =
         nullptr;
@@ -300,7 +303,8 @@ class DeviceTracerImpl : public DeviceTracer {
   }
 
   void AddCPURecords(const std::string &anno, uint64_t start_ns,
-                     uint64_t end_ns, int64_t device_id, int64_t thread_id) {
+                     uint64_t end_ns, int64_t device_id,
+                     int64_t thread_id) override {
     if (anno.empty()) {
       VLOG(1) << "Empty timeline annotation.";
       return;
@@ -321,7 +325,7 @@ class DeviceTracerImpl : public DeviceTracer {
 
   void AddMemRecords(const std::string &name, uint64_t start_ns,
                      uint64_t end_ns, int64_t device_id, int64_t stream_id,
-                     uint32_t correlation_id, uint64_t bytes) {
+                     uint32_t correlation_id, uint64_t bytes) override {
     // 0 means timestamp information could not be collected for the kernel.
     if (start_ns == 0 || end_ns == 0 || start_ns == end_ns) {
       VLOG(3) << name << " cannot be traced";
@@ -335,7 +339,8 @@ class DeviceTracerImpl : public DeviceTracer {
 
   void AddMemInfoRecord(uint64_t start_ns, uint64_t end_ns, size_t bytes,
                         const Place &place, const std::string &alloc_in,
-                        const std::string &free_in, int64_t thread_id) {
+                        const std::string &free_in,
+                        int64_t thread_id) override {
     if (0 == start_ns || 0 == end_ns) {
       VLOG(3) << alloc_in << ", " << free_in << " Cannot be traced.";
       return;
@@ -357,7 +362,8 @@ class DeviceTracerImpl : public DeviceTracer {
 
   void AddActiveKindRecords(const std::string &anno, uint64_t start_ns,
                             uint64_t end_ns, int64_t device_id,
-                            int64_t thread_id, uint32_t correlation_id) {
+                            int64_t thread_id,
+                            uint32_t correlation_id) override {
     if (anno.empty()) {
       VLOG(1) << "Empty timeline annotation.";
       return;
@@ -380,7 +386,7 @@ class DeviceTracerImpl : public DeviceTracer {
 
   void AddKernelRecords(std::string name, uint64_t start, uint64_t end,
                         int64_t device_id, int64_t stream_id,
-                        uint32_t correlation_id) {
+                        uint32_t correlation_id) override {
     // 0 means timestamp information could not be collected for the kernel.
     if (start == 0 || end == 0 || start == end) {
       VLOG(3) << correlation_id << " cannot be traced";
@@ -392,12 +398,12 @@ class DeviceTracerImpl : public DeviceTracer {
         KernelRecord{name, start, end, device_id, stream_id, correlation_id});
   }
 
-  bool IsEnabled() {
+  bool IsEnabled() override {
     std::lock_guard<std::mutex> l(trace_mu_);
     return enabled_;
   }
 
-  void Enable() {
+  void Enable() override {
     std::lock_guard<std::mutex> l(trace_mu_);
     if (enabled_) {
       return;
@@ -446,7 +452,7 @@ class DeviceTracerImpl : public DeviceTracer {
     enabled_ = true;
   }
 
-  void Reset() {
+  void Reset() override {
 #ifdef PADDLE_WITH_CUPTI
     CUPTI_CALL(
         dynload::cuptiActivityFlushAll(CUPTI_ACTIVITY_FLAG_FLUSH_FORCED));
@@ -461,7 +467,7 @@ class DeviceTracerImpl : public DeviceTracer {
     for (auto &tmp : active_kind_records_) tmp.clear();
   }
 
-  void GenEventKernelCudaElapsedTime() {
+  void GenEventKernelCudaElapsedTime() override {
 #ifdef PADDLE_WITH_CUPTI
     if (correlations_.empty())
       for (auto &tmp : correlations_pairs)
@@ -493,7 +499,7 @@ class DeviceTracerImpl : public DeviceTracer {
 #endif
   }
 
-  proto::Profile GenProfile(const std::string &profile_path) {
+  proto::Profile GenProfile(const std::string &profile_path) override {
     int miss = 0, find = 0;
     std::lock_guard<std::mutex> l(trace_mu_);
     proto::Profile profile_pb;
@@ -610,7 +616,7 @@ class DeviceTracerImpl : public DeviceTracer {
     return profile_pb;
   }
 
-  void Disable() {
+  void Disable() override {
 #ifdef PADDLE_WITH_CUPTI
     // flush might cause additional calls to DeviceTracker.
     CUPTI_CALL(
@@ -639,7 +645,7 @@ class DeviceTracerImpl : public DeviceTracer {
   CUpti_SubscriberHandle subscriber_;
 #endif  // PADDLE_WITH_CUPTI
   std::mutex trace_mu_;
-  bool enabled_;
+  bool enabled_{false};
   uint64_t start_ns_;
   uint64_t end_ns_;
   std::forward_list<KernelRecord> kernel_records_;

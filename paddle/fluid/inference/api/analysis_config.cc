@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+
 #include "paddle/fluid/inference/api/paddle_analysis_config.h"
 #include "paddle/fluid/inference/api/paddle_pass_builder.h"
 #include "paddle/fluid/platform/cpu_info.h"
@@ -33,12 +35,12 @@ PassStrategy *AnalysisConfig::pass_builder() const {
   if (!pass_builder_.get()) {
     if (use_gpu_) {
       LOG(INFO) << "Create GPU IR passes";
-      pass_builder_.reset(new GpuPassStrategy);
+      pass_builder_ = std::make_unique<GpuPassStrategy>();
     } else if (use_xpu_) {
-      pass_builder_.reset(new XpuPassStrategy);
+      pass_builder_ = std::make_unique<XpuPassStrategy>();
     } else {
       LOG(INFO) << "Create CPU IR passes";
-      pass_builder_.reset(new CpuPassStrategy);
+      pass_builder_ = std::make_unique<CpuPassStrategy>();
     }
   } else if (pass_builder_->use_gpu() ^ use_gpu()) {
     LOG(WARNING) << "The use_gpu flag is not compatible between Config and "
@@ -197,14 +199,14 @@ AnalysisConfig::AnalysisConfig(const AnalysisConfig &other) {
     PADDLE_ENFORCE_EQ(use_xpu_, false,
                       platform::errors::InvalidArgument(
                           "Only one choice can be made between CPU and XPU."));
-    pass_builder_.reset(new GpuPassStrategy(
-        *static_cast<GpuPassStrategy *>(other.pass_builder())));
+    pass_builder_ = std::make_unique<GpuPassStrategy>(
+        *static_cast<GpuPassStrategy *>(other.pass_builder()));
   } else if (use_xpu_) {
-    pass_builder_.reset(new XpuPassStrategy(
-        *static_cast<XpuPassStrategy *>(other.pass_builder())));
+    pass_builder_ = std::make_unique<XpuPassStrategy>(
+        *static_cast<XpuPassStrategy *>(other.pass_builder()));
   } else {
-    pass_builder_.reset(new CpuPassStrategy(
-        *static_cast<CpuPassStrategy *>(other.pass_builder())));
+    pass_builder_ = std::make_unique<CpuPassStrategy>(
+        *static_cast<CpuPassStrategy *>(other.pass_builder()));
   }
 
 #undef CP_MEMBER
@@ -378,7 +380,7 @@ void AnalysisConfig::Update() {
   // Transfer pass_builder and copy the existing compatible passes.
   if (!pass_builder_ || ((use_gpu() ^ pass_builder_->use_gpu()))) {
     if (use_gpu()) {
-      pass_builder_.reset(new GpuPassStrategy);
+      pass_builder_ = std::make_unique<GpuPassStrategy>();
 
       if (use_tensorrt_) {
         // Append after the Affine_channel_conv_fuse pass.
@@ -389,25 +391,25 @@ void AnalysisConfig::Update() {
           use_gpu(), false,
           platform::errors::InvalidArgument(
               "Only one choice can be made between CPU and XPU."));
-      pass_builder_.reset(new XpuPassStrategy);
+      pass_builder_ = std::make_unique<XpuPassStrategy>();
     } else {
-      pass_builder_.reset(new CpuPassStrategy);
+      pass_builder_ = std::make_unique<CpuPassStrategy>();
     }
 
   } else {
     if (use_gpu()) {
-      pass_builder_.reset(new GpuPassStrategy(
-          *static_cast<GpuPassStrategy *>(pass_builder_.get())));
+      pass_builder_ = std::make_unique<GpuPassStrategy>(
+          *static_cast<GpuPassStrategy *>(pass_builder_.get()));
     } else if (use_xpu()) {
       PADDLE_ENFORCE_EQ(
           use_gpu(), false,
           platform::errors::InvalidArgument(
               "Only one choice can be made between CPU and XPU."));
-      pass_builder_.reset(new XpuPassStrategy(
-          *static_cast<XpuPassStrategy *>(pass_builder_.get())));
+      pass_builder_ = std::make_unique<XpuPassStrategy>(
+          *static_cast<XpuPassStrategy *>(pass_builder_.get()));
     } else {
-      pass_builder_.reset(new CpuPassStrategy(
-          *static_cast<CpuPassStrategy *>(pass_builder_.get())));
+      pass_builder_ = std::make_unique<CpuPassStrategy>(
+          *static_cast<CpuPassStrategy *>(pass_builder_.get()));
     }
   }
 

@@ -14,6 +14,7 @@
 
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
@@ -37,7 +38,7 @@ class DequeueOp : public framework::OperatorBase {
  private:
   void RunImpl(const framework::Scope& scope,
                const platform::Place& dev_place) const override {
-    const std::string& queue_name = Attr<std::string>("queue_name");
+    const auto& queue_name = Attr<std::string>("queue_name");
     auto* queue_holder_var = scope.FindVar(queue_name);
     PADDLE_ENFORCE_NOT_NULL(
         queue_holder_var,
@@ -50,16 +51,16 @@ class DequeueOp : public framework::OperatorBase {
     PADDLE_ENFORCE_GT(out_names.size(), 0,
                       platform::errors::InvalidArgument(
                           "The output for Op(dequeue) must be set."));
-    for (size_t i = 0; i < out_names.size(); ++i) {
-      auto out_var = scope.FindVar(out_names[i]);
+    for (const auto& out_name : out_names) {
+      auto out_var = scope.FindVar(out_name);
       PADDLE_ENFORCE_NOT_NULL(
           out_var, platform::errors::NotFound("No variable with name %s found",
-                                              out_names[i]));
+                                              out_name));
       auto* out_tensor = out_var->GetMutable<LoDTensor>();
       PADDLE_ENFORCE_NOT_NULL(
           out_tensor,
           platform::errors::InvalidArgument(
-              "Variable with name %s has not been initialized.", out_names[i]));
+              "Variable with name %s has not been initialized.", out_name));
 
       std::vector<LoDTensor> lod_tensor_vec;
       bool success = false;
@@ -69,8 +70,8 @@ class DequeueOp : public framework::OperatorBase {
                             "Expected to pop only one element per Pop call for "
                             "Op(dequeue), but poped %d element.",
                             lod_tensor_vec.size()));
-      for (size_t j = 0; j < lod_tensor_vec.size(); ++j) {
-        TensorCopySync(lod_tensor_vec[j], dev_place, out_tensor);
+      for (const auto& j : lod_tensor_vec) {
+        TensorCopySync(j, dev_place, out_tensor);
       }
     }
   }

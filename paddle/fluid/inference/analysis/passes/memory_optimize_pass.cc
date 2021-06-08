@@ -39,13 +39,13 @@ using framework::ir::Node;
 using framework::ir::TopologyVarientSort;
 using space_table_t = MemoryOptimizePass::space_table_t;
 
-typedef struct {
+using MemNode = struct {
   std::string name;
   size_t size;
   int cluster;
   std::pair<int, int> lifetime;
   std::unordered_set<std::string> adj;
-} MemNode;
+};
 
 // Collect the lifecycles of the tensors.
 // Traverse the graph in topological order.
@@ -61,7 +61,8 @@ void MemoryOptimizePass::CollectLifeCycle(
     auto reads = op_node->inputs;
     auto writes = op_node->outputs;
 
-    std::vector<Node*> requires(reads.begin(), reads.end());
+    std::vector<Node*>
+    requires(reads.begin(), reads.end());
     requires.insert(requires.end(), writes.begin(), writes.end());
 
     // Disable reuse of feed variables.

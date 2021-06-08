@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <mutex>  // NOLINT
+
 #include "paddle/fluid/memory/allocation/aligned_allocator.h"
 
 DEFINE_bool(free_idle_chunk, false,
@@ -81,7 +82,7 @@ Allocation *AutoGrowthBestFitAllocator::AllocateImpl(size_t size) {
 
     auto *chunk = &(*chunks_.rbegin());
     realloc_size = chunk->allocation_->size();
-    uint8_t *p = reinterpret_cast<uint8_t *>(chunk->allocation_->ptr());
+    auto *p = reinterpret_cast<uint8_t *>(chunk->allocation_->ptr());
     auto &blocks = chunk->blocks_;
 
     size_t remaining_size = realloc_size - size;

@@ -14,6 +14,8 @@
 
 #include "paddle/fluid/memory/allocation/buffered_allocator.h"
 
+#include <memory>
+
 namespace paddle {
 namespace memory {
 namespace allocation {
@@ -25,7 +27,7 @@ BufferedAllocator::BufferedAllocator(std::shared_ptr<Allocator> allocator)
       platform::errors::InvalidArgument(
           "Underlying allocator of BufferedAllocator is NULL"));
   if (underlying_allocator_->IsAllocThreadSafe()) {
-    mtx_.reset(new std::mutex());
+    mtx_ = std::make_unique<std::mutex>();
   }
 }
 

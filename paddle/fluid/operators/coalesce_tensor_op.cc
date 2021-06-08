@@ -14,6 +14,7 @@
 
 #include <sstream>
 #include <vector>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/op_version_registry.h"
 #include "paddle/fluid/framework/operator.h"
@@ -107,17 +108,16 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
     size_t offset = 0;
     if (context.Attr<bool>("copy_data")) {
       for (size_t i = 0; i < in_var_names.size(); ++i) {
-        size_t len = static_cast<size_t>(in_tensors[i]->numel());
+        auto len = static_cast<size_t>(in_tensors[i]->numel());
         auto sub_tensor = fused_tensor->Slice(
             static_cast<int64_t>(offset), static_cast<int64_t>(offset + len));
         framework::TensorCopy(*in_tensors[i], context.GetPlace(), dev_ctx,
                               &sub_tensor);
 
-        offset +=
-            use_align
-                ? platform::Alignment(len * size_of_dtype, context.GetPlace()) /
-                      size_of_dtype
-                : len;
+        offset += use_align ? platform::Alignment(len * size_of_dtype,
+                                                  context.GetPlace()) /
+                                  size_of_dtype
+                            : len;
       }
     } else if (context.Attr<bool>("set_constant")) {
       math::SetConstant<DeviceContext, T> set_constant;
@@ -125,7 +125,7 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
                    static_cast<T>(context.Attr<float>("constant")));
     } else if (context.Attr<bool>("persist_output")) {
       for (size_t i = 0; i < out_var_names.size(); ++i) {
-        size_t len = static_cast<size_t>(out_tensors[i]->numel());
+        auto len = static_cast<size_t>(out_tensors[i]->numel());
         auto sub_tensor = fused_tensor->Slice(
             static_cast<int64_t>(offset), static_cast<int64_t>(offset + len));
         // some var may not persistable, or persistable var may not init
@@ -133,11 +133,10 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
           framework::TensorCopy(*out_tensors[i], context.GetPlace(), dev_ctx,
                                 &sub_tensor);
         }
-        offset +=
-            use_align
-                ? platform::Alignment(len * size_of_dtype, context.GetPlace()) /
-                      size_of_dtype
-                : len;
+        offset += use_align ? platform::Alignment(len * size_of_dtype,
+                                                  context.GetPlace()) /
+                                  size_of_dtype
+                            : len;
       }
     }
 
@@ -146,7 +145,7 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
     std::stringstream ss;
     ss << "alloc_space_for_vars: ";
     for (size_t i = 0; i < out_tensors.size(); ++i) {
-      size_t len = static_cast<size_t>(out_tensors[i]->numel());
+      auto len = static_cast<size_t>(out_tensors[i]->numel());
       auto dim = out_tensors[i]->dims();
       out_tensors[i]
           ->ShareDataWith(fused_tensor->Slice(

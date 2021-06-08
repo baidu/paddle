@@ -40,8 +40,7 @@ inline std::vector<int> get_new_shape(
     const std::vector<const Tensor *> &list_new_shape_tensor) {
   // get tensor from
   std::vector<int> vec_new_shape;
-  for (size_t i = 0; i < list_new_shape_tensor.size(); ++i) {
-    auto tensor = list_new_shape_tensor[i];
+  for (auto tensor : list_new_shape_tensor) {
     PADDLE_ENFORCE_EQ(
         tensor->dims(), framework::make_ddim({1}),
         platform::errors::InvalidArgument(
@@ -108,7 +107,7 @@ class ReshapeOp : public framework::OperatorWithKernel {
       return;
     }
 
-    const std::vector<int> &shape = ctx->Attrs().Get<std::vector<int>>("shape");
+    const auto &shape = ctx->Attrs().Get<std::vector<int>>("shape");
     if (ctx->HasInput("Shape") && shape.empty()) {
       auto shape_dims = ctx->GetInputDim("Shape");
       int num_ele = 1;

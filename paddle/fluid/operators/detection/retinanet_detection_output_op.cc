@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 limitations under the License. */
 
 #include <glog/logging.h>
+
 #include "paddle/fluid/framework/op_registry.h"
 
 namespace paddle {
@@ -66,23 +67,26 @@ class RetinanetDetectionOutputOp : public framework::OperatorWithKernel {
     auto im_info_dims = ctx->GetInputDim("ImInfo");
 
     const size_t b_n = bboxes_dims.size();
-    PADDLE_ENFORCE_GT(b_n, 0, platform::errors::InvalidArgument(
-                                  "The number of Variables in Input(BBoxes) "
-                                  "should be greater than 0, "
-                                  "but received number is:%d.",
-                                  b_n));
+    PADDLE_ENFORCE_GT(b_n, 0,
+                      platform::errors::InvalidArgument(
+                          "The number of Variables in Input(BBoxes) "
+                          "should be greater than 0, "
+                          "but received number is:%d.",
+                          b_n));
     const size_t s_n = scores_dims.size();
-    PADDLE_ENFORCE_GT(s_n, 0, platform::errors::InvalidArgument(
-                                  "The number of Variables in Input(Scores) "
-                                  "should be greater than 0, "
-                                  "but received number is:%d.",
-                                  s_n));
+    PADDLE_ENFORCE_GT(s_n, 0,
+                      platform::errors::InvalidArgument(
+                          "The number of Variables in Input(Scores) "
+                          "should be greater than 0, "
+                          "but received number is:%d.",
+                          s_n));
     const size_t a_n = anchors_dims.size();
-    PADDLE_ENFORCE_GT(a_n, 0, platform::errors::InvalidArgument(
-                                  "The number of Variables in Input(Anchors) "
-                                  "should be greater than 0, "
-                                  "but received number is:%d.",
-                                  a_n));
+    PADDLE_ENFORCE_GT(a_n, 0,
+                      platform::errors::InvalidArgument(
+                          "The number of Variables in Input(Anchors) "
+                          "should be greater than 0, "
+                          "but received number is:%d.",
+                          a_n));
     auto bbox_dims = bboxes_dims[0];
     auto score_dims = scores_dims[0];
     auto anchor_dims = anchors_dims[0];
@@ -243,9 +247,8 @@ class RetinanetDetectionOutputKernel : public framework::OpKernel<T> {
     while (sorted_indices.size() != 0) {
       const int idx = sorted_indices.front().second;
       bool keep = true;
-      for (size_t k = 0; k < selected_indices->size(); ++k) {
+      for (int kept_idx : *selected_indices) {
         if (keep) {
-          const int kept_idx = (*selected_indices)[k];
           T overlap = T(0.);
 
           overlap = JaccardOverlap<T>(cls_dets[idx], cls_dets[kept_idx], false);
@@ -340,8 +343,7 @@ class RetinanetDetectionOutputKernel : public framework::OpKernel<T> {
     for (const auto& it : indices) {
       int label = it.first;
       const std::vector<int>& label_indices = it.second;
-      for (size_t j = 0; j < label_indices.size(); ++j) {
-        int idx = label_indices[j];
+      for (int idx : label_indices) {
         score_index_pairs.push_back(std::make_pair(preds.at(label)[idx][4],
                                                    std::make_pair(label, idx)));
       }

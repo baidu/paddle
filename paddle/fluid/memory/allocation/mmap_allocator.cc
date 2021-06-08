@@ -17,8 +17,9 @@
 #include "paddle/fluid/memory/allocation/mmap_allocator.h"
 
 #include <fcntl.h>
-#include <stdlib.h>
 #include <sys/mman.h>
+
+#include <cstdlib>
 #include <random>
 #include <string>
 
@@ -68,14 +69,14 @@ std::shared_ptr<MemoryMapWriterAllocation> AllocateMemoryMapWriterAllocation(
   int flags = O_RDWR | O_CREAT;
 
   int fd = shm_open(ipc_name.c_str(), flags, 0644);
-  PADDLE_ENFORCE_NE(
-      fd, -1, platform::errors::Unavailable("File descriptor %s open failed",
-                                            ipc_name.c_str()));
+  PADDLE_ENFORCE_NE(fd, -1,
+                    platform::errors::Unavailable(
+                        "File descriptor %s open failed", ipc_name.c_str()));
   PADDLE_ENFORCE_EQ(ftruncate(fd, size), 0,
                     platform::errors::Unavailable(
                         "Fruncate a file to a specified length failed!"));
 
-  void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  void *ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   PADDLE_ENFORCE_NE(ptr, MAP_FAILED,
                     platform::errors::Unavailable(
                         "Memory map failed when create shared memory."));
@@ -87,11 +88,11 @@ std::shared_ptr<MemoryMapWriterAllocation> AllocateMemoryMapWriterAllocation(
 std::shared_ptr<MemoryMapReaderAllocation> RebuildMemoryMapReaderAllocation(
     const std::string &ipc_name, size_t size) {
   int fd = shm_open(ipc_name.c_str(), O_RDONLY, 0644);
-  PADDLE_ENFORCE_NE(
-      fd, -1, platform::errors::Unavailable("File descriptor %s open failed",
-                                            ipc_name.c_str()));
+  PADDLE_ENFORCE_NE(fd, -1,
+                    platform::errors::Unavailable(
+                        "File descriptor %s open failed", ipc_name.c_str()));
 
-  void *ptr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+  void *ptr = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
   PADDLE_ENFORCE_NE(ptr, MAP_FAILED,
                     platform::errors::Unavailable(
                         "Memory map failed when rebuild shared memory."));

@@ -12,9 +12,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include "paddle/fluid/operators/beam_search_decode_op.h"
+
 #include <string>
 
-#include "paddle/fluid/operators/beam_search_decode_op.h"
 #include "paddle/fluid/platform/device_context.h"
 
 namespace paddle {
@@ -138,8 +139,8 @@ class BeamSearchDecodeOp : public framework::OperatorBase {
     framework::RuntimeContext run_ctx(Inputs(), Outputs(), scope);
     framework::ExecutionContext ctx(*this, scope, dev_ctx, run_ctx);
 
-    const LoDTensorArray* ids = ctx.Input<LoDTensorArray>("Ids");
-    const LoDTensorArray* scores = ctx.Input<LoDTensorArray>("Scores");
+    const auto* ids = ctx.Input<LoDTensorArray>("Ids");
+    const auto* scores = ctx.Input<LoDTensorArray>("Scores");
     const size_t step_num = ids->size();
     PADDLE_ENFORCE_GT(
         step_num, 0UL,
@@ -172,8 +173,8 @@ class BeamSearchDecodeOp : public framework::OperatorBase {
     int end_id = ctx.Attr<int>("end_id");
 
     // prepare output
-    LoDTensor* sentenceIds = ctx.Output<LoDTensor>("SentenceIds");
-    LoDTensor* sentenceScores = ctx.Output<LoDTensor>("SentenceScores");
+    auto* sentenceIds = ctx.Output<LoDTensor>("SentenceIds");
+    auto* sentenceScores = ctx.Output<LoDTensor>("SentenceScores");
 
     framework::VisitDataType(
         scores->at(0).type(),

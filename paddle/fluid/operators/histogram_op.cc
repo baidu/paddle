@@ -40,8 +40,9 @@ class HistogramOp : public framework::OperatorWithKernel {
                           "The bins should be greater than or equal to 1."
                           "But received nbins is %d",
                           nbins));
-    PADDLE_ENFORCE_GE(maxval, minval, platform::errors::InvalidArgument(
-                                          "max must be larger or equal to min."
+    PADDLE_ENFORCE_GE(
+        maxval, minval,
+        platform::errors::InvalidArgument("max must be larger or equal to min."
                                           "But received max is %d, min is %d",
                                           maxval, minval));
 
@@ -50,7 +51,7 @@ class HistogramOp : public framework::OperatorWithKernel {
   }
 
   framework::OpKernelType GetExpectedKernelType(
-      const framework::ExecutionContext &ctx) const {
+      const framework::ExecutionContext &ctx) const override {
     auto data_type = OperatorWithKernel::IndicateVarDataType(ctx, "X");
     return framework::OpKernelType(data_type, ctx.device_context());
   }

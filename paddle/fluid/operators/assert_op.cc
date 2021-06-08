@@ -54,7 +54,7 @@ class AssertOp : public framework::OperatorBase {
     PADDLE_ENFORCE_NOT_NULL(cond_var_ptr,
                             platform::errors::NotFound(
                                 "Input(Condition) of AssertOp is not found."));
-    const LoDTensor &cond = cond_var_ptr->Get<LoDTensor>();
+    const auto &cond = cond_var_ptr->Get<LoDTensor>();
     PADDLE_ENFORCE_EQ(
         cond.dims(), paddle::framework::make_ddim({1}),
         platform::errors::InvalidArgument(
@@ -73,7 +73,7 @@ class AssertOp : public framework::OperatorBase {
     const std::vector<std::string> &x_names = Inputs(kData);
     for (const std::string &name : x_names) {
       const framework::Variable *x_var_ptr = scope.FindVar(name);
-      const framework::LoDTensor &x_tensor = x_var_ptr->Get<LoDTensor>();
+      const auto &x_tensor = x_var_ptr->Get<LoDTensor>();
       formatter.Print(x_tensor, name);
     }
 

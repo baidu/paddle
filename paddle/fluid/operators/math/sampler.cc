@@ -15,13 +15,14 @@ limitations under the License. */
 #include "paddle/fluid/operators/math/sampler.h"
 
 #include <glog/logging.h>
+
 #include "paddle/fluid/framework/generator.h"
 
 namespace paddle {
 namespace operators {
 namespace math {
 
-Sampler::~Sampler() {}
+Sampler::~Sampler() = default;
 
 UniformSampler::UniformSampler(int64_t range, unsigned int seed)
     : Sampler(range, seed), inv_range_(1.0 / (range + 1)) {

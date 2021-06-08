@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include "paddle/fluid/pybind/reader_py.h"
+
 #include <exception>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
 #include "Python.h"
 #include "boost/optional.hpp"
 #include "gflags/gflags.h"
@@ -119,15 +121,14 @@ class MultiDeviceFeedReader {
                    reader::OrderedMultiDeviceLoDTensorBlockingQueue>::value;
 
   MultiDeviceFeedReader(
-      const std::shared_ptr<QueueType> &queue,
-      const std::vector<std::string> &names,
+      const std::shared_ptr<QueueType> &queue, std::vector<std::string> names,
       const std::vector<std::vector<int>> &shapes,
       const std::vector<framework::proto::VarType::Type> &dtypes,
       const std::vector<bool> &need_check_feed,
       const std::vector<platform::Place> &dst_places, bool use_double_buffer,
       bool drop_last, bool pin_memory = false)
       : queue_(queue),
-        names_(names),
+        names_(std::move(names)),
         pool_(new ::ThreadPool(dst_places.size())),
         drop_last_(drop_last),
         pin_memory_(pin_memory) {
@@ -181,15 +182,15 @@ class MultiDeviceFeedReader {
     CheckNextStatus();
     ResultDictList result;
     result.reserve(ret_.size());
-    for (size_t i = 0; i < ret_.size(); ++i) {
-      if (ret_[i].empty()) {
+    for (auto &i : ret_) {
+      if (i.empty()) {
         if (!kKeepOrder) result.emplace_back();
         continue;
       }
 
       result.emplace_back();
       auto &ret = result.back();
-      PADDLE_ENFORCE_EQ(names_.size(), ret_[i].size(),
+      PADDLE_ENFORCE_EQ(names_.size(), i.size(),
                         platform::errors::InvalidArgument(
                             "The sample number of reader's input data and the "
                             "input number of feed list are not equal.\n"
@@ -198,7 +199,7 @@ class MultiDeviceFeedReader {
                             "and configured by `set_batch_generator`, but here "
                             "need to used `set_sample_list_generator`."));
       for (size_t j = 0; j < names_.size(); ++j) {
-        ret.emplace(names_[j], std::move(ret_[i][j]));
+        ret.emplace(names_[j], std::move(i[j]));
       }
     }
     ReadAsync();
@@ -209,9 +210,9 @@ class MultiDeviceFeedReader {
     CheckNextStatus();
     ResultList result;
     result.reserve(ret_.size());
-    for (size_t i = 0; i < ret_.size(); ++i) {
-      if (kKeepOrder && ret_[i].empty()) continue;
-      result.emplace_back(std::move(ret_[i]));
+    for (auto &i : ret_) {
+      if (kKeepOrder && i.empty()) continue;
+      result.emplace_back(std::move(i));
     }
     ReadAsync();
     return result;
@@ -336,31 +337,32 @@ void BindMultiDeviceReader(py::module *module, const char *reader_name) {
            py::call_guard<py::gil_scoped_release>())
       .def("read_next_list", &ReaderType::ReadNextList,
            py::call_guard<py::gil_scoped_release>())
-      .def("read_next_var_list",
-           [](ReaderType &self) {
-             auto result_list = self.ReadNextList();
-             auto &tensor_list = result_list[0];
-             std::vector<std::shared_ptr<imperative::VarBase>> var_list;
-             var_list.reserve(tensor_list.size());
-             auto func = [](framework::LoDTensor &lod_tensor) {
-               std::string act_name =
-                   imperative::GetCurrentTracer()->GenerateUniqueName(
-                       "generated_var");
-               auto new_var = std::make_shared<imperative::VarBase>(act_name);
-               new_var->SetPersistable(false);
-               new_var->SetType(framework::proto::VarType::LOD_TENSOR);
-               new_var->SetDataType(lod_tensor.type());
-               auto *tensor =
-                   new_var->MutableVar()->GetMutable<framework::LoDTensor>();
-               *tensor = std::move(lod_tensor);
-               return new_var;
-             };
-             for (auto &tensor : tensor_list) {
-               var_list.emplace_back(func(tensor));
-             }
-             return var_list;
-           },
-           py::call_guard<py::gil_scoped_release>())
+      .def(
+          "read_next_var_list",
+          [](ReaderType &self) {
+            auto result_list = self.ReadNextList();
+            auto &tensor_list = result_list[0];
+            std::vector<std::shared_ptr<imperative::VarBase>> var_list;
+            var_list.reserve(tensor_list.size());
+            auto func = [](framework::LoDTensor &lod_tensor) {
+              std::string act_name =
+                  imperative::GetCurrentTracer()->GenerateUniqueName(
+                      "generated_var");
+              auto new_var = std::make_shared<imperative::VarBase>(act_name);
+              new_var->SetPersistable(false);
+              new_var->SetType(framework::proto::VarType::LOD_TENSOR);
+              new_var->SetDataType(lod_tensor.type());
+              auto *tensor =
+                  new_var->MutableVar()->GetMutable<framework::LoDTensor>();
+              *tensor = std::move(lod_tensor);
+              return new_var;
+            };
+            for (auto &tensor : tensor_list) {
+              var_list.emplace_back(func(tensor));
+            }
+            return var_list;
+          },
+          py::call_guard<py::gil_scoped_release>())
       .def("reset", &ReaderType::Reset,
            py::call_guard<py::gil_scoped_release>())
       .def("shutdown", &ReaderType::Shutdown,
@@ -370,34 +372,35 @@ void BindMultiDeviceReader(py::module *module, const char *reader_name) {
 void BindReader(py::module *module) {
   auto &m = *module;
 
-  m.def("diff_tensor_shape", [](const framework::LoDTensor &tensor,
-                                const framework::VarDesc &var_desc,
-                                size_t num_places) -> py::object {
-    auto diff = DiffTensorShapeWithVarDesc(tensor, var_desc, num_places);
-    if (diff) {
-      return py::cast(std::move(diff.get()));
-    } else {
-      return py::cast(nullptr);
-    }
-  });
+  m.def(
+      "diff_tensor_shape",
+      [](const framework::LoDTensor &tensor, const framework::VarDesc &var_desc,
+         size_t num_places) -> py::object {
+        auto diff = DiffTensorShapeWithVarDesc(tensor, var_desc, num_places);
+        if (diff) {
+          return py::cast(std::move(diff.get()));
+        } else {
+          return py::cast(nullptr);
+        }
+      });
 
-  m.def("init_lod_tensor_blocking_queue",
-        [](framework::Variable &var, size_t capacity,
-           bool is_ordered) -> py::object {
-          VLOG(1) << "init_lod_tensor_blocking_queue";
-          if (is_ordered) {
-            auto *holder = var.GetMutable<
-                reader::OrderedMultiDeviceLoDTensorBlockingQueueHolder>();
-            holder->InitOnce(capacity, FLAGS_reader_queue_speed_test_mode);
-            return py::cast(holder->GetQueue());
-          } else {
-            auto *holder =
-                var.GetMutable<reader::LoDTensorBlockingQueueHolder>();
-            holder->InitOnce(capacity, FLAGS_reader_queue_speed_test_mode);
-            return py::cast(holder->GetQueue());
-          }
-        },
-        py::return_value_policy::copy);
+  m.def(
+      "init_lod_tensor_blocking_queue",
+      [](framework::Variable &var, size_t capacity,
+         bool is_ordered) -> py::object {
+        VLOG(1) << "init_lod_tensor_blocking_queue";
+        if (is_ordered) {
+          auto *holder = var.GetMutable<
+              reader::OrderedMultiDeviceLoDTensorBlockingQueueHolder>();
+          holder->InitOnce(capacity, FLAGS_reader_queue_speed_test_mode);
+          return py::cast(holder->GetQueue());
+        } else {
+          auto *holder = var.GetMutable<reader::LoDTensorBlockingQueueHolder>();
+          holder->InitOnce(capacity, FLAGS_reader_queue_speed_test_mode);
+          return py::cast(holder->GetQueue());
+        }
+      },
+      py::return_value_policy::copy);
 
   py::class_<framework::ReaderHolder>(m, "Reader", "")
       .def("start", &framework::ReaderHolder::Start)
@@ -406,12 +409,13 @@ void BindReader(py::module *module) {
   py::class_<reader::LoDTensorBlockingQueue,
              std::shared_ptr<reader::LoDTensorBlockingQueue>>(
       m, "LoDTensorBlockingQueue", "")
-      .def("push",
-           [](reader::LoDTensorBlockingQueue &self,
-              const std::vector<framework::LoDTensor> &lod_tensor_vec) {
-             return self.Push(lod_tensor_vec);
-           },
-           py::call_guard<py::gil_scoped_release>())
+      .def(
+          "push",
+          [](reader::LoDTensorBlockingQueue &self,
+             const std::vector<framework::LoDTensor> &lod_tensor_vec) {
+            return self.Push(lod_tensor_vec);
+          },
+          py::call_guard<py::gil_scoped_release>())
       .def("size", &reader::LoDTensorBlockingQueue::Size)
       .def("capacity", &reader::LoDTensorBlockingQueue::Cap)
       .def("close", &reader::LoDTensorBlockingQueue::Close)
@@ -422,12 +426,13 @@ void BindReader(py::module *module) {
   py::class_<reader::OrderedMultiDeviceLoDTensorBlockingQueue,
              std::shared_ptr<reader::OrderedMultiDeviceLoDTensorBlockingQueue>>(
       m, "OrderedMultiDeviceLoDTensorBlockingQueue", "")
-      .def("push",
-           [](reader::OrderedMultiDeviceLoDTensorBlockingQueue &self,
-              const std::vector<framework::LoDTensor> &lod_tensor_vec) {
-             return self.Push(lod_tensor_vec);
-           },
-           py::call_guard<py::gil_scoped_release>())
+      .def(
+          "push",
+          [](reader::OrderedMultiDeviceLoDTensorBlockingQueue &self,
+             const std::vector<framework::LoDTensor> &lod_tensor_vec) {
+            return self.Push(lod_tensor_vec);
+          },
+          py::call_guard<py::gil_scoped_release>())
       .def("size", &reader::OrderedMultiDeviceLoDTensorBlockingQueue::Size)
       .def("capacity", &reader::OrderedMultiDeviceLoDTensorBlockingQueue::Cap)
       .def("close", &reader::OrderedMultiDeviceLoDTensorBlockingQueue::Close)
@@ -442,19 +447,20 @@ void BindReader(py::module *module) {
   BindMultiDeviceReader<reader::OrderedMultiDeviceLoDTensorBlockingQueue>(
       module, "OrderedMultiDeviceFeedReader");
 
-  m.def("create_py_reader",
-        [](const std::shared_ptr<reader::LoDTensorBlockingQueue> &queue,
-           const std::vector<std::string> &names,
-           const std::vector<std::vector<int>> &shapes,
-           const std::vector<framework::proto::VarType::Type> &dtypes,
-           const std::vector<bool> &need_check_feed,
-           const std::vector<platform::Place> &dst_places,
-           bool use_double_buffer, bool drop_last, bool pin_memory) {
-          return new MultiDeviceFeedReader<reader::LoDTensorBlockingQueue>(
-              queue, names, shapes, dtypes, need_check_feed, dst_places,
-              use_double_buffer, drop_last, pin_memory);
-        },
-        py::return_value_policy::take_ownership);
+  m.def(
+      "create_py_reader",
+      [](const std::shared_ptr<reader::LoDTensorBlockingQueue> &queue,
+         const std::vector<std::string> &names,
+         const std::vector<std::vector<int>> &shapes,
+         const std::vector<framework::proto::VarType::Type> &dtypes,
+         const std::vector<bool> &need_check_feed,
+         const std::vector<platform::Place> &dst_places, bool use_double_buffer,
+         bool drop_last, bool pin_memory) {
+        return new MultiDeviceFeedReader<reader::LoDTensorBlockingQueue>(
+            queue, names, shapes, dtypes, need_check_feed, dst_places,
+            use_double_buffer, drop_last, pin_memory);
+      },
+      py::return_value_policy::take_ownership);
 
   m.def(
       "create_py_reader",

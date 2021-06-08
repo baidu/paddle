@@ -39,7 +39,7 @@ class BufferedReader : public framework::DecoratedReader {
 
  public:
   BufferedReader(const std::shared_ptr<framework::ReaderBase>& reader,
-                 const platform::Place& place, size_t buffer_size,
+                 platform::Place place, size_t buffer_size,
                  bool pin_memory = false);
 
   ~BufferedReader() override;

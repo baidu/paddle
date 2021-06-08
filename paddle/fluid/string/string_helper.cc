@@ -14,8 +14,8 @@
 
 #include "paddle/fluid/string/string_helper.h"
 
-#include <ctype.h>
-#include <stdio.h>
+#include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -76,7 +76,7 @@ std::string erase_spaces(const std::string& str) {
 
 inline int str_to_float(const char* str, float* v) {
   const char* head = str;
-  char* cursor = NULL;
+  char* cursor = nullptr;
   int index = 0;
   while (*(head += count_spaces(head)) != 0) {
     v[index++] = std::strtof(head, &cursor);
@@ -100,12 +100,12 @@ char* LineFileReader::getdelim(FILE* f, char delim) {
       _buffer[--ret] = 0;
     }
 
-    _length = (size_t)ret;
+    _length = static_cast<size_t>(ret);
     return _buffer;
   } else {
     _length = 0;
     CHECK(feof(f));
-    return NULL;
+    return nullptr;
   }
 #else
   return NULL;

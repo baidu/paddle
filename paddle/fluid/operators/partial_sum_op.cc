@@ -10,6 +10,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/partial_sum_op.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -87,17 +88,18 @@ class PartialSumOp : public framework::OperatorWithKernel {
       const framework::ExecutionContext &ctx) const override {
     auto inputs = ctx.MultiInput<Tensor>("X");
     auto input_data_type = framework::proto::VarType::Type(0);
-    bool flag = 0;
+    bool flag = false;
     for (auto *input : inputs) {
       if (input->IsInitialized() && input->numel() > 0) {
         input_data_type = input->type();
-        flag = 1;
+        flag = true;
         break;
       }
     }
 
-    PADDLE_ENFORCE_EQ(flag, 1, platform::errors::InvalidArgument(
-                                   "All Inputs of PartialSum OP are Empty!"));
+    PADDLE_ENFORCE_EQ(flag, 1,
+                      platform::errors::InvalidArgument(
+                          "All Inputs of PartialSum OP are Empty!"));
     return framework::OpKernelType(input_data_type, platform::CPUPlace());
   }
 };

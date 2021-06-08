@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/analysis/passes/passes.h"
+
+#include <memory>
+
 #include "paddle/fluid/inference/analysis/passes/adjust_cudnn_workspace_size_pass.h"
 #include "paddle/fluid/inference/analysis/passes/inference_op_replace_pass.h"
 #include "paddle/fluid/inference/analysis/passes/ir_analysis_pass.h"
@@ -44,9 +47,8 @@ PassRegistry::PassRegistry() {
                   std::unique_ptr<AnalysisPass>(new AdjustCudnnWorkSpacePass));
   passes_.emplace("inference_op_replace_pass",
                   std::unique_ptr<AnalysisPass>(new InferenceOpReplacePass));
-  passes_.emplace(
-      "ir_graph_to_program_pass",
-      std::unique_ptr<IrGraphToProgramPass>(new IrGraphToProgramPass));
+  passes_.emplace("ir_graph_to_program_pass",
+                  std::make_unique<IrGraphToProgramPass>());
 }
 
 }  // namespace analysis

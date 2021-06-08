@@ -104,7 +104,7 @@ struct MemEvenRecorder {
 
  private:
   struct RecordMemEvent {
-    RecordMemEvent(const Place& place, size_t bytes);
+    RecordMemEvent(Place place, size_t bytes);
     ~RecordMemEvent();
 
     Place place_;

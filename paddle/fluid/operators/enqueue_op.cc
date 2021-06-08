@@ -48,7 +48,7 @@ class EnqueueOp : public framework::OperatorBase {
  private:
   void RunImpl(const framework::Scope& scope,
                const platform::Place& dev_place) const override {
-    const std::string& queue_name = Attr<std::string>("queue_name");
+    const auto& queue_name = Attr<std::string>("queue_name");
     auto* queue_holder_var = scope.FindVar(queue_name);
     PADDLE_ENFORCE_NOT_NULL(
         queue_holder_var,

@@ -13,8 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/detection/mask_util.h"
-#include <math.h>
-#include <stdlib.h>
+
+#include <cmath>
+#include <cstdlib>
+
 #include "paddle/fluid/memory/memory.h"
 
 namespace paddle {
@@ -38,7 +40,7 @@ void Decode(const uint32_t* cnts, int m, uint8_t* mask) {
   }
 }
 
-typedef uint32_t uint;
+using uint = uint32_t;
 void Poly2Mask(const float* xy, int k, int h, int w, uint8_t* mask) {
   int j, m = 0;
   double scale = 5;
@@ -146,7 +148,7 @@ void Poly2Mask(const float* xy, int k, int h, int w, uint8_t* mask) {
 
   // convert to mask
   auto mskptr = memory::Alloc(cpu, sizeof(uint8_t) * h * w);
-  uint8_t* msk = reinterpret_cast<uint8_t*>(mskptr->ptr());
+  auto* msk = reinterpret_cast<uint8_t*>(mskptr->ptr());
   Decode(b, m, msk);
 
   for (int ii = 0; ii < h; ++ii) {
@@ -165,6 +167,7 @@ void Poly2Boxes(const std::vector<std::vector<std::vector<float>>>& polys,
     float y0 = std::numeric_limits<float>::max();
     float y1 = std::numeric_limits<float>::min();
     // each list may have more than one polys
+    // NOLINTNEXTLINE
     for (size_t j = 0; j < polys[i].size(); ++j) {
       for (size_t k = 0; k < polys[i][j].size() / 2; ++k) {
         x0 = std::min(x0, polys[i][j][2 * k]);

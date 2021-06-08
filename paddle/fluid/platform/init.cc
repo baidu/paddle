@@ -166,10 +166,10 @@ void InitDevices() {
 void InitDevices(const std::vector<int> devices) {
   std::vector<platform::Place> places;
 
-  for (size_t i = 0; i < devices.size(); ++i) {
+  for (int device : devices) {
     // In multi process multi gpu mode, we may have gpuid = 7
     // but count = 1.
-    if (devices[i] < 0) {
+    if (device < 0) {
       LOG(WARNING) << "Invalid devices id.";
       continue;
     }
@@ -263,10 +263,9 @@ bool StartsWith(const char *str, const char *prefix) {
 }
 
 const char *ParseSignalErrorString(const std::string &str) {
-  for (size_t i = 0;
-       i < (sizeof(SignalErrorStrings) / sizeof(*(SignalErrorStrings))); ++i) {
-    if (std::string::npos != str.find(SignalErrorStrings[i].name)) {
-      return SignalErrorStrings[i].error_string;
+  for (auto SignalErrorString : SignalErrorStrings) {
+    if (std::string::npos != str.find(SignalErrorString.name)) {
+      return SignalErrorString.error_string;
     }
   }
   return "Unknown signal";

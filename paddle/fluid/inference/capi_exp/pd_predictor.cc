@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/capi_exp/pd_predictor.h"
+
 #include "paddle/fluid/inference/api/paddle_inference_api.h"
 #include "paddle/fluid/inference/capi_exp/pd_types.h"
 #include "paddle/fluid/inference/capi_exp/pd_utils.h"
@@ -32,9 +33,8 @@ __pd_give PD_Predictor* PD_PredictorCreate(__pd_take PD_Config* pd_config) {
   PADDLE_ENFORCE_NOT_NULL(
       pd_config, paddle::platform::errors::InvalidArgument(
                      "The pointer of paddle predictor shouldn't be nullptr"));
-  PD_Predictor* pd_predictor = new PD_Predictor();
-  paddle_infer::Config* config =
-      reinterpret_cast<paddle_infer::Config*>(pd_config);
+  auto* pd_predictor = new PD_Predictor();
+  auto* config = reinterpret_cast<paddle_infer::Config*>(pd_config);
   pd_predictor->predictor = paddle_infer::CreatePredictor(*config);
   delete config;
   return pd_predictor;
@@ -43,7 +43,7 @@ __pd_give PD_Predictor* PD_PredictorCreate(__pd_take PD_Config* pd_config) {
 __pd_give PD_Predictor* PD_PredictorClone(
     __pd_keep PD_Predictor* pd_predictor) {
   CHECK_AND_CONVERT_PD_PREDICTOR;
-  PD_Predictor* new_predictor = new PD_Predictor();
+  auto* new_predictor = new PD_Predictor();
   new_predictor->predictor = predictor->Clone();
   return new_predictor;
 }
@@ -74,7 +74,7 @@ size_t PD_PredictorGetOutputNum(__pd_keep PD_Predictor* pd_predictor) {
 __pd_give PD_Tensor* PD_PredictorGetInputHandle(
     __pd_keep PD_Predictor* pd_predictor, const char* name) {
   CHECK_AND_CONVERT_PD_PREDICTOR;
-  PD_Tensor* pd_tensor = new PD_Tensor();
+  auto* pd_tensor = new PD_Tensor();
   pd_tensor->tensor = predictor->GetInputHandle(name);
   return pd_tensor;
 }
@@ -82,7 +82,7 @@ __pd_give PD_Tensor* PD_PredictorGetInputHandle(
 __pd_give PD_Tensor* PD_PredictorGetOutputHandle(
     __pd_keep PD_Predictor* pd_predictor, const char* name) {
   CHECK_AND_CONVERT_PD_PREDICTOR;
-  PD_Tensor* pd_tensor = new PD_Tensor();
+  auto* pd_tensor = new PD_Tensor();
   pd_tensor->tensor = predictor->GetOutputHandle(name);
   return pd_tensor;
 }

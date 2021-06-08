@@ -204,10 +204,10 @@ struct SelectedRowsSumTo<platform::CPUDeviceContext, T> {
                   framework::SelectedRows* input2) {
     // Ensure all selected rows have the same height
     size_t size = 0u;
-    for (auto iter = input1.begin(); iter != input1.end(); ++iter) {
-      auto& in_rows = (*iter)->rows();
+    for (auto iter : input1) {
+      auto& in_rows = iter->rows();
       size += in_rows.end() - in_rows.begin();
-      auto in1_height = (*iter)->height();
+      auto in1_height = iter->height();
       PADDLE_ENFORCE_EQ(in1_height, input2->height(),
                         platform::errors::InvalidArgument(
                             "The two inputs height must be equal."
@@ -218,8 +218,8 @@ struct SelectedRowsSumTo<platform::CPUDeviceContext, T> {
     // concat rows
     std::vector<int64_t> in2_rows;
     in2_rows.reserve(in2_rows.size() + size);
-    for (auto iter = input1.begin(); iter != input1.end(); ++iter) {
-      const framework::Vector<int64_t>& in_rows = (*iter)->rows();
+    for (auto iter : input1) {
+      const framework::Vector<int64_t>& in_rows = iter->rows();
       in2_rows.insert(in2_rows.end(), in_rows.begin(), in_rows.end());
     }
     input2->set_rows(in2_rows);
@@ -529,7 +529,7 @@ struct MergeAverage<platform::CPUDeviceContext, T> {
                               &out_data[out_i * input_width]);
       }
     }
-    size_t input_width_cast = static_cast<size_t>(input_width);
+    auto input_width_cast = static_cast<size_t>(input_width);
     T count = static_cast<T>(inputs.size());
     for (size_t i = 0; i < merge_rows.size(); i++) {
       for (size_t j = 0; j < input_width_cast; j++) {

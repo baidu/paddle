@@ -9,10 +9,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-#include <math.h>
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/op_version_registry.h"
 #include "paddle/fluid/operators/detection/bbox_util.h"
@@ -213,7 +214,7 @@ std::vector<std::vector<int>> SampleFgBgGt(
     int fg_rois_this_image = fg_inds.size();
     int fg_rois_per_this_image = std::min(fg_rois_per_im, fg_rois_this_image);
     if (use_random) {
-      const int64_t fg_size = static_cast<int64_t>(fg_inds.size());
+      const auto fg_size = static_cast<int64_t>(fg_inds.size());
       if (fg_size > fg_rois_per_this_image) {
         for (int64_t i = fg_rois_per_this_image; i < fg_size; ++i) {
           int rng_ind = std::floor(uniform(engine) * i);
@@ -236,7 +237,7 @@ std::vector<std::vector<int>> SampleFgBgGt(
     int bg_rois_per_this_image =
         std::min(bg_rois_per_image, bg_rois_this_image);
     if (use_random) {
-      const int64_t bg_size = static_cast<int64_t>(bg_inds.size());
+      const auto bg_size = static_cast<int64_t>(bg_inds.size());
       if (bg_size > bg_rois_per_this_image) {
         for (int64_t i = bg_rois_per_this_image; i < bg_size; ++i) {
           int rng_ind = std::floor(uniform(engine) * i);
@@ -498,7 +499,7 @@ class GenerateProposalLabelsKernel : public framework::OpKernel<T> {
             "GenerateProposalLabelsOp gt_boxes needs 1 level of LoD. But "
             "received level of LoD is [%d], LoD is [%s].",
             gt_boxes->lod().size(), gt_boxes->lod()));
-    int64_t n = static_cast<int64_t>(rpn_rois->lod().back().size() - 1);
+    auto n = static_cast<int64_t>(rpn_rois->lod().back().size() - 1);
     int64_t rois_num = rpn_rois->dims()[0];
     int64_t gts_num = gt_boxes->dims()[0];
     int64_t init_num =

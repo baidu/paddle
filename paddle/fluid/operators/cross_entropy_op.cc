@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/cross_entropy_op.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -126,7 +127,7 @@ class CrossEntropyGradientOpBase : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
-  void InferShape(framework::InferShapeContext* ctx) const {
+  void InferShape(framework::InferShapeContext* ctx) const override {
     OP_INOUT_CHECK(ctx->HasInput("Label"), "Input", "Label",
                    "CrossEntropyGradientOpBase");
     OP_INOUT_CHECK(ctx->HasInput(framework::GradVarName("Y")), "Input",
@@ -323,14 +324,14 @@ class CrossEntropyGradientOp2 : public CrossEntropyGradientOpBase {
   }
 
  protected:
-  virtual framework::DDim GetXDim(framework::InferShapeContext* ctx) const {
+  framework::DDim GetXDim(framework::InferShapeContext* ctx) const override {
     auto x_shape = ctx->GetInputDim("XShape");
     return framework::DDim(x_shape.Get(), x_shape.size() - 1);
   }
 
-  virtual const char* VarNameWithXLoD() const { return "XShape"; }
+  const char* VarNameWithXLoD() const override { return "XShape"; }
 
-  virtual bool IsSoftLabel(framework::InferShapeContext* ctx) const {
+  bool IsSoftLabel(framework::InferShapeContext* ctx) const override {
     return false;
   }
 };

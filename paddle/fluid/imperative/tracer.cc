@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "paddle/fluid/imperative/tracer.h"
+
 #include <map>
+#include <memory>
 #include <set>
 #include <unordered_set>
 #include <utility>
+
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/imperative/amp_auto_cast.h"
 #include "paddle/fluid/imperative/op_base.h"
@@ -117,8 +120,8 @@ paddle::framework::GarbageCollector* Tracer::MutableGarbageCollectorIfNotExists(
           "Please recompile or reinstall Paddle with XPU support."));
 #endif
     } else if (platform::is_cpu_place(place)) {
-      gc.reset(new framework::CPUGarbageCollector(
-          BOOST_GET_CONST(platform::CPUPlace, place), 0));
+      gc = std::make_unique<framework::CPUGarbageCollector>(
+          BOOST_GET_CONST(platform::CPUPlace, place), 0);
       VLOG(10) << "Created GarbageCollector at " << place;
     } else {
       PADDLE_THROW(platform::errors::PreconditionNotMet(

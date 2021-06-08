@@ -19,7 +19,7 @@ limitations under the License. */
 namespace paddle {
 namespace platform {
 
-typedef ::paddle::platform::error::Code Code;
+using Code = ::paddle::platform::error::Code;
 
 std::string error_name(Code code) {
   switch (code) {
