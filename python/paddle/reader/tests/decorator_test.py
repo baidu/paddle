@@ -48,70 +48,6 @@ class TestMap(unittest.TestCase):
             self.assertEqual(e, i)
 
 
-class TestBuffered(unittest.TestCase):
-    def test_read(self):
-        for size in range(20):
-            b = paddle.reader.buffered(reader_creator_10(0), size)
-            c = 0
-            for i in b():
-                self.assertEqual(i, c)
-                c += 1
-            self.assertEqual(c, 10)
-
-    def test_buffering(self):
-        # read have 30ms delay.
-        b = paddle.reader.buffered(reader_creator_10(0.03), 10)
-        last_time = time.time()
-        for idx, i in enumerate(b()):
-            elapsed_time = time.time() - last_time
-            if i == 0:
-                time.sleep(1)
-            else:
-                # read time should be short, meaning already buffered.
-                self.assertLess(elapsed_time, 0.08)
-            last_time = time.time()
-
-
-class TestCompose(unittest.TestCase):
-    def test_compse(self):
-        reader = paddle.reader.compose(
-            reader_creator_10(0), reader_creator_10(0))
-        for idx, e in enumerate(reader()):
-            self.assertEqual(e, (idx, idx))
-
-    def test_compose_not_aligned(self):
-        total = 0
-        reader = paddle.reader.compose(
-            paddle.reader.chain(reader_creator_10(0), reader_creator_10(0)),
-            reader_creator_10(0))
-        with self.assertRaises(paddle.reader.ComposeNotAligned):
-            for e in reader():
-                total += 1
-        # expecting 10, not 20
-        self.assertEqual(total, 10)
-
-    def test_compose_not_aligned_no_check(self):
-        total = 0
-        reader = paddle.reader.compose(
-            paddle.reader.chain(reader_creator_10(0), reader_creator_10(0)),
-            reader_creator_10(0),
-            check_alignment=False)
-        for e in reader():
-            total += 1
-        # expecting 10, not 20
-        self.assertEqual(total, 10)
-
-
-class TestChain(unittest.TestCase):
-    def test_chain(self):
-        c = paddle.reader.chain(reader_creator_10(0), reader_creator_10(0))
-        idx = 0
-        for e in c():
-            self.assertEqual(e, idx % 10)
-            idx += 1
-        self.assertEqual(idx, 20)
-
-
 class TestShuffle(unittest.TestCase):
     def test_shuffle(self):
         case = [(0, True), (1, True), (10, False), (100, False)]
@@ -148,35 +84,6 @@ class TestXmap(unittest.TestCase):
                             result.sort()
                         for idx, e in enumerate(result):
                             self.assertEqual(e, mapper(idx))
-
-
-class TestMultiProcessReader(unittest.TestCase):
-    def setup(self):
-        self.samples = []
-        for i in range(1000):
-            self.samples.append([[i], [i + 1, i + 2], i + 3])
-
-        def reader(index):
-            for i in range(len(self.samples)):
-                if i % 3 == index:
-                    yield self.samples[i]
-
-        self.reader0 = functools.partial(reader, 0)
-        self.reader1 = functools.partial(reader, 1)
-        self.reader2 = functools.partial(reader, 2)
-
-    def reader_test(self, use_pipe):
-        self.setup()
-        results = []
-        for data in paddle.reader.multiprocess_reader(
-            [self.reader0, self.reader1, self.reader2], 100, use_pipe)():
-            results.append(data)
-        self.assertEqual(sorted(self.samples), sorted(results))
-
-    def test_distributed_batch_reader(self):
-        if sys.platform != 'win32':
-            self.reader_test(use_pipe=False)
-            self.reader_test(use_pipe=True)
 
 
 if __name__ == '__main__':

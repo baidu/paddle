@@ -33,8 +33,7 @@ from paddle.fluid.executor import Executor, global_scope
 from paddle.fluid.evaluator import Evaluator
 from paddle.fluid.framework import Program, Parameter, default_main_program, default_startup_program, Variable, \
     program_guard, dygraph_not_support, static_only
-from paddle.reader import cache, map_readers, buffered, compose, chain, shuffle, \
-    ComposeNotAligned, firstn, xmap_readers, multiprocess_reader
+from paddle.reader import map_readers, shuffle, xmap_readers
 from .wrapped_decorator import signature_safe_contextmanager
 from paddle.fluid.compiler import CompiledProgram
 from paddle.fluid.log_helper import get_logger
