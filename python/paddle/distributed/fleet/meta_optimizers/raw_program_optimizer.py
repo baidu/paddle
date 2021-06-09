@@ -38,6 +38,7 @@ class RawProgramOptimizer(MetaOptimizerBase):
         super(RawProgramOptimizer, self)._set_basic_info(
             loss, role_maker, user_defined_optimizer, user_defined_strategy)
         self.without_graph_optimization = user_defined_strategy.without_graph_optimization
+        self.allreduce_fusion_optimization = user_defined_strategy.allreduce_fusion_optimization
 
     def _can_apply(self):
         if not self.role_maker._is_collective:
@@ -125,6 +126,8 @@ class RawProgramOptimizer(MetaOptimizerBase):
     def _transpile_main_program(self, loss):
         self._insert_loss_grad_ops(loss)
         self._insert_allreduce_ops()
+        if self.allreduce_fusion_optimization and core.is_compiled_with_npu():
+            self._allreduce_fusion_program()
 
     def _insert_loss_grad_ops(self, loss):
         """
@@ -195,3 +198,72 @@ class RawProgramOptimizer(MetaOptimizerBase):
                     attrs={'ring_id': ring_id,
                            OP_ROLE_KEY: OpRole.Backward})
                 break
+
+
+    def _allreduce_fusion_program(self):
+        block = self.main_program.global_block()
+        ring_id = self.global_ring_id
+        allreduce_input_fp16_vars = []
+        allreduce_output_fp16_vars = []
+        allreduce_input_fp32_vars = []
+        allreduce_output_fp32_vars = []
+        allreduce_input_var_name = []
+        allreduce_output_var_name = []
+                
+        for idx,op in reversed(list(enumerate(block.ops))):
+            if op.type == "c_allreduce_sum":
+                allreduce_input_var_name.extend(op.input("X"))
+                allreduce_output_var_name.extend(op.output("Out"))
+                block._remove_op(idx)
+
+        for var_name_in in allreduce_input_var_name:
+            if block.var(var_name_in).dtype == core.VarDesc.VarType.FP32:
+                allreduce_input_fp32_vars.append(var_name_in)
+                allreduce_output_fp32_vars.append(var_name_in)
+            elif block.var(var_name_in).dtype == core.VarDesc.VarType.FP16:
+                allreduce_input_fp16_vars.append(var_name_in)
+                allreduce_output_fp16_vars.append(var_name_in)
+
+        for idx,op in reversed(list(enumerate(block.ops))):
+            if op.type == "c_sync_calc_stream":
+                block._remove_op(idx)
+
+        for idx, op in enumerate(block.ops):
+            if op.type == "c_sync_comm_stream":
+                block._insert_op(
+                    idx,
+                    type='c_fusion_allreduce_sum',
+                    inputs={'X': allreduce_input_fp32_vars},
+                    outputs={'Out': allreduce_output_fp32_vars},
+                    attrs={
+                        'ring_id': ring_id,
+                        'use_calc_stream':True,
+                        OP_ROLE_KEY: OpRole.Backward
+                    })
+
+                block._insert_op(
+                    idx,
+                    type='c_fusion_allreduce_sum',
+                    inputs={'X': allreduce_input_fp16_vars},
+                    outputs={'Out': allreduce_output_fp16_vars},
+                    attrs={
+                        'ring_id': ring_id,
+                        'use_calc_stream':True,
+                        OP_ROLE_KEY: OpRole.Backward
+                    })
+
+                input_var = op.input("X")
+                output_var = op.output("Out")
+                block._insert_op(
+                    idx+1,
+                    type='c_sync_calc_stream',
+                    inputs={'X': input_var},
+                    outputs={'Out': output_var},
+                    attrs={OP_ROLE_KEY: OpRole.Backward, })
+                break
+
+        #for idx, op in enumerate(block.ops):
+        #    if op.type == "c_sync_comm_stream":
+        #        block._remove_op(idx)
+        #        break
+        return

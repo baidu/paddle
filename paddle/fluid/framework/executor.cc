@@ -26,7 +26,7 @@ limitations under the License. */
 #include "paddle/fluid/platform/mkldnn_helper.h"
 #endif
 #include "paddle/fluid/framework/executor_gc_helper.h"
-
+#include "paddle/fluid/platform/device_tracer.h"
 DECLARE_bool(benchmark);
 DECLARE_bool(use_mkldnn);
 
@@ -481,7 +481,7 @@ void Executor::RunPartialPreparedContext(ExecutorPrepareContext* ctx,
 #endif
     }
   }
-
+  auto start_ns = paddle::platform::PosixInNsec();
   for (int64_t i = start_op_index; i < end_op_index; ++i) {
     auto& op = ctx->ops_[i];
     op->Run(*local_scope, place_);
@@ -489,7 +489,9 @@ void Executor::RunPartialPreparedContext(ExecutorPrepareContext* ctx,
       DeleteUnusedTensors(*local_scope, op.get(), ctx->unused_vars_, gc.get());
     }
   }
-
+  auto end_ns = paddle::platform::PosixInNsec();
+  auto duration = end_ns - start_ns;
+  VLOG(1) << "The executor total time:" << duration;
   auto callback = [scope, local_scope, keep_kids]() {
     if (local_scope != scope) {
       VLOG(4) << "Delete scope: " << local_scope;

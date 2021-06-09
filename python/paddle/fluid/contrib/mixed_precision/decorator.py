@@ -303,14 +303,23 @@ class OptimizerWithMixedPrecision(object):
         if self._is_distributed:
             # if distributed, split check_finite_and_unscale to overlap
             # unscale with communication
-            for p, g in params_grads:
-                with self._train_program._optimized_guard([p, g]):
+            if core.is_compiled_with_npu():
+                with self._train_program._optimized_guard(grads):
                     _, found_inf = check_finite_and_unscale(
-                        [g, ],
+                        grads,
                         self._loss_scaling,
                         name="find_infinite_scale",
                         float_status=self._float_status)
                     found_infs.append(found_inf)
+            else:
+                for p, g in params_grads:
+                    with self._train_program._optimized_guard([p, g]):
+                        _, found_inf = check_finite_and_unscale(
+                            [g, ],
+                            self._loss_scaling,
+                            name="find_infinite_scale",
+                            float_status=self._float_status)
+                        found_infs.append(found_inf)
         elif self._use_pure_fp16:
             if fp32_grads:
                 with self._train_program._optimized_guard(fp32_grads):

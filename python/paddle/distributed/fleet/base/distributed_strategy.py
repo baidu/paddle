@@ -854,6 +854,32 @@ class DistributedStrategy(object):
             )
 
     @property
+    def allreduce_fusion_optimization(self):
+        """
+        This based on raw_program_optimizer program and allreduce will fued one op
+
+        Examples:
+
+          .. code-block:: python
+
+            import paddle.distributed.fleet as fleet
+            strategy = fleet.DistributedStrategy()
+            strategy.allreduce_fusion_optimization = True
+
+        """
+        return self.strategy.allreduce_fusion_optimization
+
+    @allreduce_fusion_optimization.setter
+    @is_strict_auto
+    def allreduce_fusion_optimization(self, flag):
+        if isinstance(flag, bool):
+            self.strategy.allreduce_fusion_optimization = flag
+        else:
+            print(
+                "WARNING: allreduce_fusion_optimization should have value of bool type"
+            )
+
+    @property
     def pipeline(self):
         """
         Indicating whether we are using pipeline parallelism for distributed training.

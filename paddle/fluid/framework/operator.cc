@@ -29,7 +29,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/var_type.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/profiler.h"
-
+#include "paddle/fluid/platform/device_tracer.h"
 namespace paddle {
 namespace framework {
 class LoDTensor;
@@ -229,7 +229,11 @@ void OperatorBase::Run(const Scope& scope, const platform::Place& place) {
       auto op_name = platform::OpName(outputs_, Type());
       platform::RecordEvent op_name_record_event(
           op_name, platform::EventRole::kUniqueOp);
+      auto start_ns = paddle::platform::PosixInNsec();
       RunImpl(scope, place);
+      auto end_ns = paddle::platform::PosixInNsec();
+      auto duration = end_ns - start_ns;
+      VLOG(1) << "OP Name:" << type_ <<"    start_ns:"<<start_ns <<"   end_ns:"<<end_ns<<"  duration:"<<duration;
     }
 
     VLOG(3) << GetExecutionPlace(place) << " " << DebugStringEx(&scope);

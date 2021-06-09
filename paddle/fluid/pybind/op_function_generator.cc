@@ -143,6 +143,7 @@ std::map<std::string, std::set<std::string>> op_passing_outs_map = {
     {"fake_quantize_dequantize_abs_max", {"Out", "OutScale"}},
     {"fake_channel_wise_quantize_dequantize_abs_max", {"Out", "OutScale"}},
     {"check_finite_and_unscale", {"Out", "FoundInfinite"}},
+    {"c_fusion_allreduce_sum",{"Out"}},
     {"update_loss_scaling",
      {"Out", "LossScaling", "OutGoodSteps", "OutBadSteps"}},
     {"moving_average_abs_max_scale",
