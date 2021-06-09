@@ -19,6 +19,7 @@ from __future__ import print_function
 import os
 import sys
 import os.path as osp
+import functools
 import shutil
 import requests
 import hashlib
@@ -58,8 +59,6 @@ logger = logging.getLogger(__name__)
 __all__ = ['get_weights_path_from_url']
 
 WEIGHTS_HOME = osp.expanduser("~/.cache/paddle/hapi/weights")
-
-DOWNLOAD_RETRY_LIMIT = 3
 
 
 def is_url(path):
@@ -163,6 +162,30 @@ def get_path_from_url(url,
     return fullpath
 
 
+def retry(times, delay=1, exceptions=Exception):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            _e = None
+            for i in range(times):
+                if i > 0:
+                    _e = None
+                    time.sleep(delay)
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    _e = e
+
+            if _e is not None:
+                raise RuntimeError('Retry failed with exception {}!'.format(
+                    str(_e)))
+
+        return wrapper
+
+    return decorator
+
+
+@retry(times=3)
 def _download(url, path, md5sum=None):
     """
     Download from url, save to path.
@@ -175,46 +198,33 @@ def _download(url, path, md5sum=None):
 
     fname = osp.split(url)[-1]
     fullname = osp.join(path, fname)
-    retry_cnt = 0
 
-    while not (osp.exists(fullname) and _md5check(fullname, md5sum)):
-        if retry_cnt < DOWNLOAD_RETRY_LIMIT:
-            retry_cnt += 1
-        else:
-            raise RuntimeError("Download from {} failed. "
-                               "Retry limit reached".format(url))
+    req = requests.get(url, stream=True)
 
-        logger.info("Downloading {} from {}".format(fname, url))
+    if req.status_code != 200:
+        raise RuntimeError("Downloading from {} failed with code "
+                           "{}!".format(url, req.status_code))
 
-        try:
-            req = requests.get(url, stream=True)
-        except Exception as e:  # requests.exceptions.ConnectionError
-            logger.info(
-                "Downloading {} from {} failed {} times with exception {}".
-                format(fname, url, retry_cnt + 1, str(e)))
-            time.sleep(1)
-            continue
-
-        if req.status_code != 200:
-            raise RuntimeError("Downloading from {} failed with code "
-                               "{}!".format(url, req.status_code))
-
-        # For protecting download interupted, download to
-        # tmp_fullname firstly, move tmp_fullname to fullname
-        # after download finished
-        tmp_fullname = fullname + "_tmp"
-        total_size = req.headers.get('content-length')
-        with open(tmp_fullname, 'wb') as f:
-            if total_size:
-                with tqdm(total=(int(total_size) + 1023) // 1024) as pbar:
-                    for chunk in req.iter_content(chunk_size=1024):
-                        f.write(chunk)
-                        pbar.update(1)
-            else:
+    # For protecting download interupted, download to
+    # tmp_fullname firstly, move tmp_fullname to fullname
+    # after download finished
+    tmp_fullname = fullname + "_tmp"
+    total_size = req.headers.get('content-length')
+    with open(tmp_fullname, 'wb') as f:
+        if total_size:
+            with tqdm(total=(int(total_size) + 1023) // 1024) as pbar:
                 for chunk in req.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-        shutil.move(tmp_fullname, fullname)
+                    f.write(chunk)
+                    pbar.update(1)
+        else:
+            for chunk in req.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+    shutil.move(tmp_fullname, fullname)
+
+    if not (osp.exists(fullname) and _md5check(fullname, md5sum)):
+        raise RuntimeError("Downloading {} error when md5check!".format(
+            fullname))
 
     return fullname
 
