@@ -13,44 +13,96 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #pragma once
-#include <string>
-#include <vector>
+#include <math.h>
+#include <limits>
 
-#include "paddle/fluid/framework/eigen.h"
-#include "paddle/fluid/framework/tensor.h"
-#include "paddle/fluid/operators/amp/fp16_type_traits.h"
-#include "paddle/fluid/platform/device_context.h"
-#include "paddle/fluid/platform/hostdevice.h"
-#include "paddle/fluid/platform/macros.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_op.cu.h"
+#ifdef __HIPCC__
+#include <hip/hip_runtime.h>
+#endif
 
 namespace paddle {
 namespace operators {
 
-template <typename T>
+template <typename Tx, typename Ty = Tx>
 struct CustomMin {
-  __device__ __forceinline__ T operator()(const T &a, const T &b) const {
+  using Transformer = detail::IdentityFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() {
+    return std::numeric_limits<Ty>::max();
+  }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
     return (b < a) ? b : a;
   }
 };
 
-template <typename T>
+template <typename Tx, typename Ty = Tx>
 struct CustomMax {
-  __device__ __forceinline__ T operator()(const T &a, const T &b) const {
+  using Transformer = detail::IdentityFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() {
+    return std::numeric_limits<Ty>::min();
+  }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
     return (b > a) ? b : a;
   }
 };
 
-template <typename T>
+// for cub::Reduce
+template <typename Tx, typename Ty = Tx>
 struct CustomSum {
-  __device__ __forceinline__ T operator()(const T &a, const T &b) const {
+  using Transformer = detail::IdentityFunctor<Tx, Ty>;
+
+  HOSTDEVICE __forceinline__ Ty initial() { return static_cast<Ty>(0.0f); }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
     return b + a;
   }
 };
 
-template <typename T>
+template <typename Tx, typename Ty = Tx>
+struct CustomMean {
+  using Transformer = detail::DivideFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() { return static_cast<Ty>(0.0f); }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
+    return b + a;
+  }
+};
+
+template <typename Tx, typename Ty = Tx>
 struct CustomMul {
-  __device__ __forceinline__ T operator()(const T &a, const T &b) const {
+  using Transformer = detail::IdentityFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() { return static_cast<Ty>(1.0f); }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
     return b * a;
+  }
+};
+
+template <typename Tx, typename Ty = Tx>
+struct CustomLogicalOr {
+  using Transformer = detail::IdentityFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() { return static_cast<Ty>(false); }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
+    return b || a;
+  }
+};
+
+template <typename Tx, typename Ty = Tx>
+struct CustomLogicalAnd {
+  using Transformer = detail::IdentityFunctor<Tx>;
+
+  HOSTDEVICE __forceinline__ Ty initial() { return static_cast<Ty>(true); }
+
+  __device__ __forceinline__ Ty operator()(const Ty &a, const Ty &b) const {
+    return b && a;
   }
 };
 
