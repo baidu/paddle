@@ -15,11 +15,14 @@
 from __future__ import print_function
 
 import unittest
+import paddle
 from paddle.fluid.framework import default_main_program, Program, convert_np_dtype_to_dtype_, in_dygraph_mode
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
 import paddle.fluid.core as core
 import numpy as np
+
+paddle.enable_static()
 
 
 class TestVariable(unittest.TestCase):
