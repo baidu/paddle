@@ -20,7 +20,7 @@ from paddle.distributed.fleet.meta_optimizers import AMPOptimizer
 import os
 from fleet_meta_optimizer_base import TestFleetMetaOptimizer
 import paddle.distributed.fleet.base.role_maker as role_maker
-
+os.environ['FLAGS_infcheck_adamoptimizer'] = "True"
 paddle.enable_static()
 
 

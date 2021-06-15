@@ -43,6 +43,11 @@ static inline float GetAttrFromTensor(const framework::Tensor* tensor) {
   return tensor_data[0];
 }
 
+class AdamOpMaker : public framework::OpProtoAndCheckerMaker {
+ public:
+  void Make() override;
+};
+
 class AdamOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;

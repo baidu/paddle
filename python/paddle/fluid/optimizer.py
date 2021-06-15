@@ -44,9 +44,9 @@ from .wrapped_decorator import signature_safe_contextmanager
 from .. import compat as cpt
 
 __all__ = [
-    'SGD', 'Momentum', 'Adagrad', 'Adam', 'Adamax', 'Dpsgd', 'DecayedAdagrad',
-    'Ftrl', 'SGDOptimizer', 'MomentumOptimizer', 'AdagradOptimizer',
-    'AdamOptimizer', 'AdamaxOptimizer', 'DpsgdOptimizer',
+    'InfCheckAdamOptimizer', 'SGD', 'Momentum', 'Adagrad', 'Adam', 'Adamax',
+    'Dpsgd', 'DecayedAdagrad', 'Ftrl', 'SGDOptimizer', 'MomentumOptimizer',
+    'AdagradOptimizer', 'AdamOptimizer', 'AdamaxOptimizer', 'DpsgdOptimizer',
     'DecayedAdagradOptimizer', 'RMSPropOptimizer', 'FtrlOptimizer', 'Adadelta',
     'AdadeltaOptimizer', 'ModelAverage', 'LarsMomentum',
     'LarsMomentumOptimizer', 'LambOptimizer', 'ExponentialMovingAverage',
@@ -130,6 +130,13 @@ class Optimizer(object):
         self._opti_name_list = []
         self._accumulators_holder = {}
         self._param_device_map = dict()
+        self._var_attr_dict = dict()
+
+    def set_var_dict(self, key, val):
+        self._var_attr_dict[key] = val
+
+    def _get_var_dict(self, key):
+        return self._var_attr_dict[key]
 
     @framework.dygraph_only
     def state_dict(self):
@@ -6363,3 +6370,99 @@ class GradientMergeOptimizer(object):
             loss, startup_program=startup_program, params_grads=params_grads)
 
         return optimize_ops, params_grads
+
+
+#  Fix me: this a workround method
+#  Based on adamoptimizer, once the foud_inf is true then copy input to output
+#  call the adam_infcheck op
+#  Copy Param to ParamOut
+#  Copy Moment1 to Moment1Out
+#  Copy Moment2 to Moment2Out
+#  Copy Beta1Pow to Beta1PowOut
+#  Copy Beta2Pow to Beta1PowOut
+class InfCheckAdamOptimizer(AdamOptimizer):
+    r"""
+        AdamOptimizer add inffoud var
+    """
+    _moment1_acc_str = "moment1"
+    _moment2_acc_str = "moment2"
+    _beta1_pow_acc_str = "beta1_pow_acc"
+    _beta2_pow_acc_str = "beta2_pow_acc"
+
+    def __init__(self,
+                 learning_rate=0.001,
+                 beta1=0.9,
+                 beta2=0.999,
+                 epsilon=1e-6,
+                 parameter_list=None,
+                 regularization=None,
+                 grad_clip=None,
+                 name=None,
+                 lazy_mode=False):
+        super(InfCheckAdamOptimizer, self).__init__(
+            learning_rate=learning_rate,
+            parameter_list=parameter_list,
+            regularization=regularization,
+            grad_clip=grad_clip,
+            beta1=beta1,
+            beta2=beta2,
+            epsilon=epsilon,
+            name=name,
+            lazy_mode=lazy_mode)
+        self.type = "adam_infcheck"
+
+    def _append_optimize_op(self, block, param_and_grad):
+        assert isinstance(block, framework.Block)
+        moment1 = self._get_accumulator(self._moment1_acc_str,
+                                        param_and_grad[0])
+        moment2 = self._get_accumulator(self._moment2_acc_str,
+                                        param_and_grad[0])
+        beta1_pow_acc = self._get_accumulator(self._beta1_pow_acc_str,
+                                              param_and_grad[0])
+        beta2_pow_acc = self._get_accumulator(self._beta2_pow_acc_str,
+                                              param_and_grad[0])
+        lr = self._create_param_lr(param_and_grad)
+        # create the adam optimize op
+        assert not framework.in_dygraph_mode(
+        ), "InfCheckAdamOptimizer not support dygraph_mode"
+        foud_inf_var = self._get_var_dict("found_inf")
+        inputs = {
+            "Param": [param_and_grad[0]],
+            "Grad": [param_and_grad[1]],
+            "LearningRate": [lr],
+            "Moment1": [moment1],
+            "Moment2": [moment2],
+            "Beta1Pow": [beta1_pow_acc],
+            "Beta2Pow": [beta2_pow_acc],
+            "InfCheck": [foud_inf_var]
+        }
+        outputs = {
+            "ParamOut": [param_and_grad[0]],
+            "Moment1Out": [moment1],
+            "Moment2Out": [moment2],
+            "Beta1PowOut": [beta1_pow_acc],
+            "Beta2PowOut": [beta2_pow_acc],
+        }
+        attrs = {
+            "epsilon": self._epsilon,
+            "lazy_mode": self._lazy_mode,
+            "min_row_size_to_use_multithread": 1000
+        }
+
+        if isinstance(self._beta1, Variable):
+            inputs['Beta1Tensor'] = self._beta1
+        else:
+            attrs['beta1'] = self._beta1
+        if isinstance(self._beta2, Variable):
+            inputs['Beta2Tensor'] = self._beta2
+        else:
+            attrs['beta2'] = self._beta2
+
+        inf_check_adam_op = block.append_op(
+            type=self.type,
+            inputs=inputs,
+            outputs=outputs,
+            attrs=attrs,
+            stop_gradient=True)
+
+        return inf_check_adam_op

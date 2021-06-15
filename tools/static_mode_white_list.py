@@ -41,6 +41,7 @@ STATIC_MODE_TESTING_LIST = [
     'test_adadelta_op',
     'test_adagrad_op',
     'test_adam_op',
+    'test_adam_infcheck_op',
     'test_adam_optimizer_fp32_fp64',
     'test_adamax_api',
     'test_adamax_op',

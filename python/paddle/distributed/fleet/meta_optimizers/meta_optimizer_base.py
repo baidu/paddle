@@ -25,6 +25,9 @@ class MetaOptimizerBase(Optimizer):
         self.meta_optimizers_white_list = []
         self.meta_optimizers_black_list = []
 
+    def set_var_dict(self, key, val):
+        self.inner_opt.set_var_dict(key, val)
+
     def _set_basic_info(self, loss, role_maker, user_defined_optimizer,
                         user_defined_strategy):
         self.loss = loss

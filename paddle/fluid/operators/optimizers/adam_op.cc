@@ -129,84 +129,79 @@ framework::OpKernelType AdamOp::GetKernelTypeForVar(
                                    tensor.place(), tensor.layout());
   }
 }
+void AdamOpMaker::Make() {
+  AddInput("Param", "(Tensor) Input parameter");
+  AddInput("Grad", "(Tensor) Input gradient");
+  AddInput("LearningRate", "(Tensor) Learning rate");
+  AddInput("Moment1", "(Tensor) Input first moment");
+  AddInput("Moment2", "(Tensor) Input second moment");
+  AddInput("Beta1Pow", "(Tensor) Input beta1 power accumulator");
+  AddInput("Beta2Pow", "(Tensor) Input beta2 power accumulator");
 
-class AdamOpMaker : public framework::OpProtoAndCheckerMaker {
- public:
-  void Make() override {
-    AddInput("Param", "(Tensor) Input parameter");
-    AddInput("Grad", "(Tensor) Input gradient");
-    AddInput("LearningRate", "(Tensor) Learning rate");
-    AddInput("Moment1", "(Tensor) Input first moment");
-    AddInput("Moment2", "(Tensor) Input second moment");
-    AddInput("Beta1Pow", "(Tensor) Input beta1 power accumulator");
-    AddInput("Beta2Pow", "(Tensor) Input beta2 power accumulator");
+  AddInput("Beta1Tensor",
+           "(Tensor<float32>, optional) If provided, Adam will use this "
+           "as beta1, this has a higher priority than attr(beta1), the "
+           "shape of this tensor MUST BE [1].")
+      .AsDispensable();
+  AddInput("Beta2Tensor",
+           "(Tensor<float32>, optional) If provided, Adam will use this "
+           "as beta2, this has a higher priority than attr(beta2), the "
+           "shape of this tensor MUST BE [1].")
+      .AsDispensable();
+  AddInput("EpsilonTensor",
+           "(Tensor<float32>, optional) If provided, Adam will use this "
+           "as epsilon, this has a higher priority than attr(epsilon), the "
+           "shape of this tensor MUST BE [1].")
+      .AsDispensable();
+  AddInput("MasterParam", "FP32 master weight for AMP.").AsDispensable();
 
-    AddInput("Beta1Tensor",
-             "(Tensor<float32>, optional) If provided, Adam will use this "
-             "as beta1, this has a higher priority than attr(beta1), the "
-             "shape of this tensor MUST BE [1].")
-        .AsDispensable();
-    AddInput("Beta2Tensor",
-             "(Tensor<float32>, optional) If provided, Adam will use this "
-             "as beta2, this has a higher priority than attr(beta2), the "
-             "shape of this tensor MUST BE [1].")
-        .AsDispensable();
-    AddInput("EpsilonTensor",
-             "(Tensor<float32>, optional) If provided, Adam will use this "
-             "as epsilon, this has a higher priority than attr(epsilon), the "
-             "shape of this tensor MUST BE [1].")
-        .AsDispensable();
-    AddInput("MasterParam", "FP32 master weight for AMP.").AsDispensable();
+  AddOutput("ParamOut", "(Tensor) Output parameter");
+  AddOutput("Moment1Out", "(Tensor) Output first moment");
+  AddOutput("Moment2Out", "(Tensor) Output second moment");
+  AddOutput("Beta1PowOut", "(Tensor) Output beta1 power accumulator");
+  AddOutput("Beta2PowOut", "(Tensor) Output beta2 power accumulator");
+  AddOutput("MasterParamOut",
+            "The updated FP32 master weight for AMP. "
+            "It shared memory with Input(MasterParam).")
+      .AsDispensable();
 
-    AddOutput("ParamOut", "(Tensor) Output parameter");
-    AddOutput("Moment1Out", "(Tensor) Output first moment");
-    AddOutput("Moment2Out", "(Tensor) Output second moment");
-    AddOutput("Beta1PowOut", "(Tensor) Output beta1 power accumulator");
-    AddOutput("Beta2PowOut", "(Tensor) Output beta2 power accumulator");
-    AddOutput("MasterParamOut",
-              "The updated FP32 master weight for AMP. "
-              "It shared memory with Input(MasterParam).")
-        .AsDispensable();
-
-    AddAttr<float>("beta1",
-                   "(float, default 0.9) "
-                   "Exponential decay rate for the "
-                   "first moment estimates.")
-        .SetDefault(0.9f);
-    AddAttr<float>("beta2",
-                   "(float, default 0.999) "
-                   "exponential decay rate for the "
-                   "second moment estimates.")
-        .SetDefault(0.999f);
-    AddAttr<float>("epsilon",
-                   "(float, default 1.0e-8) "
-                   "Constant for numerical stability")
-        .SetDefault(1.0e-8f);
-    AddAttr<bool>(
-        "lazy_mode",
-        "(bool, default false) "
-        "only update the parameter that has gradient in sparse update")
-        .SetDefault(false);
-    AddAttr<int64_t>("min_row_size_to_use_multithread",
-                     "(int64_t, default 0) "
-                     "when not zero, if param row size is larger then "
-                     "min_row_size_to_use_multithread and "
-                     "inner_op_parallelism is larger then 0, sparse update "
-                     "will run in multithread mode")
-        .SetDefault(1000);
-    AddAttr<bool>("multi_precision",
-                  "(bool, default false) "
-                  "Whether to use multi-precision during weight updating.")
-        .SetDefault(false);
-    // TODO(zhiqiu): We could set Beta1PowOut and Beta2PowOut
-    // as dispensable since they are not used when use_global_beta_pow is true.
-    AddAttr<bool>("use_global_beta_pow",
-                  "(bool, default false) "
-                  "Whether to use global beta_pow for whole model instead of "
-                  "creating beta_pow for each parameter.")
-        .SetDefault(false);
-
-    AddComment(R"DOC(
+  AddAttr<float>("beta1",
+                 "(float, default 0.9) "
+                 "Exponential decay rate for the "
+                 "first moment estimates.")
+      .SetDefault(0.9f);
+  AddAttr<float>("beta2",
+                 "(float, default 0.999) "
+                 "exponential decay rate for the "
+                 "second moment estimates.")
+      .SetDefault(0.999f);
+  AddAttr<float>("epsilon",
+                 "(float, default 1.0e-8) "
+                 "Constant for numerical stability")
+      .SetDefault(1.0e-8f);
+  AddAttr<bool>("lazy_mode",
+                "(bool, default false) "
+                "only update the parameter that has gradient in sparse update")
+      .SetDefault(false);
+  AddAttr<int64_t>("min_row_size_to_use_multithread",
+                   "(int64_t, default 0) "
+                   "when not zero, if param row size is larger then "
+                   "min_row_size_to_use_multithread and "
+                   "inner_op_parallelism is larger then 0, sparse update "
+                   "will run in multithread mode")
+      .SetDefault(1000);
+  AddAttr<bool>("multi_precision",
+                "(bool, default false) "
+                "Whether to use multi-precision during weight updating.")
+      .SetDefault(false);
+  // TODO(zhiqiu): We could set Beta1PowOut and Beta2PowOut
+  // as dispensable since they are not used when use_global_beta_pow is true.
+  AddAttr<bool>("use_global_beta_pow",
+                "(bool, default false) "
+                "Whether to use global beta_pow for whole model instead of "
+                "creating beta_pow for each parameter.")
+      .SetDefault(false);
+  AddComment(R"DOC(
 Adam Optimizer.
 
 This implements the Adam optimizer from Section 2 of the Adam
@@ -225,8 +220,7 @@ param\_out = param - learning\_rate * \frac{moment\_1}{\sqrt{moment\_2} + \epsil
 $$
 
 )DOC");
-  }
-};
+}
 }  // namespace operators
 }  // namespace paddle
 
