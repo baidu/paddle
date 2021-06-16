@@ -1958,8 +1958,6 @@ function tar_fluid_lib() {
     ========================================
 EOF
     cd ${PADDLE_ROOT}/build
-    cp -r paddle_install_dir fluid
-    tar -czf fluid.tgz fluid
     cp -r paddle_inference_install_dir paddle_inference
     tar -czf paddle_inference.tgz paddle_inference
 }
@@ -1979,25 +1977,6 @@ EOF
     fluid_endTime_s=`date +%s`
     echo "test_fluid_lib Total Time: $[ $fluid_endTime_s - $fluid_startTime_s ]s"
     echo "ipipe_log_param_Test_Fluid_Lib_Total_Time: $[ $fluid_endTime_s - $fluid_startTime_s ]s" >> ${PADDLE_ROOT}/build/build_summary.txt     
-    ./clean.sh
-    if [[ "$EXIT_CODE" != "0" ]]; then
-        exit 8;
-    fi
-}
-
-function test_fluid_lib_train() {
-    cat <<EOF
-    ========================================
-    Testing fluid library for training ...
-    ========================================
-EOF
-    fluid_train_startTime_s=`date +%s`
-    cd ${PADDLE_ROOT}/paddle/fluid/train/demo
-    ./run.sh ${PADDLE_ROOT} ${WITH_MKL:-ON}
-    EXIT_CODE=$?
-    fluid_train_endTime_s=`date +%s`
-    echo "test_fluid_lib_train Total Time: $[ $fluid_train_endTime_s - $fluid_train_startTime_s ]s"
-    echo "ipipe_log_param_Test_Fluid_Lib_Train_Total_Time: $[ $fluid_train_endTime_s - $fluid_train_startTime_s ]s"
     ./clean.sh
     if [[ "$EXIT_CODE" != "0" ]]; then
         exit 8;
@@ -2225,11 +2204,6 @@ function main() {
         python ${PADDLE_ROOT}/tools/remove_grad_op_and_kernel.py
         gen_fluid_lib ${parallel_number}
         test_fluid_lib
-        #test_fluid_lib_train
-        ;;
-      test_train)
-        gen_fluid_lib ${parallel_number}
-        test_fluid_lib_train
         ;;
       assert_api_approvals)
         assert_api_spec_approvals

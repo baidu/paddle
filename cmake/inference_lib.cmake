@@ -215,73 +215,27 @@ copy(inference_lib_dist
       SRCS  ${src_dir}/inference/capi_exp/pd_*.h  ${paddle_inference_c_lib}
       DSTS  ${PADDLE_INFERENCE_C_INSTALL_DIR}/paddle/include ${PADDLE_INFERENCE_C_INSTALL_DIR}/paddle/lib)
 
-# fluid library for both train and inference
-set(fluid_lib_deps inference_lib_dist)
-add_custom_target(fluid_lib_dist ALL DEPENDS ${fluid_lib_deps})
-
 set(dst_dir "${PADDLE_INSTALL_DIR}/paddle/fluid")
 set(module "inference")
 if(WIN32)
-        copy(fluid_lib_dist
+        copy(inference_lib_dist
                 SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/api/paddle_*.h ${paddle_inference_lib}
                 DSTS ${dst_dir}/${module} ${dst_dir}/${module} ${dst_dir}/${module} ${dst_dir}/${module}
                 )
         else()
-        copy(fluid_lib_dist
+        copy(inference_lib_dist
                 SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/api/paddle_*.h ${paddle_inference_lib}
                 DSTS ${dst_dir}/${module} ${dst_dir}/${module} ${dst_dir}/${module} 
                 )
 endif()
 
-set(module "framework")
-set(framework_lib_deps framework_proto data_feed_proto trainer_desc_proto)
-add_dependencies(fluid_lib_dist ${framework_lib_deps})
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/details/*.h ${PADDLE_BINARY_DIR}/paddle/fluid/framework/trainer_desc.pb.h ${PADDLE_BINARY_DIR}/paddle/fluid/framework/framework.pb.h ${PADDLE_BINARY_DIR}/paddle/fluid/framework/data_feed.pb.h ${src_dir}/${module}/ir/memory_optimize_pass/*.h
-        ${src_dir}/${module}/ir/*.h ${src_dir}/${module}/fleet/*.h
-        DSTS ${dst_dir}/${module} ${dst_dir}/${module}/details ${dst_dir}/${module} ${dst_dir}/${module} ${dst_dir}/${module} ${dst_dir}/${module}/ir/memory_optimize_pass ${dst_dir}/${module}/ir ${dst_dir}/${module}/fleet)
-
-set(module "operators")
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/reader/blocking_queue.h
-        DSTS ${dst_dir}/${module}/reader/
-        )
-
-set(module "memory")
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/detail/*.h ${src_dir}/${module}/allocation/*.h
-        DSTS ${dst_dir}/${module} ${dst_dir}/${module}/detail ${dst_dir}/${module}/allocation
-        )
+set(dst_dir "${PADDLE_INSTALL_DIR}/paddle/fluid")
 
 set(module "platform")
 set(platform_lib_deps profiler_proto error_codes_proto)
 if(WITH_GPU)
   set(platform_lib_deps ${platform_lib_deps} external_error_proto)
 endif(WITH_GPU)
-
-add_dependencies(fluid_lib_dist ${platform_lib_deps})
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/dynload/*.h ${src_dir}/${module}/details/*.h ${PADDLE_BINARY_DIR}/paddle/fluid/platform/*.pb.h
-        DSTS ${dst_dir}/${module} ${dst_dir}/${module}/dynload ${dst_dir}/${module}/details ${dst_dir}/${module}
-        )
-
-set(module "string")
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/tinyformat/*.h
-        DSTS ${dst_dir}/${module} ${dst_dir}/${module}/tinyformat
-        )
-
-set(module "imperative")
-copy(fluid_lib_dist
-        SRCS ${src_dir}/${module}/*.h ${src_dir}/${module}/jit/*.h 
-        DSTS ${dst_dir}/${module} ${dst_dir}/${module}/jit
-        )
-
-set(module "pybind")
-copy(fluid_lib_dist
-        SRCS ${CMAKE_CURRENT_BINARY_DIR}/paddle/fluid/${module}/pybind.h
-        DSTS ${dst_dir}/${module}
-        )
 
 set(dst_dir "${PADDLE_INSTALL_DIR}/third_party/eigen3")
 copy(inference_lib_dist
@@ -302,13 +256,6 @@ set(dst_dir "${PADDLE_INSTALL_DIR}/third_party/install/zlib")
 copy(inference_lib_dist
         SRCS ${ZLIB_INCLUDE_DIR} ${ZLIB_LIBRARIES}
         DSTS ${dst_dir} ${dst_dir}/lib)
-
-
-# CMakeCache Info
-copy(fluid_lib_dist
-        SRCS ${PADDLE_INFERENCE_INSTALL_DIR}/third_party ${CMAKE_CURRENT_BINARY_DIR}/CMakeCache.txt
-        DSTS ${PADDLE_INSTALL_DIR} ${PADDLE_INSTALL_DIR}
-        )
 
 # paddle fluid version
 function(version version_file)
