@@ -22,7 +22,7 @@ from paddle.distributed.fleet.meta_optimizers.meta_optimizer_base import MetaOpt
 
 
 class TestFleetMetaOptimizerBase(unittest.TestCase):
-    def net(main_prog, startup_prog):
+    def net(self, main_prog, startup_prog):
         with fluid.program_guard(main_prog, startup_prog):
             with fluid.unique_name.guard():
                 role = role_maker.PaddleCloudRoleMaker(is_collective=True)

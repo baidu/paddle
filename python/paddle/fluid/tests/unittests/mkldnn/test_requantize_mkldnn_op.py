@@ -100,7 +100,7 @@ class TestReQuantizeOp(OpTest):
     def set_shifts(self):
         pass
 
-    def set_input_data_type(OpTest):
+    def set_input_data_type(self, OpTest):
         pass
 
 

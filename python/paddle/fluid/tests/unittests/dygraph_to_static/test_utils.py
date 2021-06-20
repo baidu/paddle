@@ -42,7 +42,7 @@ def dyfunc_assign(input):
 
 
 class StaticCode():
-    def dyfunc_assign(input):
+    def dyfunc_assign(self, input):
         b = 1
         a = b
         e = a

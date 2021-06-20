@@ -245,7 +245,7 @@ class TestDynamicToStaticCode(unittest.TestCase):
     def set_answer_func(self):
         class StaticCode():
             @paddle.jit.not_to_static
-            def func_not_to_static(x):
+            def func_not_to_static(self, x):
                 res = func_sum(x)
                 return res
 
@@ -274,7 +274,7 @@ class TestDynamicToStaticCode2(TestDynamicToStaticCode):
 
     def set_answer_func(self):
         class StaticCode():
-            def func_convert_then_not_to_static(x):
+            def func_convert_then_not_to_static(self, x):
                 y = paddle.jit.dy2static.convert_call(func_not_to_static)(x)
                 return y
 
