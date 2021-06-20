@@ -156,6 +156,8 @@ see: http://www.paddlepaddle.org/documentation/docs/zh/1.6/user_guides/howto/tra
         type=str,
         default="127.0.0.1",
         help="Paddle cluster nodes ips, such as 192.168.0.16,192.168.0.17..")
+    collective_group.add_argument(
+        "--bind", type=str, default=None, help="bind core, default is None.")
 
     ps_group = parser.add_argument_group("Parameter-Server Parameters")
     # for parameter server
@@ -256,7 +258,8 @@ def launch_collective(args):
         training_script=args.training_script,
         training_script_args=args.training_script_args,
         log_dir=args.log_dir,
-        envs=global_envs)
+        envs=global_envs,
+        bind=args.bind)
 
     for idx, proc in enumerate(procs):
         print("launch proc_id:{} idx:{}".format(proc.proc.pid, idx))

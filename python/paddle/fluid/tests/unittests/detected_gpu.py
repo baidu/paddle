@@ -17,7 +17,8 @@ import sys
 import paddle.fluid as fluid
 
 print("compile with cuda:", fluid.core.is_compiled_with_cuda())
-print("get_cuda_device_count:", fluid.core.get_cuda_device_count())
+if paddle.is_compiled_with_cuda():
+    print("get_cuda_device_count:", fluid.core.get_cuda_device_count())
 
 if fluid.core.is_compiled_with_cuda() and fluid.core.get_cuda_device_count(
 ) > 0:

@@ -20,6 +20,7 @@ export FLAGS_START_PORT=35789
 #local_ip=`ip route get 1 | awk '{print $NF;exit}'`
 file_0="fleet_nproc_0.check_0.log"
 
+############ test nproc = 1 ################
 function test_nproc_0(){
     gpus=$1
     rm -f ${file_0}
@@ -56,8 +57,11 @@ if python detected_xpu.py ; then
     export XPU_VISIBLE_DEVICES=0,1
     test_nproc_0 "0,1"
 fi
+##############################
 
-function test_nproc_1_gpu(){
+
+############ test nproc = 2 ################
+function test_nproc_1(){
     file_0="fleet_nproc_1.check_0.log"
     file_1="fleet_nproc_1.check_1.log"
     rm -f ${file_0} ${file_1}
@@ -86,7 +90,14 @@ function test_nproc_1_gpu(){
 if python detected_gpu.py ; then
     echo "begin ut 4:"
     export CUDA_VISIBLE_DEVICES=0,1
-    test_nproc_1_gpu
+    test_nproc_1
+fi
+
+# unittest5: nproc_per_node=2, each with 1 gpus
+if python detected_xpu.py ; then
+    echo "begin ut 5:"
+    export XPU_VISIBLE_DEVICES=0,1
+    test_nproc_1
 fi
 
 function test_nproc_1_cpu(){
@@ -114,21 +125,28 @@ function test_nproc_1_cpu(){
     fi
 }
 
-# unittest5: nproc_per_node=2, cpu
+# unittest6: nproc_per_node=2, cpu
 if ! python detected_gpu.py ; then
-    echo "begin ut 5:"
+    echo "begin ut 6:"
     export CUDA_VISIBLE_DEVICES=""
     test_nproc_1_cpu
 fi
+##############################
 
-
-function test_nproc_1_xpu(){
+############ test bind ################
+function test_bind(){
     file_0="fleet_nproc_1.check_0.log"
     file_1="fleet_nproc_1.check_1.log"
     rm -f ${file_0} ${file_1}
 
-    distributed_args="--log_dir=testlog --nproc_per_node=2"
-    python -m paddle.distributed.launch ${distributed_args} nproc_process.py  fleet_nproc_1
+    distributed_args="--log_dir=testlog --nproc_per_node=2 --bind core"
+
+    if [[ ${WITH_COVERAGE} == "ON" ]]; then
+        PYTHON_EXEC="python -u -m coverage run --branch -p "
+    else
+        PYTHON_EXEC="python -u "
+    fi
+    ${PYTHON_EXEC} -m paddle.distributed.launch ${distributed_args} nproc_process.py  fleet_nproc_1
 
     str0="selected_devices:0 worker_endpoints:127.0.0.1:35789,127.0.0.1:35790 trainers_num:2 current_endpoint:127.0.0.1:35789 trainer_id:0"
     if grep -q "$str0" "$file_0"; then
@@ -147,9 +165,17 @@ function test_nproc_1_xpu(){
     fi
 }
 
-# unittest6: nproc_per_node=2, each with 1 gpus
-if python detected_xpu.py ; then
-    echo "begin ut 6:"
-    export XPU_VISIBLE_DEVICES=0,1
-    test_nproc_1_xpu
+# unittest7: nproc_per_node=2, bind
+if python detected_gpu.py ; then
+    echo
+    echo "begin ut 7:"
+    export CUDA_VISIBLE_DEVICES="0,1"
+    test_bind
+fi
+
+# unittest8: nproc_per_node=2, bind
+if ! python detected_gpu.py ; then
+    echo "begin ut 8:"
+    export CUDA_VISIBLE_DEVICES=""
+    test_bind
 fi

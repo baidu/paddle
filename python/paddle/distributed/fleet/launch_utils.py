@@ -251,6 +251,41 @@ class Pod(object):
         return r
 
 
+def get_cpu_info():
+    sockets = 0
+    cores_per_socket = 0
+    cpus = 0
+
+    with open('/proc/cpuinfo') as f:
+        for ls in [line.split(':') for line in f.readlines()]:
+            key = ls[0].strip()
+            if key == 'physical id':
+                sockets = max(sockets, int(ls[1].strip()) + 1)
+            elif key == 'cpu cores':
+                cores_per_socket = int(ls[1].strip())
+            elif key == 'processor':
+                cpus = max(cpus, int(ls[1].strip()) + 1)
+
+    # get numa
+    # with open('/sys/devices/system/node/online') as f:
+    #     numa = f.readlines()[0].split('-')[1]
+
+    physical_cores = sockets * cores_per_socket
+    assert cpus % physical_cores == 0, \
+        'logical_cores must be divisible by physical_cores, ' \
+        'but received cpus={}, physical_cores={}'.format(cpus, physical_cores)
+    hyper_threading = int(cpus / physical_cores)
+
+    results = {
+        'cpus': cpus,
+        'physical_cores': physical_cores,
+        'sockets': sockets,
+        'cores_per_socket': cores_per_socket,
+        'hyper_threading': hyper_threading,
+    }
+    return results
+
+
 def get_logger(log_level=20, name="root"):
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
@@ -454,7 +489,8 @@ def start_local_trainers(cluster,
                          training_script,
                          training_script_args,
                          log_dir=None,
-                         envs=None):
+                         envs=None,
+                         bind=None):
 
     if envs is None:
         current_env = copy.copy(os.environ.copy())
@@ -471,6 +507,11 @@ def start_local_trainers(cluster,
     ids = cluster.world_device_ids()
     res = [':'.join(ele) for ele in ids]
     procs = []
+    if bind is not None:
+        cpu_info = get_cpu_info()
+        num_gpus = len(pod.trainers)
+        cores_per_gpu = int(cpu_info['physical_cores'] / num_gpus)
+
     for idx, t in enumerate(pod.trainers):
         proc_env = {
             "PADDLE_TRAINER_ID": "%d" % t.rank,
@@ -502,7 +543,16 @@ def start_local_trainers(cluster,
 
         current_env.update(proc_env)
 
-        cmd = [sys.executable, "-u", training_script] + training_script_args
+        cmd = []
+
+        if bind is not None:
+            numactl_args = '--physcpubind={}-{}'.format(
+                idx * cores_per_gpu, (idx + 1) * cores_per_gpu - 1)
+            cmd += ['numactl', numactl_args]
+            logger.info('local_rank={} bind with physical_core={}-{}'.format(
+                idx, idx * cores_per_gpu, (idx + 1) * cores_per_gpu - 1))
+
+        cmd += [sys.executable, "-u", training_script] + training_script_args
 
         logger.debug("start trainer proc{}  env:{}".format(cmd, current_env))
 

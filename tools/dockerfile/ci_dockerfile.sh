@@ -38,7 +38,7 @@ function make_ubuntu_dockerfile(){
     ENV PATH=/usr/local/gcc-8.2/bin:\$PATH #g" ${dockerfile_name}
   sed -i "s#bash /build_scripts/install_nccl2.sh#wget -q --no-proxy https://nccl2-deb.cdn.bcebos.com/nccl-repo-ubuntu1604-2.7.8-ga-cuda10.1_1-1_amd64.deb \\
     RUN dpkg -i nccl-repo-ubuntu1604-2.7.8-ga-cuda10.1_1-1_amd64.deb \\
-    RUN apt update \&\& apt remove -y libnccl* --allow-change-held-packages \&\&  apt-get install -y libnccl2=2.7.8-1+cuda10.1 libnccl-dev=2.7.8-1+cuda10.1 pigz --allow-change-held-packages #g" ${dockerfile_name}
+    RUN apt update \&\& apt remove -y libnccl* --allow-change-held-packages \&\&  apt-get install -y libnccl2=2.7.8-1+cuda10.1 libnccl-dev=2.7.8-1+cuda10.1 pigz numactl --allow-change-held-packages #g" ${dockerfile_name}
 }
 
 
@@ -47,7 +47,7 @@ function make_centos_dockerfile(){
   sed "s/<baseimg>/11.0-cudnn8-devel-centos7/g" Dockerfile.centos >${dockerfile_name}
   sed -i "s#COPY build_scripts /build_scripts#COPY tools/dockerfile/build_scripts  ./build_scripts#g" ${dockerfile_name} 
   dockerfile_line=$(wc -l ${dockerfile_name}|awk '{print $1}')
-  sed -i "${dockerfile_line}i RUN yum install -y pigz graphviz" ${dockerfile_name}
+  sed -i "${dockerfile_line}i RUN yum install -y pigz graphviz numactl" ${dockerfile_name}
   sed -i "${dockerfile_line}i RUN rm -f /usr/bin/cc && ln -s /usr/local/gcc-5.4/bin/gcc /usr/bin/cc" ${dockerfile_name}
   sed -i "${dockerfile_line}i RUN rm -f /usr/bin/g++ && ln -s /usr/local/gcc-5.4/bin/g++ /usr/bin/g++" ${dockerfile_name}
   sed -i "${dockerfile_line}i RUN rm -f /usr/bin/c++ && ln -s /usr/local/gcc-5.4/bin/c++ /usr/bin/c++" ${dockerfile_name}
