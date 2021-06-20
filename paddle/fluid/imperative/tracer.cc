@@ -151,11 +151,16 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
     }
   }
   auto op = framework::OpRegistry::CreateOp(type, {}, {}, {}, false);
+  
+  
   const auto& op_info = op->Info();
   auto* attr_checker = op_info.Checker();
+  
   if (attr_checker) {
     attr_checker->Check(&attrs, true);
   }
+  
+  
 
   NameVarBaseMap new_ins = ins;
   if (enable_autocast_) {

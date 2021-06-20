@@ -1032,4 +1032,4 @@ void ThrowExceptionToPython(std::exception_ptr p) {
 }  // namespace paddle
 
 // This include must be the last line
-#include "paddle/fluid/pybind/op_function_impl.h"
+#include "paddle/fluid/pybind/op_function_impl_new.h"

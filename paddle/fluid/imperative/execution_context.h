@@ -35,11 +35,13 @@ class DygraphExecutionContext : public framework::ExecutionContext {
                           const framework::RuntimeContext& ctx,
                           const NameVarMap<VarType>& var_base_map_in,
                           const NameVarMap<VarType>& var_base_map_out,
-                          const framework::AttributeMap& attrs)
+                          const framework::AttributeMap& attrs,
+                          const framework::AttributeMap& default_attrs)
       : ExecutionContext(op, scope, device_context, ctx),
         var_base_map_in_(var_base_map_in),
         var_base_map_out_(var_base_map_out),
-        attrs_(attrs) {}
+        attrs_(attrs),
+        default_attrs_(default_attrs){}
 
   std::string InputName(const std::string& name) const override {
     auto it = var_base_map_in_.find(name);
@@ -92,16 +94,22 @@ class DygraphExecutionContext : public framework::ExecutionContext {
   }
 
   bool HasAttr(const std::string& name) const override {
-    return attrs_.count(name) != 0;
+    return attrs_.count(name) != 0 || default_attrs_.count( name );
   }
 
   const framework::AttributeMap& Attrs() const override { return attrs_; }
 
   const framework::Attribute& GetAttr(const std::string& name) const override {
     auto it = attrs_.find(name);
-
+    
+    bool find = ( it != attrs_.end() );
+    if( it == attrs_.end() )
+    {
+        it = default_attrs_.find( name );
+        find = (  it != default_attrs_.end() );
+    }
     PADDLE_ENFORCE_NE(
-        it, attrs_.end(),
+        find, false,
         platform::errors::NotFound("can not find [%s] in attrs", name));
 
     return it->second;
@@ -192,6 +200,7 @@ class DygraphExecutionContext : public framework::ExecutionContext {
   const NameVarMap<VarType>& var_base_map_in_;
   const NameVarMap<VarType>& var_base_map_out_;
   const framework::AttributeMap& attrs_;
+  const framework::AttributeMap& default_attrs_;
 };
 
 }  // namespace imperative

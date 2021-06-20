@@ -107,10 +107,11 @@ PreparedOp PrepareImpl(const NameVarMap<VarType>& ins,
   }
 #endif
 
+  //auto *attr_checker = op_->Info().Checker();
   // 1. get expected kernel key
   auto expected_kernel_key =
       op.GetExpectedKernelType(DygraphExecutionContext<VarType>(
-          op, framework::Scope(), *dev_ctx, ctx, ins, outs, attrs));
+          op, framework::Scope(), *dev_ctx, ctx, ins, outs, attrs, {} )) ;
   VLOG(3) << "expected_kernel_key:" << expected_kernel_key;
 
   // 2. check if op[type] has kernel registered.
@@ -175,8 +176,10 @@ static void PreparedOpRunImpl(
   static_cast<const framework::OperatorWithKernel&>(op).InferShape(
       &infer_shape_ctx);
 
+  auto *attr_checker = op.Info().Checker();
   func(DygraphExecutionContext<VarType>(op, scope, *dev_ctx, ctx, ins, outs,
-                                        attrs));
+                                        attrs, 
+                                        attr_checker->default_attr_map() ));
 
   if (FLAGS_check_nan_inf) {
     framework::details::CheckOpHasNanOrInfInDygraph<VarType>(

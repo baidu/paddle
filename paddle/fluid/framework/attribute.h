@@ -208,7 +208,8 @@ Attribute GetAttrValue(const proto::OpDesc::Attr& attr_desc);
 
 class AttrReader {
  public:
-  explicit AttrReader(const AttributeMap& attrs) : attrs_(attrs) {}
+  explicit AttrReader(const AttributeMap& attrs, const AttributeMap& default_attrs = {} ) 
+      : attrs_(attrs), default_attrs_(default_attrs) {}
 
   template <typename T>
   inline const T& Get(const std::string& name) const {
@@ -224,6 +225,7 @@ class AttrReader {
 
  private:
   const AttributeMap& attrs_;
+  const AttributeMap& default_attrs_;
 };
 
 // check whether a value(attribute) fit a certain limit
@@ -406,12 +408,22 @@ class OpAttrChecker {
     return default_values_map;
   }
 
+  void InitDefaultMap() {
+    for (const auto& checker : attr_checkers_) {
+      checker(&default_values_map_, true);
+    }
+  }
+
+  const AttributeMap& default_attr_map() const { return default_values_map_; }
+
   void RecordExplicitCheckerNum() {
     explicit_checker_num_ = attr_checkers_.size();
   }
 
  private:
   std::vector<AttrChecker> attr_checkers_;
+
+  AttributeMap default_values_map_;
 
   // in order to improve the efficiency of dynamic graph mode,
   // we divede the attribute into explicit type and implicit type.

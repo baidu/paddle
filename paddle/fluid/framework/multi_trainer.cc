@@ -162,6 +162,7 @@ Scope* MultiTrainer::GetWorkerScope(int thread_id) {
 
 void MultiTrainer::Run() {
   VLOG(3) << "Going to run";
+  LOG(ERROR) << "multi run " << thread_num_ << "\t" << debug_;
   for (int thidx = 0; thidx < thread_num_; ++thidx) {
     if (!debug_) {
       threads_.push_back(

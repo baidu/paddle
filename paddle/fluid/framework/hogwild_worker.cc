@@ -216,7 +216,9 @@ void HogwildWorker::TrainFiles() {
   // how to accumulate fetched values here
   device_reader_->Start();
   int cur_batch;
+  int i = 0;
   while ((cur_batch = device_reader_->Next()) > 0) {
+    i++;
     for (auto &op : ops_) {
       bool need_skip = false;
       for (auto t = 0u; t < skip_ops_.size(); ++t) {
