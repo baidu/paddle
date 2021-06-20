@@ -95,11 +95,13 @@ endif()
 
 if(WITH_PYTHON)
   # generate op pybind functions automatically for dygraph.
+  set(OP_FUNCTION_GENERETOR_DEPS pybind proto_desc executor layer tracer engine imperative_profiler imperative_flag)
+
   if (WITH_ASCEND_CL)
-    set(OP_FUNCTION_GENERETOR_DEPS pybind proto_desc executor layer tracer engine imperative_profiler imperative_flag ascend_wrapper)
-  else()
-    set(OP_FUNCTION_GENERETOR_DEPS pybind proto_desc executor layer tracer engine imperative_profiler imperative_flag)
+    list(APPEND OP_FUNCTION_GENERETOR_DEPS inf_eccl)
+    list(APPEND OP_FUNCTION_GENERETOR_DEPS ascend_wrapper)
   endif()
+
   list(APPEND OP_FUNCTION_GENERETOR_DEPS ${GLOB_OP_LIB})
   list(APPEND OP_FUNCTION_GENERETOR_DEPS ${GLOB_OPERATOR_DEPS})
 

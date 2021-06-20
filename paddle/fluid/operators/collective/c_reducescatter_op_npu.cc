@@ -51,7 +51,7 @@ class CReduceScatterOpAscendKernel : public framework::OpKernel<T> {
 
     void* inputPtr = reinterpret_cast<void*>(const_cast<T*>(in->data<T>()));
     void* outputPtr = reinterpret_cast<void*>(out->data<T>());
-    HcclDataType dtype = platform::ToHCCLDataType(in->type());
+    EcclDataType dtype = platform::ToHCCLDataType(in->type());
 
     aclrtStream stream = nullptr;
     if (ctx.Attr<bool>("use_calc_stream")) {
@@ -62,11 +62,11 @@ class CReduceScatterOpAscendKernel : public framework::OpKernel<T> {
     }
     VLOG(3) << "begin hccl reduce scatter, parameter is: "
             << "recv_numel: " << recv_numel << "dtype: " << dtype
-            << "hccl_red_type: " << HCCL_REDUCE_SUM << ", group is: " << group;
+            << "hccl_red_type: " << SUM << ", group is: " << group;
 
-    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclReduceScatter(
-        inputPtr, outputPtr, recv_numel, dtype, HCCL_REDUCE_SUM, comm->comm(),
-        reinterpret_cast<void*>(stream)));
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::eccl_reduce_scatter(
+        inputPtr, outputPtr, recv_numel, dtype, SUM, comm->comm().c_str(),
+        reinterpret_cast<void*>(stream), AUTO));
 #else
     PADDLE_THROW(platform::errors::PreconditionNotMet(
         "PaddlePaddle should compile with NPU."));

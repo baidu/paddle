@@ -31,7 +31,7 @@ class CAllGatherOpASCENDKernel : public framework::OpKernel<T> {
 #if defined(PADDLE_WITH_ASCEND_CL)
     auto in = ctx.Input<framework::Tensor>("X");
     auto out = ctx.Output<framework::Tensor>("Out");
-    HcclDataType dtype = platform::ToHCCLDataType(in->type());
+    EcclDataType dtype = platform::ToHCCLDataType(in->type());
 
     int ring_id = ctx.Attr<int>("ring_id");
     std::string group =
@@ -60,9 +60,9 @@ class CAllGatherOpASCENDKernel : public framework::OpKernel<T> {
             << ", group is " << group << ", ring_id is " << ring_id
             << ", nranks is " << nranks;
 
-    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclAllGather(
-        send_buff, recv_buff, send_numel, dtype, comm->comm(),
-        reinterpret_cast<void *>(stream)));
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::eccl_all_gather(
+        send_buff, recv_buff, send_numel, dtype, comm->comm().c_str(),
+        reinterpret_cast<void *>(stream), AUTO));
 
 #else
     PADDLE_THROW(platform::errors::PreconditionNotMet(

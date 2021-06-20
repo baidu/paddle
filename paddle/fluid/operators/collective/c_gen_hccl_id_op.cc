@@ -22,10 +22,7 @@ limitations under the License. */
 #include "paddle/fluid/platform/device_context.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/place.h"
-
-#ifdef PADDLE_WITH_ASCEND_CL
-#include "paddle/fluid/operators/collective/gen_hccl_id_op_helper.h"
-#endif
+#include "paddle/fluid/platform/dynload/hccl.h"
 
 namespace paddle {
 namespace operators {
@@ -43,21 +40,20 @@ class CGenHCCLIdOp : public framework::OperatorBase {
   void RunImpl(const framework::Scope& scope,
                const platform::Place& dev_place) const override {
     int rank = Attr<int>("rank");
-    framework::Scope& local_scope = scope.NewScope();
+    int rank_count = Attr<int>("rank_count");
+    std::string endpoint = Attr<std::string>("endpoint");
+    std::string group_name = Attr<std::string>("group_name");
+    int split_index = Attr<int>("split_index");
 
-    std::function<std::string(size_t)> func = [&](size_t i) -> std::string {
-      return Output("Out");
-    };
+    VLOG(2) << "rank = " << rank
+            << ", endpoint = " << endpoint
+            << ", rank_count = " << rank_count
+            << ", group_name = " << group_name
+            << ", split_index = " << split_index;
 
-    if (rank == 0) {
-      std::vector<std::string> endpoint_list =
-          Attr<std::vector<std::string>>("other_endpoints");
-      SendBroadCastHCCLID(endpoint_list, 1, func, local_scope);
-    } else {
-      std::string endpoint = Attr<std::string>("endpoint");
-      RecvBroadCastHCCLID(endpoint, 1, func, local_scope);
-    }
-    scope.DeleteScope(&local_scope);
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::eccl_gen_unique_id(rank,
+                            endpoint.c_str(), rank_count,
+                            split_index, group_name.c_str()));
   }
 };
 
@@ -81,7 +77,7 @@ class CGenHCCLIdOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
     VLOG(3) << "ele";
-    AddOutput("Out", "Raw variable contains a HCCL UniqueId instaces.");
+    // AddOutput("Out", "Raw variable contains a HCCL UniqueId instaces.");
     AddComment(R"DOC(
 CGenHCCLId operator
 
@@ -90,15 +86,25 @@ For trainer 1~n: start a gRPC server to get the UniqueId, once got, stop the ser
 )DOC");
     AddAttr<std::string>("endpoint",
                          "(string), e.g. 127.0.0.1:6175 "
-                         "current listen endpoint");
-    AddAttr<std::vector<std::string>>(
-        "other_endpoints",
-        "['trainer1_ip:port', 'trainer2_ip:port', ...] "
-        "list of other trainer endpoints")
-        .SetDefault({});
+                         "Common store for booststrap, usually the ip of rank0 in each group");
+
+    AddAttr<std::string>("group_name",
+                         "(string), e.g. world_group  "
+                         "The group id used for ECCL, which may map to ringid!");
+
     AddAttr<int>("rank",
                  "(int default 0) "
                  "The rank of the trainer in distributed training.")
+        .SetDefault(0);
+
+    AddAttr<int>("rank_count",
+                 "(int default 0) "
+                 "The rank number in distributed training.")
+        .SetDefault(0);
+
+    AddAttr<int>("split_index",
+                 "(int default 0) "
+                 "The position that split the pod.")
         .SetDefault(0);
   }
 };

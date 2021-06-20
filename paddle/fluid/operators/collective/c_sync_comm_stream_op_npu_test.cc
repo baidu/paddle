@@ -31,7 +31,7 @@ limitations under the License. */
 #include "paddle/fluid/string/printf.h"
 
 #include "paddle/fluid/operators/collective/c_broadcast_op.h"
-#include "paddle/fluid/operators/collective/gen_hccl_id_op_helper.h"
+#include "paddle/fluid/operators/collective/c_ascend_collective_test_help.h"
 
 #if defined(PADDLE_WITH_ASCEND_CL)
 #include "paddle/fluid/platform/collective_helper.h"
@@ -44,82 +44,9 @@ namespace m = paddle::operators::math;
 
 USE_OP(c_broadcast);
 USE_OP_DEVICE_KERNEL(c_sync_comm_stream, NPU);
-USE_NO_KERNEL_OP(c_gen_hccl_id);
-USE_NO_KERNEL_OP(c_comm_init_hccl);
 USE_OP_DEVICE_KERNEL(c_broadcast, NPU);
 
 DECLARE_string(selected_npus);
-
-template <typename T>
-void PrintDebugInfo(const std::string preStr, const std::vector<T>& data) {
-  std::string debugstring = "";
-  for (auto ele : data) {
-    debugstring += std::to_string(ele) + std::string(",");
-  }
-  VLOG(2) << preStr << ":" << std::endl << debugstring;
-}
-
-void PrepareUniqueId(f::Scope* scope, const p::DeviceContext& ctx,
-                     HcclRootInfo* hccl_id) {
-  int rank_id = atoi(getenv("RANK_ID"));
-  int device_id = atoi(getenv("DEVICE_ID"));
-
-  VLOG(2) << "rank_id = " << rank_id << "; device_id = " << device_id
-          << "; rank_id = " << rank_id
-          << "; RANK_TABLE_FILE = " << atoi(getenv("DEVICE_ID"));
-
-  std::vector<int> rank_ids{0, 1};
-  f::AttributeMap gen_hccl_id;
-
-  std::vector<std::string> endpointList = {"127.0.0.1:6175", "127.0.0.1:6177"};
-  gen_hccl_id["rank"] = rank_id;
-  gen_hccl_id["endpoint"] = endpointList[rank_id];
-  std::vector<std::string> other_endpoints = {
-      endpointList[rank_id == 0 ? 1 : 0]};
-  gen_hccl_id["other_endpoints"] = other_endpoints;
-
-  auto out = scope->Var("Out");
-  auto id = out->GetMutable<HcclRootInfo>();
-
-  VLOG(3) << "break";
-
-  auto comm_init_op = f::OpRegistry::CreateOp("c_gen_hccl_id", {},
-                                              {{"Out", {"Out"}}}, gen_hccl_id);
-  VLOG(3) << "break";
-  auto place = ctx.GetPlace();
-  comm_init_op->Run(*scope, place);
-  ctx.Wait();
-
-  memcpy(hccl_id, id, 1024);
-}
-
-void Prepare(f::Scope* scope, const p::DeviceContext& ctx,
-             HcclRootInfo* hccl_id) {
-  auto x = scope->Var("X");
-  auto id = x->GetMutable<HcclRootInfo>();
-
-  memcpy(id, hccl_id, 1024);
-
-  int rank_id = atoi(getenv("RANK_ID"));
-  int device_id = atoi(getenv("DEVICE_ID"));
-
-  VLOG(2) << "rank_id = " << rank_id << "; device_id = " << device_id
-          << "; rank_id = " << rank_id
-          << "; RANK_TABLE_FILE = " << atoi(getenv("DEVICE_ID"));
-
-  // std::vector<int> rank_ids{0, 1};
-  f::AttributeMap comm_init_attrs;
-  comm_init_attrs["ring_id"] = 0;
-  comm_init_attrs["rank_ids"] = 2;
-  comm_init_attrs["rank"] = rank_id;
-  comm_init_attrs["device_id"] = device_id;
-  // comm_init_attrs["rank_ids"] = rank_ids;
-  auto comm_init_op = f::OpRegistry::CreateOp(
-      "c_comm_init_hccl", {{"X", {"X"}}}, {}, comm_init_attrs);
-  auto place = ctx.GetPlace();
-  comm_init_op->Run(*scope, place);
-  ctx.Wait();
-}
 
 void TestHCCLBroadcastOp(f::Scope* scope, const p::DeviceContext& ctx) {
   std::cout << "BEGIN TEST:" << __FUNCTION__ << std::endl;
@@ -179,12 +106,12 @@ void TestHCCLBroadcastOp(f::Scope* scope, const p::DeviceContext& ctx) {
 
 TEST(c_sync_comm_stream_op, NPU) {
   f::Scope scope;
-  HcclRootInfo hccl_id;
+   PaddleEcclCommGroupIdType group_name = "test_group_1";
 
   // only support one device, if more than one device, use first default
   p::NPUDeviceContext ctx(p::NPUPlace(atoi(FLAGS_selected_npus.c_str())));
 
-  PrepareUniqueId(&scope, ctx, &hccl_id);
-  Prepare(&scope, ctx, &hccl_id);
+  PrepareUniqueId(&scope, ctx, group_name);
+  Prepare(&scope, ctx, group_name);
   TestHCCLBroadcastOp(&scope, ctx);
 }

@@ -131,7 +131,7 @@ class CReduceOpASCENDKernel : public framework::OpKernel<T> {
     auto in = ctx.Input<framework::LoDTensor>("X");
     auto out = ctx.Output<framework::LoDTensor>("Out");
     auto place = ctx.GetPlace();
-    HcclDataType dtype = platform::ToHCCLDataType(in->type());
+    EcclDataType dtype = platform::ToHCCLDataType(in->type());
     int64_t numel = in->numel();
 
     void* sendbuff = reinterpret_cast<void*>(const_cast<T*>(in->data<T>()));
@@ -154,22 +154,22 @@ class CReduceOpASCENDKernel : public framework::OpKernel<T> {
 
     int rank_id = comm->rank();
 
-    HcclReduceOp hccl_red_type = HCCL_REDUCE_SUM;
+    EcclReductionOp hccl_red_type = SUM;
     switch (red_type) {
       case kRedSum:
-        hccl_red_type = HCCL_REDUCE_SUM;
+        hccl_red_type = SUM;
         break;
 
       case kRedMax:
-        hccl_red_type = HCCL_REDUCE_MAX;
+        hccl_red_type = MAX;
         break;
 
       case kRedMin:
-        hccl_red_type = HCCL_REDUCE_MIN;
+        hccl_red_type = MIN;
         break;
 
       case kRedProd:
-        hccl_red_type = HCCL_REDUCE_PROD;
+        hccl_red_type = PROD;
         break;
 
       default:
@@ -182,9 +182,9 @@ class CReduceOpASCENDKernel : public framework::OpKernel<T> {
             << "dtype: " << dtype << "hccl_red_type: " << hccl_red_type
             << ", group is: " << group;
 
-    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclAllReduce(
-        sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm(),
-        reinterpret_cast<void*>(stream)));
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::eccl_all_reduce(
+        sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm().c_str(),
+        reinterpret_cast<void*>(stream), AUTO));
 
     if (rank_id != root_id) {
       auto npu_place = BOOST_GET_CONST(platform::NPUPlace, place);

@@ -427,7 +427,7 @@ void* GetHCCLDsoHandle() {
   return GetDsoHandleFromSearchPath(FLAGS_rccl_dir, "librccl.so", true);
 
 #elif defined(PADDLE_WITH_ASCEND_CL)
-  return GetDsoHandleFromSearchPath(FLAGS_hccl_dir, "libhccl.so", true, {},
+  return GetDsoHandleFromSearchPath(FLAGS_hccl_dir, "libeccl.so", true, {},
                                     warning_msg);
 #else
   return GetDsoHandleFromSearchPath(FLAGS_nccl_dir, "libnccl.so", true, {},

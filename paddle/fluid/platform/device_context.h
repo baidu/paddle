@@ -75,6 +75,8 @@ struct GpuDevice;
 #ifdef PADDLE_WITH_ASCEND_CL
 #include "acl/acl.h"
 #include "paddle/fluid/platform/npu_info.h"
+#include "paddle/fluid/platform/dynload/eccl.h"
+#include "paddle/fluid/platform/dynload/eccl_types.h"
 #endif
 
 namespace paddle {
@@ -198,10 +200,10 @@ class NPUDeviceContext : public DeviceContext {
 
 #if defined(PADDLE_WITH_ASCEND_CL)
   /*! \brief  Return hccl communicators. */
-  HcclComm hccl_comm() const { return hccl_comm_; }
+  PaddleEcclCommGroupIdType hccl_comm() const { return hccl_comm_; }
 
   /*! \brief  Set hccl communicators. */
-  void set_hccl_comm(HcclComm comm) { hccl_comm_ = comm; }
+  void set_hccl_comm(PaddleEcclCommGroupIdType comm) { hccl_comm_ = comm; }
 #endif
 
   // template <typename Callback>
@@ -217,7 +219,7 @@ class NPUDeviceContext : public DeviceContext {
 
 #ifdef PADDLE_WITH_ASCEND_CL
   // HCCLContext_t hccl_context_;
-  HcclComm hccl_comm_{nullptr};
+  PaddleEcclCommGroupIdType hccl_comm_;
 #endif
 
   // Need to be the same with other DeviceContext,

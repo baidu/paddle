@@ -47,7 +47,8 @@ limitations under the License. */
 
 #ifdef PADDLE_WITH_ASCEND_CL
 #include "acl/acl.h"
-#include "hccl/hccl_types.h"
+#include "paddle/fluid/platform/dynload/eccl.h"
+#include "paddle/fluid/platform/dynload/eccl_types.h"
 #endif  // PADDLE_WITH_ASCEND_CL
 
 #include <fstream>
@@ -1172,7 +1173,7 @@ struct NPUStatusType {};
   }
 
 DEFINE_NPU_STATUS_TYPE(aclError, ACL_ERROR_NONE);
-DEFINE_NPU_STATUS_TYPE(HcclResult, HCCL_SUCCESS);
+DEFINE_NPU_STATUS_TYPE(EcclResult, SUCCESS);
 }  // namespace details
 
 inline std::string build_npu_error_msg(aclError stat) {
@@ -1181,7 +1182,7 @@ inline std::string build_npu_error_msg(aclError stat) {
   return sout.str();
 }
 
-inline std::string build_npu_error_msg(HcclResult stat) {
+inline std::string build_npu_error_msg(EcclResult stat) {
   std::ostringstream sout;
   sout << " HCCL error, the error code is : " << stat << ". ";
   return sout.str();

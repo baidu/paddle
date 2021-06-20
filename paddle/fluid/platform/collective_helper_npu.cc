@@ -35,11 +35,11 @@ class HCCLCommImpl : public HCCLComm {
   }
 
   ~HCCLCommImpl() {
-    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclCommDestroy(comm_));
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::eccl_destroy_comm_global(comm_.c_str()));
   }
 
-  void set_comm(HcclComm comm) { comm_ = comm; }
-  HcclComm comm() const override { return comm_; }
+  void set_comm(PaddleEcclCommGroupIdType comm) { comm_ = comm; }
+  PaddleEcclCommGroupIdType comm() const override { return comm_; }
 
   aclrtStream stream() const override { return dev_ctx_->stream(); }
 
@@ -52,15 +52,12 @@ class HCCLCommImpl : public HCCLComm {
   int ring_id_;
   int nranks_;
   int rank_;
-  HcclComm comm_;
+  PaddleEcclCommGroupIdType comm_;
   std::unique_ptr<NPUDeviceContext> dev_ctx_;
 };
 
-HCCLComm* HCCLCommContext::CreateHCCLComm(HcclRootInfo* hccl_id, int nranks,
+HCCLComm* HCCLCommContext::CreateHCCLComm(PaddleEcclCommGroupIdType group_name, int nranks,
                                           int rank, int dev_id, int ring_id) {
-  PADDLE_ENFORCE_NOT_NULL(hccl_id,
-                          platform::errors::InvalidArgument(
-                              "The hccl unique id should not be null."));
   PADDLE_ENFORCE_GT(
       nranks, 1,
       platform::errors::InvalidArgument(
@@ -78,17 +75,16 @@ HCCLComm* HCCLCommContext::CreateHCCLComm(HcclRootInfo* hccl_id, int nranks,
       platform::errors::InvalidArgument(
           "Expected dev_id >= 0. But received dev_id is %d.", dev_id));
 
-  HcclComm comm;
   PADDLE_ENFORCE_NPU_SUCCESS(aclrtSetDevice(dev_id));
-  VLOG(1) << "initialized comm: " << &comm << ", nranks: " << nranks
-          << ", hccl_id: " << hccl_id << ", rank: " << rank;
+  VLOG(1) << "initialized comm: " << group_name << ", nranks: " << nranks
+          << ", rank: " << rank;
   PADDLE_ENFORCE_NPU_SUCCESS(
-      platform::dynload::HcclCommInitRootInfo(nranks, hccl_id, rank, &comm));
+      platform::dynload::eccl_init_comm_global(nranks, rank, "CPU", dev_id, group_name.c_str()));
 
-  VLOG(1) << "initialized comm: " << &comm << ", nranks: " << nranks
-          << ", hccl_id: " << hccl_id << ", rank: " << rank;
+  VLOG(1) << "initialized comm: " << group_name << ", nranks: " << nranks
+          << ", rank: " << rank;
 
-  auto* comm_wrapper = AssignHCCLComm(comm, nranks, rank, dev_id, ring_id);
+  auto* comm_wrapper = AssignHCCLComm(group_name, nranks, rank, dev_id, ring_id);
 
   VLOG(1) << "hccl communicator of rank " << rank << " in ring " << ring_id
           << " has been created on device " << dev_id
@@ -101,7 +97,7 @@ HCCLComm* HCCLCommContext::CreateHCCLComm(HcclRootInfo* hccl_id, int nranks,
   return comm_wrapper;
 }
 
-HCCLComm* HCCLCommContext::AssignHCCLComm(HcclComm comm, int nranks, int rank,
+HCCLComm* HCCLCommContext::AssignHCCLComm(PaddleEcclCommGroupIdType group_name, int nranks, int rank,
                                           int dev_id, int ring_id) {
   std::unique_ptr<NPUDeviceContext> dev_ctx(
       new NPUDeviceContext(NPUPlace(dev_id)));
@@ -110,7 +106,7 @@ HCCLComm* HCCLCommContext::AssignHCCLComm(HcclComm comm, int nranks, int rank,
   c->set_ring_id(ring_id);
   c->set_nranks(nranks);
   c->set_rank(rank);
-  c->set_comm(comm);
+  c->set_comm(group_name);
   c->set_dev_ctx(std::move(dev_ctx));
 
   comm_map_mutex_.lock();
@@ -126,7 +122,7 @@ HCCLComm* HCCLCommContext::AssignHCCLComm(HcclComm comm, int nranks, int rank,
     auto* dev_ctx = static_cast<platform::NPUDeviceContext*>(
         platform::DeviceContextPool::Instance().Get(
             platform::NPUPlace(dev_id)));
-    dev_ctx->set_hccl_comm(comm);
+    dev_ctx->set_hccl_comm(group_name);
   }
 
   return comm_map_[ring_id][dev_id].get();

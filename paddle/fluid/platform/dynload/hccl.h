@@ -15,12 +15,13 @@ limitations under the License. */
 
 #ifdef PADDLE_WITH_ASCEND_CL
 
-#include <hccl/hccl.h>
-#include <hccl/hccl_types.h>
 #include <mutex>  // NOLINT
 
-#include "paddle/fluid/platform/dynload/dynamic_loader.h"
+#include "paddle/fluid/platform/dynload/eccl.h"
+#include "paddle/fluid/platform/dynload/eccl_types.h"
+
 #include "paddle/fluid/platform/port.h"
+#include "paddle/fluid/platform/dynload/dynamic_loader.h"
 
 #define HCOM_GROUP_PREFIX "HCOM_GROUP_"
 
@@ -45,15 +46,16 @@ extern void* hccl_dso_handle;
   };                                                                     \
   extern DynLoad__##__name __name
 
-#define HCCL_RAND_ROUTINE_EACH(__macro) \
-  __macro(HcclReduceScatter);           \
-  __macro(HcclCommDestroy);             \
-  __macro(HcclAllReduce);               \
-  __macro(HcclCommInitRootInfo);        \
-  __macro(HcclGetRootInfo);             \
-  __macro(HcclBroadcast);               \
-  __macro(HcclCommInitClusterInfo);     \
-  __macro(HcclAllGather);
+#define HCCL_RAND_ROUTINE_EACH(__macro)       \
+  __macro(eccl_gen_unique_id);                \
+  __macro(eccl_init_comm_global);             \
+  __macro(eccl_destroy_comm_global);          \
+  __macro(eccl_reduce_scatter);               \
+  __macro(eccl_all_reduce);                   \
+  __macro(eccl_broadcast);                    \
+  __macro(eccl_all_gather);                   \
+  __macro(eccl_reduce);                       \
+  __macro(eccl_sync_stream);
 
 HCCL_RAND_ROUTINE_EACH(DECLARE_DYNAMIC_LOAD_HCCL_WRAP)
 

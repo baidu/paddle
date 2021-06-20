@@ -158,7 +158,7 @@ class HCCLComm {
   virtual int nranks() const = 0;
   virtual int rank() const = 0;
   virtual int device_id() const = 0;
-  virtual HcclComm comm() const = 0;
+  virtual PaddleEcclCommGroupIdType comm() const = 0;
   virtual aclrtStream stream() const = 0;
   virtual NPUDeviceContext* dev_context() const = 0;
   virtual ~HCCLComm() = default;
@@ -172,11 +172,11 @@ class HCCLCommContext {
     return comm_ctx;
   }
 
-  HCCLComm* CreateHCCLComm(HcclRootInfo* hccl_id, int nranks, int rank,
+  HCCLComm* CreateHCCLComm(PaddleEcclCommGroupIdType hccl_id, int nranks, int rank,
                            int dev_id, int ring_id);
   // a latter comm with the same dev_id and the same ring_id
   // will override the former
-  HCCLComm* AssignHCCLComm(HcclComm comm, int nranks, int rank, int dev_id,
+  HCCLComm* AssignHCCLComm(PaddleEcclCommGroupIdType comm, int nranks, int rank, int dev_id,
                            int ring_id);
 
   // retrieve a communicator by the ring id in multiprocessing mode
@@ -217,7 +217,7 @@ class HCCLCommContext {
   // we may use group feature in the feature
   // HCCLCommContext() { InitHcomWorldGroup(); }
 
-  HcclComm comm_;
+  PaddleEcclCommGroupIdType comm_;
 
  public:
   ~HCCLCommContext() {}
