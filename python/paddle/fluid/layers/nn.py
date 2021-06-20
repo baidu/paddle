@@ -345,6 +345,12 @@ def fc(input,
 
         w = helper.create_parameter(
             attr=param_attr, shape=param_shape, dtype=dtype, is_bias=False)
+        if core.is_compiled_with_npu():
+            paddle.fluid.default_startup_program().global_block().append_op(
+                type="trans_data",
+                inputs={"X": w},
+                outputs={"Out": w},
+                attrs={"acl_format": 29})
         tmp = helper.create_variable_for_type_inference(dtype)
         helper.append_op(
             type="mul",
