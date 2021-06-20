@@ -46,16 +46,15 @@ def analysisFNDAFile(rootPath, test):
         if 'FNDA:' in message:
             message_list = message.split('\n')
             clazz_filename = message_list[0]
-            if not clazz_filename.endswith('.h'):  #filter .h's Analysis
-                for i in range(1, len(message_list) - 1):
-                    fn = message_list[i]
-                    matchObj = re.match(
-                        r'(.*)Maker(.*)|(.*)Touch(.*)Regist(.*)|(.*)Touch(.*)JitKernel(.*)|(.*)converterC2Ev(.*)',
-                        fn, re.I)
-                    if matchObj == None:
-                        os.system('echo %s >> %s' %
-                                  (clazz_filename, ut_map_file))
-                        break
+            #if not clazz_filename.endswith('.h'):  #filter .h's Analysis
+            for i in range(1, len(message_list) - 1):
+                fn = message_list[i]
+                matchObj = re.match(
+                    r'(.*)Maker(.*)|(.*)Touch(.*)Regist(.*)|(.*)Touch(.*)JitKernel(.*)|(.*)converterC2Ev(.*)',
+                    fn, re.I)
+                if matchObj == None:
+                    os.system('echo %s >> %s' % (clazz_filename, ut_map_file))
+                    break
     f.close()
 
 

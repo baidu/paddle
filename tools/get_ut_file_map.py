@@ -139,48 +139,53 @@ def ut_file_map_supplement(rootPath):
         'cd /pre_test && wget --no-proxy https://paddle-docker-tar.bj.bcebos.com/pre_test/ut_file_map.json --no-check-certificate'
     )
     ut_file_map_old = "/pre_test/ut_file_map.json"
-    ut_file_map_full = {}
     with open(ut_file_map_new, 'r') as load_f:
         load_dict_new = json.load(load_f)
     with open(ut_file_map_old, 'r') as f:
         load_dict_old = json.load(f)
 
-    for filename in load_dict_new:
-        ut_file_map_full[filename] = load_dict_new[filename]
-        if filename in load_dict_old:
-            for ut in load_dict_old[filename]:
-                if ut not in ut_file_map_full[filename]:
-                    ut_file_map_full[filename].append(ut)
+    all_uts_paddle = '%s/build/all_uts_paddle' % rootPath
+    with open(all_uts_paddle, 'r') as f:
+        all_uts_paddle_list = []
+        for ut in f.readlines():
+            all_uts_paddle_list.append(ut.strip())
+        f.close()
 
     for filename in load_dict_old:
         if filename not in load_dict_new:
-            ut_file_map_full[filename] = load_dict_old[filename]
+            if filename.endswith(('.h')):
+                load_dict_new[filename] = []
+            else:
+                load_dict_new[filename] = load_dict_old[filename]
 
     with open("/pre_test/ut_file_map.json", "w") as f:
-        json.dump(ut_file_map_full, f, indent=4)
-        print("ut_file_map_full success!!")
+        json.dump(load_dict_new, f, indent=4)
+        print("load_dict_new success!!")
 
-    all_uts_paddle = '%s/build/all_uts_paddle' % rootPath
-    with open(all_uts_paddle, 'r') as f:
-        all_uts_paddle_list = f.readlines()
-        f.close()
     os.system(
         'cd /pre_test && wget --no-proxy https://paddle-docker-tar.bj.bcebos.com/pre_test/prec_delta --no-check-certificate'
     )
     prec_delta_old = '/pre_test/prec_delta'
     prec_delta_new = "%s/build/prec_delta" % rootPath
     with open(prec_delta_old, 'r') as f:
-        prec_delta_old_list = f.readlines()
+        prec_delta_old_list = []
+        for ut in f.readlines():
+            prec_delta_old_list.append(ut.strip())
         f.close()
     with open(prec_delta_new, 'r') as f:
-        prec_delta_new_list = f.readlines()
+        prec_delta_new_list = []
+        for ut in f.readlines():
+            prec_delta_new_list.append(ut.strip())
         f.close()
     for ut in prec_delta_old_list:
-        if ut not in prec_delta_new_list and ut not in all_uts_paddle_list:
-            prec_delta_new_list.append(ut)
+        filename = '%s/build/ut_map/%s/coverage.info.tmp' % (rootPath, ut)
+        if ut in all_uts_paddle_list:
+            if not os.path.exists(filename) and ut not in prec_delta_new_list:
+                prec_delta_new_list.append(ut)
     prec_delta_file = open("/pre_test/prec_delta", 'w')
     for ut in prec_delta_new_list:
-        prec_delta_file.write(ut)
+        prec_delta_file.write(ut + '\n')
+    print("prec_delta_file success!!")
     prec_delta_file.close()
 
 
