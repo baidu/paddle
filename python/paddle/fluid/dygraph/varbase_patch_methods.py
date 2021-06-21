@@ -561,6 +561,15 @@ def monkey_patch_varbase():
             # 2. Call c++ func getitem_index_not_tensor to speedup.
             return self._getitem_index_not_tensor(item)
 
+    def __setstate__(self, state):
+        if isinstance(state, dict):
+            for k, v in state.items():
+                setattr(self, k, v)
+        else:
+            raise ValueError(
+                "Input of `VarBase.__setstate__` should be dict, but received {}.".
+                format(type(state)))
+
     for method_name, method in (
         ("__bool__", __bool__), ("__nonzero__", __nonzero__),
         ("_to_static_var", _to_static_var), ("set_value", set_value),
@@ -570,7 +579,8 @@ def monkey_patch_varbase():
         ("__str__", __str__), ("__repr__", __str__),
         ("__deepcopy__", __deepcopy__), ("__module__", "paddle"),
         ("__name__", "Tensor"), ("__array__", __array__),
-        ("__getitem__", __getitem__), ("item", item)):
+        ("__getitem__", __getitem__), ("item", item),
+        ('__setstate__', __setstate__)):
         setattr(core.VarBase, method_name, method)
 
     # NOTE(zhiqiu): pybind11 will set a default __str__ method of enum class.

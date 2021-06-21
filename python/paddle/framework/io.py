@@ -239,7 +239,18 @@ def _pickle_save(obj, f, protocol):
         data = self.numpy()
         name = self.name
         if name in list_params:
-            return self.__reduce__()
+            if type(self) == ParamBase:
+                return self.__reduce__()
+            elif type(self) == core.VarBase:
+
+                # VarBase's readable and writable property:name, stop_gradient, persistable
+                attrs = [
+                    'name',
+                    'stop_gradient',
+                    'persistable',
+                ]
+                _dict_ = {attr: getattr(self, attr) for attr in attrs}
+                return core.VarBase, (self.numpy(), ), _dict_
 
         return (tuple, ((name, data), ))
 
@@ -249,10 +260,10 @@ def _pickle_save(obj, f, protocol):
         return (eval, ('data', {'data': data}))
 
     def reduce_Layer(self):
-        is_param_or_layer = lambda v: isinstance(v, ParamBase) or isinstance(v, core.Layer)
+        is_param_or_layer = lambda v: isinstance(v, core.VarBase) or isinstance(v, core.Layer)
 
         def collect_params(param_or_layer):
-            if isinstance(param_or_layer, ParamBase):
+            if isinstance(param_or_layer, core.VarBase):
                 list_params.add(param_or_layer.name)
             else:
                 # param_or_layer is layer

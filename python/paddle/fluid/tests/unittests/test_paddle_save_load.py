@@ -19,6 +19,7 @@ import numpy as np
 import os
 import sys
 import six
+import pickle
 from io import BytesIO
 
 import paddle
@@ -946,6 +947,41 @@ class TestSaveLoadLayer(unittest.TestCase):
             self.assertTrue((origin[i] - loaded_result[i]).abs().max() < 1e-10)
             for k, v in origin_layer[i]._linear.weight.__dict__.items():
                 self.assertTrue(v == loaded_layer[i]._linear.weight.__dict__[k])
+
+    def test_save_load_layer_with_varbase(self):
+        paddle.disable_static()
+        layer = LinearNet()
+        var1 = paddle.to_tensor([3, 4], stop_gradient=False)
+        var1.name = 'test_save_load_layer_with_varbase'
+        var2 = paddle.to_tensor([3, 4], stop_gradient=True)
+        layer._vars = [var1, var2]
+
+        path = "test_save_load_layer_with_varbase_/layer.pdmodel"
+        paddle.save(layer, path)
+        loaded_layer = paddle.load(path)
+        for k, v in layer._linear.weight.__dict__.items():
+            self.assertTrue(v == loaded_layer._linear.weight.__dict__[k])
+        for i in range(len(layer._vars)):
+            attrs = [
+                'name',
+                'stop_gradient',
+                'persistable',
+            ]
+            for attr in attrs:
+                self.assertTrue(
+                    getattr(layer._vars[i], attr) == getattr(
+                        loaded_layer._vars[i], attr))
+
+        with self.assertRaises(ValueError):
+            with open(path, 'rw') as f:
+
+                def reduce_varbase(self):
+                    return fluid.core.VarBase, tuple(), tuple()
+
+                pickler = pickle.Pickler(f, 4)
+                pickler.dispatch_table[fluid.core.VarBase] = reduce_varbase
+                var = fluid.core.VarBase(np.ones([2, 3]))
+                pickler.dump(var)
 
 
 if __name__ == '__main__':
