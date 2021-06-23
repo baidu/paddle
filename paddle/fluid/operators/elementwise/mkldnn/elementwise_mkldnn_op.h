@@ -47,12 +47,14 @@ class EltwiseMKLDNNKernel : public framework::OpKernel<T> {
     float scale_o = ctx.Attr<float>("Scale_out");
     int axis = ctx.Attr<int>("axis");
 
-    bool is_inplaced = x->IsSharedBufferWith(*z);
+    bool is_inplaced = false;  // x->IsSharedBufferWith(*z);
 
-    std::string key = is_inplaced
-                          ? platform::CreateKey(dev_ctx, ctx.OutputName("Out"),
-                                                x->format(), y->format())
-                          : ctx.OutputName("Out");
+    std::string key =
+        platform::CreateKey(dev_ctx, ctx.OutputName("Out"), ctx.InputName("X"),
+                            x->format(), y->format());
+    //: ctx.OutputName("Out");
+
+    std::cout << "eletwise_key" << key << std::endl;
 
     platform::BinaryMKLDNNHandler<T> handler(
         BINARY_OP, axis, dev_ctx, mkldnn_engine, ctx.GetPlace(), x, y, z,
