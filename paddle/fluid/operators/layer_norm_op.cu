@@ -399,10 +399,11 @@ __global__ void LayerNormBackwardComputeGradInput(
     // epsilon, const T* gamma,
     const U *__restrict__ mean, const U *__restrict__ var, const float epsilon,
     const U *gamma, T *grad_input) {
+  {
 #ifdef __HIPCC__
-  for (auto i1 = hipBlockIdx_y; i1 < n1; i1 += hipGridDim_y) {
+    auto i1 = hipBlockIdx_x;
 #else
-  for (auto i1 = blockIdx.y; i1 < n1; i1 += gridDim.y) {
+    auto i1 = blockIdx.x;
 #endif
     U sum_loss1 = U(0);
     U sum_loss2 = U(0);
@@ -869,9 +870,8 @@ static void LayerNormBackward(const T *x, const T *d_y, const U *scale,
       constexpr int BDIMX1 = 32;
       constexpr int BDIMY1 = 4;
       dim3 threads1(BDIMX1, BDIMY1, 1);
-      const dim3 blocks1(1, batch_size, 1);
       LayerNormBackwardComputeGradInput<
-          T, U, BDIMX1, BDIMY1><<<blocks1, threads1, 0, stream>>>(
+          T, U, BDIMX1, BDIMY1><<<batch_size, threads1, 0, stream>>>(
           d_y, x, batch_size, feature_size, mean, var, epsilon, scale, d_x);
       break;
     }
