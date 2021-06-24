@@ -19,9 +19,6 @@
 #include <unordered_map>
 
 #include "paddle/fluid/framework/ir/fuse_pass_base.h"
-#include "paddle/fluid/framework/ir/graph.h"
-#include "paddle/fluid/framework/ir/graph_pattern_detector.h"
-#include "paddle/fluid/framework/ir/pass.h"
 
 namespace paddle {
 namespace framework {
@@ -30,10 +27,10 @@ namespace ir {
 /*
  * Squash dequantize->quantize pair pattern into requantize op
  */
-class Graph;
 
 class CPUQuantizeSquashPass : public FusePassBase {
  public:
+  CPUQuantizeSquashPass();
   virtual ~CPUQuantizeSquashPass() {}
 
  protected:

@@ -59,7 +59,11 @@ nvinfer1::Dims InstanceNormPlugin::getOutputDimensions(
 }
 
 int InstanceNormPlugin::enqueue(int batch_size, const void *const *inputs,
+#if IS_TRT_VERSION_LT(8000)
                                 void **outputs, void *workspace,
+#else
+                                void *const *outputs, void *workspace,
+#endif
                                 cudaStream_t stream) {
   const auto &input_dims = this->getInputDims(0);
 

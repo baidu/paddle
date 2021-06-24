@@ -841,8 +841,7 @@ class HDFSClient(FS):
                     fs_src_path))
 
             if self.is_exist(fs_dst_path):
-                raise FSFileExistsError("{} exists already".format(
-                    fs_src_path, fs_dst_path, fs_dst_path))
+                raise FSFileExistsError("{} exists already".format(fs_dst_path))
 
         return self._try_mv(fs_src_path, fs_dst_path)
 

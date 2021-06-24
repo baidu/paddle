@@ -34,6 +34,7 @@ class LarsMomentumOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput("LearningRate",
              "(LoDTensor, default LoDTensor<float>) "
              "Input learning rate");
+    AddInput("MasterParam", "FP32 master weight for AMP.").AsDispensable();
 
     AddOutput("ParamOut",
               "(LoDTensor) This output is updated parameter. "
@@ -41,6 +42,10 @@ class LarsMomentumOpMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("VelocityOut",
               "(LoDTensor) This output is updated velocity. "
               "It shared memory with Input(Velocity).");
+    AddOutput("MasterParamOut",
+              "The updated FP32 master weight for AMP. "
+              "It shared memory with Input(MasterParam).")
+        .AsDispensable();
 
     AddAttr<float>("mu", "(float) Momentum coefficient");
     AddAttr<float>("lars_coeff", "(float, default 0.001) LARS coefficient.")
@@ -51,6 +56,15 @@ class LarsMomentumOpMaker : public framework::OpProtoAndCheckerMaker {
     AddAttr<float>("epsilon",
                    "(float, default 0.0) epsilon to avoid Division by Zero.")
         .SetDefault(0.0);
+    AddAttr<bool>("multi_precision",
+                  "(bool, default false) "
+                  "Whether to use multi-precision during weight updating.")
+        .SetDefault(false);
+    AddAttr<float>(
+        "rescale_grad",
+        "(float, default 1.0) Multiply the gradient with `rescale_grad`"
+        "before updating. Often choose to be `1.0/batch_size`.")
+        .SetDefault(1.0f);
 
     AddComment(R"DOC(
 Lars Momentum Optimizer.

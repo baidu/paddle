@@ -1349,7 +1349,7 @@ class ReduceOnPlateau(LRScheduler):
         if isinstance(metrics, (Tensor, numpy.ndarray)):
             assert len(metrics.shape) == 1 and metrics.shape[0] == 1, "the metrics.shape " \
                 "should be (1L,), but the current metrics.shape is {}. Maybe that "  \
-                "you should call paddle.mean to process it first.".format(loss.shape)
+                "you should call paddle.mean to process it first.".format(metrics.shape)
         elif not isinstance(metrics,
                             (int, float, numpy.float32, numpy.float64)):
             raise TypeError(

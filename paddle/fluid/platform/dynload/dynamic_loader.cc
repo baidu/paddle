@@ -219,16 +219,16 @@ static inline void* GetDsoHandleFromSearchPath(
   for (auto dso : dso_names) {
     // 1. search in user config path by FLAGS
     dso_handle = GetDsoHandleFromSpecificPath(config_path, dso, dynload_flags);
-    // 2. search in extra paths
+    // 2. search in system default path
+    if (nullptr == dso_handle) {
+      dso_handle = GetDsoHandleFromDefaultPath(dso, dynload_flags);
+    }
+    // 3. search in extra paths
     if (nullptr == dso_handle) {
       for (auto path : extra_paths) {
         VLOG(3) << "extra_paths: " << path;
         dso_handle = GetDsoHandleFromSpecificPath(path, dso, dynload_flags);
       }
-    }
-    // 3. search in system default path
-    if (nullptr == dso_handle) {
-      dso_handle = GetDsoHandleFromDefaultPath(dso, dynload_flags);
     }
     if (nullptr != dso_handle) break;
   }

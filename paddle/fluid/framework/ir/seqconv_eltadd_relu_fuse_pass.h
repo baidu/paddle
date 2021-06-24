@@ -28,6 +28,7 @@ class Graph;
 
 class SeqConvEltAddReluFusePass : public FusePassBase {
  public:
+  SeqConvEltAddReluFusePass();
   virtual ~SeqConvEltAddReluFusePass() {}
 
  protected:

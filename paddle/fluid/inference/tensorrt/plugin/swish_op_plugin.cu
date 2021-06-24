@@ -85,7 +85,12 @@ __global__ void swish_kernel<half>(int num, const half *input, half *output,
 }
 
 int SwishPlugin::enqueue(int batch_size, const void *const *inputs,
+#if IS_TRT_VERSION_LT(8000)
                          void **outputs, void *workspace, cudaStream_t stream) {
+#else
+                         void *const *outputs, void *workspace,
+                         cudaStream_t stream) {
+#endif
   // input dims is CHW.
   const auto &input_dims = this->getInputDims(0);
   const float *input = reinterpret_cast<const float *>(inputs[0]);

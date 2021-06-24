@@ -55,6 +55,7 @@ __forceinline__ __device__ T blockReduceSum(T val) {
   int wid = threadIdx.x / warpSize;
 
   val = warpReduceSum(val);
+  __syncthreads();
   if (lane == 0) shared[wid] = val;
 
   __syncthreads();

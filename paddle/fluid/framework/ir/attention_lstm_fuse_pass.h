@@ -23,8 +23,14 @@ namespace ir {
 class Graph;
 
 class AttentionLSTMFusePass : public FusePassBase {
+ public:
+  AttentionLSTMFusePass();
+
  protected:
   void ApplyImpl(ir::Graph* graph) const override;
+
+ private:
+  void FindWhileOp(Graph* graph) const;
 };
 
 }  // namespace ir

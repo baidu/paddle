@@ -26,7 +26,7 @@ import six
 import paddle
 from ..layer_helper import LayerHelper
 from ..initializer import Normal, Constant, NumpyArrayInitializer
-from ..framework import Variable, OpProtoHolder, in_dygraph_mode, dygraph_only, _dygraph_tracer, default_main_program, _varbase_creator, static_only
+from ..framework import Variable, OpProtoHolder, in_dygraph_mode, dygraph_only, _dygraph_tracer, default_main_program, _varbase_creator, static_only, _global_flags
 from .. import dygraph_utils
 from ..param_attr import ParamAttr
 from .layer_function_generator import autodoc, templatedoc, _generate_doc_string_
@@ -4424,7 +4424,8 @@ def reduce_sum(input, dim=None, keep_dim=False, name=None):
         if dim == None or dim == [] or len(dim) == len(input.shape) else False
     }
     check_variable_and_dtype(
-        input, 'input', ['float32', 'float64', 'int32', 'int64'], 'reduce_sum')
+        input, 'input', ['float16', 'float32', 'float64', 'int32', 'int64'],
+        'reduce_sum')
     helper = LayerHelper('reduce_sum', **locals())
     out = helper.create_variable_for_type_inference(dtype=helper.input_dtype())
     helper.append_op(
@@ -9500,7 +9501,7 @@ def relu6(x, threshold=6.0, name=None):
         outputs={'Out': out},
         attrs={
             'threshold': threshold,
-            'use_mkldnn': core.globals()["FLAGS_use_mkldnn"]
+            'use_mkldnn': _global_flags()["FLAGS_use_mkldnn"]
         })
     return out
 
@@ -11093,7 +11094,7 @@ def strided_slice(input, axes, starts, ends, strides):
             Then:
                 result = [ [2], ]
     Args:
-        input (Variable): An N-D ``Tensor`` or ``LoDTensor`` . The data type is ``float32``, ``float64``, ``int32`` or ``int64``.
+        input (Variable): An N-D ``Tensor`` or ``LoDTensor`` . The data type is ``bool``, ``float32``, ``float64``, ``int32`` or ``int64``.
         axes (list|tuple): The data type is ``int32`` . Axes that `starts` and `ends` apply to.
                             It's optional. If it is not provides, it will be treated as :math:`[0,1,...,len(starts)-1]`.
         starts (list|tuple|Variable): The data type is ``int32`` . If ``starts`` is a list or tuple, the elements of
@@ -11144,7 +11145,7 @@ def strided_slice(input, axes, starts, ends, strides):
     helper = LayerHelper('strided_slice', **locals())
 
     check_variable_and_dtype(input, 'input',
-                             ['float32', 'float64', 'int32', 'int64'],
+                             ['bool', 'float32', 'float64', 'int32', 'int64'],
                              'strided_slice')
     check_type(axes, 'axes', (list, tuple), 'strided_slice')
     check_type(starts, 'starts', (list, tuple, Variable), 'strided_slice')
@@ -11569,7 +11570,7 @@ Examples:
             axis=axis,
             act=act,
             op_name='elementwise_add',
-            use_mkldnn=core.globals()["FLAGS_use_mkldnn"])
+            use_mkldnn=_global_flags()["FLAGS_use_mkldnn"])
 
     return _elementwise_op(LayerHelper('elementwise_add', **locals()))
 

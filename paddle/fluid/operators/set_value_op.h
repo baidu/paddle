@@ -23,6 +23,7 @@
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/assign_value_op.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.h"
+#include "paddle/fluid/operators/slice_utils.h"
 #include "paddle/fluid/operators/utils.h"
 #include "paddle/fluid/platform/enforce.h"
 
@@ -57,106 +58,6 @@ inline std::string GetValueName(framework::proto::VarType::Type data_type) {
           data_type));
   }
   return value_name;
-}
-
-inline void CheckAndUpdateSlice(const framework::DDim in_dims,
-                                const std::vector<int64_t> axes,
-                                std::vector<int64_t>* starts,
-                                std::vector<int64_t>* ends,
-                                std::vector<int64_t>* steps) {
-  for (size_t i = 0; i < axes.size(); ++i) {
-    int64_t axis = axes[i];
-    int64_t dim_value = in_dims[axis];
-
-    int64_t start =
-        (*starts)[i] < 0 ? ((*starts)[i] + dim_value) : (*starts)[i];
-    int64_t end = (*ends)[i] < 0 ? ((*ends)[i] + dim_value) : (*ends)[i];
-    start = std::max(start, static_cast<int64_t>(0));
-    end = std::min(end, dim_value);
-
-    int64_t step = (*steps)[i];
-    PADDLE_ENFORCE_NE(
-        step, 0, platform::errors::InvalidArgument(
-                     "Step should not be 0, but received step = %d.", step));
-    if (step > 0) {
-      start = std::min(start, dim_value);
-      end = std::max(end, static_cast<int64_t>(0));
-      PADDLE_ENFORCE_GT(
-          end, start,
-          platform::errors::InvalidArgument(
-              "When step > 0, end should be greater than start, but "
-              "received end = %d, start = %d.",
-              end, start));
-    } else {
-      // NOTE(liym27): When step < 0, start should less and equal to dim_value-1
-      // "end is -1" means contain the 0-th element of this axis.
-      start = std::min(start, dim_value - 1);
-      end = std::max(end, static_cast<int64_t>(-1));
-      PADDLE_ENFORCE_GT(
-          start, end,
-          platform::errors::InvalidArgument(
-              "When step < 0, start should be greater than end, but "
-              "received start = %d, end = %d.",
-              start, end));
-    }
-
-    (*starts)[i] = start;
-    (*ends)[i] = end;
-  }
-}
-
-inline framework::DDim GetSliceDims(const framework::DDim in_dims,
-                                    const std::vector<int64_t>& axes,
-                                    const std::vector<int64_t>& starts,
-                                    const std::vector<int64_t>& ends,
-                                    const std::vector<int64_t>& steps) {
-  framework::DDim slice_dims(in_dims);
-
-  for (size_t i = 0; i < axes.size(); ++i) {
-    int64_t axis = axes[i];
-    int64_t start = starts[i];
-    int64_t end = ends[i];
-    int64_t step = steps[i];
-
-    if (step > 0) {
-      slice_dims[axis] = (end - start + step - 1) / step;
-    } else {
-      slice_dims[axis] = (end - start + step + 1) / step;
-    }
-  }
-  return slice_dims;
-}
-
-inline framework::DDim GetDecreasedDims(
-    const framework::DDim slice_dims,
-    const std::vector<int64_t>& decrease_axes) {
-  // Get dims after decreasing axes.
-  framework::DDim decreased_dims(slice_dims);
-  if (decrease_axes.size() > 0) {
-    for (size_t i = 0; i < decrease_axes.size(); ++i) {
-      int64_t axis = decrease_axes[i];
-      PADDLE_ENFORCE_EQ(
-          decreased_dims[axis], 1,
-          platform::errors::InvalidArgument("decrease dim should be 1"));
-      decreased_dims[axis] = 0;
-    }
-
-    std::vector<int64_t> new_shape;
-    for (int i = 0; i < decreased_dims.size(); ++i) {
-      if (decreased_dims[i] != 0) {
-        new_shape.push_back(decreased_dims[i]);
-      }
-    }
-
-    // NOTE(liym27): Paddle does not support that the rank of Tensor is 0, and
-    // uses [1] instead.
-    if (new_shape.size() == 0) {
-      new_shape.push_back(1);
-    }
-
-    decreased_dims = framework::make_ddim(new_shape);
-  }
-  return decreased_dims;
 }
 
 template <typename DeviceContext, typename T>
@@ -225,8 +126,8 @@ class SetValueKernel : public framework::OpKernel<T> {
     }
 
     auto in_dims = in->dims();
-    CheckAndUpdateSlice(in_dims, axes, &starts, &ends, &steps);
-    auto slice_dims = GetSliceDims(in_dims, axes, starts, ends, steps);
+    CheckAndUpdateSliceAttrs(in_dims, axes, &starts, &ends, &steps);
+    auto slice_dims = GetSliceDims(in_dims, axes, starts, ends, &steps);
     auto decrease_slice_dims = GetDecreasedDims(slice_dims, decrease_axes);
 
     auto place = ctx.GetPlace();

@@ -69,15 +69,21 @@ if(NOT DEFINED CBLAS_PROVIDER)
     PATHS ${OPENBLAS_LIB_SEARCH_PATHS})
 
   if(OPENBLAS_LAPACKE_INC_DIR AND OPENBLAS_INC_DIR AND OPENBLAS_LIB)
-    set(CBLAS_PROVIDER OPENBLAS)
-    set(CBLAS_INC_DIR ${OPENBLAS_INC_DIR} ${OPENBLAS_LAPACKE_INC_DIR})
-    set(CBLAS_LIBRARIES ${OPENBLAS_LIB})
+    file(READ "${OPENBLAS_INC_DIR}/openblas_config.h" config_file)
+    string(REGEX MATCH "OpenBLAS ([0-9]+\.[0-9]+\.[0-9]+)" tmp ${config_file})
+    string(REGEX MATCH "([0-9]+\.[0-9]+\.[0-9]+)" ver ${tmp})
+    
+    if (${ver} VERSION_GREATER_EQUAL "0.3.7")
+      set(CBLAS_PROVIDER OPENBLAS)
+      set(CBLAS_INC_DIR ${OPENBLAS_INC_DIR} ${OPENBLAS_LAPACKE_INC_DIR})
+      set(CBLAS_LIBRARIES ${OPENBLAS_LIB})
 
-    add_definitions(-DPADDLE_USE_OPENBLAS)
-    add_definitions(-DLAPACK_FOUND)
+      add_definitions(-DPADDLE_USE_OPENBLAS)
+      add_definitions(-DLAPACK_FOUND)
 
-    message(STATUS "Found OpenBLAS (include: ${OPENBLAS_INC_DIR}, library: ${CBLAS_LIBRARIES})")
-    message(STATUS "Found lapack in OpenBLAS (include: ${OPENBLAS_LAPACKE_INC_DIR})")
+      message(STATUS "Found OpenBLAS (include: ${OPENBLAS_INC_DIR}, library: ${CBLAS_LIBRARIES})")
+      message(STATUS "Found lapack in OpenBLAS (include: ${OPENBLAS_LAPACKE_INC_DIR})")
+    endif()
   endif()
 endif()
 

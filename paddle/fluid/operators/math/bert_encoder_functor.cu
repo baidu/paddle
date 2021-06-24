@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include <algorithm>
+
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/math/bert_encoder_functor.h"
@@ -312,6 +313,156 @@ __global__ void SoftmaxKernelWithEltadd2<half2>(
 }
 
 template <typename T>
+__global__ void SoftmaxKernelWithEltaddForLarge(T *qk_buf, const T *bias_qk,
+                                                const int batch_size,
+                                                const int head_num,
+                                                const int seq_len,
+                                                const unsigned mask) {
+  int qk_offset = blockIdx.x * seq_len;
+  assert(blockDim.x % 32 == 0);
+
+  T stride_max = -1e20f;
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    stride_max = qk_buf[threadIdx.x + i + qk_offset] +
+                             bias_qk[threadIdx.x + i + qk_offset] >
+                         stride_max
+                     ? qk_buf[threadIdx.x + i + qk_offset] +
+                           bias_qk[threadIdx.x + i + qk_offset]
+                     : stride_max;
+  }
+  T max_val = blockReduceMax<T>(stride_max, mask);
+
+  T stride_sum = 0.f;
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    stride_sum += __expf(qk_buf[threadIdx.x + i + qk_offset] +
+                         bias_qk[threadIdx.x + i + qk_offset] - max_val);
+  }
+  T sum_val = blockReduceSum<T>(stride_sum, mask);
+
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    qk_buf[threadIdx.x + i + qk_offset] =
+        (T)(__expf(qk_buf[threadIdx.x + i + qk_offset] +
+                   bias_qk[threadIdx.x + i + qk_offset] - max_val) /
+            sum_val);
+  }
+}
+
+// HIP defined __HIP_NO_HALF_CONVERSIONS__
+#ifndef __HIPCC__  // @{ Half kernel: SoftmaxKernelWithEltadd
+template <>
+__global__ void SoftmaxKernelWithEltaddForLarge(
+    half *qk_buf, const half *bias_qk, const int batch_size, const int head_num,
+    const int seq_len, const unsigned mask) {
+#if CUDA_ARCH_FP16_SUPPORTED(__CUDA_ARCH__)
+  int qk_offset = blockIdx.x * seq_len;
+  assert(blockDim.x % 32 == 0);
+
+  float stride_max = -1e20f;
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float tmp = static_cast<float>(qk_buf[threadIdx.x + i + qk_offset] +
+                                   bias_qk[threadIdx.x + i + qk_offset]);
+    stride_max = tmp > stride_max ? tmp : stride_max;
+  }
+  float max_val = blockReduceMax<float>(stride_max, mask);
+
+  float stride_sum = 0.f;
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float tmp = static_cast<float>(qk_buf[threadIdx.x + i + qk_offset] +
+                                   bias_qk[threadIdx.x + i + qk_offset]);
+    stride_sum += __expf(tmp - max_val);
+  }
+  float sum_val = blockReduceSum<float>(stride_sum, mask);
+
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float tmp =
+        __expf(static_cast<float>(qk_buf[threadIdx.x + i + qk_offset] +
+                                  bias_qk[threadIdx.x + i + qk_offset]) -
+               max_val);
+    qk_buf[threadIdx.x + i + qk_offset] = (half)(tmp / sum_val);
+  }
+#endif
+}
+#endif  // @} End Half kernel: SoftmaxKernelWithEltadd
+
+template <typename T>
+__global__ void SoftmaxKernelWithEltaddForLarge2(T *qk_buf_, const T *bias_qk_,
+                                                 const int batch_size,
+                                                 const int head_num,
+                                                 const int seq_len,
+                                                 const unsigned mask) {
+  int qk_offset = blockIdx.x * seq_len;
+  assert(blockDim.x % 32 == 0);
+
+  float2 stride_max = make_float2(-1e20f, -1e20f);
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<T>(qk_buf_[threadIdx.x + i + qk_offset] +
+                             bias_qk_[threadIdx.x + i + qk_offset]);
+    stride_max.x = max(stride_max.x, cur.x);
+    stride_max.y = max(stride_max.y, cur.y);
+  }
+  float max_val = blockReduceMax<float>(max(stride_max.x, stride_max.y), mask);
+
+  float2 stride_sum = make_float2(0.f, 0.f);
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<T>(qk_buf_[threadIdx.x + i + qk_offset] +
+                             bias_qk_[threadIdx.x + i + qk_offset]);
+    stride_sum.x += __expf(cur.x - max_val);
+    stride_sum.y += __expf(cur.y - max_val);
+  }
+
+  float sum_val =
+      blockReduceSum<float>(stride_sum.x + stride_sum.y, mask) + 1e-6f;
+
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<T>(qk_buf_[threadIdx.x + i + qk_offset] +
+                             bias_qk_[threadIdx.x + i + qk_offset]);
+    qk_buf_[threadIdx.x + i + qk_offset] = FloatsToPair<T>(
+        __expf(cur.x - max_val) / sum_val, __expf(cur.y - max_val) / sum_val);
+  }
+}
+
+template <>
+__global__ void SoftmaxKernelWithEltaddForLarge2(
+    half2 *qk_buf_, const half2 *bias_qk_, const int batch_size,
+    const int head_num, const int seq_len, const unsigned mask) {
+// operator "+" of half only suppotted after cuda version 10.0
+// HIP defined __HIP_NO_HALF_CONVERSIONS__ in hip.cmake
+#if defined(PADDLE_WITH_CUDA) && \
+    (CUDA_ARCH_FP16_SUPPORTED(__CUDA_ARCH__) && CUDA_VERSION >= 10000)
+
+  int qk_offset = blockIdx.x * seq_len;
+  assert(blockDim.x % 32 == 0);
+
+  float2 stride_max = make_float2(-1e20f, -1e20f);
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<half2>(qk_buf_[threadIdx.x + i + qk_offset] +
+                                 bias_qk_[threadIdx.x + i + qk_offset]);
+    stride_max.x = max(stride_max.x, cur.x);
+    stride_max.y = max(stride_max.y, cur.y);
+  }
+  float max_val = blockReduceMax<float>(max(stride_max.x, stride_max.y), mask);
+
+  float2 stride_sum = make_float2(0.f, 0.f);
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<half2>(qk_buf_[threadIdx.x + i + qk_offset] +
+                                 bias_qk_[threadIdx.x + i + qk_offset]);
+    stride_sum.x += __expf(cur.x - max_val);
+    stride_sum.y += __expf(cur.y - max_val);
+  }
+
+  float sum_val =
+      blockReduceSum<float>(stride_sum.x + stride_sum.y, mask) + 1e-6f;
+
+  for (int i = 0; i < seq_len; i += blockDim.x) {
+    float2 cur = ToFloat2<half2>(qk_buf_[threadIdx.x + i + qk_offset] +
+                                 bias_qk_[threadIdx.x + i + qk_offset]);
+    qk_buf_[threadIdx.x + i + qk_offset] = FloatsToPair<half2>(
+        __expf(cur.x - max_val) / sum_val, __expf(cur.y - max_val) / sum_val);
+  }
+#endif
+}
+
+template <typename T>
 inline void MatMulWithHeadQK(const platform::CUDADeviceContext &context,
                              int head_num, int seq_len, int size_per_head,
                              int batch_size, bool q_trans, bool k_trans,
@@ -332,31 +483,48 @@ inline void MatMulWithHeadQK(const platform::CUDADeviceContext &context,
       reinterpret_cast<run_type *>(qk_buf_), batch_size * head_num,
       seq_len * size_per_head, seq_len * size_per_head);
 
-  int grid = batch_size * head_num * seq_len;
-  int block = seq_len;
+  if (seq_len <= 1024) {
+    int grid = batch_size * head_num * seq_len;
+    int block = seq_len;
 
-  // Align block to 32, also limit seq_len to max block size.
-  PADDLE_ENFORCE_LE(seq_len, 1024, platform::errors::InvalidArgument(
-                                       "seq_len should <= 1024, "
-                                       "but received seq_len is:%d",
-                                       seq_len));
-  if (seq_len % 2 == 0) {
-    block = (seq_len <= 64) ? 32 : ((seq_len + 63) / 64) * 32;
-    if (std::is_same<T, float>::value) {
-      SoftmaxKernelWithEltadd2<float2><<<grid, block, 0, stream>>>(
-          reinterpret_cast<float2 *>(qk_buf_),
-          reinterpret_cast<const float2 *>(bias_qk), batch_size, head_num,
-          seq_len / 2, FINAL_MASK);
+    // Align block to 32, also limit seq_len to max block size.
+    if (seq_len % 2 == 0) {
+      block = (seq_len <= 64) ? 32 : ((seq_len + 63) / 64) * 32;
+      if (std::is_same<T, float>::value) {
+        SoftmaxKernelWithEltadd2<float2><<<grid, block, 0, stream>>>(
+            reinterpret_cast<float2 *>(qk_buf_),
+            reinterpret_cast<const float2 *>(bias_qk), batch_size, head_num,
+            seq_len / 2, FINAL_MASK);
+      } else {
+        SoftmaxKernelWithEltadd2<__half2><<<grid, block, 0, stream>>>(
+            reinterpret_cast<__half2 *>(qk_buf_),
+            reinterpret_cast<const __half2 *>(bias_qk), batch_size, head_num,
+            seq_len / 2, FINAL_MASK);
+      }
     } else {
-      SoftmaxKernelWithEltadd2<__half2><<<grid, block, 0, stream>>>(
-          reinterpret_cast<__half2 *>(qk_buf_),
-          reinterpret_cast<const __half2 *>(bias_qk), batch_size, head_num,
-          seq_len / 2, FINAL_MASK);
+      block = (seq_len <= 32) ? 32 : ((seq_len + 31) / 32) * 32;
+      SoftmaxKernelWithEltadd<T><<<grid, block, 0, stream>>>(
+          qk_buf_, bias_qk, batch_size, head_num, seq_len, FINAL_MASK);
     }
   } else {
-    block = (seq_len <= 32) ? 32 : ((seq_len + 31) / 32) * 32;
-    SoftmaxKernelWithEltadd<T><<<grid, block, 0, stream>>>(
-        qk_buf_, bias_qk, batch_size, head_num, seq_len, FINAL_MASK);
+    int grid = batch_size * head_num * seq_len;
+    int block = 512;
+    if (seq_len % 2 == 0) {
+      if (std::is_same<T, float>::value) {
+        SoftmaxKernelWithEltaddForLarge2<float2><<<grid, block, 0, stream>>>(
+            reinterpret_cast<float2 *>(qk_buf_),
+            reinterpret_cast<const float2 *>(bias_qk), batch_size, head_num,
+            seq_len / 2, FINAL_MASK);
+      } else {
+        SoftmaxKernelWithEltaddForLarge2<__half2><<<grid, block, 0, stream>>>(
+            reinterpret_cast<__half2 *>(qk_buf_),
+            reinterpret_cast<const __half2 *>(bias_qk), batch_size, head_num,
+            seq_len / 2, FINAL_MASK);
+      }
+    } else {
+      SoftmaxKernelWithEltaddForLarge<T><<<grid, block, 0, stream>>>(
+          qk_buf_, bias_qk, batch_size, head_num, seq_len, FINAL_MASK);
+    }
   }
 }
 

@@ -312,6 +312,10 @@ class LayerHelperBase(object):
         if not attr:
             return None
         assert isinstance(attr, ParamAttr)
+        for i, size in enumerate(shape):
+            assert size > 0, (
+                "Expected every dim's size to be larger than 0, "
+                "but the size of the {}-th dim is {}".format(i, size))
         # set global dtype
         if not dtype:
             dtype = self.__dtype

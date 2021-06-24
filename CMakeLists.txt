@@ -216,7 +216,7 @@ option(WITH_STRIP       "Strip so files of Whl packages"         OFF)
 
 # PY_VERSION
 if(NOT PY_VERSION)
-  set(PY_VERSION 2.7)
+  set(PY_VERSION 3.6)
 endif()
 set(PYBIND11_PYTHON_VERSION ${PY_VERSION})
 

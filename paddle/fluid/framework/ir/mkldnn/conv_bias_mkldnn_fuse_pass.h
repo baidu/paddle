@@ -29,6 +29,7 @@ class Graph;
 
 class ConvBiasFusePass : public FusePassBase {
  public:
+  ConvBiasFusePass();
   virtual ~ConvBiasFusePass() {}
   virtual std::string type() const { return "conv2d"; }
 
@@ -41,6 +42,7 @@ class ConvBiasFusePass : public FusePassBase {
 */
 class Conv2DTransposeBiasFusePass : public ConvBiasFusePass {
  public:
+  Conv2DTransposeBiasFusePass();
   std::string type() const override { return "conv2d_transpose"; }
 };
 

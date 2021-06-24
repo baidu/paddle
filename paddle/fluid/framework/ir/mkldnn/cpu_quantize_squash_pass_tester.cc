@@ -25,7 +25,8 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
            const std::vector<std::string>& inputs,
            const std::vector<std::string>& outputs, bool use_mkldnn,
            const std::vector<float> scale = {}, float bias = 0.0,
-           const std::string& mkldnn_data_type = "float32") {
+           const std::string& mkldnn_data_type = "float32",
+           bool bias_after_scale = false, int groups = 1) {
   auto* op = prog->MutableBlock(0)->AppendOp();
   op->SetType(type);
   op->SetAttr("use_mkldnn", use_mkldnn);
@@ -37,6 +38,15 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
     if (inputs.size() > 1) op->SetInput("Filter", {inputs[1]});
     if (inputs.size() > 2) op->SetInput("Bias", {inputs[2]});
     op->SetOutput("Output", {outputs[0]});
+    const std::vector<int> strides({1, 1});
+    const std::vector<int> paddings({1, 1});
+    const std::vector<int> dilations({1, 1});
+    op->SetAttr("strides", strides);
+    op->SetAttr("paddings", paddings);
+    op->SetAttr("dilations", dilations);
+    op->SetAttr("groups", groups);
+    op->SetAttr("padding_algorithm", std::string("EXPLICIT"));
+    op->SetAttr("data_format", std::string("NCHW"));
     op->SetAttr("force_fp32_output", false);
     op->SetAttr("mkldnn_data_type", mkldnn_data_type);
   } else if (type == "quantize") {
@@ -74,6 +84,7 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
     op->SetOutput("Out", {outputs[0]});
     op->SetAttr("scale", scale[0]);
     op->SetAttr("bias", bias);
+    op->SetAttr("bias_after_scale", bias_after_scale);
   } else if (type == "matmul") {
     op->SetInput("X", {inputs[0]});
     op->SetInput("Y", {inputs[1]});
@@ -373,8 +384,8 @@ ProgramDesc BuildQuantConv2dProgramDesc(const bool& use_mkldnn,
     prog.MutableBlock(0)->Var(v);
   }
   SetOp(&prog, "quantize", "Quant", {"a"}, {"b"}, use_mkldnn, {quant_scale});
-  SetOp(&prog, "conv2d", "Conv2d", {"b"}, {"c"}, use_mkldnn, {}, 0.0f,
-        mkldnn_data_type);
+  SetOp(&prog, "conv2d", "Conv2d", {"b", "filter", "bias"}, {"c"}, use_mkldnn,
+        {}, 0.0f, mkldnn_data_type);
 
   return prog;
 }

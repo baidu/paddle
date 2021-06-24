@@ -52,6 +52,52 @@ static void GetConcatNodes(ir::Graph* graph, std::vector<Node*>* concat_nodes) {
 }
 }  // anonymous namespace
 
+SeqPoolCVMConcatFusePass::SeqPoolCVMConcatFusePass() {
+  AddOpCompat(OpCompat("sequence_pool"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddOutput("MaxIndex")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddAttr("pooltype")
+      .IsStringIn({"AVERAGE", "SUM", "SQRT", "LAST", "FIRST", "MAX"})
+      .End()
+      .AddAttr("pad_value")
+      .End();
+  AddOpCompat(OpCompat("cvm"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("CVM")
+      .IsTensor()
+      .End()
+      .AddOutput("Y")
+      .IsTensor()
+      .End()
+      .AddAttr("use_cvm")
+      .IsBoolEQ(true)
+      .End();
+  AddOpCompat(OpCompat("concat"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("AxisTensor")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")
+      .IsNumGE(1)
+      .End();
+}
+
 void SeqPoolCVMConcatFusePass::ApplyImpl(ir::Graph* graph) const {
   FusePassBase::Init("seqpool_cvm_concat_fuse", graph);
   std::vector<Node*> concat_nodes;

@@ -62,11 +62,7 @@ def reader_creator(filename, sub_name, cycle=False):
                          if sub_name in each_item.name)
 
                 for name in names:
-                    if six.PY2:
-                        batch = pickle.load(f.extractfile(name))
-                    else:
-                        batch = pickle.load(
-                            f.extractfile(name), encoding='bytes')
+                    batch = pickle.load(f.extractfile(name), encoding='bytes')
                     for item in read_batch(batch):
                         yield item
 

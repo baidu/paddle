@@ -118,17 +118,6 @@ class SumMKLDNNHandler : public platform::MKLDNNHandlerT<T, dnnl::sum> {
 
   inline int GetNumInputs(void) { return num_inputs_; }
 
- protected:
-  // isCached need to be overloaded as base one works on key_common
-  bool isCached() {
-    const std::string key_pd = this->key_ + "@fwd_pd";
-    this->fwd_pd_ = std::static_pointer_cast<dnnl::sum::primitive_desc>(
-        this->dev_ctx_.GetBlob(key_pd));
-
-    const std::string key_p = this->key_ + "@fwd_p";
-    return (this->dev_ctx_.GetBlob(key_p) != nullptr);
-  }
-
  private:
   int num_inputs_;
   std::vector<std::string> srcs_suffix_;

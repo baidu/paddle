@@ -22,11 +22,12 @@ setlocal enabledelayedexpansion
 
 rem -------clean up environment-----------
 set work_dir=%cd%
-set cache_dir=%work_dir:Paddle=cache%
+if not defined cache_dir set cache_dir=%work_dir:Paddle=cache%
 if not exist %cache_dir%\tools (
     git clone https://github.com/zhouwei25/tools.git %cache_dir%\tools
 )
 taskkill /f /im cmake.exe  2>NUL
+taskkill /f /im ninja.exe  2>NUL
 taskkill /f /im MSBuild.exe 2>NUL
 taskkill /f /im cl.exe 2>NUL
 taskkill /f /im lib.exe 2>NUL
@@ -77,7 +78,7 @@ if not defined PYTHON_ROOT set PYTHON_ROOT=C:\Python37
 rem -------set cache build directory-----------
 rmdir build\python /s/q
 rmdir build\paddle\third_party\externalError /s/q
-rmdir build\paddle\fluid\pybind /s/q
+rem rmdir build\paddle\fluid\pybind /s/q
 rmdir build\paddle_install_dir /s/q
 rmdir build\paddle_inference_install_dir /s/q
 rmdir build\paddle_inference_c_install_dir /s/q
@@ -160,6 +161,7 @@ set WITH_MKL=ON
 set WITH_GPU=ON
 set WITH_AVX=ON
 set MSVC_STATIC_CRT=OFF
+set ON_INFER=ON
 
 call :cmake || goto cmake_error
 call :build || goto build_error
@@ -176,12 +178,13 @@ set WITH_GPU=OFF
 set WITH_AVX=OFF
 set MSVC_STATIC_CRT=ON
 set retry_times=1
+set ON_INFER=OFF
 
 call :cmake || goto cmake_error
 call :build || goto build_error
 call :test_whl_pacakage || goto test_whl_pacakage_error
 call :test_unit || goto test_unit_error
-call :test_inference || goto test_inference_error
+:: call :test_inference || goto test_inference_error
 :: call :check_change_of_unittest || goto check_change_of_unittest_error
 goto:success
 
@@ -190,7 +193,7 @@ rem ------Build windows avx whl package------
 set WITH_AVX=ON
 set ON_INFER=OFF
 set CUDA_ARCH_NAME=All
-set retry_times=4
+set retry_times=3
 
 call :cmake || goto cmake_error
 call :build || goto build_error
@@ -202,7 +205,7 @@ rem ------Build windows no-avx whl package------
 set WITH_AVX=OFF
 set ON_INFER=OFF
 set CUDA_ARCH_NAME=All
-set retry_times=4
+set retry_times=3
 
 call :cmake || goto cmake_error
 call :build || goto build_error
@@ -217,7 +220,8 @@ set CUDA_ARCH_NAME=All
 
 call :cmake || goto cmake_error
 call :build || goto build_error
-call :zip_file || goto zip_file_error
+call :zip_cc_file || goto zip_cc_file_error
+call :zip_c_file || goto zip_c_file_error
 goto:success
 
 rem "Other configurations are added here"
@@ -263,7 +267,7 @@ if "%WITH_GPU%"=="ON" (
 )
 
 rem ------initialize the python environment------
-@ECHO ON
+@ECHO OFF
 set PYTHON_EXECUTABLE=%PYTHON_ROOT%\python.exe
 set PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\Scripts;%PATH%
 if "%WITH_PYTHON%" == "ON" (
@@ -418,7 +422,7 @@ if %GENERATOR% == "Ninja" (
     ninja all
 ) else (
     if "%WITH_CLCACHE%"=="OFF" (
-        MSBuild /m:%PARALLEL_PROJECT_COUNT% /p:PreferredToolArchitecture=x64 /p:Configuration=Release /verbosity:%LOG_LEVEL% ALL_BUILD.vcxproj
+        MSBuild /m:%PARALLEL_PROJECT_COUNT% /p:PreferredToolArchitecture=x64 /p:TrackFileAccess=false /p:Configuration=Release /verbosity:%LOG_LEVEL% ALL_BUILD.vcxproj
     ) else (
         MSBuild /m:%PARALLEL_PROJECT_COUNT% /p:PreferredToolArchitecture=x64 /p:TrackFileAccess=false /p:CLToolExe=clcache.exe /p:CLToolPath=%PYTHON_ROOT%\Scripts /p:Configuration=Release /verbosity:%LOG_LEVEL% ALL_BUILD.vcxproj
     )
@@ -646,12 +650,12 @@ echo     git fetch upstream $BRANCH # develop is not fetched>>  check_change_of_
 echo fi>>  check_change_of_unittest.sh
 echo git checkout -b origin_pr >>  check_change_of_unittest.sh
 echo git checkout -f $BRANCH >>  check_change_of_unittest.sh
-echo cmake .. -G %GENERATOR% -DWITH_AVX=%WITH_AVX% -DWITH_GPU=%WITH_GPU% -DWITH_MKL=%WITH_MKL% ^
--DWITH_TESTING=%WITH_TESTING% -DWITH_PYTHON=%WITH_PYTHON% -DPYTHON_EXECUTABLE=%PYTHON_EXECUTABLE% -DON_INFER=%ON_INFER% ^
+echo cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=Release -DWITH_AVX=%WITH_AVX% -DWITH_GPU=%WITH_GPU% -DWITH_MKL=%WITH_MKL% ^
+-DWITH_TESTING=%WITH_TESTING% -DWITH_PYTHON=%WITH_PYTHON% -DON_INFER=%ON_INFER% ^
 -DWITH_INFERENCE_API_TEST=%WITH_INFERENCE_API_TEST% -DTHIRD_PARTY_PATH=%THIRD_PARTY_PATH% ^
 -DINFERENCE_DEMO_INSTALL_DIR=%INFERENCE_DEMO_INSTALL_DIR% -DWITH_STATIC_LIB=%WITH_STATIC_LIB% ^
--DWITH_TENSORRT=%WITH_TENSORRT% -DTENSORRT_ROOT=%TENSORRT_ROOT% -DMSVC_STATIC_CRT=%MSVC_STATIC_CRT% ^
--DWITH_UNITY_BUILD=%WITH_UNITY_BUILD% >>  check_change_of_unittest.sh
+-DWITH_TENSORRT=%WITH_TENSORRT% -DTENSORRT_ROOT="%TENSORRT_ROOT%" -DMSVC_STATIC_CRT=%MSVC_STATIC_CRT% ^
+-DWITH_UNITY_BUILD=%WITH_UNITY_BUILD% -DCUDA_ARCH_NAME=%CUDA_ARCH_NAME% >>  check_change_of_unittest.sh
 echo cat ^<^<EOF>>  check_change_of_unittest.sh
 echo     ============================================       >>  check_change_of_unittest.sh
 echo     Generate unit tests.spec of develop.               >>  check_change_of_unittest.sh
@@ -689,7 +693,7 @@ goto:eof
 exit /b 1
 
 rem ---------------------------------------------------------------------------------------------
-:zip_file
+:zip_cc_file
 tree /F %cd%\paddle_inference_install_dir\paddle
 if exist paddle_inference.zip del paddle_inference.zip
 python -c "import shutil;shutil.make_archive('paddle_inference', 'zip', root_dir='paddle_inference_install_dir')"
@@ -701,8 +705,25 @@ for /F %%i in ("%libsize%") do (
 )
 goto:eof
 
-:zip_file_error
+:zip_cc_file_error
 echo Tar inference library failed!
+exit /b 1
+
+rem ---------------------------------------------------------------------------------------------
+:zip_c_file
+tree /F %cd%\paddle_inference_c_install_dir\paddle
+if exist paddle_inference_c.zip del paddle_inference_c.zip
+python -c "import shutil;shutil.make_archive('paddle_inference_c', 'zip', root_dir='paddle_inference_c_install_dir')"
+%cache_dir%\tools\busybox64.exe du -h -k paddle_inference_c.zip > lib_size.txt
+set /p libsize=< lib_size.txt
+for /F %%i in ("%libsize%") do (
+    set /a libsize_m=%%i/1024
+    echo "Windows Paddle_Inference CAPI ZIP Size: !libsize_m!M"
+)
+goto:eof
+
+:zip_c_file_error
+echo Tar inference capi library failed!
 exit /b 1
 
 :timestamp
@@ -763,6 +784,7 @@ echo    ========================================
 echo    Clean up environment  at the end ...
 echo    ========================================
 taskkill /f /im cmake.exe  2>NUL
+taskkill /f /im ninja.exe  2>NUL
 taskkill /f /im MSBuild.exe 2>NUL
 taskkill /f /im git.exe 2>NUL
 taskkill /f /im cl.exe 2>NUL

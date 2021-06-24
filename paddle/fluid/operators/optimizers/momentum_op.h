@@ -135,6 +135,9 @@ class MomentumOp : public framework::OperatorWithKernel {
 
     ctx->SetOutputDim("ParamOut", param_dim);
     ctx->SetOutputDim("VelocityOut", param_dim);
+    if (ctx->HasOutput("MasterParamOut")) {
+      ctx->SetOutputDim("MasterParamOut", param_dim);
+    }
   }
 
   framework::OpKernelType GetExpectedKernelType(

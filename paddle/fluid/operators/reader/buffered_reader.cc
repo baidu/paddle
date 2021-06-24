@@ -68,7 +68,6 @@ BufferedReader::BufferedReader(
     stream_ = platform::NpuStreamResourcePool::Instance().New(dev_idx);
   }
 #endif
-  is_same_place_ = false;
   cpu_buffer_.resize(buffer_size);
   cuda_buffer_.resize(buffer_size);
   npu_buffer_.resize(buffer_size);
@@ -116,7 +115,7 @@ void BufferedReader::ReadAsync(size_t i) {
         std::vector<void *> cuda_pinned_ptrs;
         cuda_pinned_ptrs.reserve(cpu.size());
         platform::RecordEvent record_event("BufferedReader:MemoryCopy");
-        // NODE(chenwehiang): When we use CUDAPinned Memory, we need call
+        // NODE(chenweihang): When we use CUDAPinned Memory, we need call
         // cudaHostAlloc, that is a CUDA API, calling CUDA API need load
         // cuda lib into device, it will cost hundreds of MB of GPU memory.
         // If we don't set Device here, which will use CUDAPlace(0) default.
@@ -126,18 +125,21 @@ void BufferedReader::ReadAsync(size_t i) {
           if (platform::is_cpu_place(cpu[i].place())) {
             cuda[i].Resize(cpu[i].dims());
             cuda[i].set_layout(cpu[i].layout());
-            cuda_pinned_ptrs.emplace_back(
-                cuda[i].mutable_data(cuda_pinned_place, cpu[i].type()));
+            cuda_pinned_ptrs[i] =
+                cuda[i].mutable_data(cuda_pinned_place, cpu[i].type());
             auto size =
                 cpu[i].numel() * paddle::framework::SizeOfType(cpu[i].type());
 
             memory::Copy(cuda_pinned_place, cuda_pinned_ptrs[i],
                          BOOST_GET_CONST(platform::CPUPlace, cpu[i].place()),
                          cpu[i].data<void>(), size);
+
             cuda[i].set_lod(cpu[i].lod());
           } else {
-            // we set same place flag & use cpu[i] directly
-            is_same_place_ = true;
+            // Here the cpu[i]'s place may be CUDAPlace, CUDAPinnedPlace, or
+            // others, we don't copy the memory of it to CUDAPinnedPlace, but
+            // we should share tensor data to cuda[i]
+            cuda[i].ShareDataWith(cpu[i]);
           }
         }
       } else {
@@ -296,9 +298,9 @@ void BufferedReader::ReadNextImpl(std::vector<framework::LoDTensor> *out) {
     return;
   }
 
-  if (platform::is_gpu_place(place_) && !is_same_place_) {
+  if (platform::is_gpu_place(place_)) {
     *out = std::move(cuda_buffer_[i]);
-  } else if (platform::is_npu_place(place_) && !is_same_place_) {
+  } else if (platform::is_npu_place(place_)) {
     *out = std::move(npu_buffer_[i]);
   } else {
     *out = std::move(cpu_buffer_[i]);

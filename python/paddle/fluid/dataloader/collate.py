@@ -78,7 +78,6 @@ def default_collate_fn(batch):
 
     raise TypeError("batch data con only contains: tensor, numpy.ndarray, "
                     "dict, list, number, but got {}".format(type(sample)))
-    return outputs
 
 
 def default_convert_fn(batch):

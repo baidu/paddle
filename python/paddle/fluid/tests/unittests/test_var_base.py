@@ -176,7 +176,6 @@ class TestVarBase(unittest.TestCase):
 
                 x = paddle.to_tensor(1, dtype='uint8')
                 self.assertEqual(x.item(), 1)
-                print(type(x.item()))
                 self.assertTrue(isinstance(x.item(), int))
 
                 x = paddle.to_tensor(1, dtype='int8')
@@ -193,7 +192,7 @@ class TestVarBase(unittest.TestCase):
 
                 x = paddle.to_tensor(1, dtype='int64')
                 self.assertEqual(x.item(), 1)
-                self.assertTrue(isinstance(x.item(), long if six.PY2 else int))
+                self.assertTrue(isinstance(x.item(), int))
 
                 x = paddle.to_tensor(True)
                 self.assertEqual(x.item(), True)
@@ -202,6 +201,24 @@ class TestVarBase(unittest.TestCase):
                 x = paddle.to_tensor(1 + 1j)
                 self.assertEqual(x.item(), 1 + 1j)
                 self.assertTrue(isinstance(x.item(), complex))
+
+                numpy_array = np.random.randn(3, 4)
+                # covert core.LoDTensor to paddle.Tensor
+                lod_tensor = paddle.fluid.core.LoDTensor()
+                place = paddle.fluid.framework._current_expected_place()
+                lod_tensor.set(numpy_array, place)
+                x = paddle.to_tensor(lod_tensor)
+                self.assertTrue(np.array_equal(x.numpy(), numpy_array))
+                self.assertEqual(x.type, core.VarDesc.VarType.LOD_TENSOR)
+                self.assertEqual(str(x.place), str(place))
+
+                # covert core.Tensor to paddle.Tensor
+                x = paddle.to_tensor(numpy_array)
+                dlpack = x.value().get_tensor()._to_dlpack()
+                tensor_from_dlpack = paddle.fluid.core.from_dlpack(dlpack)
+                x = paddle.to_tensor(tensor_from_dlpack)
+                self.assertTrue(np.array_equal(x.numpy(), numpy_array))
+                self.assertEqual(x.type, core.VarDesc.VarType.LOD_TENSOR)
 
                 with self.assertRaises(ValueError):
                     paddle.randn([3, 2, 2]).item()
@@ -229,6 +246,14 @@ class TestVarBase(unittest.TestCase):
             _test_place("gpu_pinned")
             _test_place(core.CUDAPlace(0))
             _test_place("gpu:0")
+
+    def test_to_tensor_not_change_input_stop_gradient(self):
+        with paddle.fluid.dygraph.guard(core.CPUPlace()):
+            a = paddle.zeros([1024])
+            a.stop_gradient = False
+            b = paddle.to_tensor(a)
+            self.assertEqual(a.stop_gradient, False)
+            self.assertEqual(b.stop_gradient, True)
 
     def test_to_tensor_change_place(self):
         if core.is_compiled_with_cuda():
@@ -260,8 +285,9 @@ class TestVarBase(unittest.TestCase):
             with paddle.fluid.dygraph.guard(core.CUDAPlace(0)):
                 lod_tensor = core.LoDTensor()
                 lod_tensor.set(a_np, core.CUDAPlace(0))
-                a = paddle.to_tensor(lod_tensor)
+                a = paddle.to_tensor(lod_tensor, place=core.CPUPlace())
                 self.assertTrue(np.array_equal(a_np, a.numpy()))
+                self.assertTrue(a.place.__repr__(), "CPUPlace")
 
     def test_to_variable(self):
         with fluid.dygraph.guard():

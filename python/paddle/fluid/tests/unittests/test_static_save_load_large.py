@@ -21,15 +21,10 @@ import paddle.fluid.framework as framework
 from test_imperative_base import new_program_scope
 
 import numpy as np
-import six
 import pickle
 import os
 
-# Python2.x no longer supports saving and loading large parameters.
-if six.PY2:
-    LARGE_PARAM = 2
-else:
-    LARGE_PARAM = 2**26
+LARGE_PARAM = 2**26
 
 
 class TestStaticSaveLoadLargeParameters(unittest.TestCase):
@@ -59,10 +54,7 @@ class TestStaticSaveLoadLargeParameters(unittest.TestCase):
 
             path = os.path.join("test_static_save_load_large_param",
                                 "static_save")
-            if six.PY2:
-                protocol = 2
-            else:
-                protocol = 4
+            protocol = 4
             paddle.fluid.save(prog, path, pickle_protocol=protocol)
             # set var to zero
             for var in prog.list_vars():

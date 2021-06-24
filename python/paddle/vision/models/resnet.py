@@ -20,9 +20,7 @@ import paddle.nn as nn
 
 from paddle.utils.download import get_weights_path_from_url
 
-__all__ = [
-    'ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'
-]
+__all__ = []
 
 model_urls = {
     'resnet18': ('https://paddle-hapi.bj.bcebos.com/models/resnet18.pdparams',

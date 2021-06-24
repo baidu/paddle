@@ -18,6 +18,7 @@ from .random import get_rng_state_tracker
 from paddle.nn import functional as F
 from paddle import framework
 from ...base import topology as tp
+from paddle.autograd import PyLayer
 
 __all__ = []
 
@@ -43,14 +44,13 @@ class VocabParallelEmbedding(Layer):
         self.origin_num_embeddings = num_embeddings
         self.is_mp = (self.world_size > 1)
 
-        per_part_size = (
-            num_embeddings + self.world_size - 1) // self.world_size
-        last_part_size = num_embeddings - per_part_size * (self.world_size - 1)
-        if self.rank == self.world_size - 1:
-            per_part_size = last_part_size
-        per_part_size += 1  # make the last row as the padding index
-        self.per_part_size = per_part_size
+        assert num_embeddings % self.world_size == 0, (
+            "The length of the vocabulary must be divisible by the parallelism degree of MP"
+        )
 
+        per_part_size = num_embeddings // self.world_size
+
+        self.vocab_start_index = self.rank * per_part_size
         self._dtype = self._helper.get_default_dtype()
         self._size = [per_part_size, embedding_dim]
         self._weight_attr = weight_attr
@@ -63,49 +63,35 @@ class VocabParallelEmbedding(Layer):
                     shape=self._size,
                     dtype=self._dtype,
                     is_bias=False)
-            self.weight[per_part_size - 1] = 0.0
-            self.weight.is_distributed = True
         else:
             self.weight = self.create_parameter(
                 attr=self._weight_attr,
-                shape=[num_embeddings, embedding_dim],
+                shape=self._size,
                 dtype=self._dtype,
                 is_bias=False)
 
+        self.weight.is_distributed = True
+
     def forward(self, x):
-        if not self.is_mp:
-            return F.embedding(
+        if self.is_mp:
+            output_parallel = paddle.distributed.collective._c_lookup_table(
+                self.weight,
+                x,
+                start_index=self.vocab_start_index,
+                name=self._name)
+            output = paddle.distributed.collective._mp_allreduce(
+                output_parallel,
+                group=self.model_parallel_group,
+                use_calc_stream=True,
+                use_model_parallel=True)
+        else:
+            output = F.embedding(
                 x,
                 weight=self.weight,
                 padding_idx=None,
                 sparse=False,
                 name=self._name)
-
-        origin_input_shape = x.shape
-        if len(origin_input_shape) == 2:
-            x = paddle.unsqueeze(x, axis=-1)
-        else:
-            assert origin_input_shape[-1] == 1, (
-                "The last dimension size of x must be 1.")
-        x_shard = paddle.shard_index(x, self.origin_num_embeddings,
-                                     self.world_size, self.rank,
-                                     self.per_part_size - 1)
-        if len(origin_input_shape) == 2:
-            x_shard = paddle.squeeze(x_shard, axis=-1)
-
-        emb_out = F.embedding(
-            x_shard,
-            weight=self.weight,
-            padding_idx=self.per_part_size - 1,
-            sparse=False,
-            name=self._name)
-
-        emb_out = paddle.distributed.collective._mp_allreduce(
-            emb_out,
-            group=self.model_parallel_group,
-            use_calc_stream=True,
-            use_model_parallel=True)
-        return emb_out
+        return output
 
 
 class ColumnParallelLinear(Layer):
@@ -175,9 +161,7 @@ class ColumnParallelLinear(Layer):
 
         if self.gather_output and self.is_mp:
             output = paddle.distributed.collective._c_concat(
-                output_parallel,
-                nranks=self.world_size,
-                group=self.model_parallel_group)
+                output_parallel, group=self.model_parallel_group)
         else:
             output = output_parallel
         return output
@@ -245,10 +229,7 @@ class RowParallelLinear(Layer):
         else:
             # split last dim
             input_parallel = paddle.distributed.collective._c_split(
-                x,
-                rank=self.rank,
-                nranks=self.world_size,
-                group=self.model_parallel_group)
+                x, group=self.model_parallel_group)
 
         output_parallel = F.linear(input_parallel, self.weight, name=self._name)
 
@@ -263,3 +244,19 @@ class RowParallelLinear(Layer):
 
         output = output_ + self.bias if self.bias is not None else output_
         return output
+
+
+class ParallelCrossEntropy(Layer):
+    def __init__(self, name=None):
+        super(ParallelCrossEntropy, self).__init__()
+        self.name = name
+        self.model_parallel_group = tp._HYBRID_PARALLEL_GROUP.get_model_parallel_group(
+        )
+        self.world_size = tp._HYBRID_PARALLEL_GROUP.get_model_parallel_world_size(
+        )
+        self.rank = tp._HYBRID_PARALLEL_GROUP.get_model_parallel_rank()
+
+    def forward(self, input, label):
+        loss = paddle.distributed.collective._c_softmax_with_cross_entropy(
+            input, label, group=self.model_parallel_group)
+        return loss

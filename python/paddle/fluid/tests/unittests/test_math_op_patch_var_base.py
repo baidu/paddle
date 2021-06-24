@@ -18,7 +18,6 @@ import unittest
 import paddle
 import paddle.fluid as fluid
 import numpy as np
-import six
 import inspect
 
 
@@ -141,6 +140,31 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
             res = a % b
             self.assertTrue(np.array_equal(res.numpy(), a_np % b_np))
 
+    # for bitwise and/or/xor/not
+    def test_bitwise(self):
+        paddle.disable_static()
+
+        x_np = np.random.randint(-100, 100, [2, 3, 5])
+        y_np = np.random.randint(-100, 100, [2, 3, 5])
+        x = paddle.to_tensor(x_np)
+        y = paddle.to_tensor(y_np)
+
+        out_np = x_np & y_np
+        out = x & y
+        self.assertTrue(np.array_equal(out.numpy(), out_np))
+
+        out_np = x_np | y_np
+        out = x | y
+        self.assertTrue(np.array_equal(out.numpy(), out_np))
+
+        out_np = x_np ^ y_np
+        out = x ^ y
+        self.assertTrue(np.array_equal(out.numpy(), out_np))
+
+        out_np = ~x_np
+        out = ~x
+        self.assertTrue(np.array_equal(out.numpy(), out_np))
+
     # for logical compare
     def test_equal(self):
         a_np = np.asarray([1, 2, 3, 4, 5])
@@ -216,10 +240,7 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
             a = fluid.dygraph.to_variable(np.array([100.1]))
             self.assertTrue(float(a) == 100.1)
             self.assertTrue(int(a) == 100)
-            if six.PY2:
-                self.assertTrue(long(a) == 100)
-            else:
-                self.assertTrue(int(a) == 100)
+            self.assertTrue(int(a) == 100)
 
     def test_len(self):
         a_np = np.random.uniform(-1, 1, self.shape).astype(self.dtype)
@@ -553,6 +574,13 @@ class TestMathOpPatchesVarBase(unittest.TestCase):
         self.assertTrue(inspect.ismethod(a.mean))
         self.assertTrue(inspect.ismethod(a.std))
         self.assertTrue(inspect.ismethod(a.numel))
+
+    def test_complex_scalar(self):
+        a_np = np.random.random(self.shape).astype(self.dtype)
+        with fluid.dygraph.guard():
+            a = fluid.dygraph.to_variable(a_np)
+            res = 1J * a
+            self.assertTrue(np.array_equal(res.numpy(), 1J * a_np))
 
 
 if __name__ == '__main__':

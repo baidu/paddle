@@ -219,7 +219,7 @@ class DynamicShapeTensorRTSubgraphPassConvTest(InferencePassTest):
             }, {
                 "conv2d_0.tmp_0": [16, 6, 16, 16],
                 "data": [16, 6, 16, 16],
-                "depthwise_conv2d_0.tmp_0": [32, 6, 64, 64]
+                "depthwise_conv2d_0.tmp_0": [16, 6, 16, 16]
             }, False)
         self.fetch_list = [conv_out]
 

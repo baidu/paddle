@@ -1,0 +1,98 @@
+type: "matmul"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Y"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "alpha"
+    type: FLOAT
+  }
+  attrs {
+    name: "transpose_X"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "transpose_Y"
+    type: BOOLEAN
+  }
+}
+extra {
+  attrs {
+    name: "Scale_out"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_x"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_y"
+    type: FLOAT
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "force_fp32_output"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fused_reshape_Out"
+    type: INTS
+  }
+  attrs {
+    name: "fused_reshape_X"
+    type: INTS
+  }
+  attrs {
+    name: "fused_reshape_Y"
+    type: INTS
+  }
+  attrs {
+    name: "fused_transpose_Out"
+    type: INTS
+  }
+  attrs {
+    name: "fused_transpose_X"
+    type: INTS
+  }
+  attrs {
+    name: "fused_transpose_Y"
+    type: INTS
+  }
+}

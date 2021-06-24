@@ -1,0 +1,47 @@
+type: "sequence_pool"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+  outputs {
+    name: "MaxIndex"
+  }
+  attrs {
+    name: "pooltype"
+    type: STRING
+  }
+  attrs {
+    name: "pad_value"
+    type: FLOAT
+  }
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}
+

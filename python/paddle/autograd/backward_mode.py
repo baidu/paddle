@@ -15,7 +15,7 @@
 from paddle.fluid import core
 from paddle.fluid import framework
 import paddle
-__all__ = ['backward']
+__all__ = []
 
 
 @framework.dygraph_only

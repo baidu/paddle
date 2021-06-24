@@ -193,14 +193,8 @@ class FunctionSpec(object):
             raise TypeError(
                 "The type(input_spec) should be one of (tuple, list), but received {}.".
                 format(type_name(input_spec)))
-        input_spec = tuple(input_spec)
-        for spec in flatten(input_spec):
-            if not isinstance(spec, paddle.static.InputSpec):
-                raise ValueError(
-                    "The type(elem) from input_spec should be `InputSpec`, but received {}.".
-                    format(type_name(spec)))
 
-        return input_spec
+        return tuple(input_spec)
 
     def __repr__(self):
         return "function: {}({}), input_spec: {}".format(
@@ -326,9 +320,8 @@ def convert_to_input_spec(inputs, input_spec):
     elif isinstance(input_spec, paddle.static.InputSpec):
         return input_spec
     else:
-        raise TypeError(
-            "The type(input_spec) should be a `InputSpec` or dict/list/tuple of it, but received {}.".
-            type_name(input_spec))
+        # NOTE(Aurelius84): Support non-Tensor type as input spec info
+        return input_spec
 
 
 def replace_spec_empty_name(args_name, input_with_spec):

@@ -22,7 +22,11 @@ class Scope;
 }  // namespace framework
 }  // namespace paddle
 #if defined(PADDLE_WITH_ASCEND_CL)
+#include "acl/acl.h"
+#include "hccl/hccl.h"
+#include "hccl/hccl_types.h"
 #include "paddle/fluid/platform/collective_helper.h"
+#include "paddle/fluid/platform/hccl_helper.h"
 #endif
 
 namespace paddle {
@@ -57,6 +61,33 @@ class CCommInitOpAscend : public framework::OperatorBase {
     }
     platform::HCCLCommContext::Instance().CreateHCCLComm(
         hccl_id, rank_ids, rank_id, device_id, rid);
+
+    //  Build comm
+    float* buff;
+    int32_t size = 20;
+    std::vector<float> input(size, 0);
+    for (int32_t idx = 0; idx < size; idx++) {
+      input[idx] = 1.0;
+    }
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtMalloc(reinterpret_cast<void**>(&buff),
+                                           size * sizeof(float),
+                                           ACL_MEM_MALLOC_HUGE_FIRST));
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtMemcpy(
+        reinterpret_cast<void*>(buff), size * sizeof(float), input.data(),
+        size * sizeof(float), ACL_MEMCPY_HOST_TO_DEVICE));
+    VLOG(3) << "Build buff data successful.";
+
+    aclrtStream stream = nullptr;
+    auto comm = paddle::platform::HCCLCommContext::Instance().Get(rid, place);
+    if (rank_id == 0) {
+      stream = comm->stream();
+    } else {
+      auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+      stream = static_cast<platform::NPUDeviceContext*>(dev_ctx)->stream();
+    }
+    PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclBroadcast(
+        buff, size, HCCL_DATA_TYPE_FP32, 0, comm->comm(), stream));
+    VLOG(3) << "Build connection successful.";
 #else
     PADDLE_THROW(platform::errors::PreconditionNotMet(
         "PaddlePaddle should compile with NPU."));

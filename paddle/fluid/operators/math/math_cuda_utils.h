@@ -188,6 +188,7 @@ __inline__ __device__ T blockReduceSum(T val, unsigned mask) {
 
   val = warpReduceSum<T>(val, mask);
 
+  __syncthreads();
   if (lane == 0) shared[wid] = val;
 
   __syncthreads();

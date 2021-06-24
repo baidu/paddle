@@ -27,7 +27,6 @@ import subprocess
 import multiprocessing
 import platform
 import inspect
-import json
 import argparse
 import shutil
 import re
@@ -39,14 +38,13 @@ if logger.handlers:
     console = logger.handlers[
         0]  # we assume the first handler is the one we want to configure
 else:
-    console = logging.StreamHandler()
+    console = logging.StreamHandler(stream=sys.stderr)
     logger.addHandler(console)
 console.setFormatter(logging.Formatter("%(message)s"))
 
 RUN_ON_DEVICE = 'cpu'
 SAMPLE_CODE_TEST_CAPACITY = set()
 GPU_ID = 0
-methods = []
 whl_error = []
 API_DEV_SPEC_FN = 'paddle/fluid/API_DEV.spec'
 API_PR_SPEC_FN = 'paddle/fluid/API_PR.spec'
@@ -247,13 +245,15 @@ def is_required_match(requirestr, cbtitle='not-specified'):
         False - not match
         None - skipped  # trick
     """
-    global SAMPLE_CODE_TEST_CAPACITY  # readonly
+    global SAMPLE_CODE_TEST_CAPACITY, RUN_ON_DEVICE  # readonly
     requires = set(['cpu'])
     if requirestr:
         for r in requirestr.split(','):
             rr = r.strip().lower()
             if rr:
                 requires.add(rr)
+    else:
+        requires.add(RUN_ON_DEVICE)
     if 'skip' in requires or 'skiptest' in requires:
         logger.info('%s: skipped', cbtitle)
         return None
@@ -283,8 +283,8 @@ def insert_codes_into_codeblock(codeblock, apiname='not-specified'):
         cpu_str = '\nimport os\nos.environ["CUDA_VISIBLE_DEVICES"] = ""\n'
         gpu_str = '\nimport os\nos.environ["CUDA_VISIBLE_DEVICES"] = "{}"\n'.format(
             GPU_ID)
-        if 'required' in codeblock:
-            if codeblock['required'] is None or codeblock['required'] == 'cpu':
+        if 'required' in codeblock and codeblock['required']:
+            if codeblock['required'] == 'cpu':
                 inserted_codes_f = cpu_str
             elif codeblock['required'] == 'gpu':
                 inserted_codes_f = gpu_str
@@ -389,7 +389,7 @@ def execute_samplecode(tfname):
     """
     result = True
     msg = None
-    if platform.python_version()[0] in ["2", "3"]:
+    if platform.python_version()[0] in ["3"]:
         cmd = [sys.executable, tfname]
     else:
         logger.error("Error: fail to parse python version!")
@@ -426,20 +426,25 @@ stdout: %s
     return result, tfname, msg, end_time - start_time
 
 
-def get_filenames():
+def get_filenames(full_test=False):
     '''
     this function will get the sample code files that pending for check.
+
+    Args:
+        full_test: the full apis or the increment
 
     Returns:
 
         dict: the sample code files pending for check .
 
     '''
-    global methods  # write
     global whl_error
     import paddle
     whl_error = []
-    get_incrementapi()
+    if full_test:
+        get_full_api_from_pr_spec()
+    else:
+        get_incrementapi()
     all_sample_code_filenames = {}
     with open(API_DIFF_SPEC_FN) as f:
         for line in f.readlines():
@@ -472,8 +477,9 @@ def get_api_md5(path):
         api_md5(dict): key is the api's real fullname, value is the md5sum.
     """
     api_md5 = {}
-    API_spec = '%s/%s' % (os.path.abspath(os.path.join(os.getcwd(), "..")),
-                          path)
+    API_spec = os.path.abspath(os.path.join(os.getcwd(), "..", path))
+    if not os.path.isfile(API_spec):
+        return api_md5
     pat = re.compile(r'\((paddle[^,]+)\W*document\W*([0-9a-z]{32})')
     patArgSpec = re.compile(
         r'^(paddle[^,]+)\s+\(ArgSpec.*document\W*([0-9a-z]{32})')
@@ -485,6 +491,41 @@ def get_api_md5(path):
             if mo:
                 api_md5[mo.group(1)] = mo.group(2)
     return api_md5
+
+
+def get_full_api():
+    """
+    get all the apis
+    """
+    global API_DIFF_SPEC_FN  ## readonly
+    from print_signatures import get_all_api_from_modulelist
+    member_dict = get_all_api_from_modulelist()
+    with open(API_DIFF_SPEC_FN, 'w') as f:
+        f.write("\n".join(member_dict.keys()))
+
+
+def get_full_api_by_walk():
+    """
+    get all the apis
+    """
+    global API_DIFF_SPEC_FN  ## readonly
+    from print_signatures import get_all_api
+    apilist = get_all_api()
+    with open(API_DIFF_SPEC_FN, 'w') as f:
+        f.write("\n".join([ai[0] for ai in apilist]))
+
+
+def get_full_api_from_pr_spec():
+    """
+    get all the apis
+    """
+    global API_PR_SPEC_FN, API_DIFF_SPEC_FN  ## readonly
+    pr_api = get_api_md5(API_PR_SPEC_FN)
+    if len(pr_api):
+        with open(API_DIFF_SPEC_FN, 'w') as f:
+            f.write("\n".join(pr_api.keys()))
+    else:
+        get_full_api_by_walk()
 
 
 def get_incrementapi():
@@ -526,6 +567,7 @@ def parse_args():
     #                     help='Use CPU mode (overrides --gpu)')
     # parser.add_argument('--gpu', dest='gpu_mode', action="store_true")
     parser.add_argument('--debug', dest='debug', action="store_true")
+    parser.add_argument('--full-test', dest='full_test', action="store_true")
     parser.add_argument('mode', type=str, help='run on device', default='cpu')
     for item in arguments:
         parser.add_argument(
@@ -545,6 +587,8 @@ if __name__ == '__main__':
     args = parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
     if args.logf:
         logfHandler = logging.FileHandler(args.logf)
         logfHandler.setFormatter(
@@ -573,7 +617,7 @@ if __name__ == '__main__':
     else:
         os.mkdir(SAMPLECODE_TEMPDIR)
 
-    filenames = get_filenames()
+    filenames = get_filenames(args.full_test)
     if len(filenames) == 0 and len(whl_error) == 0:
         logger.info("-----API_PR.spec is the same as API_DEV.spec-----")
         exit(0)
@@ -593,6 +637,8 @@ if __name__ == '__main__':
     if not args.debug:
         shutil.rmtree(SAMPLECODE_TEMPDIR)
 
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    logger.addHandler(stdout_handler)
     logger.info("----------------End of the Check--------------------")
     if len(whl_error) != 0:
         logger.info("%s is not in whl.", whl_error)

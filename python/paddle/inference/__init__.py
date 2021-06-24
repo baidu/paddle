@@ -12,5 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..fluid.inference import Config, DataType, PlaceType, PrecisionType, Tensor, \
-    Predictor, create_predictor, get_version, get_num_bytes_of_data_type, PredictorPool
+from ..fluid.inference import Config  # noqa: F401
+from ..fluid.inference import DataType  # noqa: F401
+from ..fluid.inference import PlaceType  # noqa: F401
+from ..fluid.inference import PrecisionType  # noqa: F401
+from ..fluid.inference import Tensor  # noqa: F401
+from ..fluid.inference import Predictor  # noqa: F401
+from ..fluid.inference import create_predictor  # noqa: F401
+from ..fluid.inference import get_version  # noqa: F401
+from ..fluid.inference import get_num_bytes_of_data_type  # noqa: F401
+from ..fluid.inference import PredictorPool  # noqa: F401
+
+__all__ = [  # noqa
+    'Config',
+    'DataType',
+    'PlaceType',
+    'PrecisionType',
+    'Tensor',
+    'Predictor',
+    'create_predictor',
+    'get_version',
+    'get_num_bytes_of_data_type',
+    'PredictorPool'
+]

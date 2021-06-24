@@ -33,6 +33,7 @@ from .mixed_precision import *
 from . import layers
 from .layers import *
 from . import optimizer
+from .optimizer import *
 from . import sparsity
 from .sparsity import *
 

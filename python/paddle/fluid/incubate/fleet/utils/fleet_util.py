@@ -32,7 +32,7 @@ OpRole = core.op_proto_and_checker_maker.OpRole
 __all__ = ["FleetUtil"]
 
 _logger = get_logger(
-    __name__, logging.INFO, fmt='%(asctime)s-%(levelname)s: %(message)s')
+    __name__, logging.INFO, fmt='%(asctime)s %(levelname)s: %(message)s')
 
 fleet = None
 
@@ -244,7 +244,7 @@ class FleetUtil(object):
         new_pos = 0.0
         new_neg = 0.0
         total_ins_num = 0
-        for i in xrange(num_bucket):
+        for i in range(num_bucket):
             index = num_bucket - 1 - i
             new_pos = pos + global_pos[0][index]
             total_ins_num += global_pos[0][index]
@@ -1240,8 +1240,8 @@ class FleetUtil(object):
         hours = os.popen("echo -n " + hours).read().split(" ")
         split_interval = int(split_interval)
         split_per_pass = int(split_per_pass)
-        splits_per_day = 24 * 60 / split_interval
-        pass_per_day = splits_per_day / split_per_pass
+        splits_per_day = 24 * 60 // split_interval
+        pass_per_day = splits_per_day // split_per_pass
         left_train_hour = int(hours[0])
         right_train_hour = int(hours[-1])
 
@@ -1425,7 +1425,7 @@ class FleetUtil(object):
         relative_ctr_error = 0.0
         k_max_span = 0.01
         k_relative_error_bound = 0.05
-        for i in xrange(num_bucket):
+        for i in range(num_bucket):
             click = global_pos[0][i]
             show = global_pos[0][i] + global_neg[0][i]
             ctr = float(i) / num_bucket

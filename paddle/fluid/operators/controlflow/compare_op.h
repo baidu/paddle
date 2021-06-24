@@ -100,6 +100,9 @@ class CompareOpKernel
   REGISTER_OP_##dev##_KERNEL(op_type,                                         \
                              ::paddle::operators::CompareOpKernel<            \
                                  ::paddle::platform::dev##DeviceContext,      \
+                                 functor<bool>, inverse_functor<bool>>,       \
+                             ::paddle::operators::CompareOpKernel<            \
+                                 ::paddle::platform::dev##DeviceContext,      \
                                  functor<int>, inverse_functor<int>>,         \
                              ::paddle::operators::CompareOpKernel<            \
                                  ::paddle::platform::dev##DeviceContext,      \

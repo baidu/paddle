@@ -18,6 +18,7 @@ limitations under the License. */
 namespace ops = paddle::operators;
 REGISTER_OP_CUDA_KERNEL(
     strided_slice,
+    ops::StridedSliceKernel<paddle::platform::CUDADeviceContext, bool>,
     ops::StridedSliceKernel<paddle::platform::CUDADeviceContext, int>,
     ops::StridedSliceKernel<paddle::platform::CUDADeviceContext, int64_t>,
     ops::StridedSliceKernel<paddle::platform::CUDADeviceContext, float>,
@@ -29,7 +30,8 @@ REGISTER_OP_CUDA_KERNEL(
 
 REGISTER_OP_CUDA_KERNEL(
     strided_slice_grad,
-    ops::StridedSliceGradKernel<paddle::platform::CPUDeviceContext, int>,
+    ops::StridedSliceGradKernel<paddle::platform::CUDADeviceContext, bool>,
+    ops::StridedSliceGradKernel<paddle::platform::CUDADeviceContext, int>,
     ops::StridedSliceGradKernel<paddle::platform::CUDADeviceContext, int64_t>,
     ops::StridedSliceGradKernel<paddle::platform::CUDADeviceContext, float>,
     ops::StridedSliceGradKernel<paddle::platform::CUDADeviceContext, double>,

@@ -465,7 +465,11 @@ void LaunchBroadcastElementwiseCudaKernel(
     const platform::CUDADeviceContext &ctx,
     const std::vector<const framework::Tensor *> &ins,
     std::vector<framework::Tensor *> *outs, int axis, Functor func) {
-  static_assert(ET == (ElementwiseType)2, "Only Support binary calculation.");
+  PADDLE_ENFORCE_EQ(ET, ElementwiseType::kBinary,
+                    platform::errors::InvalidArgument(
+                        "Currently, only Support binary calculation, "
+                        "but received %d input tensors.\n",
+                        static_cast<int>(ET)));
   int in_vec_size = 4;
   framework::Tensor *out = (*outs)[0];
   for (auto *in : ins) {
@@ -502,22 +506,20 @@ void LaunchBroadcastElementwiseCudaKernel(
 
 template <ElementwiseType ET, typename InT, typename OutT, typename Functor>
 void LaunchElementwiseCudaKernel(
-    const framework::ExecutionContext &ctx,
+    const platform::CUDADeviceContext &cuda_ctx,
     const std::vector<const framework::Tensor *> &ins,
-    std::vector<framework::Tensor *> *outs, Functor func) {
+    std::vector<framework::Tensor *> *outs, int axis, Functor func) {
   std::vector<int> dims_size;
   bool no_broadcast_flag = true;
   for (auto *in : ins) {
     no_broadcast_flag = ins[0]->dims() == in->dims();
     dims_size.emplace_back(in->dims().size());
   }
-  const auto &cuda_ctx =
-      ctx.template device_context<platform::CUDADeviceContext>();
+
   if (no_broadcast_flag) {
-    LaunchSameDimsElementwiseCudaKernel<ElementwiseType::kBinary, InT, OutT>(
-        cuda_ctx, ins, outs, func);
+    LaunchSameDimsElementwiseCudaKernel<ET, InT, OutT>(cuda_ctx, ins, outs,
+                                                       func);
   } else {
-    int axis = ctx.HasAttr("axis") ? ctx.Attr<int>("axis") : -1;
     axis = axis == -1
                ? *std::max_element(dims_size.begin(), dims_size.end()) -
                      *std::min_element(dims_size.begin(), dims_size.end())

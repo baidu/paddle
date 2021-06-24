@@ -18,21 +18,16 @@ import os
 from paddle.fluid import core
 from paddle.fluid import framework
 from paddle.fluid.dygraph.parallel import ParallelEnv
-from paddle.fluid.framework import is_compiled_with_cuda  #DEFINE_ALIAS
-from paddle.fluid.framework import is_compiled_with_rocm  #DEFINE_ALIAS
+from paddle.fluid.framework import is_compiled_with_cuda  # noqa: F401
+from paddle.fluid.framework import is_compiled_with_rocm  # noqa: F401
 
-__all__ = [
+
+__all__ = [  # npqa
     'get_cudnn_version',
     'set_device',
     'get_device',
     'XPUPlace',
     'is_compiled_with_xpu',
-    #            'cpu_places',
-    #            'CPUPlace',
-    #            'cuda_pinned_places',
-    #            'cuda_places',
-    #            'CUDAPinnedPlace',
-    #            'CUDAPlace',
     'is_compiled_with_cuda',
     'is_compiled_with_rocm',
     'is_compiled_with_npu'
@@ -68,7 +63,7 @@ def is_compiled_with_xpu():
         .. code-block:: python
 
             import paddle
-            support_xpu = paddle.device.is_compiled_with_xpu()
+            support_xpu = paddle.is_compiled_with_xpu()
     """
     return core.is_compiled_with_xpu()
 
@@ -82,9 +77,10 @@ def XPUPlace(dev_id):
 
     Examples:
         .. code-block:: python
-
+            # required: xpu
+            
             import paddle
-            place = paddle.device.XPUPlace(0)
+            place = paddle.XPUPlace(0)
     """
     return core.XPUPlace(dev_id)
 
@@ -127,15 +123,13 @@ def _convert_to_place(device):
         place = core.CPUPlace()
     elif lower_device == 'gpu':
         if not core.is_compiled_with_cuda():
-            raise ValueError(
-                "The device should not be 'gpu', " \
-                "since PaddlePaddle is not compiled with CUDA")
+            raise ValueError("The device should not be 'gpu', "
+                             "since PaddlePaddle is not compiled with CUDA")
         place = core.CUDAPlace(ParallelEnv().dev_id)
     elif lower_device == 'xpu':
         if not core.is_compiled_with_xpu():
-            raise ValueError(
-                "The device should not be 'xpu', " \
-                "since PaddlePaddle is not compiled with XPU")
+            raise ValueError("The device should not be 'xpu', "
+                             "since PaddlePaddle is not compiled with XPU")
         selected_xpus = os.getenv("FLAGS_selected_xpus", "0").split(",")
         device_id = int(selected_xpus[0])
         place = core.XPUPlace(device_id)
@@ -149,7 +143,7 @@ def _convert_to_place(device):
         if avaliable_gpu_device:
             if not core.is_compiled_with_cuda():
                 raise ValueError(
-                    "The device should not be {}, since PaddlePaddle is " \
+                    "The device should not be {}, since PaddlePaddle is "
                     "not compiled with CUDA".format(avaliable_gpu_device))
             device_info_list = device.split(':', 1)
             device_id = device_info_list[1]
@@ -158,7 +152,7 @@ def _convert_to_place(device):
         if avaliable_xpu_device:
             if not core.is_compiled_with_xpu():
                 raise ValueError(
-                    "The device should not be {}, since PaddlePaddle is " \
+                    "The device should not be {}, since PaddlePaddle is "
                     "not compiled with XPU".format(avaliable_xpu_device))
             device_info_list = device.split(':', 1)
             device_id = device_info_list[1]

@@ -18,7 +18,7 @@ namespace ops = paddle::operators;
 namespace plat = paddle::platform;
 
 REGISTER_OP_CUDA_KERNEL(
-    tril_triu,
+    tril_triu, ops::TrilTriuOpKernel<paddle::platform::CUDADeviceContext, bool>,
     ops::TrilTriuOpKernel<paddle::platform::CUDADeviceContext, float>,
     ops::TrilTriuOpKernel<paddle::platform::CUDADeviceContext, double>,
     ops::TrilTriuOpKernel<paddle::platform::CUDADeviceContext, int>,
@@ -26,6 +26,7 @@ REGISTER_OP_CUDA_KERNEL(
     ops::TrilTriuOpKernel<paddle::platform::CUDADeviceContext, plat::float16>);
 REGISTER_OP_CUDA_KERNEL(
     tril_triu_grad,
+    ops::TrilTriuGradOpKernel<paddle::platform::CUDADeviceContext, bool>,
     ops::TrilTriuGradOpKernel<paddle::platform::CUDADeviceContext, float>,
     ops::TrilTriuGradOpKernel<paddle::platform::CUDADeviceContext, double>,
     ops::TrilTriuGradOpKernel<paddle::platform::CUDADeviceContext, int>,

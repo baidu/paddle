@@ -169,10 +169,7 @@ class TestDistSaveLoad2x2(TestDistSimnetBow2x2):
 
             var = np.array(fluid.global_scope().find_var('__fc_b__').get_tensor(
             ))
-            if six.PY2:
-                print(pickle.dumps(np.ravel(var).tolist()))
-            else:
-                sys.stdout.buffer.write(pickle.dumps(np.ravel(var).tolist()))
+            sys.stdout.buffer.write(pickle.dumps(np.ravel(var).tolist()))
 
         elif save_mode == "DIST":
             skip_steps = int(os.getenv("SKIP_STEPS"))
@@ -191,10 +188,7 @@ class TestDistSaveLoad2x2(TestDistSimnetBow2x2):
                         continue
                     loss, = exe.run(fetch_list=[avg_cost.name],
                                     feed=feeder.feed(data))
-            if six.PY2:
-                print(pickle.dumps(loss.tolist()))
-            else:
-                sys.stdout.buffer.write(pickle.dumps(loss.tolist()))
+            sys.stdout.buffer.write(pickle.dumps(loss.tolist()))
         else:
             raise Exception("save_mode must be LOCAL or DIST")
 

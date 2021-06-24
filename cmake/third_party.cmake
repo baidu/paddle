@@ -215,6 +215,8 @@ list(APPEND third_party_deps extern_eigen3 extern_gflags extern_glog extern_boos
 list(APPEND third_party_deps extern_zlib extern_dlpack extern_warpctc extern_threadpool)
 
 include(cblas)              	# find first, then download, build, install openblas
+
+message(STATUS "CBLAS_PROVIDER: ${CBLAS_PROVIDER}")
 if(${CBLAS_PROVIDER} STREQUAL MKLML)
     list(APPEND third_party_deps extern_mklml)
 elseif(${CBLAS_PROVIDER} STREQUAL EXTERN_OPENBLAS)

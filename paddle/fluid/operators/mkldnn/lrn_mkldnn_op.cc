@@ -34,7 +34,7 @@ class LRNMKLDNNHandler : public platform::MKLDNNHandlerT<T, mkldnn::lrn_forward,
             dev_ctx, mkldnn_engine, cpu_place,
             platform::CreateKey(dev_ctx, framework::vectorize(input->dims()),
                                 unique_name)) {
-    if (!this->isCachedNonBlocking()) {
+    if (!this->isCached()) {
       const int n = ctx.Attr<int>("n");
       // MKL-DNN implements LRN in a caffe way:
       // http://caffe.berkeleyvision.org/tutorial/layers/lrn.html
@@ -52,7 +52,7 @@ class LRNMKLDNNHandler : public platform::MKLDNNHandlerT<T, mkldnn::lrn_forward,
       auto src_md = mkldnn::memory::desc(dims, platform::MKLDNNGetDataType<T>(),
                                          input->format());
 
-      this->AcquireForwardPrimitiveDescriptorNonBlocking(
+      this->AcquireForwardPrimitiveDescriptor(
           is_test ? mkldnn::prop_kind::forward_inference
                   : mkldnn::prop_kind::forward_training,
           mkldnn::algorithm::lrn_across_channels, src_md, n, alpha, beta, k);
@@ -86,11 +86,11 @@ class LRNMKLDNNHandler : public platform::MKLDNNHandlerT<T, mkldnn::lrn_forward,
       auto diff_md = mkldnn::memory::desc(
           dims, platform::MKLDNNGetDataType<T>(), out_grad->format());
 
-      this->AcquireForwardPrimitiveDescriptorNonBlocking(
+      this->AcquireForwardPrimitiveDescriptor(
           mkldnn::prop_kind::forward_training,
           mkldnn::algorithm::lrn_across_channels, src_md, n, alpha, beta, k);
 
-      this->AcquireBackwardPrimitiveDescriptorNonBlocking(
+      this->AcquireBackwardPrimitiveDescriptor(
           mkldnn::algorithm::lrn_across_channels, src_md, diff_md, n, alpha,
           beta, k);
     }

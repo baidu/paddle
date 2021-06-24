@@ -417,7 +417,7 @@ TEST(enforce, cuda_success) {
       "An unsupported value or parameter was passed to the function (a "
       "negative vector size, for example).To correct: ensure that all the "
       "parameters being passed have valid values"));
-  /*
+
 #if !defined(__APPLE__) && defined(PADDLE_WITH_NCCL)
   EXPECT_TRUE(CheckCudaStatusSuccess(ncclSuccess));
   EXPECT_TRUE(CheckCudaStatusFailure(ncclUnhandledCudaError, "NCCL error"));
@@ -430,7 +430,6 @@ TEST(enforce, cuda_success) {
                                      "The call to NCCL is incorrect. This is "
                                      "usually reflecting a programming error"));
 #endif
-*/
 }
 #endif
 #endif

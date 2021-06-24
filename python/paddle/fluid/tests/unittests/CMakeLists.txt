@@ -80,6 +80,7 @@ if(((NOT WITH_ROCM) AND (NOT WITH_GPU)) OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_c_split)
     LIST(REMOVE_ITEM TEST_OPS test_allgather)
     LIST(REMOVE_ITEM TEST_OPS test_c_identity)
+    LIST(REMOVE_ITEM TEST_OPS test_c_embedding_op)
     LIST(REMOVE_ITEM TEST_OPS test_allreduce)
     LIST(REMOVE_ITEM TEST_OPS test_broadcast)
     LIST(REMOVE_ITEM TEST_OPS test_collective_reduce)
@@ -103,6 +104,7 @@ if(((NOT WITH_ROCM) AND (NOT WITH_GPU)) OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_collective_sendrecv_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_wait)
     LIST(REMOVE_ITEM TEST_OPS test_memcpy_op)
+    LIST(REMOVE_ITEM TEST_OPS test_raw_program_optimizer)
 endif()
 
 if(WIN32)
@@ -576,7 +578,7 @@ endif()
 py_test_modules(test_parallel_executor_crf MODULES test_parallel_executor_crf)
 # Coverage pipeline use cuda 10.1 now, profiler will random hang in cuda 10.1,
 # see https://github.com/PaddlePaddle/Paddle/issues/29082 for details.
-# We guess there are some bugs in cuda 10.1 or 10.2, 
+# We guess there are some bugs in cuda 10.1 or 10.2,
 # since this unittest is stable in cuda 11 (py3 pipeline) now.
 if(NOT WITH_COVERAGE)
   py_test_modules(test_parallel_executor_profiler MODULES test_parallel_executor_profiler)
@@ -601,8 +603,8 @@ py_test_modules(test_fuse_bn_act_pass MODULES test_fuse_bn_act_pass ENVS FLAGS_c
 py_test_modules(test_fuse_bn_add_act_pass MODULES test_fuse_bn_add_act_pass ENVS FLAGS_cudnn_deterministic=1 FLAGS_cudnn_batchnorm_spatial_persistent=1 FLAGS_conv_workspace_size_limit=1000)
 
 # NOTE: These unittests will appear NaN steadily in windows CI. After analysis,
-# it is found that windows CI will run all the training unittests with the ON_INFER option turned on, 
-# which will not appear in other CIs. The calculation behavior of some ops in inference mode is 
+# it is found that windows CI will run all the training unittests with the ON_INFER option turned on,
+# which will not appear in other CIs. The calculation behavior of some ops in inference mode is
 # inconsistent with that in non-inference mode.
 if(NOT ON_INFER)
     py_test_modules(test_parallel_executor_seresnext_base_cpu MODULES test_parallel_executor_seresnext_base_cpu)
@@ -645,7 +647,7 @@ if (WITH_XPU)
     add_subdirectory(xpu)
 endif()
 
-# dist xpu tests: 
+# dist xpu tests:
 if (WITH_XPU_BKCL)
     py_test(test_collective_reduce_api_xpu SRCS "test_collective_reduce_api.py")
     py_test(test_collective_allreduce_api_xpu SRCS "test_collective_allreduce_api.py")
@@ -658,6 +660,8 @@ endif()
 if (WITH_MKLDNN)
     add_subdirectory(mkldnn)
 endif()
+
+add_subdirectory(asp)
 
 add_subdirectory(ir)
 
@@ -713,6 +717,8 @@ if (WITH_DISTRIBUTE)
     set_tests_properties(test_dist_fleet_ctr2 PROPERTIES TIMEOUT 200)
     set_tests_properties(test_dist_fleet_sparse_embedding_ctr PROPERTIES TIMEOUT 200)
     set_tests_properties(test_dist_fleet_infer PROPERTIES TIMEOUT 200)
+    set_tests_properties(test_dist_fleet_raw_program_optimizer PROPERTIES TIMEOUT 120)
+    set_tests_properties(test_dist_fleet_raw_program_optimizer_fuse_allreduce PROPERTIES TIMEOUT 60)
 endif()
 
 if (WITH_DISTRIBUTE AND NOT APPLE)

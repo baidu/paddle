@@ -25,6 +25,7 @@
 #pragma once
 
 #include "pd_common.h"  // NOLINT
+#include "pd_types.h"   // NOLINT
 
 typedef struct PD_Config PD_Config;
 
@@ -154,10 +155,27 @@ PADDLE_CAPI_EXPORT extern PD_Bool PD_ConfigUseGpu(
 /// \brief Turn on XPU.
 ///
 /// \param[in] pd_onfig config
-/// \param[in] l3_workspace_size l3 workspace size.
+/// \param l3_workspace_size The size of the video memory allocated by the l3
+///         cache, the maximum is 16M.
+/// \param locked Whether the allocated L3 cache can be locked. If false,
+///       it means that the L3 cache is not locked, and the allocated L3
+///       cache can be shared by multiple models, and multiple models
+///       sharing the L3 cache will be executed sequentially on the card.
+/// \param autotune Whether to autotune the conv operator in the model. If
+///       true, when the conv operator of a certain dimension is executed
+///       for the first time, it will automatically search for a better
+///       algorithm to improve the performance of subsequent conv operators
+///       of the same dimension.
+/// \param autotune_file Specify the path of the autotune file. If
+///       autotune_file is specified, the algorithm specified in the
+///       file will be used and autotune will not be performed again.
+/// \param precision Calculation accuracy of multi_encoder
+/// \param adaptive_seqlen Is the input of multi_encoder variable length
 ///
 PADDLE_CAPI_EXPORT extern void PD_ConfigEnableXpu(
-    __pd_keep PD_Config* pd_config, int32_t l3_workspace_size);
+    __pd_keep PD_Config* pd_config, int32_t l3_workspace_size, PD_Bool locked,
+    PD_Bool autotune, const char* autotune_file, const char* precision,
+    PD_Bool adaptive_seqlen);
 ///
 /// \brief A boolean state telling whether the XPU is turned on.
 ///
@@ -564,6 +582,35 @@ PADDLE_CAPI_EXPORT extern PD_Bool PD_ConfigIsValid(
 /// \param[in] pd_onfig config
 ///
 PADDLE_CAPI_EXPORT extern void PD_ConfigPartiallyRelease(
+    __pd_keep PD_Config* pd_config);
+///
+/// \brief Delete all passes that has a certain type 'pass'.
+///
+/// \param[in] pass the certain pass type to be deleted.
+///
+PADDLE_CAPI_EXPORT extern void PD_ConfigDeletePass(
+    __pd_keep PD_Config* pd_config, const char* pass);
+///
+/// \brief  Insert a pass to a specific position
+///
+/// \param[in] idx the position to insert.
+/// \param[in] pass the new pass.
+///
+PADDLE_CAPI_EXPORT extern void PD_ConfigInsertPass(
+    __pd_keep PD_Config* pd_config, size_t idx, const char* pass);
+///
+/// \brief Append a pass to the end of the passes
+///
+/// \param[in] pass the new pass.
+///
+PADDLE_CAPI_EXPORT extern void PD_ConfigAppendPass(
+    __pd_keep PD_Config* pd_config, const char* pass);
+///
+/// \brief Get information of passes.
+///
+/// \return Return list of the passes.
+///
+PADDLE_CAPI_EXPORT extern __pd_give PD_OneDimArrayCstr* PD_ConfigAllPasses(
     __pd_keep PD_Config* pd_config);
 
 #ifdef __cplusplus

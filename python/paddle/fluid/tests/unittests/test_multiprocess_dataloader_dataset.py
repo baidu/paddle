@@ -330,5 +330,72 @@ class TestComplextDataset(unittest.TestCase):
             self.run_main(num_workers)
 
 
+class SingleFieldDataset(Dataset):
+    def __init__(self, sample_num):
+        self.sample_num = sample_num
+
+    def __len__(self):
+        return self.sample_num
+
+    def __getitem__(self, idx):
+        return np.random.random((2, 3)).astype('float32')
+
+
+class TestSingleFieldDataset(unittest.TestCase):
+    def init_dataset(self):
+        self.sample_num = 16
+        self.dataset = SingleFieldDataset(self.sample_num)
+
+    def run_main(self, num_workers):
+        paddle.static.default_startup_program().random_seed = 1
+        paddle.static.default_main_program().random_seed = 1
+        place = paddle.CPUPlace()
+        with fluid.dygraph.guard(place):
+            self.init_dataset()
+            dataloader = DataLoader(
+                self.dataset,
+                places=place,
+                num_workers=num_workers,
+                batch_size=2,
+                drop_last=True)
+
+            for i, data in enumerate(dataloader()):
+                assert isinstance(data, paddle.Tensor)
+                assert data.shape == [2, 2, 3]
+
+    def test_main(self):
+        for num_workers in [0, 2]:
+            self.run_main(num_workers)
+
+
+class SingleFieldIterableDataset(IterableDataset):
+    def __init__(self, sample_num):
+        self.sample_num = sample_num
+
+    def __iter__(self):
+        for _ in range(self.sample_num):
+            yield np.random.random((2, 3)).astype('float32')
+
+
+class TestSingleFieldIterableDataset(TestSingleFieldDataset):
+    def init_dataset(self):
+        self.sample_num = 16
+        self.dataset = SingleFieldIterableDataset(self.sample_num)
+
+
+class TestDataLoaderGenerateStates(unittest.TestCase):
+    def setUp(self):
+        self.inputs = [(0, 1), (0, 2), (1, 3)]
+        self.outputs = [[1835504127, 1731038949, 1320224556, 2330041505],
+                        [2834126987, 2358157858, 1860244682, 1437227251],
+                        [457190280, 2660306227, 859341110, 354512857]]
+
+    def test_main(self):
+        from paddle.fluid.dataloader.worker import _generate_states
+        for inp, outp in zip(self.inputs, self.outputs):
+            out = _generate_states(*inp)
+            assert out == outp
+
+
 if __name__ == '__main__':
     unittest.main()

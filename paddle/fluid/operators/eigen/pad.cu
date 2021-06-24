@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 #include "paddle/fluid/operators/eigen/eigen_function.h"
+#include "paddle/fluid/platform/bfloat16.h"
 #include "paddle/fluid/platform/complex.h"
 #include "paddle/fluid/platform/float16.h"
 
@@ -57,6 +58,7 @@ INSTANTIATION(EigenPad, int64_t);
 INSTANTIATION(EigenPad, float);
 INSTANTIATION(EigenPad, double);
 INSTANTIATION(EigenPad, platform::float16);
+INSTANTIATION(EigenPad, platform::bfloat16);
 INSTANTIATION(EigenPad, platform::complex<float>);
 INSTANTIATION(EigenPad, platform::complex<double>);
 #undef INSTANTIATION

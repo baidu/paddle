@@ -141,7 +141,7 @@ class TestXPUBatchNormOp(unittest.TestCase):
         else:
             raise ValueError(
                 "Unsupported data layout! Only NCHW and NHWC is supported, but received "
-                + data_layout)
+                + self.data_layout)
         np.random.seed(1024)
         self.x_np = np.random.random_sample(self.shape).astype(self.dtype)
         self.scale_np = np.random.random_sample(

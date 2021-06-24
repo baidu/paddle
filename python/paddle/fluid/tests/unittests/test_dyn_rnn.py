@@ -333,7 +333,7 @@ class TestDynamicRNNErrors(unittest.TestCase):
                     hidden = fluid.layers.fc(input=[word, memory],
                                              size=10,
                                              act='tanh')
-                    out = np.ones(1).astype('float32')
+                    out = numpy.ones(1).astype('float32')
                     drnn.update_memory(ex_mem=memory, new_mem=hidden)
                     drnn.output(hidden, out)
 

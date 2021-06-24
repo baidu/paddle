@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import optimizer
-from . import checkpoint
-from ..fluid.layer_helper import LayerHelper
+from .optimizer import LookAhead  # noqa: F401
+from .optimizer import ModelAverage  # noqa: F401
+from .checkpoint import auto_checkpoint  # noqa: F401
+from ..fluid.layer_helper import LayerHelper  # noqa: F401
 
-__all__ = []
-__all__ += optimizer.__all__
-__all__ += checkpoint.__all__
+__all__ = [  # noqa
+    'LookAhead', 'ModelAverage'
+]

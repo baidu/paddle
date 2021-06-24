@@ -1,0 +1,97 @@
+type: "fc"
+def {
+  inputs {
+    name: "Input"
+  }
+  inputs {
+    name: "W"
+  }
+  inputs {
+    name: "Bias"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "in_num_col_dims"
+    type: INT
+  }
+  attrs {
+    name: "activation_type"
+    type: STRING
+  }
+}
+extra {
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "padding_weights"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "@ALL_KERNELS_MUST_COMPUTE_RUNTIME_SHAPE@"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "weight_scale"
+    type: FLOATS
+  }
+  attrs {
+    name: "Input_scale"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_scale"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "force_fp32_output"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "enable_int8"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_fc_padding"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_gpu"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

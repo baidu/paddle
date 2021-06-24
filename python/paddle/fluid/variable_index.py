@@ -50,6 +50,17 @@ def replace_ellipsis(var, item):
     return item
 
 
+def replace_none(item):
+    new_item = []
+    none_axes = []
+    for i, slice_item in enumerate(item):
+        if slice_item is None:
+            none_axes.append(i)
+        else:
+            new_item.append(slice_item)
+    return new_item, none_axes
+
+
 def is_integer_or_scalar_tensor(ele):
     from .framework import Variable
     if isinstance(ele, int):
@@ -87,7 +98,7 @@ def _getitem_impl_(var, item):
     Returns:
         Sliced variable
     """
-    from .framework import default_main_program
+    from .framework import default_main_program, Variable
 
     if not isinstance(item, tuple):
         item = (item, )
@@ -97,12 +108,27 @@ def _getitem_impl_(var, item):
     starts = []
     ends = []
     steps = []
-    reverse_axis = []
+    reverse_axes = []
 
     use_strided_slice = False
+    item, none_axes = replace_none(item)
+    item = replace_ellipsis(var, item)
 
     for dim, slice_item in enumerate(item):
         if is_integer_or_scalar_tensor(slice_item):
+            if isinstance(slice_item,
+                          int) and var.shape[dim] is not None and var.shape[
+                              dim] >= 0 and slice_item >= var.shape[dim]:
+                # For python, if users write a, b = var, the __getitem__
+                # method will iterate through 0, 1, 2 ... until __getitem__
+                # throws an IndexError, then stop. The var[0], var[1] will
+                # be given to a, b respectively. If more values are given,
+                # the unpack size would cause error.
+                #
+                # We raises IndexError here to support grammar like `a, b = var`
+                raise IndexError(
+                    "slice_item %d at dim %d should be >= 0 and < var.shape[%d]: %d"
+                    % (slice_item, dim, dim, var.shape[dim]))
             decrease_axes.append(dim)
             start = slice_item
             step = 1
@@ -120,11 +146,53 @@ def _getitem_impl_(var, item):
 
             if start is None and end is None:
                 assert (step == -1)
-                reverse_axis.append(dim)
+                reverse_axes.append(dim)
                 continue
 
             start = 0 if start is None else start
             end = MAX_INTEGER if end is None else end
+
+        elif isinstance(slice_item, list):
+            is_bool_list = False
+            for i in slice_item:
+                if not isinstance(i, (int, bool)):
+                    raise TypeError("Only support int or bool in index list.")
+
+                if isinstance(i, bool):
+                    is_bool_list = True
+                    break
+
+            if len(item) != 1:
+                raise IndexError(
+                    "When index contains a list, its length must be 1, but received {}".
+                    format(len(item)))
+
+            if is_bool_list:
+                new_slice_item = []
+                for idx, ele in enumerate(slice_item):
+                    if not isinstance(ele, bool):
+                        raise TypeError(
+                            "Mixed bool index with other types is not supported."
+                        )
+
+                    if ele is True:
+                        new_slice_item.append(idx)
+                slice_item = new_slice_item
+
+            from .layers import assign
+            from ..tensor import index_select
+
+            idx = assign(np.array(slice_item).astype("int32"))
+            return index_select(var, index=idx, axis=0)
+
+        elif isinstance(slice_item, Variable):
+            if len(item) != 1:
+                raise IndexError(
+                    "When index contains a Tensor, its length must be 1, but received {}".
+                    format(len(item)))
+
+            from ..tensor import index_select
+            return index_select(var, index=slice_item, axis=0)
 
         else:
             raise IndexError(
@@ -170,9 +238,38 @@ def _getitem_impl_(var, item):
             attrs=attrs)
         out = slice_out_var
 
-    if len(reverse_axis) > 0:
+    if len(reverse_axes) > 0:
         from .layers.tensor import reverse
-        out = reverse(out, axis=reverse_axis)
+        out = reverse(out, axis=reverse_axes)
+
+    # Deal with cases when all axes are decreased.
+    # After slice, the shape of out is [1], which should have been [], but Paddle doesn't support scalar.
+    # In order to ensure the correctness of the final shape of out, one dimension of out needs to be decreased.
+    # For example:
+    # # x.shape: (2,3,4)
+    # out = x[0, 1, 1, None] # out.shape : (1)
+    if len(decrease_axes) == len(var.shape):
+        none_axes = none_axes[1:]
+
+    if len(none_axes) > 0:
+        # Deal with cases that decrease_axes is not empty
+        # For example:
+        # # x.shape: (2,3,4)
+        # out = x[0, 0:2, None] # out.shape : (2, 1, 4)
+        for idx, axis in enumerate(none_axes):
+            l = len([i for i in decrease_axes if i < axis])
+            new_axis = axis - l
+            none_axes[idx] = new_axis
+
+        # Deal with cases when all axes are decreased.
+        # After slice, the shape of out is [1], which should have been [], but Paddle doesn't support scalar.
+        # In order to ensure the correctness of the final shape of out, one dimension of out needs to be decreased.
+        # For example:
+        # # x.shape: (2,3,4)
+        # out = x[0, 1, 1, None] # out.shape : (1)
+
+        from ..tensor import unsqueeze
+        out = unsqueeze(out, axis=none_axes)
 
     return out
 

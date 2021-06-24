@@ -434,9 +434,10 @@ class MultiThread(GradAllReduce):
             print("total endpoints: ", self.endpoints)
             print("rank: %d, ring_id: %d" % (self.rank, self.nrings))
             for ring_id in range(self.nrings):
-                self._init_communicator(
-                    self.startup_program, self.current_endpoint, self.endpoints,
-                    self.rank, ring_id, self.wait_port, True)
+                self._init_communicator(self.startup_program,
+                                        self.current_endpoint, self.endpoints,
+                                        self.rank, ring_id, self.wait_port)
+
         else:
             print("begin to _transpile_startup_program for single-node")
             block = self.startup_program.global_block()

@@ -32,6 +32,7 @@ void SetBatchNormAttrs(OpDesc* bn_op, bool is_test = true,
   bn_op->SetAttr("is_test", is_test);
   bn_op->SetAttr("trainable_statistics", trainable_stats);
   bn_op->SetAttr("fuse_with_relu", false);
+  bn_op->SetAttr("epsilon", 0.001f);
 }
 }
 

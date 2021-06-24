@@ -12,7 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .metrics import *
-from . import metrics
+from .metrics import Metric  # noqa: F401
+from .metrics import Accuracy  # noqa: F401
+from .metrics import Precision  # noqa: F401
+from .metrics import Recall  # noqa: F401
+from .metrics import Auc  # noqa: F401
+from .metrics import accuracy  # noqa: F401
 
-__all__ = metrics.__all__
+__all__ = [ #noqa
+    'Metric',
+    'Accuracy',
+    'Precision',
+    'Recall',
+    'Auc',
+    'accuracy'
+]

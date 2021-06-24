@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__all__ = ['batch']
+__all__ = []
 
 
 def batch(reader, batch_size, drop_last=False):
@@ -35,11 +35,11 @@ def batch(reader, batch_size, drop_last=False):
     Examples:
         .. code-block:: python
            
-            import paddle.fluid as fluid
+            import paddle
             def reader():
                 for i in range(10):
                     yield i
-            batch_reader = fluid.io.batch(reader, batch_size=2)
+            batch_reader = paddle.batch(reader, batch_size=2)
             
             for data in batch_reader():
                 print(data)
@@ -60,7 +60,7 @@ def batch(reader, batch_size, drop_last=False):
             if len(b) == batch_size:
                 yield b
                 b = []
-        if drop_last == False and len(b) != 0:
+        if drop_last is False and len(b) != 0:
             yield b
 
     # Batch size check

@@ -25,9 +25,59 @@ namespace paddle {
 namespace framework {
 namespace ir {
 
-class Graph;
-
 using string::PrettyLogDetail;
+
+CPUQuantizeSquashPass::CPUQuantizeSquashPass() {
+  AddOpCompat(OpCompat("scale"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("bias")
+      .IsNumEQ(0.0f)
+      .End()
+      .AddAttr("scale")
+      .IsNumGT(0.0f)
+      .End()
+      .AddAttr("bias_after_scale")  // bias equal to 0.0, so this attribute is
+                                    // unconstrained.
+      .End();
+
+  AddOpCompat(OpCompat("conv2d"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("ResidualData")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .End()
+      .AddAttr("paddings")
+      .End()
+      .AddAttr("padding_algorithm")
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NCHW", "NHWC"})
+      .End();
+}
 
 void CPUQuantizeSquashPass::FindNodesToKeep(
     Graph* graph,
@@ -354,6 +404,10 @@ void CPUQuantizeSquashPass::DequantScaleSquash(Graph* graph) const {
   int found_dequant_scale_squash_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     VLOG(4) << "squash dequant-scale ops pair";
 
     GET_IR_NODE_FROM_SUBGRAPH(dequant_op, dequant_op, dequant_scale_pattern);
@@ -362,9 +416,10 @@ void CPUQuantizeSquashPass::DequantScaleSquash(Graph* graph) const {
     GET_IR_NODE_FROM_SUBGRAPH(scale_out, scale_out, dequant_scale_pattern);
 
     if (dequant_out->outputs.size() == 1 &&
-        scale_op->Op()->GetAttrIfExists<float>("bias") == 0.0) {
+        BOOST_GET_CONST(float, scale_op->Op()->GetAttr("bias")) == 0.0f) {
       auto dequant_scale = dequant_op->Op()->GetAttrIfExists<float>("Scale");
-      auto scale_scale = scale_op->Op()->GetAttrIfExists<float>("scale");
+      float scale_scale =
+          BOOST_GET_CONST(float, scale_op->Op()->GetAttr("scale"));
 
       PADDLE_ENFORCE_GT(dequant_scale, 0.0f,
                         platform::errors::InvalidArgument(
@@ -399,6 +454,10 @@ void CPUQuantizeSquashPass::ScaleQuantSquash(Graph* graph) const {
   int found_scale_quant_squash_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     VLOG(4) << "squash scale-quant ops pair";
 
     GET_IR_NODE_FROM_SUBGRAPH(scale_in, scale_in, scale_quant_pattern);
@@ -407,9 +466,10 @@ void CPUQuantizeSquashPass::ScaleQuantSquash(Graph* graph) const {
     GET_IR_NODE_FROM_SUBGRAPH(quant_op, quant_op, scale_quant_pattern);
 
     if (quant_in->outputs.size() == 1 &&
-        scale_op->Op()->GetAttrIfExists<float>("bias") == 0.0) {
+        BOOST_GET_CONST(float, scale_op->Op()->GetAttr("bias")) == 0.0f) {
       auto quant_scale = quant_op->Op()->GetAttrIfExists<float>("Scale");
-      auto scale_scale = scale_op->Op()->GetAttrIfExists<float>("scale");
+      float scale_scale =
+          BOOST_GET_CONST(float, scale_op->Op()->GetAttr("scale"));
 
       PADDLE_ENFORCE_GT(
           quant_scale, 0.0f,
@@ -443,6 +503,11 @@ void CPUQuantizeSquashPass::QuantizeBf16Conv(Graph* graph) const {
   int found_quant_conv_squash_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
+
     VLOG(4) << "squash quant-conv2d ops pair";
 
     GET_IR_NODE_FROM_SUBGRAPH(quant_in, quant_in, pattern);

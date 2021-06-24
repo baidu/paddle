@@ -1,0 +1,72 @@
+type: "lstm"
+def {
+  inputs {
+    name: "Input"
+  }
+  inputs {
+    name: "H0"
+  }
+  inputs {
+    name: "C0"
+  }
+  inputs {
+    name: "Weight"
+  }
+  inputs {
+    name: "Bias"
+  }
+  outputs {
+    name: "Hidden"
+  }
+  outputs {
+    name: "Cell"
+  }
+  outputs {
+    name: "BatchGate"
+  }
+  outputs {
+    name: "BatchCellPreAct"
+  }
+  attrs {
+    name: "use_peepholes"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "is_reverse"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "gate_activation"
+    type: STRING
+  }
+  attrs {
+    name: "cell_activation"
+    type: STRING
+  }
+  attrs {
+    name: "candidate_activation"
+    type: STRING
+  }
+}
+extra {
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

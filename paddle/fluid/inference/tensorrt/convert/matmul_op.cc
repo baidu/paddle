@@ -45,9 +45,16 @@ class MatMulOpConverter : public OpConverter {
     bool transpose_X = BOOST_GET_CONST(bool, op_desc.GetAttr("transpose_X"));
     bool transpose_Y = BOOST_GET_CONST(bool, op_desc.GetAttr("transpose_Y"));
 
-    auto* layer = TRT_ENGINE_ADD_LAYER(
-        engine_, MatrixMultiply, *const_cast<nvinfer1::ITensor*>(input1),
-        transpose_X, *const_cast<nvinfer1::ITensor*>(input2), transpose_Y);
+    nvinfer1::MatrixOperation matrix_operation_X =
+        transpose_X ? nvinfer1::MatrixOperation::kTRANSPOSE
+                    : nvinfer1::MatrixOperation::kNONE;
+    nvinfer1::MatrixOperation matrix_operation_Y =
+        transpose_Y ? nvinfer1::MatrixOperation::kTRANSPOSE
+                    : nvinfer1::MatrixOperation::kNONE;
+
+    auto* layer =
+        TRT_ENGINE_ADD_LAYER(engine_, MatrixMultiply, *input1,
+                             matrix_operation_X, *input2, matrix_operation_Y);
 
     float alpha = BOOST_GET_CONST(float, op_desc.GetAttr("alpha"));
     auto output_name = op_desc.Output("Out")[0];

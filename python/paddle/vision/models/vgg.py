@@ -17,13 +17,7 @@ import paddle.nn as nn
 
 from paddle.utils.download import get_weights_path_from_url
 
-__all__ = [
-    'VGG',
-    'vgg11',
-    'vgg13',
-    'vgg16',
-    'vgg19',
-]
+__all__ = []
 
 model_urls = {
     'vgg16': ('https://paddle-hapi.bj.bcebos.com/models/vgg16.pdparams',

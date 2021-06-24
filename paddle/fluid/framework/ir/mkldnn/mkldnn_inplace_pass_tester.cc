@@ -167,7 +167,7 @@ TEST(MKLDNNInplacePass, inplace_softmax_branched) {
 
 TEST(MKLDNNInplacePass, inplace_elementwise_add) {
   // Two elementwise_add mkl-dnn enabled op instances to be made inplace
-  MKLDNNInplacePassTest().MainTest("elementwise_add", false, 1);
+  MKLDNNInplacePassTest().MainTest("elementwise_add", false, 0);
 }
 TEST(MKLDNNInplacePass, inplace_tanh) {
   MKLDNNInplacePassTest().MainTest("tanh", false, 1);

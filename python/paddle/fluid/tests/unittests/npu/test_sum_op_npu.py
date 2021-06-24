@@ -82,5 +82,30 @@ class TestSum2(OpTest):
         self.check_output_with_place(self.place, check_dygraph=False)
 
 
+class TestSum3(OpTest):
+    def setUp(self):
+        self.set_npu()
+        self.init_dtype()
+        self.op_type = "sum"
+        self.place = paddle.NPUPlace(0)
+
+        x0 = np.random.random((3, 3)).astype(self.dtype)
+
+        self.inputs = {'X': [("x0", x0)]}
+        y = x0
+        self.outputs = {'Out': y}
+
+        self.attrs = {'use_mkldnn': False}
+
+    def init_dtype(self):
+        self.dtype = np.float16
+
+    def set_npu(self):
+        self.__class__.use_npu = True
+
+    def test_check_output(self):
+        self.check_output_with_place(self.place, check_dygraph=False)
+
+
 if __name__ == '__main__':
     unittest.main()

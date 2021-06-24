@@ -17,7 +17,7 @@ import sys
 import os
 __all__ = [
     'TrainerDesc', 'MultiTrainer', 'DistMultiTrainer', 'PipelineTrainer',
-    'HeterXpuTrainer', 'HeterBoxWorker'
+    'HeterXpuTrainer', 'HeterBoxTrainer'
 ]
 
 

@@ -34,17 +34,15 @@ void TensorRTEngine::InitNetwork() {
   infer_builder_.reset(createInferBuilder(&logger_));
 
   if (with_dynamic_shape_) {
-#if IS_TRT_VERSION_GE(6000)
-    infer_networkv2_.reset(infer_builder_->createNetworkV2(
+    infer_network_.reset(infer_builder_->createNetworkV2(
         1U << static_cast<int>(
             nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH)));
-    infer_builder_config_.reset(infer_builder_->createBuilderConfig());
-    infer_ptr<nvinfer1::IBuilderConfig> infer_builder_config_;
-    optim_profile_ = infer_builder_->createOptimizationProfile();
-#endif
   } else {
-    infer_network_.reset(infer_builder_->createNetwork());
+    infer_network_.reset(infer_builder_->createNetworkV2(0U));
   }
+
+  infer_builder_config_.reset(infer_builder_->createBuilderConfig());
+  optim_profile_ = infer_builder_->createOptimizationProfile();
 }
 
 void TensorRTEngine::Execute(int batch_size, std::vector<void *> *buffers,
@@ -73,12 +71,12 @@ void TensorRTEngine::FreezeNetwork() {
                               "Call InitNetwork first to initialize network."));
   // build engine.
   infer_builder_->setMaxBatchSize(max_batch_);
-  infer_builder_->setMaxWorkspaceSize(max_workspace_);
+  infer_builder_config_->setMaxWorkspaceSize(max_workspace_);
+
   bool enable_fp16 = (precision_ == AnalysisConfig::Precision::kHalf);
-#if IS_TRT_VERSION_GE(5000)
   if (enable_fp16) {
     bool support_fp16 = infer_builder_->platformHasFastFp16();
-    infer_builder_->setFp16Mode(support_fp16);
+    infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
     if (!support_fp16) {
       LOG(INFO) << "You specify FP16 mode, but the hardware do not support "
                    "FP16 speed up, use FP32 instead.";
@@ -86,23 +84,19 @@ void TensorRTEngine::FreezeNetwork() {
       LOG(INFO) << "Run Paddle-TRT FP16 mode";
     }
   }
-#else
-  if (enable_fp16)
-    LOG(INFO) << "Using FP16 in Paddle-TRT must ensure that the version of TRT "
-                 "is at least 5."
-                 "So, use FP32 to run.";
-#endif
-  bool enable_int8 = (precision_ == AnalysisConfig::Precision::kInt8);
 
+  bool enable_int8 = (precision_ == AnalysisConfig::Precision::kInt8);
   if (enable_int8) {
-    infer_builder_->setInt8Mode(true);
+    infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
+    infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kINT8);
+    infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kSTRICT_TYPES);
+
     if (calibrator_) {
-      infer_builder_->setInt8Calibrator(calibrator_);
+      infer_builder_config_->setInt8Calibrator(calibrator_);
     } else {
-      infer_builder_->setInt8Calibrator(nullptr);
+      infer_builder_config_->setInt8Calibrator(nullptr);
 
 #if IS_TRT_VERSION_GE(5000)
-      infer_builder_->setStrictTypeConstraints(true);
       for (auto &quant_range : quant_dynamic_range_) {
         auto tensor = quant_range.first;
         float range = quant_range.second;
@@ -116,6 +110,7 @@ void TensorRTEngine::FreezeNetwork() {
           all_t.insert(layer->getOutput(j));
         }
       }
+
       for (int i = 0; i < network()->getNbInputs(); i++) {
         all_t.insert(network()->getInput(i));
       }
@@ -127,6 +122,7 @@ void TensorRTEngine::FreezeNetwork() {
                   << ", this might be ok when trt does not need this range";
         }
       }
+
 #if IS_TRT_VERSION_GE(5122)
       auto is_layer_int8 = [&](nvinfer1::ILayer *layer) -> bool {
         for (int j = 0; j < layer->getNbInputs(); j++) {
@@ -189,9 +185,9 @@ void TensorRTEngine::FreezeNetwork() {
                      << infer_builder_->getNbDLACores() << ", but got "
                      << dla_core_ << ", so use use 0 as default.";
       }
-      infer_builder_->setDefaultDeviceType(nvinfer1::DeviceType::kDLA);
-      infer_builder_->setDLACore(dla_core_);
-      infer_builder_->allowGPUFallback(true);
+      infer_builder_config_->setDefaultDeviceType(nvinfer1::DeviceType::kDLA);
+      infer_builder_config_->setDLACore(dla_core_);
+      infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kGPU_FALLBACK);
       LOG(INFO) << "TensorRT DLA enabled in FreezeNetwork(), DLACore "
                 << dla_core_;
     }
@@ -212,30 +208,18 @@ void TensorRTEngine::FreezeNetwork() {
           Vec2TRT_Dims(optim_input_shape_[input.first], input.first, true));
     }
     infer_builder_config_->addOptimizationProfile(optim_profile_);
-    infer_builder_config_->setMaxWorkspaceSize(max_workspace_);
-    if (enable_int8) {
-      // Due to a bug of TRT, we must set precision BuilderFlag to kFP16 before
-      // kINT8 here to perform INT8 inference.
-      infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
-      infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kINT8);
-      infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kSTRICT_TYPES);
+    if (WithFp16() && disable_trt_plugin_fp16()) {
+      LOG(INFO) << "NOTE: In order to achieve higher accuracy, you have "
+                   "disabled the fp16 mode of TRT Plugin,\n"
+                << "you can reopen it with "
+                   "'config.SetDynamicShapeInfo(min_shape, max_shape, "
+                   "opt_shape, false /*disable_trt_plugin_fp16*/)'";
     }
-    if (WithFp16()) {
-      infer_builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
-      if (disable_trt_plugin_fp16()) {
-        LOG(INFO) << "NOTE: In order to achieve higher accuracy, you have "
-                     "disabled the fp16 mode of TRT Plugin,\n"
-                  << "you can reopen it with "
-                     "'config.SetDynamicShapeInfo(min_shape, max_shape, "
-                     "opt_shape, false /*disable_trt_plugin_fp16*/)'";
-      }
-    }
-    infer_engine_.reset(infer_builder_->buildEngineWithConfig(
-        *network(), *infer_builder_config_));
 #endif
-  } else {
-    infer_engine_.reset(infer_builder_->buildCudaEngine(*network()));
   }
+  infer_engine_.reset(infer_builder_->buildEngineWithConfig(
+      *network(), *infer_builder_config_));
+
   PADDLE_ENFORCE_NOT_NULL(
       infer_engine_, platform::errors::Fatal(
                          "Build TensorRT cuda engine failed! Please recheck "

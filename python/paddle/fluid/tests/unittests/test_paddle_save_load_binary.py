@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import unittest
 import numpy as np
+from io import BytesIO
 import os
 import sys
 import six
@@ -176,12 +177,26 @@ class TestSaveLoadBinaryFormat(unittest.TestCase):
             paddle.save(temp_lod, path, use_binary_format=True)
 
         with self.assertRaises(RuntimeError):
-            fluid.core._save_lod_tensor(
+            fluid.core.save_lod_tensor(
                 temp_lod, 'test_save_load_error_not_exist_file/not_exist_file')
 
         with self.assertRaises(RuntimeError):
-            fluid.core._load_lod_tensor(
+            fluid.core.load_lod_tensor(
                 temp_lod, 'test_save_load_error_not_exist_file/not_exist_file')
+
+        # save to memory
+        byio = BytesIO()
+        paddle.save(tensor, byio, use_binary_format=True)
+        byio.seek(0)
+        # load from memory
+        loaded_tensor_mem = paddle.load(byio)
+        to_array_mem = np.array(loaded_tensor_mem)
+        self.assertTrue(np.array_equal(np.array(tensor), to_array_mem))
+
+        with self.assertRaises(NotImplementedError):
+            paddle.framework.io._save_lod_tensor(tensor, 1)
+        with self.assertRaises(NotImplementedError):
+            paddle.framework.io._load_lod_tensor(1)
 
     def test_save_load_selected_rows(self):
         paddle.enable_static()
@@ -210,10 +225,28 @@ class TestSaveLoadBinaryFormat(unittest.TestCase):
             np.array_equal(np.array(load_sr.get_tensor()), np_array))
 
         with self.assertRaises(RuntimeError):
-            fluid.core._save_selected_rows(
+            fluid.core.save_selected_rows(
                 selected_rows,
                 'test_paddle_save_load_selected_rows_not_exist_file/temp')
         with self.assertRaises(RuntimeError):
-            fluid.core._load_selected_rows(
+            fluid.core.load_selected_rows(
                 selected_rows,
                 'test_paddle_save_load_selected_rows_not_exist_file/temp')
+
+        # save to memory
+        byio = BytesIO()
+        paddle.save(selected_rows, byio, use_binary_format=True)
+        byio.seek(0)
+        # load from memory
+        selected_rows_mem = paddle.load(byio)
+        to_array_mem = np.array(selected_rows_mem)
+        self.assertTrue(isinstance(selected_rows_mem, fluid.core.SelectedRows))
+        self.assertTrue(list(selected_rows_mem.rows()) == rows)
+        self.assertTrue(selected_rows_mem.height() == height)
+        self.assertTrue(
+            np.array_equal(np.array(selected_rows_mem.get_tensor()), np_array))
+
+        with self.assertRaises(NotImplementedError):
+            paddle.framework.io._save_selected_rows(selected_rows, 1)
+        with self.assertRaises(NotImplementedError):
+            paddle.framework.io._load_selected_rows(1)

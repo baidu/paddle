@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...fluid.incubate.checkpoint import auto_checkpoint
+from ...fluid.incubate.checkpoint import auto_checkpoint  # noqa: F401
 
-__all__ = ["auto_checkpoint"]
+__all__ = []

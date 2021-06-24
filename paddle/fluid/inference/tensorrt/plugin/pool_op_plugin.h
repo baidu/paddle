@@ -128,7 +128,11 @@ class PoolPlugin : public PluginTensorRT {
   nvinfer1::Dims getOutputDimensions(int index, const nvinfer1::Dims* inputs,
                                      int nbInputDims) override;
   int initialize() override { return 0; }
+#if IS_TRT_VERSION_LT(8000)
   int enqueue(int batchSize, const void* const* inputs, void** outputs,
+#else
+  int enqueue(int batchSize, const void* const* inputs, void* const* outputs,
+#endif
               void* workspace, cudaStream_t stream) override;
 
  private:

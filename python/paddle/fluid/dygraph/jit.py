@@ -403,8 +403,15 @@ def _get_input_var_names(inputs, input_spec):
     ]
     if input_spec is None:
         # no prune
-        result_list = input_var_names
-    elif input_spec is not None and len(input_spec) == len(input_var_names):
+        return input_var_names
+    else:
+        # fileter out non-tensor type spec infos.
+        input_spec = [
+            spec for spec in input_spec
+            if isinstance(spec, paddle.static.InputSpec)
+        ]
+
+    if len(input_spec) == len(input_var_names):
         # no prune
         result_list = input_var_names
         # if input spec name not in input_var_names, only raise warning
@@ -530,8 +537,9 @@ def save(layer, path, input_spec=None, **configs):
     Args:
         layer (Layer|function): The Layer or function to be saved.
         path (str): The path prefix to save model. The format is ``dirname/file_prefix`` or ``file_prefix``.
-        input_spec (list[InputSpec|Tensor]|tuple[InputSpec|Tensor], optional): Describes the input of the saved model's forward
-            method, which can be described by InputSpec or example Tensor. If None, all input variables of
+        input_spec (list or tuple[InputSpec|Tensor|Python built-in variable], optional): Describes the input of the saved model's forward
+            method, which can be described by InputSpec or example Tensor. Moreover, we support to specify non-tensor type argument,
+            such as int, float, string, or list/dict of them.If None, all input variables of
             the original Layer's forward method would be the inputs of the saved model. Default None.
         **configs (dict, optional): Other save configuration options for compatibility. We do not
             recommend using these configurations, they may be removed in the future. If not necessary,
@@ -698,9 +706,8 @@ def save(layer, path, input_spec=None, **configs):
                 inner_input_spec.append(
                     paddle.static.InputSpec.from_tensor(var))
             else:
-                raise TypeError(
-                    "The element in input_spec list should be 'Variable' or `paddle.static.InputSpec`, but received element's type is %s."
-                    % type(var))
+                # NOTE(Aurelius84): Support non-Tensor type in `input_spec`.
+                inner_input_spec.append(var)
 
     # parse configs
     configs = _parse_save_configs(configs)
@@ -719,7 +726,7 @@ def save(layer, path, input_spec=None, **configs):
                     inner_input_spec)
             elif 'forward' == attr_func:
                 # transform in jit.save, if input_spec is incomplete, declarative will throw error
-                # inner_input_spec is list[InputSpec], it should be packed with same sturcture
+                # inner_input_spec is list[InputSpec], it should be packed with same structure
                 # as original input_spec here.
                 if inner_input_spec:
                     inner_input_spec = pack_sequence_as(input_spec,

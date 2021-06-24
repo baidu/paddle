@@ -16,20 +16,24 @@ from __future__ import print_function
 import unittest
 import numpy as np
 import paddle
-
-from test_collective_api_base import TestDistBase
+from paddle.distributed import fleet
 
 paddle.enable_static()
 
 
-class TestParallelEmbeddingNoneDivisibleAPI(TestDistBase):
-    def _setup_config(self):
-        pass
+class TestCollectiveSplitAssert(unittest.TestCase):
+    def network(self):
+        fleet.init()
+        data = paddle.static.data(
+            name='tindata', shape=[10, 1000], dtype="float32")
+        emb_out = paddle.distributed.split(
+            data, (7, 8), operation="embedding", num_partitions=2)
 
-    def test_parallel_embedding_none_divisible(self):
-        self.check_with_place("parallel_embedding_api_none_divisible.py",
-                              "parallel_embedding", "nccl")
+    def test_assert(self):
+        with self.assertRaises(AssertionError):
+            self.network()
 
 
 if __name__ == '__main__':
+    paddle.enable_static()
     unittest.main()

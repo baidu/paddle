@@ -18,13 +18,21 @@ if(NOT LINUX)
   return()
 endif()
 
-if(XPU_SDK_ROOT)
-  set(LITE_WITH_XPU ON)
-  include_directories("${XPU_SDK_ROOT}/XTDK/include")
-  include_directories("${XPU_SDK_ROOT}/XTCL/include")
+if (LITE_WITH_XPU)
   add_definitions(-DLITE_SUBGRAPH_WITH_XPU)
-  LINK_DIRECTORIES("${XPU_SDK_ROOT}/XTDK/shlib/")
-  LINK_DIRECTORIES("${XPU_SDK_ROOT}/XTDK/runtime/shlib/")
+  IF(WITH_AARCH64)
+    SET(XPU_SDK_ENV "kylin_aarch64")
+  ELSEIF(WITH_SUNWAY)
+    SET(XPU_SDK_ENV "deepin_sw6_64")
+  ELSEIF(WITH_BDCENTOS)
+    SET(XPU_SDK_ENV "bdcentos_x86_64")
+  ELSEIF(WITH_UBUNTU)
+    SET(XPU_SDK_ENV "ubuntu_x86_64")
+  ELSEIF(WITH_CENTOS)
+    SET(XPU_SDK_ENV "centos7_x86_64")
+  ELSE ()
+    SET(XPU_SDK_ENV "ubuntu_x86_64")
+  ENDIF()
 endif()
 
 if (NOT LITE_SOURCE_DIR OR NOT LITE_BINARY_DIR)
@@ -57,7 +65,8 @@ if (NOT LITE_SOURCE_DIR OR NOT LITE_BINARY_DIR)
                            -DWITH_TESTING=OFF
                            -DLITE_BUILD_EXTRA=ON
                            -DLITE_WITH_XPU=${LITE_WITH_XPU}
-                           -DXPU_SDK_ROOT=${XPU_SDK_ROOT}
+                           -DXPU_SDK_URL=${XPU_BASE_URL}
+                           -DXPU_SDK_ENV=${XPU_SDK_ENV}
                            -DLITE_WITH_CODE_META_INFO=OFF
                            -DLITE_WITH_ARM=ON)
     ExternalProject_Add(
@@ -99,7 +108,8 @@ if (NOT LITE_SOURCE_DIR OR NOT LITE_BINARY_DIR)
                            -DLITE_WITH_STATIC_CUDA=OFF
                            -DCUDA_ARCH_NAME=${CUDA_ARCH_NAME}
                            -DLITE_WITH_XPU=${LITE_WITH_XPU}
-                           -DXPU_SDK_ROOT=${XPU_SDK_ROOT}
+                           -DXPU_SDK_URL=${XPU_BASE_URL}
+                           -DXPU_SDK_ENV=${XPU_SDK_ENV}
                            -DLITE_WITH_CODE_META_INFO=OFF
                            -DLITE_WITH_ARM=OFF)
 
@@ -147,6 +157,10 @@ message(STATUS "Paddle-lite BINARY_DIR: ${LITE_BINARY_DIR}")
 message(STATUS "Paddle-lite SOURCE_DIR: ${LITE_SOURCE_DIR}")
 include_directories(${LITE_SOURCE_DIR})
 include_directories(${LITE_BINARY_DIR})
+if(LITE_WITH_XPU)
+  include_directories(${LITE_BINARY_DIR}/third_party/install/xpu/xdnn/include/)
+  include_directories(${LITE_BINARY_DIR}/third_party/install/xpu/xre/include/)
+endif()
 
 function(external_lite_libs alias path)
   add_library(${alias} SHARED IMPORTED GLOBAL)

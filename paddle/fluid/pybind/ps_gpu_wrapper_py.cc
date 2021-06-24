@@ -48,6 +48,8 @@ void BindPSGPUWrapper(py::module* m) {
       .def("end_pass", &framework::PSGPUWrapper::EndPass,
            py::call_guard<py::gil_scoped_release>())
       .def("build_gpu_ps", &framework::PSGPUWrapper::BuildGPUPS,
+           py::call_guard<py::gil_scoped_release>())
+      .def("finalize", &framework::PSGPUWrapper::Finalize,
            py::call_guard<py::gil_scoped_release>());
 }  // end PSGPUWrapper
 #endif

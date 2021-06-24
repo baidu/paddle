@@ -15,7 +15,7 @@
 import paddle
 import paddle.nn as nn
 
-__all__ = ['LeNet']
+__all__ = []
 
 
 class LeNet(nn.Layer):

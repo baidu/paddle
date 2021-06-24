@@ -157,7 +157,7 @@ def normalize_program(program, feed_vars, fetch_vars):
             exe.run(paddle.static.default_startup_program())
 
             # normalize main program.
-            program = default_main_program()
+            program = paddle.static.default_main_program()
             normalized_program = paddle.static.normalize_program(program, [image], [predict])
 
     """

@@ -22,6 +22,61 @@ namespace paddle {
 namespace framework {
 namespace ir {
 
+MatmulTransposeReshapeMKLDNNPass::MatmulTransposeReshapeMKLDNNPass() {
+  AddOpCompat(OpCompat("matmul"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("alpha")  // unconstrained. can be any float value.
+      .End()
+      .AddAttr("transpose_X")  // unconstrained. can be any bool value.
+      .End()
+      .AddAttr("transpose_Y")  // unconstrained. can be any bool value.
+      .End();
+
+  AddOpCompat(OpCompat("transpose2"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddOutput("XShape")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")  // ints
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NHWC", "NCHW", "AnyLayout"})
+      .End();
+
+  AddOpCompat(OpCompat("reshape2"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Shape")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddInput("ShapeTensor")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddOutput("XShape")
+      .IsTensor()
+      .End()
+      .AddAttr("shape")  // ints
+      .End();
+}
 void MatmulTransposeReshapeMKLDNNPass::ApplyImpl(ir::Graph *graph) const {
   PADDLE_ENFORCE_NOT_NULL(graph,
                           platform::errors::InvalidArgument(
@@ -37,6 +92,10 @@ void MatmulTransposeReshapeMKLDNNPass::ApplyImpl(ir::Graph *graph) const {
   int found_matmul_transpose_reshape_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t &subgraph,
                      Graph *g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     VLOG(4) << "handle matmul_transpose_reshape fuse";
     GET_IR_NODE_FROM_SUBGRAPH(matmul_op, matmul_op, mtrp);
     GET_IR_NODE_FROM_SUBGRAPH(matmul_out, matmul_out, mtrp);

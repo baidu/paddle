@@ -136,6 +136,70 @@ static bool IsEqual(const std::vector<T> &x, const std::vector<T> &y) {
   return true;
 }
 
+FCElementwiseLayerNormFusePass::FCElementwiseLayerNormFusePass() {
+  AddOpCompat(OpCompat("fc"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("W")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("in_num_col_dims")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("activation_type")
+      .IsStringIn({"relu", ""})
+      .End();
+
+  AddOpCompat(OpCompat("layer_norm"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Scale")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddOutput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Mean")
+      .IsOptional()
+      .End()
+      .AddOutput("Variance")
+      .IsOptional()
+      .End()
+
+      .AddAttr("epsilon")
+      .IsNumGE(0.0f)
+      .IsNumLE(0.001f)
+      .End()
+      .AddAttr("begin_norm_axis")
+      .IsNumGT(0)
+      .End();
+
+  AddOpCompat(OpCompat("elementwise_add"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")
+      .IsNumEQ(-1)
+      .End();
+}
+
 void FCElementwiseLayerNormFusePass::ApplyImpl(ir::Graph *graph) const {
   PADDLE_ENFORCE_NOT_NULL(graph,
                           platform::errors::InvalidArgument(
@@ -156,6 +220,11 @@ void FCElementwiseLayerNormFusePass::ApplyImpl(ir::Graph *graph) const {
                      Graph *graph) {
     if (subgraph.count(x) <= 0) {
       LOG(WARNING) << "The subgraph is empty.";
+      return;
+    }
+
+    if (!IsCompat(subgraph, graph)) {
+      LOG(WARNING) << "Pass in op compat failed.";
       return;
     }
 

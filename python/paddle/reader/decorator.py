@@ -18,6 +18,7 @@ import multiprocessing
 import six
 import sys
 import warnings
+import logging
 
 from six.moves.queue import Queue
 from six.moves import zip_longest

@@ -4,10 +4,8 @@ pycrypto ; platform_system != "Windows"
 mock
 gym
 opencv-python<=4.2.0.32
-visualdl ; python_version>="3.5"
+visualdl
 paddle2onnx>=0.4
-scipy>=0.19.0, <=1.2.1 ; python_version<"3.5"
-scipy<=1.3.1 ; python_version=="3.5"
-scipy ; python_version>"3.5"
+scipy
 prettytable
 distro

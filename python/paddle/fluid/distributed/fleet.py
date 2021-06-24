@@ -13,6 +13,7 @@
 import sys
 from .. import core
 from . import ps_instance
+from google.protobuf import text_format
 
 __all__ = ['Fleet']
 

@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 
 import paddle
+import paddle.nn as nn
 paddle.enable_static()
 import paddle.fluid.core as core
 import paddle.fluid as fluid
@@ -896,6 +897,18 @@ class TestConv2DTransposeOpException(unittest.TestCase):
                 data_format='NHWC')
 
         self.assertRaises(ValueError, attr_padding_with_data_format)
+
+
+class TestConv2DTransposeRepr(unittest.TestCase):
+    def test_case(self):
+        paddle.disable_static()
+        x_var = paddle.uniform((2, 4, 8, 8), dtype='float32', min=-1., max=1.)
+        conv = nn.Conv2DTranspose(4, 6, (3, 3), output_padding=1, stride=2)
+        print(conv)
+        y_var = conv(x_var)
+        y_np = y_var.numpy()
+        self.assertIsNotNone(y_np)
+        paddle.enable_static()
 
 
 if __name__ == '__main__':

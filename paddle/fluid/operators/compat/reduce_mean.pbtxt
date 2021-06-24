@@ -1,0 +1,55 @@
+type: "reduce_mean"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "dim"
+    type: INTS
+  }
+  attrs {
+    name: "keep_dim"
+    type: BOOLEAN
+  }
+}
+extra {
+  attrs {
+    name: "reduce_all"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "in_dtype"
+    type: INT
+  }
+  attrs {
+    name: "out_dtype"
+    type: INT
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

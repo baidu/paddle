@@ -1,0 +1,39 @@
+type: "sigmoid"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+}
+extra {
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_cudnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

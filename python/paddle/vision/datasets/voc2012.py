@@ -23,7 +23,7 @@ import paddle
 from paddle.io import Dataset
 from paddle.dataset.common import _check_exists_and_download
 
-__all__ = ["VOC2012"]
+__all__ = []
 
 VOC_URL = 'https://dataset.bj.bcebos.com/voc/VOCtrainval_11-May-2012.tar'
 

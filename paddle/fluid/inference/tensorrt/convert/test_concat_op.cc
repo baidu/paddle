@@ -24,10 +24,10 @@ TEST(concat_op, test) {
   std::unordered_set<std::string> parameters({""});
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("concat_x1", nvinfer1::DimsCHW(10, 3, 1));
-  validator.DeclInputVar("concat_x2", nvinfer1::DimsCHW(3, 3, 1));
-  validator.DeclInputVar("concat_x3", nvinfer1::DimsCHW(7, 3, 1));
-  validator.DeclOutputVar("concat_out", nvinfer1::DimsCHW(20, 3, 1));
+  validator.DeclInputVar("concat_x1", nvinfer1::Dims3(10, 3, 1));
+  validator.DeclInputVar("concat_x2", nvinfer1::Dims3(3, 3, 1));
+  validator.DeclInputVar("concat_x3", nvinfer1::Dims3(7, 3, 1));
+  validator.DeclOutputVar("concat_out", nvinfer1::Dims3(20, 3, 1));
 
   // Prepare Op description
   framework::OpDesc desc;

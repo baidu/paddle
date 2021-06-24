@@ -1,0 +1,63 @@
+type: "layer_norm"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Scale"
+  }
+  inputs {
+    name: "Bias"
+  }
+  outputs {
+    name: "Y"
+  }
+  outputs {
+    name: "Mean"
+  }
+  outputs {
+    name: "Variance"
+  }
+  attrs {
+    name: "epsilon"
+    type: FLOAT
+  }
+  attrs {
+    name: "begin_norm_axis"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

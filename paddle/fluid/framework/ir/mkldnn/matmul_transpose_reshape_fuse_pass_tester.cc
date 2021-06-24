@@ -28,6 +28,7 @@ void SetOp(ProgramDesc *prog, const std::string &type,
   op->SetOutput("Out", {outputs[0]});
   if (type == "transpose2") {
     op->SetAttr("axis", std::vector<int>({0, 2, 1, 3}));
+    op->SetAttr("data_format", std::string("NCHW"));
     op->SetOutput("XShape", {outputs[1]});
   }
   if (type == "reshape2") {
@@ -38,6 +39,9 @@ void SetOp(ProgramDesc *prog, const std::string &type,
   if (type == "matmul") {
     op->SetInput("Y", {inputs[1]});
     op->SetAttr("use_mkldnn", true);
+    op->SetAttr("alpha", 1.0f);
+    op->SetAttr("transpose_X", true);
+    op->SetAttr("transpose_Y", true);
   }
 }
 

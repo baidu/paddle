@@ -27,6 +27,7 @@ import tempfile
 import textwrap
 import numpy as np
 
+import paddle
 from paddle.fluid import unique_name
 from paddle.fluid.data_feeder import convert_dtype
 
@@ -59,10 +60,7 @@ class BaseNodeVisitor(gast.NodeVisitor):
 
 
 # imp is deprecated in python3
-if six.PY2:
-    import imp
-else:
-    from importlib.machinery import SourceFileLoader
+from importlib.machinery import SourceFileLoader
 
 dygraph_class_to_static_api = {
     "CosineDecay": "cosine_decay",
@@ -141,9 +139,9 @@ def make_hashable(x, error_msg=None):
     """
     Makes input `x` hashable.
 
-    For some unhashable objects, such as `dict/list/np.ndarray`,applying hash function by using their values.
+    For some unhashable objects, such as `dict/list/set/np.ndarray`,applying hash function by using their values.
     """
-    if isinstance(x, (tuple, list)):
+    if isinstance(x, (tuple, list, set)):
         return tuple(map(make_hashable, x))
 
     try:
@@ -487,15 +485,10 @@ def ast_to_func(ast_root, dyfunc, delete_on_exit=True):
             os.remove(filepath)
 
     source = ast_to_source_code(ast_root)
-    import_fluid = "import paddle\nimport paddle.fluid as fluid\n"
-    source = import_fluid + source
+    source = _inject_import_statements() + source
 
-    if six.PY2:
-        source = source.encode('utf-8')
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
-    else:
-        f = tempfile.NamedTemporaryFile(
-            mode='w', suffix='.py', delete=False, encoding='utf-8')
+    f = tempfile.NamedTemporaryFile(
+        mode='w', suffix='.py', delete=False, encoding='utf-8')
     with f:
         module_name = os.path.basename(f.name[:-3])
         f.write(source)
@@ -504,10 +497,7 @@ def ast_to_func(ast_root, dyfunc, delete_on_exit=True):
         atexit.register(lambda: remove_if_exit(f.name))
         atexit.register(lambda: remove_if_exit(f.name[:-3] + ".pyc"))
 
-    if six.PY2:
-        module = imp.load_source(module_name, f.name)
-    else:
-        module = SourceFileLoader(module_name, f.name).load_module()
+    module = SourceFileLoader(module_name, f.name).load_module()
     func_name = dyfunc.__name__
     # The 'forward' or 'another_forward' of 'TranslatedLayer' cannot be obtained
     # through 'func_name'. So set the special function name '__i_m_p_l__'.
@@ -526,6 +516,14 @@ def ast_to_func(ast_root, dyfunc, delete_on_exit=True):
     recover_globals_attribute(dyfunc, callable_func)
 
     return callable_func, f.name
+
+
+def _inject_import_statements():
+    import_statements = [
+        "import paddle", "import paddle.fluid as fluid", "from typing import *",
+        "import numpy as np"
+    ]
+    return '\n'.join(import_statements) + '\n'
 
 
 def recover_globals_attribute(src_obj, dst_obj):
@@ -1421,10 +1419,10 @@ def input_specs_compatible(src_input_specs, desired_input_specs):
     Returns True if the two input specs are compatible, otherwise False.
 
     args:
-        src_input_spec (list[InputSpec]|tuple(InputSpec)): list/tuple of
-            paddle.static.InputSpec
-        desired_input_specs (list[InputSpec]|tuple(InputSpec)): list/tuple of
-            paddle.static.InputSpec
+        src_input_spec (list or tuple[InputSpec et.al]): list/tuple of
+            paddle.static.InputSpec or int/str et.al
+        desired_input_specs (list or tuple[InputSpec et.al]): list/tuple of
+            paddle.static.InputSpec or int/str et.al
     """
     len_specs = len(src_input_specs)
     if len_specs != len(desired_input_specs):
@@ -1433,28 +1431,67 @@ def input_specs_compatible(src_input_specs, desired_input_specs):
         for spec in src_input_specs:
             if spec not in desired_input_specs:
                 return False
-
     else:
-        for i in range(len_specs):
-            src_shape = src_input_specs[i].shape
-            other_shape = desired_input_specs[i].shape
-            len_shape = len(src_shape)
-            if len_shape != len(other_shape):
-                return False
-            for j in range(len_shape):
-                if src_shape[j] is None or src_shape[j] < 0:
-                    continue
-                if other_shape[j] is None or other_shape[j] < 0:
-                    continue
-                if src_shape[j] != other_shape[j]:
+        for (src_spec, desired_spec) in zip(src_input_specs,
+                                            desired_input_specs):
+            if isinstance(src_spec, paddle.static.InputSpec) or isinstance(
+                    desired_spec, paddle.static.InputSpec):
+                if not _compatible_tensor_spec(src_spec, desired_spec):
+                    return False
+            else:
+                if not _compatible_non_tensor_spec(src_spec, desired_spec):
                     return False
 
-            src_dtype = convert_dtype(src_input_specs[i].dtype)
-            other_dtype = convert_dtype(desired_input_specs[i].dtype)
-            if src_dtype != other_dtype:
-                return False
+    return True
+
+
+def _compatible_tensor_spec(src_spec, desired_spec):
+    """
+    Check whether two tensor type spec is compatible.
+    """
+    for spec in [src_spec, desired_spec]:
+        if not isinstance(spec, paddle.static.InputSpec):
+            return False
+    src_shape = src_spec.shape
+    other_shape = desired_spec.shape
+    len_shape = len(src_shape)
+    if len_shape != len(other_shape):
+        return False
+    for j in range(len_shape):
+        if src_shape[j] is None or src_shape[j] < 0:
+            continue
+        if other_shape[j] is None or other_shape[j] < 0:
+            continue
+        if src_shape[j] != other_shape[j]:
+            return False
+
+    src_dtype = convert_dtype(src_spec.dtype)
+    other_dtype = convert_dtype(desired_spec.dtype)
+    if src_dtype != other_dtype:
+        return False
 
     return True
+
+
+def _compatible_non_tensor_spec(src_spec, desired_spec):
+    """
+    Check whether two non-tensor type spec is compatible.
+    """
+
+    def hash_value(spec):
+        try:
+            hash_val = make_hashable(spec)
+        except:
+            hash_val = None
+        return hash_val
+
+    src_hash_val = hash_value(src_spec)
+    desired_hash_val = hash_value(desired_spec)
+
+    if src_hash_val != desired_hash_val:
+        return False
+    else:
+        return True
 
 
 def slice_is_num(slice_node):

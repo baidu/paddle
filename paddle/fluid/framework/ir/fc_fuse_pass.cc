@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "paddle/fluid/framework/ir/fc_fuse_pass.h"
-
 #include <string>
 
 #include "paddle/fluid/framework/op_version_registry.h"
@@ -22,6 +21,67 @@
 namespace paddle {
 namespace framework {
 namespace ir {
+
+FCFusePass::FCFusePass() {
+  AddOpCompat(OpCompat("mul"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("x_num_col_dims")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("y_num_col_dims")
+      .IsNumEQ(1)
+      .End();
+
+  AddOpCompat(OpCompat("elementwise_add"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")
+      .IsNumGE(1)
+      .End();
+
+  AddOpCompat(OpCompat("relu"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End();
+
+  AddOpCompat(OpCompat("fc"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("W")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("in_num_col_dims")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("activation_type")
+      .IsStringIn({"relu", ""})
+      .End();
+}
 
 void FCFusePass::ApplyImpl(ir::Graph* graph) const {
   PADDLE_ENFORCE_NOT_NULL(
@@ -50,6 +110,10 @@ int FCFusePass::ApplyFCPattern(Graph* graph, bool with_relu) const {
                      Graph* g) {
     if (subgraph.count(x) <= 0) {
       LOG(WARNING) << "The subgraph is empty.";
+      return;
+    }
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
       return;
     }
 
@@ -158,6 +222,11 @@ int FCFusePass::ApplyFCPattern(Graph* graph, bool with_relu) const {
       desc.SetAttr("out_threshold", out_threshold_attr);
     }
     desc.Flush();
+
+    if (!IsCompat(desc)) {
+      LOG(WARNING) << "Fc fuse pass in out fc op compat failed.";
+      return;
+    }
 
     auto fc_node = g->CreateOpNode(&desc);  // OpDesc will be copied.
     if (with_relu) {

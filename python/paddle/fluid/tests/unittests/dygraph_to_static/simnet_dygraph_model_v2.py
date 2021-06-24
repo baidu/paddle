@@ -14,6 +14,7 @@
 
 from functools import reduce
 import paddle
+from paddle.static import Variable
 
 
 class EmbeddingLayer(object):

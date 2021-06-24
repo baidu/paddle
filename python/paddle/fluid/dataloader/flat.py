@@ -120,7 +120,7 @@ def _restore_batch(flat_batch, structure):
                 elif isinstance(field, (Sequence, Mapping)):
                     field_idx = _restore(structure[k], field_idx)
         else:
-            raise TypeError("wrong flat data type: {}".format(type(batch)))
+            raise TypeError("wrong flat data type: {}".format(type(structure)))
 
         return field_idx
 

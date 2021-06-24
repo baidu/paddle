@@ -135,15 +135,17 @@ class CompareReduceOp : public framework::OperatorWithKernel {
       ::paddle::framework::EmptyGradOpMaker<paddle::framework::OpDesc>,    \
       ::paddle::framework::EmptyGradOpMaker<paddle::imperative::OpBase>);
 
-#define REGISTER_COMPARE_REDUCE_CPU_KERNEL(op_type, functor)            \
-  REGISTER_OP_CPU_KERNEL(                                               \
-      op_type, ::paddle::operators::CompareReduceOpKernel<              \
-                   ::paddle::platform::CPUDeviceContext, functor<int>>, \
-      ::paddle::operators::CompareReduceOpKernel<                       \
-          ::paddle::platform::CPUDeviceContext, functor<int64_t>>,      \
-      ::paddle::operators::CompareReduceOpKernel<                       \
-          ::paddle::platform::CPUDeviceContext, functor<float>>,        \
-      ::paddle::operators::CompareReduceOpKernel<                       \
+#define REGISTER_COMPARE_REDUCE_CPU_KERNEL(op_type, functor)             \
+  REGISTER_OP_CPU_KERNEL(                                                \
+      op_type, ::paddle::operators::CompareReduceOpKernel<               \
+                   ::paddle::platform::CPUDeviceContext, functor<bool>>, \
+      ::paddle::operators::CompareReduceOpKernel<                        \
+          ::paddle::platform::CPUDeviceContext, functor<int>>,           \
+      ::paddle::operators::CompareReduceOpKernel<                        \
+          ::paddle::platform::CPUDeviceContext, functor<int64_t>>,       \
+      ::paddle::operators::CompareReduceOpKernel<                        \
+          ::paddle::platform::CPUDeviceContext, functor<float>>,         \
+      ::paddle::operators::CompareReduceOpKernel<                        \
           ::paddle::platform::CPUDeviceContext, functor<double>>);
 REGISTER_COMPARE_REDUCE_OP(equal_all, "X == Y");
 

@@ -68,8 +68,11 @@ class TestSoftmaxWithCrossEntropyOp(OpTest):
         loss = cross_entropy(softmax, labels, self.soft_label, self.axis,
                              self.ignore_index)
 
+        one_hot_label = np.eye(axis_dim)[labels.reshape(-1)]
+
         self.inputs = {"Logits": logits, "Label": labels}
         self.outputs = {
+            "Backprop": (softmax - one_hot_label).astype(self.dtype),
             "Softmax": softmax.astype(self.dtype),
             "Loss": loss.astype(self.dtype)
         }
@@ -85,12 +88,16 @@ class TestSoftmaxWithCrossEntropyOp(OpTest):
     def test_check_output(self):
         self.check_output_with_place(self.place, check_dygraph=False)
 
-    # TODO(ascendrc): Add grad test
-    # def test_check_grad(self):
-    #     if self.dtype == np.float16:
-    #         return
-    #     self.check_grad(['X'], 'Out')
-    #
+    def test_check_grad(self):
+        if self.dtype == np.float16:
+            return
+        # fp32 has low precision, cpu and npu both need to relax the max_relative_error if using fp32
+        self.check_grad_with_place(
+            self.place, ['Logits'],
+            'Loss',
+            check_dygraph=False,
+            numeric_grad_delta=0.001,
+            max_relative_error=0.5)
 
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),

@@ -15,7 +15,7 @@
 import paddle
 from paddle.fluid.framework import dygraph_only
 from paddle.fluid import core
-__all__ = ['PyLayer', 'PyLayerContext']
+__all__ = []
 
 
 class PyLayerContext(object):

@@ -176,6 +176,8 @@ message DistributedStrategy {
   optional bool find_unused_parameters = 28 [ default = false ];
   optional bool tensor_parallel = 29 [ default = false ];
   optional bool without_graph_optimization = 30 [ default = false ];
+  optional int32 fuse_grad_size_in_num = 31 [ default = 1 ];
+  optional bool calc_comm_same_stream = 32 [ default = false ];
 
   optional RecomputeConfig recompute_configs = 101;
   optional AMPConfig amp_configs = 102;

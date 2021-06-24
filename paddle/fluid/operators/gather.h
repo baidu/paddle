@@ -126,24 +126,17 @@ void CPUGatherNd(const platform::DeviceContext& ctx, const Tensor& input,
   }
 }
 
-template <typename T, typename U, typename V>
-void GatherV2Function(const Tensor* input, const Tensor* index,
-                      const Tensor* axis, Tensor* out,
-                      const paddle::platform::Place& place) {
-  auto* axis_data = axis->data<V>();
+template <typename T, typename U>
+void GatherV2Function(const Tensor* input, const Tensor* index, int axis,
+                      Tensor* out, const paddle::platform::Place& place) {
   auto* index_data = index->data<U>();
-
-  int axis_size = axis->numel();
   int index_size = index->numel();
   int input_size = input->numel();
   auto input_dim = input->dims();
   auto* input_data = input->data<T>();
 
   if (input->numel() == 0) return;
-  PADDLE_ENFORCE_EQ(axis_size, 1,
-                    platform::errors::InvalidArgument(
-                        "Axis size should be 1, but received %d", axis_size));
-  int axis_index = axis_data[0];
+  int axis_index = axis;
 
   int input_index_dim_size = input_dim[axis_index];
   for (int i = 0; i < index_size; i++) {
@@ -186,22 +179,17 @@ void GatherV2Function(const Tensor* input, const Tensor* index,
   }
 }
 
-template <typename T, typename U, typename V>
+template <typename T, typename U>
 void GatherV2GradFunction(const Tensor* input, const Tensor* index,
-                          const Tensor* axis, Tensor* out,
+                          const int axis, Tensor* out,
                           const paddle::platform::Place& place) {
-  auto* axis_data = axis->data<V>();
   auto* index_data = index->data<U>();
 
-  int axis_size = axis->numel();
   auto input_dim = input->dims();
   auto* input_data = input->data<T>();
 
   if (input->numel() == 0) return;
-  PADDLE_ENFORCE_EQ(axis_size, 1,
-                    platform::errors::InvalidArgument(
-                        "Axis size should be 1, but received %d", axis_size));
-  int axis_index = axis_data[0];
+  int axis_index = axis;
   int input_index_dim_size = input_dim[axis_index];
 
   int inner_dim_size = 1;

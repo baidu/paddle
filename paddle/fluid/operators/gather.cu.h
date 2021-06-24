@@ -202,12 +202,11 @@ __global__ void GatherGradGPUKernel(const T* input, const U* index, T* out,
   }
 }
 
-template <typename T, typename U, typename V>
+template <typename T, typename U>
 void GatherV2CUDAFunction(const Tensor* input, const Tensor* index,
-                          const Tensor* axis, Tensor* out,
+                          const int axis, Tensor* out,
                           const paddle::platform::Place& place,
                           const framework::ExecutionContext& ctx) {
-  int axis_size = axis->numel();
   int index_size = index->numel();
   int input_size = input->numel();
   auto input_dim = input->dims();
@@ -215,12 +214,8 @@ void GatherV2CUDAFunction(const Tensor* input, const Tensor* index,
   auto* index_data = index->data<U>();
 
   if (input->numel() == 0) return;
-  PADDLE_ENFORCE_EQ(axis_size, 1,
-                    platform::errors::InvalidArgument(
-                        "Axis size should be 1, but received %d", axis_size));
-  Tensor cpu_axis;
-  framework::TensorCopy(*axis, platform::CPUPlace(), &cpu_axis);
-  int axis_index = cpu_axis.data<V>()[0];
+
+  int axis_index = axis;
   int index_dim_size = input_dim[axis_index];
 
   int inner_dim_size = 1;
@@ -251,26 +246,19 @@ void GatherV2CUDAFunction(const Tensor* input, const Tensor* index,
       index_size, index_dim_size, out_size);
 }
 
-template <typename T, typename U, typename V>
+template <typename T, typename U>
 void GatherV2GradCUDAFunction(const Tensor* input, const Tensor* index,
-                              const Tensor* axis, Tensor* out,
+                              const int axis, Tensor* out,
                               const paddle::platform::Place& place,
                               const framework::ExecutionContext& ctx) {
   auto* index_data = index->data<U>();
-
-  int axis_size = axis->numel();
   int index_size = index->numel();
   int input_size = input->numel();
   auto input_dim = input->dims();
   auto* input_data = input->data<T>();
 
   if (input->numel() == 0) return;
-  PADDLE_ENFORCE_EQ(axis_size, 1,
-                    platform::errors::InvalidArgument(
-                        "Axis size should be 1, but received %d", axis_size));
-  Tensor cpu_axis;
-  framework::TensorCopy(*axis, platform::CPUPlace(), &cpu_axis);
-  int axis_index = cpu_axis.data<V>()[0];
+  int axis_index = axis;
   int input_index_dim_size = input_dim[axis_index];
 
   int inner_dim_size = 1;

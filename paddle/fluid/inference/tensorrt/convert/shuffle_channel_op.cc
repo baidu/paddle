@@ -57,7 +57,7 @@ class ShuffleChannelOpConverter : public OpConverter {
     auto* output = layer->getOutput(0);
 
     auto* reshape_layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *output);
-    nvinfer1::DimsCHW reshape_dim2(c, h, w);
+    nvinfer1::Dims3 reshape_dim2(c, h, w);
     reshape_layer->setReshapeDimensions(reshape_dim2);
 
     auto output_name = op_desc.Output("Out")[0];

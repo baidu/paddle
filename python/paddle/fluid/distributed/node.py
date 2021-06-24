@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 
 import ps_pb2 as pslib
+# NOTE: reduce removed in fuctools in python3
+from functools import reduce
 
 
 class Server(object):

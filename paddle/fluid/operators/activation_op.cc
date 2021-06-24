@@ -182,6 +182,13 @@ $$out = e^x$$
 
 )DOC";
 
+UNUSED constexpr char Expm1Doc[] = R"DOC(
+Expm1 Operator. Computes expm1 of x element-wise with a natural number :math:`e` as the base.
+
+$$out = e^x - 1$$
+
+)DOC";
+
 UNUSED constexpr char ReluDoc[] = R"DOC(
 Relu Activation Operator.
 
@@ -706,6 +713,7 @@ REGISTER_ACTIVATION_OP_MAKER(Sigmoid, SigmoidDoc);
 REGISTER_ACTIVATION_OP_MAKER(Silu, SiluDoc);
 REGISTER_ACTIVATION_OP_MAKER(LogSigmoid, LogSigmoidDoc);
 REGISTER_ACTIVATION_OP_MAKER(Exp, ExpDoc);
+REGISTER_ACTIVATION_OP_MAKER(Expm1, Expm1Doc);
 REGISTER_ACTIVATION_OP_MAKER(Relu, ReluDoc);
 REGISTER_ACTIVATION_OP_MAKER(Tanh, TanhDoc);
 REGISTER_ACTIVATION_OP_MAKER(TanhShrink, TanhShrinkDoc);
@@ -1406,6 +1414,34 @@ REGISTER_OP_CPU_KERNEL(
                               ops::ExpGradFunctor<int>>,
     ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
                               ops::ExpGradFunctor<int64_t>>);
+/* ========================================================================== */
+
+/* ==========================   expm1 register  ============================ */
+REGISTER_OPERATOR(
+    expm1, ops::ActivationOp, ops::Expm1OpMaker, ops::ActivationOpInferVarType,
+    ops::ActivationGradOpMaker<ops::Expm1GradFunctor<float>::FwdDeps(),
+                               paddle::framework::OpDesc>,
+    ops::ActivationGradOpMaker<ops::Expm1GradFunctor<float>::FwdDeps(),
+                               paddle::imperative::OpBase>,
+    std::conditional<ops::CanInplaceAct<ops::Expm1GradFunctor<float>>(),
+                     ops::ActFwdInplaceInferer, void>::type);
+REGISTER_OPERATOR(expm1_grad, ops::ActivationOpGrad,
+                  ops::ActivationGradOpInplaceInferer);
+
+REGISTER_OP_CPU_KERNEL(expm1,
+                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
+                                             ops::Expm1Functor<float>>,
+                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
+                                             ops::Expm1Functor<double>>,
+                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
+                                             ops::Expm1Functor<plat::float16>>);
+REGISTER_OP_CPU_KERNEL(
+    expm1_grad, ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
+                                          ops::Expm1GradFunctor<float>>,
+    ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
+                              ops::Expm1GradFunctor<double>>,
+    ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
+                              ops::Expm1GradFunctor<plat::float16>>);
 /* ========================================================================== */
 
 /* ==========================  Log register ==================================*/

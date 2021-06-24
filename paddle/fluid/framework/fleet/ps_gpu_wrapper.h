@@ -209,6 +209,15 @@ class PSGPUWrapper {
   void EndPass() { HeterPs_->end_pass(); }
   void ShowOneTable(int index) { HeterPs_->show_one_table(index); }
 
+  void Finalize() {
+    VLOG(3) << "PSGPUWrapper Begin Finalize.";
+    if (s_instance_ == nullptr) {
+      return;
+    }
+    s_instance_ = nullptr;
+    VLOG(3) << "PSGPUWrapper Finalize Finished.";
+  }
+
  private:
   static std::shared_ptr<PSGPUWrapper> s_instance_;
   Dataset* dataset_;

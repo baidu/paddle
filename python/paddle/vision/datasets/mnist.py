@@ -24,7 +24,7 @@ import paddle
 from paddle.io import Dataset
 from paddle.dataset.common import _check_exists_and_download
 
-__all__ = ["MNIST", "FashionMNIST"]
+__all__ = []
 
 
 class MNIST(Dataset):

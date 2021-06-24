@@ -19,6 +19,9 @@ limitations under the License. */
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/framework/var_type_traits.h"
 #include "paddle/fluid/operators/jit/kernels.h"
+#ifdef PADDLE_WITH_MKLDNN
+#include "paddle/fluid/operators/mkldnn/axpy_handler.h"
+#endif
 #include "paddle/fluid/platform/bfloat16.h"
 
 namespace paddle {
@@ -139,9 +142,15 @@ struct sgd_dense_param_kernel<
               "Got [%s], but expected less than [%s]",
               grad_rows[i], grad_height));
       const int64_t row = grad_rows[i];
+#ifdef PADDLE_WITH_MKLDNN
+      operators::onednn_handler_axpy(grad_width, -lr[0],
+                                     grad_data + i * grad_width,
+                                     out_data + row * grad_width);
+#else
       for (int64_t j = 0; j < grad_width; ++j) {
         out_data[row * grad_width + j] -= lr[0] * grad_data[i * grad_width + j];
       }
+#endif
     }
   }
 };

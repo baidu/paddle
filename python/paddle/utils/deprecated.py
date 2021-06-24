@@ -18,6 +18,7 @@ decorator to deprecate a function or class
 import warnings
 import functools
 import paddle
+import sys
 
 __all__ = []
 
@@ -99,6 +100,10 @@ def deprecated(update_to="", since="", reason="", level=0):
                     func.__module__, func.__name__))
 
             warningmsg = "\033[93m\nWarning:\n%s \033[0m" % (msg)
+            # ensure ANSI escape sequences print correctly in cmd and powershell
+            if sys.platform.lower() == 'win32':
+                warningmsg = "\nWarning:\n%s " % (msg)
+
             v_current = [int(i) for i in paddle.__version__.split(".")]
             v_current += [0] * (4 - len(v_current))
             v_since = [int(i) for i in _since.split(".")]

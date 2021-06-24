@@ -25,10 +25,9 @@ TEST(DropoutOpConverter, main) {
   TRTConvertValidation validator(8, parameters, scope, 1000);
 
   std::vector<int> tensor_shape{8, 10};
-  validator.DeclInputVar("dropout-X", tensor_shape,
-                         nvinfer1::DimsCHW(10, 1, 1));
-  validator.DeclOutputVar("dropout-Out", nvinfer1::DimsCHW(10, 1, 1));
-  validator.DeclOutputVar("mask-Out", nvinfer1::DimsCHW(10, 1, 1));
+  validator.DeclInputVar("dropout-X", tensor_shape, nvinfer1::Dims3(10, 1, 1));
+  validator.DeclOutputVar("dropout-Out", nvinfer1::Dims3(10, 1, 1));
+  validator.DeclOutputVar("mask-Out", nvinfer1::Dims3(10, 1, 1));
 
   // Prepare Op description
   framework::OpDesc desc;

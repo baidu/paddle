@@ -134,6 +134,64 @@ class TestMomentumOp2(OpTest):
         self.check_output()
 
 
+@unittest.skipIf(not core.is_compiled_with_cuda(),
+                 "core is not compiled with CUDA")
+class TestLarsMomentumOpWithMP(OpTest):
+    def setUp(self):
+        self.op_type = "lars_momentum"
+
+        master_param = np.random.random((123, 321)).astype("float32")
+        param = master_param.astype("float16")
+        grad = np.random.random((123, 321)).astype("float16")
+        velocity = np.zeros((123, 321)).astype("float32")
+        learning_rate = np.array([0.001]).astype("float32")
+        mu = 0.0001
+        lars_coeff = 0.001
+        lars_weight_decay = 0.0005
+        rescale_grad = 1.0
+
+        self.inputs = {
+            'Param': param,
+            'Grad': grad,
+            'Velocity': velocity,
+            'LearningRate': learning_rate,
+            'MasterParam': master_param,
+        }
+
+        self.attrs = {
+            'mu': mu,
+            'lars_coeff': lars_coeff,
+            'lars_weight_decay': lars_weight_decay,
+            'multi_precision': True,
+            'rescale_grad': rescale_grad
+        }
+
+        fp32_grad = grad.astype("float32")
+        pnorm = np.sqrt(np.square(master_param).sum())
+        gnorm = np.sqrt(np.square(fp32_grad).sum())
+        local_lr = learning_rate * lars_coeff * pnorm / (
+            gnorm + lars_weight_decay * pnorm)
+        fp32_grad = fp32_grad * rescale_grad
+        velocity_out = mu * velocity + local_lr * (fp32_grad + lars_weight_decay
+                                                   * master_param)
+        p_new = master_param - velocity_out
+        param_out = p_new.astype("float16")
+        master_param_out = p_new
+
+        self.outputs = {
+            'ParamOut': param_out,
+            'VelocityOut': velocity_out,
+            'MasterParamOut': master_param_out
+        }
+
+    def test_check_output(self):
+        paddle.enable_static()
+        if core.is_compiled_with_cuda():
+            place = fluid.CUDAPlace(0)
+            if core.is_float16_supported(place):
+                self.check_output_with_place(place)
+
+
 class TestLarsMomentumOp(OpTest):
     def setUp(self):
         self.op_type = "lars_momentum"
@@ -553,6 +611,77 @@ class TestMomentumOpWithDecayAPI(unittest.TestCase):
             exe.run(fluid.default_startup_program())
             for data in train_reader():
                 exe.run(main, feed=feeder.feed(data), fetch_list=fetch_list)
+
+
+class TestFusedMomentumWithDecayAPI(unittest.TestCase):
+    def get_program(self, weight_attr, bias_attr=False):
+        main_program = paddle.static.Program()
+        startup_program = paddle.static.Program()
+        with paddle.static.program_guard(
+                main_program=main_program, startup_program=startup_program):
+            x = paddle.static.data(name='x', shape=[10, 10])
+            linear = paddle.nn.Linear(
+                10, 10, weight_attr=weight_attr, bias_attr=bias_attr)
+            out = linear(x)
+            loss = paddle.mean(out)
+            optimizer = paddle.optimizer.Momentum(
+                learning_rate=0.01,
+                momentum=0.9,
+                weight_decay=paddle.regularizer.L2Decay(0.5))
+            optimizer.minimize(loss)
+        return main_program
+
+    def test_param_has_l2decay(self):
+        paddle.enable_static()
+        weight_attr = paddle.ParamAttr(
+            name="weight",
+            initializer=paddle.nn.initializer.Constant(value=0.5),
+            regularizer=paddle.regularizer.L2Decay(0.1))
+        program = self.get_program(weight_attr, bias_attr=False)
+        ops = program.global_block().ops
+
+        self.assertEqual(ops[-1].attr('regularization_method'), 'l2_decay')
+        self.assertEqual(ops[-1].attr('regularization_coeff'), np.float32(0.1))
+        for i in range(len(ops)):
+            self.assertTrue('sum' not in ops[i].type)
+            self.assertTrue('scale' not in ops[i].type)
+
+    def test_param_has_l1decay(self):
+        paddle.enable_static()
+        weight_attr = paddle.ParamAttr(
+            name="weight",
+            initializer=paddle.nn.initializer.Constant(value=0.5),
+            regularizer=paddle.regularizer.L1Decay(0.1))
+        bias_attr = paddle.ParamAttr(
+            name="bias",
+            initializer=paddle.nn.initializer.Constant(value=0.),
+            regularizer=None)
+        program = self.get_program(weight_attr, bias_attr)
+        ops = program.global_block().ops
+
+        self.assertEqual(ops[-1].type, 'momentum')
+        self.assertEqual(ops[-2].type, 'momentum')
+        self.assertEqual(ops[-3].type, 'sum')
+        self.assertEqual(ops[-4].type, 'scale')
+        self.assertEqual(ops[-5].type, 'sign')
+        self.assertEqual(ops[-6].type, 'matmul_grad')
+        if 'weight' in ops[-1].input('Param'):
+            self.assertEqual(ops[-1].attr('regularization_method'), '')
+            self.assertEqual(ops[-1].attr('regularization_coeff'), 0)
+        if 'bias' in ops[-2].input('Param'):
+            self.assertEqual(ops[-2].attr('regularization_method'), 'l2_decay')
+            self.assertEqual(ops[-2].attr('regularization_coeff'),
+                             np.float32(0.5))
+
+    def test_param_has_no_regularizer(self):
+        paddle.enable_static()
+        program = self.get_program(weight_attr=None)
+        ops = program.global_block().ops
+        self.assertEqual(ops[-1].attr('regularization_method'), 'l2_decay')
+        self.assertEqual(ops[-1].attr('regularization_coeff'), np.float32(0.5))
+        for i in range(len(ops)):
+            self.assertTrue('sum' not in ops[i].type)
+            self.assertTrue('scale' not in ops[i].type)
 
 
 class TestMomentumOpVsMomentumOpWithDecayAPI(unittest.TestCase):

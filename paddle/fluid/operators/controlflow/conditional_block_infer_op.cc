@@ -73,6 +73,8 @@ class ConditionalBlockInferOp : public ConditionalOp {
 
       framework::Executor exec(dev_place);
       auto *block = Attr<framework::BlockDesc *>("sub_block");
+      VLOG(3) << "Conditional block.idx = " << block->ID()
+              << ", scope = " << &cur_scope;
       exec.Run(*block->Program(), &cur_scope, block->ID(), false);
       scope.DeleteScope(scopes->front());
     }

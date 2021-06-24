@@ -43,12 +43,10 @@ class BarrierOpCUDAKernel : public framework::OpKernel<T> {
     ncclRedOp_t nccl_red_type = ncclSum;
     PADDLE_ENFORCE_CUDA_SUCCESS(platform::dynload::ncclAllReduce(
         sendbuff, recvbuff, numel, dtype, nccl_red_type, comm->comm(), stream));
-    auto comm_stream =
-        platform::NCCLCommContext::Instance().Get(rid, place)->stream();
 #ifdef PADDLE_WITH_RCCL
-    PADDLE_ENFORCE_CUDA_SUCCESS(hipStreamSynchronize(comm_stream));
+    PADDLE_ENFORCE_CUDA_SUCCESS(hipStreamSynchronize(stream));
 #else
-    PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamSynchronize(comm_stream));
+    PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamSynchronize(stream));
 #endif
 #else
     PADDLE_THROW(platform::errors::Unavailable(

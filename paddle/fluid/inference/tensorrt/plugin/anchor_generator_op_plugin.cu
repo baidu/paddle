@@ -166,7 +166,11 @@ int AnchorGeneratorPlugin::enqueue_impl(int batch_size,
 }
 
 int AnchorGeneratorPlugin::enqueue(int batch_size, const void* const* inputs,
+#if IS_TRT_VERSION_LT(8000)
                                    void** outputs, void* workspace,
+#else
+                                   void* const* outputs, void* workspace,
+#endif
                                    cudaStream_t stream) {
   return enqueue_impl<float>(batch_size, inputs, outputs, workspace, stream);
 }

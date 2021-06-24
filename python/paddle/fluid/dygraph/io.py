@@ -166,29 +166,46 @@ def _get_loaded_var_new_old(program_desc, all_new_old_dict_all):
 
 def _rename_var_program_desc(program_desc, include=None, exclude=None):
     """
-    Change the name of the loaded variables.Use 'unique_name.generate' to avoid duplication
-    e.g. linear_0.tmp_3 ==> linear_0.tmp_1, x ==> x_0.
-    If 'include' is not `None`,variables that are not in include are not renamed.
-    If 'exclude' is not `None`,variables that are in exclude will are not renamed.
+    Change the name of the loaded variables.Use 'unique_name.generate' to avoid duplication.
+    It is used when loading multiple program during inference.
+
+    e.g. linear_0.tmp_3 ==> linear_0.tmp_1, x ==> x_0. For double grad, x@GRAD ==> x_0@GRAD
+    If 'include' is not `None`,variables in include and the corresponding
+      double grad variables (if exist) are renamed.
+    If 'exclude' is not `None`,variables that are in exclude and the
+      corresponding double grad variables (if exist) are not renamed.
 
     Args:
         program_desc(ProgramDesc):the variables in it will be modified.
         include(List):list of names of variables.
         exclude(List):list of names of variables.
+
+    Returns:
+        tuple of (dict_rename_var_new_old, dict_rename_var_old_new)
+        dict_rename_var_new_old is a dict mapping from new name to old name
+        dict_rename_var_old_new is a dict mapping from old name to new name
     """
     dict_rename_var_old_new = dict()
     dict_rename_var_new_old = dict()
     old_names = []
+    # Store all old names
     for b_idx in six.moves.range(program_desc.num_blocks()):
         cur_block = program_desc.block(b_idx)
         for var in cur_block.all_vars():
             old_names.append(var.name())
+
+    # Create dict_rename_var_new_old and dict_rename_var_old_new for non double
+    # grad variables
+    has_double_grad = False
     for b_idx in six.moves.range(program_desc.num_blocks()):
         cur_block = program_desc.block(b_idx)
         for var_idx, var in enumerate(cur_block.all_vars()):
             name_old = var.name()
+            is_double_grad_var = "@GRAD" in name_old
+            has_double_grad = has_double_grad or is_double_grad_var
             should_rename = (include is None or name_old in include) and (
-                exclude is None or name_old not in exclude)
+                exclude is None or
+                name_old not in exclude) and not is_double_grad_var
             if should_rename:
                 temp_name = name_old.split('_')
                 if len(temp_name) > 1 and temp_name[-1].isnumeric():
@@ -206,9 +223,29 @@ def _rename_var_program_desc(program_desc, include=None, exclude=None):
             if name_old != name_new:
                 cur_block._rename_var(
                     cpt.to_bytes(name_old), cpt.to_bytes(name_new))
-            dict_rename_var_old_new[name_old] = name_new
-            dict_rename_var_new_old[name_new] = name_old
+            if not is_double_grad_var:
+                dict_rename_var_old_new[name_old] = name_new
+                dict_rename_var_new_old[name_new] = name_old
 
+    # Handle double grad names
+    if has_double_grad:
+        double_grad_rename_dict = {}
+        for name_old in dict_rename_var_old_new:
+            for b_idx in six.moves.range(program_desc.num_blocks()):
+                cur_block = program_desc.block(b_idx)
+                for var_idx, var in enumerate(cur_block.all_vars()):
+                    var_name = var.name()
+                    if "@GRAD" in var_name and name_old in var_name:
+                        new_var_name = var_name.replace(
+                            name_old, dict_rename_var_old_new[name_old])
+                        double_grad_rename_dict[var_name] = new_var_name
+        for var_name in double_grad_rename_dict:
+            dict_rename_var_old_new[var_name] = double_grad_rename_dict[
+                var_name]
+            dict_rename_var_new_old[double_grad_rename_dict[
+                var_name]] = var_name
+
+    # Rename on program desc
     for b_idx in six.moves.range(program_desc.num_blocks()):
         cur_block = program_desc.block(b_idx)
         for op_idx in six.moves.range(cur_block.op_size()):
@@ -220,6 +257,11 @@ def _rename_var_program_desc(program_desc, include=None, exclude=None):
                         op._rename_input(
                             input_arg_name,
                             dict_rename_var_old_new[input_arg_name])
+                        if cur_block.has_var(cpt.to_bytes(input_arg_name)):
+                            cur_block._rename_var(
+                                cpt.to_bytes(input_arg_name),
+                                cpt.to_bytes(dict_rename_var_old_new[
+                                    input_arg_name]))
             for output_arg_name in op.output_arg_names():
                 if output_arg_name in dict_rename_var_old_new:
                     if output_arg_name != dict_rename_var_old_new[
@@ -227,6 +269,11 @@ def _rename_var_program_desc(program_desc, include=None, exclude=None):
                         op._rename_output(
                             output_arg_name,
                             dict_rename_var_old_new[output_arg_name])
+                        if cur_block.has_var(cpt.to_bytes(output_arg_name)):
+                            cur_block._rename_var(
+                                cpt.to_bytes(output_arg_name),
+                                cpt.to_bytes(dict_rename_var_old_new[
+                                    output_arg_name]))
     program_desc.flush()
     return dict_rename_var_new_old, dict_rename_var_old_new
 
@@ -267,9 +314,10 @@ class _ProgramHolder(object):
     def __init__(self, program_desc):
         super(_ProgramHolder, self).__init__()
 
-        # input, output, persistable var info
+        # input, output, persistable, double_grads var info
         self._input_descs = []
         self._output_descs = []
+        self._double_grad_descs = []
         self._persistable_names = []
 
         # execution scope
@@ -277,7 +325,6 @@ class _ProgramHolder(object):
 
         # append suffix var name dict
         self._suffix_varname_dict = None
-
         # forward program
         self._infer_program_desc = self._preprocess(program_desc)
         # forward + backward program
@@ -303,6 +350,10 @@ class _ProgramHolder(object):
     @property
     def persistable_names(self):
         return self._persistable_names
+
+    @property
+    def double_grad_descs(self):
+        return self._double_grad_descs
 
     @property
     def scope(self):
@@ -346,6 +397,12 @@ class _ProgramHolder(object):
 
         for op_idx in reversed(ops_to_remove):
             root_block._remove_op(op_idx, op_idx + 1)
+
+        for i in range(program_desc.num_blocks()):
+            block_desc = program_desc.block(i)
+            for var_desc in block_desc.all_vars():
+                if "@GRAD" in var_desc.name():
+                    self._double_grad_descs.append(var_desc)
 
         # 2. Input processing, reverse feed vars
         self._input_descs.reverse()
@@ -412,7 +469,6 @@ class _ProgramHolder(object):
         # rewrite a series of methods for append_backward for program_desc. 
         # Therefore, in order to reuse the method of backward.py, build the program here.
         program = _build_program_by_desc(program_desc_copy)
-
         # 3. Add the outputs which is only used for training and not saved in
         # inference program.
         for block_idx in six.moves.range(program.num_blocks):
@@ -738,6 +794,20 @@ def _run_dygraph(instance, input, program_holder):
                                  core.VarDesc.VarType.STEP_SCOPES, True)
     tmp_scope_vec.value().set_scope(program_holder.scope)
 
+    double_grad_vars = []
+    for var_desc in program_holder.double_grad_descs:
+        var = core.VarBase(var_desc.dtype(),
+                           var_desc.shape(),
+                           var_desc.name(), var_desc.type(), False)
+        double_grad_vars.append(var)
+    if len(double_grad_vars) == 0:
+        double_grad_vars = [
+            core.VarBase(
+                value=[1],
+                name='Fake_var',
+                place=framework._current_expected_place())
+        ]
+
     # 2. run program by op
     trace_program = program_holder.infer_program if instance._is_test else program_holder.train_program
     end_op_index = program_holder.infer_program.block(0).op_size()
@@ -745,8 +815,11 @@ def _run_dygraph(instance, input, program_holder):
         type='run_program',
         inputs={'X': input_vars,
                 'Params': persistable_vars},
-        outputs={'Out': output_vars,
-                 'OutScope': tmp_scope_vec},
+        outputs={
+            'Out': output_vars,
+            'OutScope': tmp_scope_vec,
+            'DOut': double_grad_vars
+        },
         attrs={
             'global_block': trace_program.block(0),
             'start_op_index': 0,

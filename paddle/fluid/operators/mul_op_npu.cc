@@ -46,11 +46,7 @@ class MulNPUKernel : public framework::OpKernel<T> {
         Tensor tmp_x(x->type());
         int64_t sec_dim = x->dims()[1] * x->dims()[2];
         int64_t first_dim = x->dims()[0];
-        tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
-        tmp_x.mutable_data<T>(ctx.GetPlace());
-        framework::TensorCopy(
-            *x, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), &tmp_x);
+        tmp_x.ShareDataWith(*x);
         tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
         out->mutable_data<T>(ctx.GetPlace());
         // matmul
@@ -69,36 +65,39 @@ class MulNPUKernel : public framework::OpKernel<T> {
                         platform::errors::InvalidArgument(
                             "now only support x_num_col_dims == 2: but got %d",
                             x_num_col_dims));
-      // flatten => x.shape=[6, 4]
-      Tensor tmp_x(x->type());
-      int64_t first_dim = x->dims()[0] * x->dims()[1];
-      int64_t sec_dim = x->dims()[2];
-      tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
-      tmp_x.mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *x, ctx.GetPlace(),
-          ctx.template device_context<platform::DeviceContext>(), &tmp_x);
-      tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
+      if (x->type() == framework::proto::VarType::FP16 &&
+          y->type() == framework::proto::VarType::FP16) {
+        // NOTE: When the dim of the input and output shapes is inconsistent,
+        // (Boradcast) BatchMatMul NPU OP only support FP16.
+        out->mutable_data<T>(ctx.GetPlace());
+        const auto& runner =
+            NpuOpRunner("BatchMatMul", {*x, *y}, {*out},
+                        {{"adj_x1", false}, {"adj_x2", false}});
 
-      // matmul [6,4] , [4, 5] => [6, 5]
-      Tensor tmp_matmul(x->type());
-      tmp_matmul.Resize(framework::make_ddim({first_dim, y->dims()[1]}));
-      tmp_matmul.mutable_data<T>(ctx.GetPlace());
+        auto stream =
+            ctx.template device_context<paddle::platform::NPUDeviceContext>()
+                .stream();
+        runner.Run(stream);
+      } else {
+        // flatten => x.shape=[6, 4]
+        Tensor tmp_x(x->type());
+        int64_t first_dim = x->dims()[0] * x->dims()[1];
+        int64_t sec_dim = x->dims()[2];
+        tmp_x.ShareDataWith(*x);
+        tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
 
-      const auto& runner_matmul =
-          NpuOpRunner("MatMul", {tmp_x, *y}, {tmp_matmul},
-                      {{"transpose_x1", false}, {"transpose_x2", false}});
+        // matmul [6,4] , [4, 5] => [6, 5]
+        out->mutable_data<T>(ctx.GetPlace());
 
-      runner_matmul.Run(stream);
-      // reshape [6, 5] => [2, 3, 5]
-      (*out).Resize(
-          framework::make_ddim({x->dims()[0], x->dims()[1], y->dims()[1]}));
-      out->mutable_data(ctx.GetPlace(), x->type());
-      framework::TensorCopy(
-          tmp_matmul, ctx.GetPlace(),
-          ctx.template device_context<platform::DeviceContext>(), out);
-      (*out).Resize(
-          framework::make_ddim({x->dims()[0], x->dims()[1], y->dims()[1]}));
+        Tensor tmp_out(x->type());
+        tmp_out.ShareDataWith(*out);
+        tmp_out.Resize(framework::make_ddim({first_dim, y->dims()[1]}));
+
+        const auto& runner_matmul =
+            NpuOpRunner("MatMul", {tmp_x, *y}, {tmp_out},
+                        {{"transpose_x1", false}, {"transpose_x2", false}});
+        runner_matmul.Run(stream);
+      }
     }
   }
 };
@@ -142,14 +141,14 @@ class MulGradNPUKernel : public framework::OpKernel<T> {
         if (dx) {
           // matmul [2, 5] * [12, 5] => [2, 12]
           dx->mutable_data<T>(ctx.GetPlace());
-          auto dx_dims = dx->dims();
-          dx->Resize(framework::make_ddim({dout->dims()[0], y->dims()[0]}));
+          Tensor tmp_dx(x->type());
+          tmp_dx.ShareDataWith(*dx);
+          tmp_dx.Resize(framework::make_ddim({dout->dims()[0], y->dims()[0]}));
+
           const auto& runner_matmul =
-              NpuOpRunner("MatMul", {*dout, *y}, {*dx},
+              NpuOpRunner("MatMul", {*dout, *y}, {tmp_dx},
                           {{"transpose_x1", false}, {"transpose_x2", true}});
           runner_matmul.Run(stream);
-          // reshape [2, 12] => [2, 3, 4]
-          dx->Resize(dx_dims);
         }
 
         if (dy) {
@@ -157,11 +156,7 @@ class MulGradNPUKernel : public framework::OpKernel<T> {
           Tensor tmp_x(x->type());
           int64_t sec_dim = x->dims()[1] * x->dims()[2];
           int64_t first_dim = x->dims()[0];
-          tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
-          tmp_x.mutable_data<T>(ctx.GetPlace());
-          framework::TensorCopy(
-              *x, ctx.GetPlace(),
-              ctx.template device_context<platform::DeviceContext>(), &tmp_x);
+          tmp_x.ShareDataWith(*x);
           tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
           dy->mutable_data<T>(ctx.GetPlace());
           const auto& runner_dy =
@@ -181,35 +176,42 @@ class MulGradNPUKernel : public framework::OpKernel<T> {
       Tensor tmp_dout(x->type());
       int64_t dout_first_dim = dout->dims()[0] * dout->dims()[1];
       int64_t dout_sec_dim = dout->dims()[2];
-      tmp_dout.Resize(framework::make_ddim({dout_first_dim, dout_sec_dim}));
-      tmp_dout.mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *dout, ctx.GetPlace(),
-          ctx.template device_context<platform::DeviceContext>(), &tmp_dout);
+      tmp_dout.ShareDataWith(*dout);
       tmp_dout.Resize(framework::make_ddim({dout_first_dim, dout_sec_dim}));
 
       if (dx) {
-        // tmp_dout * y [6,5] * [4,5] => [6, 4]
-        dx->mutable_data<T>(ctx.GetPlace());
-        auto dx_dims = dx->dims();
-        dx->Resize(framework::make_ddim({dout_first_dim, y->dims()[0]}));
-        const auto& runner_matmul =
-            NpuOpRunner("MatMul", {tmp_dout, *y}, {*dx},
-                        {{"transpose_x1", false}, {"transpose_x2", true}});
-        runner_matmul.Run(stream);
-        // reshape [2, 12] => [2, 3, 4]
-        dx->Resize(dx_dims);
+        // tmp_dout * y [2, 3, 5] * [4,5] => [2, 3, 4]
+        if (dout->type() == framework::proto::VarType::FP16 &&
+            y->type() == framework::proto::VarType::FP16) {
+          // NOTE: When the dim of the input and output shapes is inconsistent,
+          // (Boradcast) BatchMatMul NPU OP only support FP16.
+          dx->mutable_data<T>(ctx.GetPlace());
+          const auto& runner =
+              NpuOpRunner("BatchMatMul", {*dout, *y}, {*dx},
+                          {{"adj_x1", false}, {"adj_x2", true}});
+
+          auto stream =
+              ctx.template device_context<paddle::platform::NPUDeviceContext>()
+                  .stream();
+          runner.Run(stream);
+        } else {
+          dx->mutable_data<T>(ctx.GetPlace());
+          Tensor tmp_dx(x->type());
+          tmp_dx.ShareDataWith(*dx);
+          tmp_dx.Resize(framework::make_ddim({dout_first_dim, y->dims()[0]}));
+
+          const auto& runner_matmul =
+              NpuOpRunner("MatMul", {tmp_dout, *y}, {tmp_dx},
+                          {{"transpose_x1", false}, {"transpose_x2", true}});
+          runner_matmul.Run(stream);
+        }
       }
       if (dy) {
         // flatten x.shape [2,3,4] => [6, 4]
         Tensor tmp_x(x->type());
         int64_t first_dim = x->dims()[0] * x->dims()[1];
         int64_t sec_dim = x->dims()[2];
-        tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
-        tmp_x.mutable_data<T>(ctx.GetPlace());
-        framework::TensorCopy(
-            *x, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), &tmp_x);
+        tmp_x.ShareDataWith(*x);
         tmp_x.Resize(framework::make_ddim({first_dim, sec_dim}));
         // mamtul [6,4] [6,5] =>[4,5]
         dy->mutable_data<T>(ctx.GetPlace());

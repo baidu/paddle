@@ -87,8 +87,6 @@ def get_default_dtype():
 @contextmanager
 def set_grad_enabled(mode):
     """
-    :api_attr: imperative
-
     Create a context which enables or disables dygraph gradient calculation.
 
     Args:
@@ -96,6 +94,7 @@ def set_grad_enabled(mode):
 
     Examples:
         .. code-block:: python
+            
             import paddle
             x = paddle.ones([3, 2])
             x.stop_gradient = False

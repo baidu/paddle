@@ -181,7 +181,7 @@ class Fleet(object):
         trainers = self.worker_num()
 
         remainder = len(files) % trainers
-        blocksize = len(files) / trainers
+        blocksize = len(files) // trainers
 
         blocks = [blocksize] * trainers
         for i in range(remainder):

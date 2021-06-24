@@ -160,7 +160,7 @@ class TestBackward(unittest.TestCase):
 
 class SimpleNet(BackwardNet):
     def __init__(self):
-        super(BackwardNet, self).__init__()
+        super(SimpleNet, self).__init__()
         self.stop_gradient_grad_vars = set([
             u'x_no_grad@GRAD', u'x2_no_grad@GRAD', u'x3_no_grad@GRAD',
             u'label_no_grad@GRAD'
@@ -330,7 +330,7 @@ class TestAppendBackwardWithError(unittest.TestCase):
 # TODO(Aurelius84): add conditional network test
 class ConditionalNet(BackwardNet):
     def __init__(self):
-        super(BackwardNet, self).__init__()
+        super(ConditionalNet, self).__init__()
 
 
 if __name__ == '__main__':

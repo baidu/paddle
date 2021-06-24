@@ -83,30 +83,11 @@ void eltwise_forward(const framework::ExecutionContext &ctx,
   const auto *x = ctx.Input<Tensor>("X");
   auto *y = ctx.Output<Tensor>("Out");
 
-  float alpha = ctx.HasAttr("alpha") ? ctx.Attr<float>("alpha") : 0;
-  float beta = ctx.HasAttr("beta") ? ctx.Attr<float>("beta") : 0;
-
-  // paddle uses beta but mkldnn uses alpha for swish
-  if (algorithm == mkldnn::algorithm::eltwise_swish) {
-    std::swap(alpha, beta);
-  } else if (algorithm == dnnl::algorithm::eltwise_bounded_relu) {
-    alpha = ctx.Attr<float>("threshold");
-  }
-
-  PADDLE_ENFORCE(
-      x->dims().size() >= 1 || x->dims().size() <= 6,
-      platform::errors::Unimplemented("Input dimension size can be 1, 2, 3, 4, "
-                                      "5, or 6, but now the dimension size is",
-                                      x->dims().size()));
-
   bool is_inplaced = x->IsSharedBufferWith(*y);
-  auto src_tz = framework::vectorize<int64_t>(x->dims());
 
-  auto src_format = src_tz.size() == 2 ? MKLDNNMemoryFormat::nc : x->format();
-
-  platform::ActivationMKLDNNHandler<T> handler(
-      src_tz, algorithm, alpha, beta, src_format, dev_ctx, ctx.GetPlace(),
-      ctx.InputName("X"), is_inplaced);
+  platform::ActivationMKLDNNHandler<T> handler(algorithm, ctx, dev_ctx,
+                                               ctx.GetPlace(), x,
+                                               ctx.InputName("X"), is_inplaced);
 
   auto src_memory_p = handler.AcquireSrcMemory(x);
   auto dst_memory_p = is_inplaced ? src_memory_p : handler.AcquireDstMemory(y);
@@ -130,28 +111,8 @@ void eltwise_grad(const framework::ExecutionContext &ctx,
   const auto *diff_y = ctx.Input<Tensor>(framework::GradVarName("Out"));
   auto *diff_x = ctx.Output<Tensor>(framework::GradVarName("X"));
 
-  float alpha = ctx.HasAttr("alpha") ? ctx.Attr<float>("alpha") : 0;
-  float beta = ctx.HasAttr("beta") ? ctx.Attr<float>("beta") : 0;
-
-  // paddle uses beta but mkldnn uses alpha for swish
-  if (algorithm == mkldnn::algorithm::eltwise_swish) {
-    std::swap(alpha, beta);
-  } else if (algorithm == dnnl::algorithm::eltwise_bounded_relu) {
-    alpha = ctx.Attr<float>("threshold");
-  }
-
-  auto diff_dst_tz = framework::vectorize<int64_t>(diff_y->dims());
-
-  // diff_dst and src dims should be the same
-  auto src_format =
-      diff_dst_tz.size() == 2 ? MKLDNNMemoryFormat::nc : x->format();
-
-  auto diff_y_format =
-      diff_dst_tz.size() == 2 ? MKLDNNMemoryFormat::nc : diff_y->format();
-
   platform::ActivationMKLDNNHandler<T> handler(
-      diff_dst_tz, algorithm, alpha, beta, src_format, diff_y_format, dev_ctx,
-      ctx.GetPlace(), ctx.InputName("X"));
+      algorithm, ctx, dev_ctx, ctx.GetPlace(), x, diff_y, ctx.InputName("X"));
 
   auto src_memory_p = handler.AcquireBackwardSrcMemory(x);
   auto diff_dst_memory_p = handler.AcquireDiffDstMemory(diff_y);

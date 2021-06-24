@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/elementwise/elementwise_mul_op.h"
+#include "paddle/fluid/operators/elementwise/elementwise_op_broadcast.cu.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.cu.h"
 #include "paddle/fluid/platform/complex.h"
 #include "paddle/fluid/platform/float16.h"
@@ -24,37 +25,26 @@ namespace paddle {
 namespace operators {
 
 template <typename T>
-struct SameDimsElemwiseMul<platform::CUDADeviceContext, T> {
-  void operator()(const framework::ExecutionContext& ctx,
-                  const framework::Tensor* x, const framework::Tensor* y,
-                  framework::Tensor* z) {
-    MulRangeFunctor<T> functor(x->data<T>(), y->data<T>(), z->data<T>());
-    auto& dev_ctx = ctx.template device_context<platform::CUDADeviceContext>();
-    platform::ForRange<platform::CUDADeviceContext> for_range(dev_ctx,
-                                                              x->numel());
-    for_range(functor);
+struct CudaMulFunctor {
+  inline HOSTDEVICE T operator()(const T* args) const {
+    return args[0] * args[1];
   }
 };
 
-template <>
-struct SameDimsElemwiseMul<platform::CUDADeviceContext, platform::float16> {
-  void operator()(const framework::ExecutionContext& ctx,
-                  const framework::Tensor* x, const framework::Tensor* y,
-                  framework::Tensor* z) {
-    auto size = x->numel();
-    dim3 grid_size = dim3(((size + 7) / 8 + PADDLE_CUDA_THREAD_SIZE - 1) /
-                              PADDLE_CUDA_THREAD_SIZE,
-                          1);
-    dim3 block_size = dim3(PADDLE_CUDA_THREAD_SIZE, 1);
-    const half* x2 =
-        reinterpret_cast<const half*>(x->data<platform::float16>());
-    const half* y2 =
-        reinterpret_cast<const half*>(y->data<platform::float16>());
-    half* z2 = reinterpret_cast<half*>(z->data<platform::float16>());
-    SameDimsElemwiseMulCUDAKernel<<<
-        grid_size, block_size, 0,
-        ctx.template device_context<platform::CUDADeviceContext>().stream()>>>(
-        x2, y2, z2, size);
+template <typename T>
+class ElementwiseMulKernel<platform::CUDADeviceContext, T>
+    : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    framework::Tensor x_for_selectedrows;
+    std::vector<const framework::Tensor*> ins;
+    std::vector<framework::Tensor*> outs;
+    const auto& cuda_ctx =
+        ctx.template device_context<platform::CUDADeviceContext>();
+
+    int axis = PackTensorsIntoVector<T>(ctx, &ins, &outs, &x_for_selectedrows);
+    LaunchElementwiseCudaKernel<ElementwiseType::kBinary, T, T>(
+        cuda_ctx, ins, &outs, axis, CudaMulFunctor<T>());
   }
 };
 

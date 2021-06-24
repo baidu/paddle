@@ -14,6 +14,8 @@
 
 #include "paddle/fluid/inference/capi_exp/pd_config.h"
 #include "paddle/fluid/inference/api/paddle_inference_api.h"
+#include "paddle/fluid/inference/capi_exp/pd_types.h"
+#include "paddle/fluid/inference/capi_exp/utils_internal.h"
 #include "paddle/fluid/platform/enforce.h"
 
 #define CHECK_NULL_POINTER_PARM(param)                  \
@@ -125,10 +127,14 @@ PD_Bool PD_ConfigUseGpu(__pd_keep PD_Config* pd_config) {
 }
 
 void PD_ConfigEnableXpu(__pd_keep PD_Config* pd_config,
-                        int32_t l3_workspace_size) {
+                        int32_t l3_workspace_size, PD_Bool locked,
+                        PD_Bool autotune, const char* autotune_file,
+                        const char* precision, PD_Bool adaptive_seqlen) {
   CHECK_AND_CONVERT_PD_CONFIG;
-  config->EnableXpu(l3_workspace_size);
+  config->EnableXpu(l3_workspace_size, locked, autotune, autotune_file,
+                    precision, adaptive_seqlen);
 }
+
 PD_Bool PD_ConfigUseXpu(__pd_keep PD_Config* pd_config) {
   CHECK_AND_CONVERT_PD_CONFIG;
   return config->use_xpu();
@@ -377,6 +383,25 @@ void PD_ConfigEnableGpuMultiStream(__pd_keep PD_Config* pd_config) {
 void PD_ConfigPartiallyRelease(__pd_keep PD_Config* pd_config) {
   CHECK_AND_CONVERT_PD_CONFIG;
   config->PartiallyRelease();
+}
+void PD_ConfigDeletePass(__pd_keep PD_Config* pd_config, const char* pass) {
+  CHECK_AND_CONVERT_PD_CONFIG;
+  config->pass_builder()->DeletePass(pass);
+}
+void PD_ConfigInsertPass(__pd_keep PD_Config* pd_config, size_t idx,
+                         const char* pass) {
+  CHECK_AND_CONVERT_PD_CONFIG;
+  config->pass_builder()->InsertPass(idx, pass);
+}
+void PD_ConfigAppendPass(__pd_keep PD_Config* pd_config, const char* pass) {
+  CHECK_AND_CONVERT_PD_CONFIG;
+  config->pass_builder()->AppendPass(pass);
+}
+__pd_give PD_OneDimArrayCstr* PD_ConfigAllPasses(
+    __pd_keep PD_Config* pd_config) {
+  CHECK_AND_CONVERT_PD_CONFIG;
+  std::vector<std::string> passes = config->pass_builder()->AllPasses();
+  return paddle_infer::CvtVecToOneDimArrayCstr(passes);
 }
 
 }  // extern "C"

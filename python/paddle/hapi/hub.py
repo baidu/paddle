@@ -110,7 +110,11 @@ def _get_cache_or_reload(repo, force_reload, verbose=True, source='github'):
         url = _git_archive_link(repo_owner, repo_name, branch, source=source)
 
         fpath = get_path_from_url(
-            url, hub_dir, check_exist=not force_reload, decompress=False)
+            url,
+            hub_dir,
+            check_exist=not force_reload,
+            decompress=False,
+            method=('wget' if source == 'gitee' else 'get'))
         shutil.move(fpath, cached_file)
 
         with zipfile.ZipFile(cached_file) as cached_zipfile:

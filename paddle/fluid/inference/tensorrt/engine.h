@@ -102,7 +102,7 @@ nvinfer1::Dims Vec2TRT_Dims(const std::vector<T>& shape, std::string input,
             "trt dynamic_shape mode by SetTRTDynamicShapeInfo.",
             input, ShapeStr(shape)));
       }
-      return nvinfer1::DimsCHW(shape[1], shape[2], shape[3]);
+      return nvinfer1::Dims3(shape[1], shape[2], shape[3]);
     } else if (shape.size() == 3UL) {
       if (shape[1] == -1 || shape[2] == -1) {
         PADDLE_THROW(platform::errors::InvalidArgument(
@@ -112,10 +112,10 @@ nvinfer1::Dims Vec2TRT_Dims(const std::vector<T>& shape, std::string input,
       }
       return nvinfer1::Dims2(shape[1], shape[2]);
     }
-    return nvinfer1::DimsCHW(shape[1], 1, 1);
+    return nvinfer1::Dims3(shape[1], 1, 1);
   } else {
     if (shape.size() == 4UL) {
-      return nvinfer1::DimsNCHW(shape[0], shape[1], shape[2], shape[3]);
+      return nvinfer1::Dims4(shape[0], shape[1], shape[2], shape[3]);
     } else if (shape.size() == 3UL) {
       return nvinfer1::Dims3(shape[0], shape[1], shape[2]);
     }
@@ -202,7 +202,15 @@ class TensorRTEngine {
     dy::initLibNvInferPlugins(&logger, "");
   }
 
-  ~TensorRTEngine() {}
+  ~TensorRTEngine() {
+    for (auto& attr : attrs_) {
+      if (attr_dels_.find(attr.first) != attr_dels_.end()) {
+        attr_dels_[attr.first]();
+      }
+    }
+    attrs_.clear();
+    attr_dels_.clear();
+  }
 
   // Add an input and set its name, data type and dimension.
   nvinfer1::ITensor* DeclareInput(const std::string& name,
@@ -269,22 +277,19 @@ class TensorRTEngine {
     }
 
     if (with_dynamic_shape_) {
-#if IS_TRT_VERSION_GE(6000)
       infer_engine_.reset(runtime->deserializeCudaEngine(
-          engine_serialized_data.c_str(), engine_serialized_data.size(),
-          nullptr));
-#else
-
-      PADDLE_THROW(platform::errors::PreconditionNotMet(
-          "To enable dynamic shape support, the TensorRT version should be "
-          "greater than 6.0.0"));
-
-#endif
+          engine_serialized_data.c_str(), engine_serialized_data.size()));
     } else {
+#if IS_TRT_VERSION_LT(8000)
       infer_engine_.reset(runtime->deserializeCudaEngine(
           engine_serialized_data.c_str(), engine_serialized_data.size(),
           &inference::Singleton<plugin::PluginFactoryTensorRT>::Global()));
+#else
+      infer_engine_.reset(runtime->deserializeCudaEngine(
+          engine_serialized_data.c_str(), engine_serialized_data.size()));
+#endif
     }
+
     PADDLE_ENFORCE_NOT_NULL(
         infer_engine_,
         platform::errors::Fatal(
@@ -361,13 +366,7 @@ class TensorRTEngine {
   void Execute(int batch_size, std::vector<void*>* buffers,
                cudaStream_t stream = nullptr);
 
-  nvinfer1::INetworkDefinition* network() {
-    if (with_dynamic_shape_) {
-      return infer_networkv2_.get();
-    } else {
-      return infer_network_.get();
-    }
-  }
+  nvinfer1::INetworkDefinition* network() { return infer_network_.get(); }
 
   ShapeMapType min_input_shape() { return min_input_shape_; }
   ShapeMapType max_input_shape() { return max_input_shape_; }
@@ -385,6 +384,82 @@ class TensorRTEngine {
     return network()->addPluginV2(inputs, num_inputs, *plugin);
   }
 #endif
+
+  bool Has(const std::string& attr_name) const {
+    return attrs_.count(attr_name) > 0;
+  }
+
+  void Erase(const std::string& attr_name) {
+    if (!Has(attr_name)) {
+      return;
+    }
+    if (attr_dels_.find(attr_name) != attr_dels_.end()) {
+      attr_dels_[attr_name]();
+      attr_dels_.erase(attr_name);
+    }
+    attrs_.erase(attr_name);
+  }
+
+  // Set a pointer to the attribute. Engine takes ownership of the attribute.
+  template <typename AttrType>
+  void Set(const std::string& attr_name, AttrType* attr) {
+    if (attrs_.count(attr_name) == 0) {
+      PADDLE_ENFORCE_EQ(
+          attrs_.count(attr_name), 0,
+          platform::errors::AlreadyExists(
+              "Attribute %s already set in trt engine.", attr_name));
+    } else {
+      VLOG(3) << "Setting the attribute " << attr_name << " for trt engine "
+              << this;
+    }
+    attrs_[attr_name] = attr;
+    attr_dels_[attr_name] = [attr, attr_name]() {
+      VLOG(3) << "deleting " << attr_name;
+      delete attr;
+    };
+  }
+
+  // Set a pointer to the attribute. Engine doesn't take ownership. Caller
+  // should delete the attribute.
+  template <typename AttrType>
+  void SetNotOwned(const std::string& attr_name, AttrType* attr) {
+    PADDLE_ENFORCE_EQ(
+        attrs_.count(attr_name), 0,
+        platform::errors::AlreadyExists(
+            "Attribute %s already set in trt engine.", attr_name));
+    attrs_[attr_name] = attr;
+  }
+
+  // Get a reference to the attributed previously set.
+  template <typename AttrType>
+  AttrType& Get(const std::string& attr_name) const {
+    PADDLE_ENFORCE_NE(attrs_.find(attr_name), attrs_.end(),
+                      platform::errors::InvalidArgument(
+                          "Attribute %s not found in trt engine.", attr_name));
+    try {
+      return *boost::any_cast<AttrType*>(attrs_.at(attr_name));
+    } catch (boost::bad_any_cast&) {
+      auto TypeToString = [](const std::type_info& info) -> std::string {
+        if (std::type_index(info) == std::type_index(typeid(bool*))) {
+          return "bool";
+        } else if (std::type_index(info) == std::type_index(typeid(int*))) {
+          return "int";
+        } else if (std::type_index(info) ==
+                   std::type_index(typeid(const int*))) {
+          return "const int";
+        } else if (std::type_index(info) ==
+                   std::type_index(typeid(std::string*))) {
+          return "std::string";
+        }
+        return info.name();
+      };
+
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "Invalid type for attritube %s, expected: %s, actual: %s.", attr_name,
+          TypeToString(typeid(AttrType*)),
+          TypeToString(attrs_.at(attr_name).type())));
+    }
+  }
 
  private:
   // Each ICudaEngine object is bound to a specific GPU when it is instantiated,
@@ -441,9 +516,11 @@ class TensorRTEngine {
   infer_ptr<nvinfer1::IHostMemory> ihost_memory_;
   std::unordered_map<nvinfer1::ITensor*, float> quant_dynamic_range_;
 
+  std::unordered_map<std::string, boost::any> attrs_;
+  std::unordered_map<std::string, std::function<void(void)>> attr_dels_;
+
   // For dynamic shape
   bool with_dynamic_shape_{false};
-  infer_ptr<nvinfer1::INetworkDefinition> infer_networkv2_;
 #if IS_TRT_VERSION_GE(6000)
   infer_ptr<nvinfer1::IBuilderConfig> infer_builder_config_;
   nvinfer1::IOptimizationProfile* optim_profile_;

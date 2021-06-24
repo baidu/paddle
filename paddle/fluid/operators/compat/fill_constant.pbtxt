@@ -1,0 +1,61 @@
+type: "fill_constant"
+def {
+  inputs {
+    name: "ValueTensor"
+  }
+  inputs {
+    name: "ShapeTensor"
+  }
+  inputs {
+    name: "ShapeTensorList"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "dtype"
+    type: INT
+  }
+  attrs {
+    name: "shape"
+    type: LONGS
+  }
+  attrs {
+    name: "value"
+    type: FLOAT
+  }
+}
+extra {
+    attrs {
+    name: "str_value"
+    type: STRING
+  }
+  attrs {
+    name: "force_cpu"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "place_type"
+    type: INT
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

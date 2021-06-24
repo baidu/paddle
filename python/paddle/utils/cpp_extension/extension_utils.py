@@ -14,7 +14,6 @@
 
 import os
 import re
-import six
 import sys
 import json
 import glob
@@ -541,8 +540,7 @@ def find_cuda_home():
             with open(os.devnull, 'w') as devnull:
                 nvcc_path = subprocess.check_output(
                     [which_cmd, 'nvcc'], stderr=devnull)
-                if six.PY3:
-                    nvcc_path = nvcc_path.decode()
+                nvcc_path = nvcc_path.decode()
                 # Multi CUDA, select the first
                 nvcc_path = nvcc_path.split('\r\n')[0]
 
@@ -580,8 +578,7 @@ def find_rocm_home():
             with open(os.devnull, 'w') as devnull:
                 hipcc_path = subprocess.check_output(
                     [which_cmd, 'hipcc'], stderr=devnull)
-                if six.PY3:
-                    hipcc_path = hipcc_path.decode()
+                hipcc_path = hipcc_path.decode()
                 hipcc_path = hipcc_path.rstrip('\r\n')
 
                 # for example: /opt/rocm/bin/hipcc
@@ -652,8 +649,7 @@ def find_clang_cpp_include(compiler='clang'):
     std_v1_includes = None
     try:
         compiler_version = subprocess.check_output([compiler, "--version"])
-        if six.PY3:
-            compiler_version = compiler_version.decode()
+        compiler_version = compiler_version.decode()
         infos = compiler_version.split("\n")
         for info in infos:
             if "InstalledDir" in info:
@@ -895,13 +891,9 @@ def _load_module_from_file(api_file_path, verbose=False):
     # Unique readable module name to place custom api.
     log_v('import module from file: {}'.format(api_file_path), verbose)
     ext_name = "_paddle_cpp_extension_"
-    if six.PY2:
-        import imp
-        module = imp.load_source(ext_name, api_file_path)
-    else:
-        from importlib import machinery
-        loader = machinery.SourceFileLoader(ext_name, api_file_path)
-        module = loader.load_module()
+    from importlib import machinery
+    loader = machinery.SourceFileLoader(ext_name, api_file_path)
+    module = loader.load_module()
 
     return module
 
@@ -1005,8 +997,7 @@ def _jit_compile(file_path, verbose=False):
 
     try:
         py_version = subprocess.check_output([interpreter, '-V'])
-        if six.PY3:
-            py_version = py_version.decode()
+        py_version = py_version.decode()
         log_v("Using Python interpreter: {}, version: {}".format(
             interpreter, py_version.strip()), verbose)
     except Exception:
@@ -1083,8 +1074,7 @@ def check_abi_compatibility(compiler, verbose=False):
     if not IS_WINDOWS:
         cmd_out = subprocess.check_output(
             ['which', compiler], stderr=subprocess.STDOUT)
-        compiler_path = os.path.realpath(cmd_out.decode()
-                                         if six.PY3 else cmd_out).strip()
+        compiler_path = os.path.realpath(cmd_out.decode()).strip()
         # if not found any suitable compiler, raise warning
         if not any(name in compiler_path
                    for name in _expected_compiler_current_platform()):
@@ -1104,18 +1094,16 @@ def check_abi_compatibility(compiler, verbose=False):
             mini_required_version = GCC_MINI_VERSION
             version_info = subprocess.check_output(
                 [compiler, '-dumpfullversion', '-dumpversion'])
-            if six.PY3:
-                version_info = version_info.decode()
+            version_info = version_info.decode()
             version = version_info.strip().split('.')
         elif IS_WINDOWS:
             mini_required_version = MSVC_MINI_VERSION
             compiler_info = subprocess.check_output(
                 compiler, stderr=subprocess.STDOUT)
-            if six.PY3:
-                try:
-                    compiler_info = compiler_info.decode('UTF-8')
-                except UnicodeDecodeError:
-                    compiler_info = compiler_info.decode('gbk')
+            try:
+                compiler_info = compiler_info.decode('UTF-8')
+            except UnicodeDecodeError:
+                compiler_info = compiler_info.decode('gbk')
             match = re.search(r'(\d+)\.(\d+)\.(\d+)', compiler_info.strip())
             if match is not None:
                 version = match.groups()

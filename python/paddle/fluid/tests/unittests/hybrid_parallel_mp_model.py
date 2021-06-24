@@ -32,12 +32,34 @@ def set_random_seed(seed, dp_id, rank_id):
     paddle.seed(seed + rank_id)
 
 
-vocab_size = 5
+vocab_size = 20
 hidden_size = 10
 inner_size = 8
-output_size = 2
+output_size = 10
 seq_length = 2
 batch_size = 4
+
+
+def parallel_matmul(lm_output, logit_weights, parallel_output):
+    hcg = fleet.get_hybrid_communicate_group()
+    model_parallel_group = hcg.get_model_parallel_group()
+    world_size = hcg.get_model_parallel_world_size()
+    rank = hcg.get_model_parallel_rank()
+
+    if world_size > 1:
+        input_parallel = paddle.distributed.collective._c_identity(
+            lm_output, group=model_parallel_group)
+
+        logits = paddle.matmul(input_parallel, logit_weights, transpose_y=True)
+
+        if parallel_output:
+            return logits
+
+        return paddle.distributed.collective._c_concat(
+            logits, group=model_parallel_group)
+    else:
+        logits = paddle.matmul(lm_output, logit_weights, transpose_y=True)
+        return logits
 
 
 class SimpleMPNet(fluid.dygraph.Layer):
@@ -86,6 +108,7 @@ class SimpleMPNet(fluid.dygraph.Layer):
         x = self.linear1(x)
         x = self.linear2(x)
         x = self.linear3(x)
+        x = parallel_matmul(x, self.embedding.weight, False)
         return x
 
 
@@ -128,6 +151,7 @@ class SimpleDPNet(fluid.dygraph.Layer):
         x = self.linear1(x)
         x = self.linear2(x)
         x = self.linear3(x)
+        x = paddle.matmul(x, self.embedding.weight, transpose_y=True)
         return x
 
 
@@ -192,7 +216,7 @@ class TestDistMPTraning(unittest.TestCase):
             loss_b = self.train_batch(batch, model_b, optimizer_b, False)
 
             np.testing.assert_allclose(
-                loss_a.numpy(), loss_b.numpy(), rtol=1e-5)
+                loss_a.numpy(), loss_b.numpy(), rtol=1e-6)
 
 
 if __name__ == "__main__":

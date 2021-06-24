@@ -35,10 +35,16 @@ def YoloBox(x, img_size, attrs):
     downsample = attrs['downsample']
     clip_bbox = attrs['clip_bbox']
     scale_x_y = attrs['scale_x_y']
+    iou_aware = attrs['iou_aware']
+    iou_aware_factor = attrs['iou_aware_factor']
     bias_x_y = -0.5 * (scale_x_y - 1.)
     input_h = downsample * h
     input_w = downsample * w
 
+    if iou_aware:
+        ioup = x[:, :an_num, :, :]
+        ioup = np.expand_dims(ioup, axis=-1)
+        x = x[:, an_num:, :, :]
     x = x.reshape((n, an_num, 5 + class_num, h, w)).transpose((0, 1, 3, 4, 2))
 
     pred_box = x[:, :, :, :, :4].copy()
@@ -57,7 +63,11 @@ def YoloBox(x, img_size, attrs):
     pred_box[:, :, :, :, 2] = np.exp(pred_box[:, :, :, :, 2]) * anchor_w
     pred_box[:, :, :, :, 3] = np.exp(pred_box[:, :, :, :, 3]) * anchor_h
 
-    pred_conf = sigmoid(x[:, :, :, :, 4:5])
+    if iou_aware:
+        pred_conf = sigmoid(x[:, :, :, :, 4:5])**(
+            1 - iou_aware_factor) * sigmoid(ioup)**iou_aware_factor
+    else:
+        pred_conf = sigmoid(x[:, :, :, :, 4:5])
     pred_conf[pred_conf < conf_thresh] = 0.
     pred_score = sigmoid(x[:, :, :, :, 5:]) * pred_conf
     pred_box = pred_box * (pred_conf > 0.).astype('float32')
@@ -97,6 +107,8 @@ class TestYoloBoxOp(OpTest):
             "downsample": self.downsample,
             "clip_bbox": self.clip_bbox,
             "scale_x_y": self.scale_x_y,
+            "iou_aware": self.iou_aware,
+            "iou_aware_factor": self.iou_aware_factor
         }
 
         self.inputs = {
@@ -123,6 +135,8 @@ class TestYoloBoxOp(OpTest):
         self.x_shape = (self.batch_size, an_num * (5 + self.class_num), 13, 13)
         self.imgsize_shape = (self.batch_size, 2)
         self.scale_x_y = 1.
+        self.iou_aware = False
+        self.iou_aware_factor = 0.5
 
 
 class TestYoloBoxOpNoClipBbox(TestYoloBoxOp):
@@ -137,6 +151,8 @@ class TestYoloBoxOpNoClipBbox(TestYoloBoxOp):
         self.x_shape = (self.batch_size, an_num * (5 + self.class_num), 13, 13)
         self.imgsize_shape = (self.batch_size, 2)
         self.scale_x_y = 1.
+        self.iou_aware = False
+        self.iou_aware_factor = 0.5
 
 
 class TestYoloBoxOpScaleXY(TestYoloBoxOp):
@@ -151,19 +167,36 @@ class TestYoloBoxOpScaleXY(TestYoloBoxOp):
         self.x_shape = (self.batch_size, an_num * (5 + self.class_num), 13, 13)
         self.imgsize_shape = (self.batch_size, 2)
         self.scale_x_y = 1.2
+        self.iou_aware = False
+        self.iou_aware_factor = 0.5
+
+
+class TestYoloBoxOpIoUAware(TestYoloBoxOp):
+    def initTestCase(self):
+        self.anchors = [10, 13, 16, 30, 33, 23]
+        an_num = int(len(self.anchors) // 2)
+        self.batch_size = 32
+        self.class_num = 2
+        self.conf_thresh = 0.5
+        self.downsample = 32
+        self.clip_bbox = True
+        self.x_shape = (self.batch_size, an_num * (6 + self.class_num), 13, 13)
+        self.imgsize_shape = (self.batch_size, 2)
+        self.scale_x_y = 1.
+        self.iou_aware = True
+        self.iou_aware_factor = 0.5
 
 
 class TestYoloBoxDygraph(unittest.TestCase):
     def test_dygraph(self):
         paddle.disable_static()
-        x = np.random.random([2, 14, 8, 8]).astype('float32')
         img_size = np.ones((2, 2)).astype('int32')
-
-        x = paddle.to_tensor(x)
         img_size = paddle.to_tensor(img_size)
 
+        x1 = np.random.random([2, 14, 8, 8]).astype('float32')
+        x1 = paddle.to_tensor(x1)
         boxes, scores = paddle.vision.ops.yolo_box(
-            x,
+            x1,
             img_size=img_size,
             anchors=[10, 13, 16, 30],
             class_num=2,
@@ -172,16 +205,30 @@ class TestYoloBoxDygraph(unittest.TestCase):
             clip_bbox=True,
             scale_x_y=1.)
         assert boxes is not None and scores is not None
+
+        x2 = np.random.random([2, 16, 8, 8]).astype('float32')
+        x2 = paddle.to_tensor(x2)
+        boxes, scores = paddle.vision.ops.yolo_box(
+            x2,
+            img_size=img_size,
+            anchors=[10, 13, 16, 30],
+            class_num=2,
+            conf_thresh=0.01,
+            downsample_ratio=8,
+            clip_bbox=True,
+            scale_x_y=1.,
+            iou_aware=True,
+            iou_aware_factor=0.5)
         paddle.enable_static()
 
 
 class TestYoloBoxStatic(unittest.TestCase):
     def test_static(self):
-        x = paddle.static.data('x', [2, 14, 8, 8], 'float32')
+        x1 = paddle.static.data('x1', [2, 14, 8, 8], 'float32')
         img_size = paddle.static.data('img_size', [2, 2], 'int32')
 
         boxes, scores = paddle.vision.ops.yolo_box(
-            x,
+            x1,
             img_size=img_size,
             anchors=[10, 13, 16, 30],
             class_num=2,
@@ -189,6 +236,20 @@ class TestYoloBoxStatic(unittest.TestCase):
             downsample_ratio=8,
             clip_bbox=True,
             scale_x_y=1.)
+        assert boxes is not None and scores is not None
+
+        x2 = paddle.static.data('x2', [2, 16, 8, 8], 'float32')
+        boxes, scores = paddle.vision.ops.yolo_box(
+            x2,
+            img_size=img_size,
+            anchors=[10, 13, 16, 30],
+            class_num=2,
+            conf_thresh=0.01,
+            downsample_ratio=8,
+            clip_bbox=True,
+            scale_x_y=1.,
+            iou_aware=True,
+            iou_aware_factor=0.5)
         assert boxes is not None and scores is not None
 
 
@@ -204,6 +265,8 @@ class TestYoloBoxOpHW(TestYoloBoxOp):
         self.x_shape = (self.batch_size, an_num * (5 + self.class_num), 13, 9)
         self.imgsize_shape = (self.batch_size, 2)
         self.scale_x_y = 1.
+        self.iou_aware = False
+        self.iou_aware_factor = 0.5
 
 
 if __name__ == "__main__":

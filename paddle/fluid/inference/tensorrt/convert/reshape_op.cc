@@ -34,7 +34,7 @@ class ReshapeOpConverter : public OpConverter {
     framework::OpDesc op_desc(op, nullptr);
     // Declare inputs
     auto* input = engine_->GetITensor(op_desc.Input("X")[0]);
-    const std::vector<int>& shape =
+    std::vector<int> shape =
         BOOST_GET_CONST(std::vector<int>, op_desc.GetAttr("shape"));
     int nbDims_num = shape.size();
     nvinfer1::Dims reshape_dim;

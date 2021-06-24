@@ -8,6 +8,7 @@ nv_library(tensorrt_plugin
            anchor_generator_op_plugin.cu
            yolo_box_op_plugin.cu
            roi_align_op_plugin.cu
+           gather_nd_op_plugin.cu
            DEPS enforce tensorrt_engine prelu tensor bert_encoder_functor)
 
 nv_test(test_split_plugin SRCS test_split_plugin.cc DEPS

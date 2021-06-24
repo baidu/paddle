@@ -152,8 +152,8 @@ bool AnalysisPredictor::Init(
                                              : platform::ProfilerState::kCPU;
     platform::EnableProfiler(tracking_device);
   } else {
-    LOG(INFO) << "Profiler is deactivated, and no profiling report will be "
-                 "generated.";
+    VLOG(2) << "Profiler is deactivated, and no profiling report will be "
+               "generated.";
   }
 
   // no matter with or without MKLDNN
@@ -270,7 +270,48 @@ bool AnalysisPredictor::CreateExecutor() {
   executor_.reset(new paddle::framework::NaiveExecutor(place_));
   return true;
 }
+
+static bool IsPrepareDataOptTargetOp(framework::OpDesc *op) {
+  // here is prepare data optimization related bad cases:
+  // let's assume an op behind conditional_block and if conditional_block
+  // chooses branch 1, the op need to call prepare data. else the op don't need
+  // to call prepare data. In running, if predictor chooses branch 2, then
+  // optimization takes effect, later issue is followed if predictor chooses
+  // branch 1, because the op lost chance to prepare data.
+  std::vector<std::string> op_type = {"conditional_block_infer",
+                                      "select_input"};
+  for (const auto &type : op_type) {
+    if (op->Type() == type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void DisablePrepareDataOpt(
+    std::shared_ptr<framework::ProgramDesc> inference_program, int block,
+    bool pre_disable_opt) {
+  bool disable_opt = false;
+  auto &infer_block = inference_program->Block(block);
+  for (auto *op : infer_block.AllOps()) {
+    if (disable_opt || pre_disable_opt) {
+      op->SetAttr("inference_force_prepare_data", true);
+    }
+    if (op->HasAttr("sub_block")) {
+      int blockID = op->GetBlockAttrId("sub_block");
+      DisablePrepareDataOpt(inference_program, blockID,
+                            disable_opt || pre_disable_opt);
+    }
+    // disable prepare data if unfriendly op is found
+    if (!disable_opt) {
+      disable_opt = IsPrepareDataOptTargetOp(op);
+    }
+  }
+}
+
 bool AnalysisPredictor::PrepareExecutor() {
+  DisablePrepareDataOpt(inference_program_, 0, false);
+
   executor_->Prepare(sub_scope_, *inference_program_, 0,
                      config_.use_feed_fetch_ops_);
 
@@ -302,8 +343,6 @@ void AnalysisPredictor::MkldnnPreSet(
     platform::MKLDNNDeviceContext::tls().set_cur_mkldnn_session_id(
         platform::MKLDNNDeviceContextThreadLocals::
             kMKLDNNSessionID_CacheClearing);
-    platform::MKLDNNDeviceContext::tls().set_cur_input_shape_cache_capacity(
-        config_.mkldnn_cache_capacity_);
     // Set current_input_shape for caching dynamic shape.
     std::stringstream ss;
     for (size_t i = 0; i < inputs_shape.size(); ++i) {
@@ -314,6 +353,9 @@ void AnalysisPredictor::MkldnnPreSet(
     VLOG(2) << "Set input shape=" << ss.str();
     platform::MKLDNNDeviceContext::tls().set_cur_input_shape_str(ss.str());
   }
+  platform::MKLDNNDeviceContext::tls().set_cur_input_shape_cache_capacity(
+      config_.mkldnn_cache_capacity_);
+
 #endif
 }
 
@@ -329,10 +371,9 @@ void AnalysisPredictor::MkldnnPostReset() {
       CHECK_LE(shape_blob_size,
                static_cast<size_t>(config_.mkldnn_cache_capacity_));
     }
-    paddle::platform::MKLDNNDeviceContext::tls().set_cur_mkldnn_session_id(
-        platform::MKLDNNDeviceContextThreadLocals::kMKLDNNSessionID_Default);
-    platform::MKLDNNDeviceContext::tls().set_cur_input_shape_cache_capacity(0);
-    platform::MKLDNNDeviceContext::tls().set_cur_input_shape_str("");
+    // We cannot reset to the default cache settings
+    // as there maybe CopyToCPU method used and oneDNN
+    // primitives are used there so cache would grow
   }
 #endif
 }
@@ -1198,6 +1239,8 @@ USE_TRT_CONVERTER(affine_channel);
 USE_TRT_CONVERTER(multiclass_nms);
 USE_TRT_CONVERTER(nearest_interp);
 USE_TRT_CONVERTER(reshape);
+USE_TRT_CONVERTER(reduce_sum);
+USE_TRT_CONVERTER(gather_nd);
 #endif
 
 namespace paddle_infer {

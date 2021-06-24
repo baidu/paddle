@@ -164,7 +164,7 @@ class _ConvNd(layers.Layer):
         if self._padding_mode is not 'zeros':
             main_str += ', padding_mode={_padding_mode}'
         if self.output_padding != 0:
-            main_str += ', output_padding={_output_padding}'
+            main_str += ', output_padding={output_padding}'
         if self._dilation != [1] * len(self._dilation):
             main_str += ', dilation={_dilation}'
         if self._groups != 1:

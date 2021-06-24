@@ -21,18 +21,10 @@ import sys
 import unittest
 
 import gast
-import six
 
 import paddle
 from paddle.fluid.dygraph.dygraph_to_static import logging_utils
-
-# TODO(liym27): library mock needs to be installed separately in PY2,
-#  but CI environment has not installed mock yet.
-#  After discuss with Tian Shuo, now use mock only in PY3, and use it in PY2 after CI installs it.
-if six.PY3:
-    from unittest import mock
-# else:
-#     import mock
+from unittest import mock
 
 
 class TestLoggingUtils(unittest.TestCase):
@@ -112,7 +104,7 @@ class TestLoggingUtils(unittest.TestCase):
                                            ast_code, "TestTransformer")
 
     def test_log_message(self):
-        stream = io.BytesIO() if six.PY2 else io.StringIO()
+        stream = io.StringIO()
         log = self.translator_logger.logger
         stdout_handler = logging.StreamHandler(stream)
         log.addHandler(stdout_handler)
@@ -122,39 +114,36 @@ class TestLoggingUtils(unittest.TestCase):
         log_msg_1 = "test_log_1"
         log_msg_2 = "test_log_2"
 
-        if six.PY3:
-            with mock.patch.object(sys, 'stdout', stream):
-                logging_utils.set_verbosity(1, False)
-                logging_utils.warn(warn_msg)
-                logging_utils.error(error_msg)
-                logging_utils.log(1, log_msg_1)
-                logging_utils.log(2, log_msg_2)
+        with mock.patch.object(sys, 'stdout', stream):
+            logging_utils.set_verbosity(1, False)
+            logging_utils.warn(warn_msg)
+            logging_utils.error(error_msg)
+            logging_utils.log(1, log_msg_1)
+            logging_utils.log(2, log_msg_2)
 
-            result_msg = '\n'.join(
-                [warn_msg, error_msg, "(Level 1) " + log_msg_1, ""])
-            self.assertEqual(result_msg, stream.getvalue())
+        result_msg = '\n'.join(
+            [warn_msg, error_msg, "(Level 1) " + log_msg_1, ""])
+        self.assertEqual(result_msg, stream.getvalue())
 
     def test_log_transformed_code(self):
         source_code = "x = 3"
         ast_code = gast.parse(source_code)
 
-        stream = io.BytesIO() if six.PY2 else io.StringIO()
+        stream = io.StringIO()
         log = self.translator_logger.logger
         stdout_handler = logging.StreamHandler(stream)
         log.addHandler(stdout_handler)
 
-        if six.PY3:
-            with mock.patch.object(sys, 'stdout', stream):
-                paddle.jit.set_code_level(1)
-                logging_utils.log_transformed_code(1, ast_code,
-                                                   "BasicApiTransformer")
+        with mock.patch.object(sys, 'stdout', stream):
+            paddle.jit.set_code_level(1)
+            logging_utils.log_transformed_code(1, ast_code,
+                                               "BasicApiTransformer")
 
-                paddle.jit.set_code_level()
-                logging_utils.log_transformed_code(
-                    logging_utils.LOG_AllTransformer, ast_code,
-                    "All Transformers")
+            paddle.jit.set_code_level()
+            logging_utils.log_transformed_code(logging_utils.LOG_AllTransformer,
+                                               ast_code, "All Transformers")
 
-            self.assertIn(source_code, stream.getvalue())
+        self.assertIn(source_code, stream.getvalue())
 
 
 if __name__ == '__main__':

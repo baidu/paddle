@@ -42,7 +42,11 @@ class AnchorGeneratorPlugin : public nvinfer1::IPluginV2Ext {
   bool supportsFormat(nvinfer1::DataType type,
                       nvinfer1::TensorFormat format) const override;
   size_t getWorkspaceSize(int max_batch_size) const override;
+#if IS_TRT_VERSION_LT(8000)
   int enqueue(int batch_size, const void* const* inputs, void** outputs,
+#else
+  int enqueue(int batch_size, const void* const* inputs, void* const* outputs,
+#endif
               void* workspace, cudaStream_t stream) override;
   int initialize() override;
   void terminate() override;

@@ -368,7 +368,8 @@ def insert_reduce_ops(block,
     for var in reduce_vars:
 
         root_id = get_grad_device(var, shard)
-        assert root_id >= 0, "root id should be a positive int".format(var)
+        assert root_id >= 0, "root id should be a positive int, but now root id is {}".format(
+            root_id)
         block._insert_op_without_sync(
             insert_idx,
             type='c_reduce_sum',
@@ -560,7 +561,7 @@ def save_persistables(exe, dirname, main_program, filename=None):
     """
     # TODO (JZ-LIANG) revise this for uniform mixed parallelism
     if main_program._pipeline_opt:
-        main_program = main_program._pipeline_opt['section_program']['program']
+        main_program = main_program._pipeline_opt['section_program']
 
     def is_opt_vars(var):
         # NOTE(JZ-LIANG): The checks should be updated when add new compatible optimizer
@@ -638,3 +639,8 @@ def append_naive_sync(block, sync_var, ring_id):
             'use_calc_stream': True,
             OP_ROLE_KEY: OpRole.Forward
         })
+    block.append_op(
+        type='c_sync_calc_stream',
+        inputs={'X': [sync_var]},
+        outputs={'Out': [sync_var]},
+        attrs={OP_ROLE_KEY: OpRole.Forward})

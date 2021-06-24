@@ -140,6 +140,91 @@ void recompute_bias_and_weights(const Scope* scope,
   }
 }
 
+ConvBNFusePass::ConvBNFusePass() {
+  AddOpCompat(OpCompat("conv2d"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsOptional()
+      .End()
+      .AddInput("ResidualData")
+      .IsOptional()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .End()
+      .AddAttr("paddings")
+      .End()
+      .AddAttr("padding_algorithm")
+      .IsOptional()
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NCHW", "NHWC", "AnyLayout"})
+      .End();
+
+  AddOpCompat(OpCompat("batch_norm"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Scale")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("Mean")
+      .IsTensor()
+      .End()
+      .AddInput("Variance")
+      .IsTensor()
+      .End()
+      .AddOutput("MeanOut")
+      .IsTensor()
+      .End()
+      .AddOutput("VarianceOut")
+      .IsTensor()
+      .End()
+      .AddOutput("SavedMean")
+      .IsTensor()
+      .End()
+      .AddOutput("SavedVariance")
+      .IsTensor()
+      .End()
+      .AddOutput("Y")
+      .IsTensor()
+      .End()
+      .AddAttr("epsilon")
+      .IsNumLE(0.001f)
+      .IsNumGE(0.0f)
+      .End();
+
+  AddOpCompat(OpCompat("elementwise_add"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")
+      .IsNumEQ(1)
+      .End();
+}
+
 void ConvBNFusePass::ApplyImpl(ir::Graph* graph) const {
   PADDLE_ENFORCE_NOT_NULL(
       graph, platform::errors::InvalidArgument("Graph cannot be nullptr."));
@@ -161,8 +246,11 @@ void ConvBNFusePass::ApplyImpl(ir::Graph* graph) const {
   int found_conv_bn_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     VLOG(4) << "handle " + conv_type() + "BN fuse";
-
     // conv, batch_norm,
     // conv_weight, conv_out,
     // bn_scale, bn_bias, bn_mean, bn_variance,
@@ -236,6 +324,10 @@ void ConvBNFusePass::ApplyImpl(ir::Graph* graph) const {
       }
       conv->Op()->SetOutput("Output",
                             std::vector<std::string>({bn_out->Name()}));
+      if (!IsCompat(*conv->Op())) {
+        LOG(WARNING) << "conv_bn fuse pass in out conv op compat failed.";
+        return;
+      }
       GraphSafeRemoveNodes(
           graph,
           {conv_out, bn_scale, bn_bias, bn_mean, bn_variance, batch_norm,
@@ -251,6 +343,11 @@ void ConvBNFusePass::ApplyImpl(ir::Graph* graph) const {
       desc.SetOutput("Out", std::vector<std::string>({bn_out->Name()}));
       desc.SetType("elementwise_add");
       desc.SetAttr("axis", 1);
+      if (!IsCompat(desc)) {
+        LOG(WARNING)
+            << "conv_bn fuse pass in out elementwise_add op compat failed.";
+        return;
+      }
       auto eltwise_op = g->CreateOpNode(&desc);  // OpDesc will be copied.
 
       GraphSafeRemoveNodes(graph, {bn_scale, bn_bias, bn_mean, bn_variance,
@@ -267,6 +364,91 @@ void ConvBNFusePass::ApplyImpl(ir::Graph* graph) const {
   gpd(graph, handler);
 
   AddStatis(found_conv_bn_count);
+}
+
+ConvEltwiseAddBNFusePass::ConvEltwiseAddBNFusePass() {
+  AddOpCompat(OpCompat("conv2d"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsOptional()
+      .End()
+      .AddInput("ResidualData")
+      .IsOptional()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .End()
+      .AddAttr("paddings")
+      .End()
+      .AddAttr("padding_algorithm")
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .IsOptional()
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NCHW", "NHWC", "AnyLayout"})
+      .End();
+
+  AddOpCompat(OpCompat("batch_norm"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Scale")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("Mean")
+      .IsTensor()
+      .End()
+      .AddInput("Variance")
+      .IsTensor()
+      .End()
+      .AddOutput("MeanOut")
+      .IsTensor()
+      .End()
+      .AddOutput("VarianceOut")
+      .IsTensor()
+      .End()
+      .AddOutput("SavedMean")
+      .IsTensor()
+      .End()
+      .AddOutput("SavedVariance")
+      .IsTensor()
+      .End()
+      .AddOutput("Y")
+      .IsTensor()
+      .End()
+      .AddAttr("epsilon")
+      .IsNumLE(0.001f)
+      .IsNumGE(0.0f)
+      .End();
+
+  AddOpCompat(OpCompat("elementwise_add"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("axis")
+      .IsNumEQ(1)
+      .End();
 }
 
 void ConvEltwiseAddBNFusePass::ApplyImpl(ir::Graph* graph) const {
@@ -290,8 +472,11 @@ void ConvEltwiseAddBNFusePass::ApplyImpl(ir::Graph* graph) const {
   int found_conv_bn_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     VLOG(4) << "handle " + conv_type() + "BN fuse";
-
     // conv, batch_norm,
     // conv_weight, conv_out,
     // bn_scale, bn_bias, bn_mean, bn_variance,
@@ -361,7 +546,11 @@ void ConvEltwiseAddBNFusePass::ApplyImpl(ir::Graph* graph) const {
     // Update the elementwise_add node
     eltwise->Op()->SetAttr("axis", 1);
     eltwise->Op()->SetOutput("Out", std::vector<std::string>({bn_out->Name()}));
-
+    if (!IsCompat(*eltwise->Op())) {
+      LOG(WARNING)
+          << "conv_eltwise_bn fuse pass in out eltwise op compat failed.";
+      return;
+    }
     GraphSafeRemoveNodes(
         graph,
         {bn_scale, bn_bias, bn_mean, bn_variance, batch_norm, bn_mean_out,
@@ -375,6 +564,70 @@ void ConvEltwiseAddBNFusePass::ApplyImpl(ir::Graph* graph) const {
   gpd(graph, handler);
 
   AddStatis(found_conv_bn_count);
+}
+
+ConvTransposeBNFusePass::ConvTransposeBNFusePass() {
+  AddOpCompat(OpCompat("conv2d_transpose"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsOptional()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .End()
+      .AddAttr("paddings")
+      .End()
+      .AddAttr("padding_algorithm")
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .IsOptional()
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NCHW", "NHWC", "AnyLayout"})
+      .End();
+}
+
+ConvTransposeEltwiseAddBNFusePass::ConvTransposeEltwiseAddBNFusePass() {
+  AddOpCompat(OpCompat("conv2d_transpose"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsOptional()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .End()
+      .AddAttr("paddings")
+      .End()
+      .AddAttr("padding_algorithm")
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .IsOptional()
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NCHW", "NHWC", "AnyLayout"})
+      .End();
 }
 
 }  // namespace ir

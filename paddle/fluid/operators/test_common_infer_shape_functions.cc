@@ -48,7 +48,7 @@ class DygraphInferShapeTest {
   void SetOpType(const std::string& op_type) { op_type_ = op_type; }
   void Run(std::function<void(framework::InferShapeContext* ctx)> infer_shape) {
     imperative::DygraphInferShapeContext<imperative::VarBase> ctx(
-        &ins_, &outs_, &attrs_, op_type_);
+        &ins_, &outs_, &attrs_, {}, op_type_);
     infer_shape(&ctx);
     for (const auto& pair : expected_dims_) {
       auto out = outs_[pair.first][0];

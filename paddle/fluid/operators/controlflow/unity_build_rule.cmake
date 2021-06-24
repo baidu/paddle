@@ -12,9 +12,11 @@ register_unity_group(cc
     fetch_op.cc
     get_places_op.cc
     logical_op.cc
+    bitwise_op.cc
     tensor_array_read_write_op.cc
     while_op.cc)
 register_unity_group(cu
     logical_op.cu
+    bitwise_op.cu
     compare_op.cu
     compare_all_op.cu)

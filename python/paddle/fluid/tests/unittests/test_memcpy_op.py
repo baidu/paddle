@@ -171,6 +171,14 @@ class TestMemcpyOPError(unittest.TestCase):
                 fetch_list=[lod_tensor_var.name, pinned_var.name])
 
 
+class TestMemcpyApi(unittest.TestCase):
+    def test_api(self):
+        a = paddle.ones([1024, 1024])
+        b = paddle.tensor.creation._memcpy(a, paddle.CUDAPinnedPlace())
+        self.assertEqual(b.place.__repr__(), "CUDAPinnedPlace")
+        self.assertTrue(np.array_equal(a.numpy(), b.numpy()))
+
+
 if __name__ == '__main__':
     paddle.enable_static()
     unittest.main()

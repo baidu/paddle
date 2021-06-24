@@ -28,7 +28,8 @@ __global__ void KeYoloBoxFw(const T* input, const int* imgsize, T* boxes,
                             const int w, const int an_num, const int class_num,
                             const int box_num, int input_size_h,
                             int input_size_w, bool clip_bbox, const float scale,
-                            const float bias) {
+                            const float bias, bool iou_aware,
+                            const float iou_aware_factor) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
   T box[4];
@@ -43,23 +44,29 @@ __global__ void KeYoloBoxFw(const T* input, const int* imgsize, T* boxes,
     int img_height = imgsize[2 * i];
     int img_width = imgsize[2 * i + 1];
 
-    int obj_idx =
-        GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num, 4);
+    int obj_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num, 4,
+                                iou_aware);
     T conf = sigmoid<T>(input[obj_idx]);
+    if (iou_aware) {
+      int iou_idx = GetIoUIndex(i, j, k * w + l, an_num, an_stride, grid_num);
+      T iou = sigmoid<T>(input[iou_idx]);
+      conf = pow(conf, static_cast<T>(1. - iou_aware_factor)) *
+             pow(iou, static_cast<T>(iou_aware_factor));
+    }
     if (conf < conf_thresh) {
       continue;
     }
 
-    int box_idx =
-        GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num, 0);
+    int box_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num, 0,
+                                iou_aware);
     GetYoloBox<T>(box, input, anchors, l, k, j, h, w, input_size_h,
                   input_size_w, box_idx, grid_num, img_height, img_width, scale,
                   bias);
     box_idx = (i * box_num + j * grid_num + k * w + l) * 4;
     CalcDetectionBox<T>(boxes, box, box_idx, img_height, img_width, clip_bbox);
 
-    int label_idx =
-        GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num, 5);
+    int label_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride, grid_num,
+                                  5, iou_aware);
     int score_idx = (i * box_num + j * grid_num + k * w + l) * class_num;
     CalcLabelScore<T>(scores, input, label_idx, score_idx, class_num, conf,
                       grid_num);
@@ -80,6 +87,8 @@ class YoloBoxOpCUDAKernel : public framework::OpKernel<T> {
     float conf_thresh = ctx.Attr<float>("conf_thresh");
     int downsample_ratio = ctx.Attr<int>("downsample_ratio");
     bool clip_bbox = ctx.Attr<bool>("clip_bbox");
+    bool iou_aware = ctx.Attr<bool>("iou_aware");
+    float iou_aware_factor = ctx.Attr<float>("iou_aware_factor");
     float scale = ctx.Attr<float>("scale_x_y");
     float bias = -0.5 * (scale - 1.);
 
@@ -111,11 +120,18 @@ class YoloBoxOpCUDAKernel : public framework::OpKernel<T> {
     platform::GpuLaunchConfig config =
         platform::GetGpuLaunchConfig1D(ctx.cuda_device_context(), n * box_num);
 
-    KeYoloBoxFw<T><<<config.block_per_grid, config.thread_per_block, 0,
+    dim3 thread_num = config.thread_per_block;
+#ifdef WITH_NV_JETSON
+    if (config.compute_capability == 53 || config.compute_capability == 62) {
+      thread_num = 512;
+    }
+#endif
+
+    KeYoloBoxFw<T><<<config.block_per_grid, thread_num, 0,
                      ctx.cuda_device_context().stream()>>>(
         input_data, imgsize_data, boxes_data, scores_data, conf_thresh,
         anchors_data, n, h, w, an_num, class_num, box_num, input_size_h,
-        input_size_w, clip_bbox, scale, bias);
+        input_size_w, clip_bbox, scale, bias, iou_aware, iou_aware_factor);
   }
 };
 

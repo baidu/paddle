@@ -29,6 +29,55 @@ void FuseBatchNormActOneDNNPass::ApplyImpl(Graph *graph) const {
   FuseBatchNormAct(graph, act_type);
 }
 
+FuseBatchNormActOneDNNPass::FuseBatchNormActOneDNNPass() {
+  AddOpCompat(OpCompat("batch_norm"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Scale")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("Mean")
+      .IsTensor()
+      .End()
+      .AddInput("Variance")
+      .IsTensor()
+      .End()
+      .AddOutput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("MeanOut")
+      .IsOptional()
+      .End()
+      .AddOutput("VarianceOut")
+      .IsOptional()
+      .End()
+      .AddOutput("SavedMean")
+      .IsOptional()
+      .End()
+      .AddOutput("SavedVariance")
+      .IsOptional()
+      .End()
+      .AddOutput("ReserveSpace")
+      .IsOptional()
+      .End()
+      .AddAttr("epsilon")
+      .IsNumGE(0.0f)
+      .IsNumLE(0.001f)
+      .End();
+
+  AddOpCompat(OpCompat("relu"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End();
+}
+
 void FuseBatchNormActOneDNNPass::FuseBatchNormAct(
     Graph *graph, const std::string &act_type) const {
   PADDLE_ENFORCE_NOT_NULL(
@@ -45,6 +94,11 @@ void FuseBatchNormActOneDNNPass::FuseBatchNormAct(
   auto handler = [&](const GraphPatternDetector::subgraph_t &subgraph,
                      Graph *g) {
     VLOG(4) << "Fuse BatchNorm with ReLU activation op.";
+
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     // BN output
     GET_IR_NODE_FROM_SUBGRAPH(bn_out, bn_out, bn_act_pattern);
     // ACT output
@@ -83,6 +137,11 @@ void FuseBatchNormActOneDNNPass::FuseBatchNormAct(
     bn_op->SetAttr("fuse_with_relu", true);
     bn_op->SetAttr("trainable_statistics", false);
     bn_op->SetOutput("Y", {act_out->Name()});
+
+    if (!IsCompat(*bn_op)) {
+      LOG(WARNING) << "Fc fuse pass in out fc op compat failed.";
+      return;
+    }
 
     IR_OP_VAR_LINK(batch_norm, act_out);
     GraphSafeRemoveNodes(g, {act, bn_out});

@@ -92,6 +92,10 @@ from .dygraph.checkpoint import save_dygraph, load_dygraph
 from .dygraph.varbase_patch_methods import monkey_patch_varbase
 from . import generator
 from .core import _cuda_synchronize
+from .generator import Generator
+from .trainer_desc import TrainerDesc, DistMultiTrainer, PipelineTrainer, MultiTrainer, HeterXpuTrainer, HeterBoxTrainer
+from .transpiler import HashName, RoundRobin
+from .backward import append_backward
 
 Tensor = LoDTensor
 enable_imperative = enable_dygraph
@@ -116,7 +120,6 @@ __all__ = framework.__all__ + executor.__all__ + \
         'transpiler',
         'nets',
         'optimizer',
-        'learning_rate_decay',
         'backward',
         'regularizer',
         'LoDTensor',
@@ -137,7 +140,6 @@ __all__ = framework.__all__ + executor.__all__ + \
         'install_check',
         'save',
         'load',
-        'VarBase',
         '_cuda_synchronize'
     ]
 

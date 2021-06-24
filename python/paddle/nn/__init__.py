@@ -138,6 +138,7 @@ from ..fluid.dygraph.container import Sequential  # noqa: F401
 from . import utils  # noqa: F401
 from . import functional  # noqa: F401
 from . import initializer  # noqa: F401
+from . import quant  # noqa: F401
 
 #TODO: remove 'diag_embed', 'remove_weight_norm', 'weight_norm' months later.
 import paddle.utils.deprecated as deprecated
@@ -286,5 +287,6 @@ __all__ = [     #noqa
            'Swish',
            'PixelShuffle',
            'ELU',
-           'ReLU6'
+           'ReLU6',
+           'LayerDict'
 ]

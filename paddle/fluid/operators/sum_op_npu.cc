@@ -35,9 +35,11 @@ class SumNPUKernel : public framework::OpKernel<T> {
     auto place = ctx.GetPlace();
 
     int n = static_cast<int>(x.size());
-    PADDLE_ENFORCE_EQ(n > 1, true,
-                      platform::errors::InvalidArgument(
-                          "The size of Input(x) list must larger or equal 2"));
+
+    if (n == 1) {
+      TensorCopy(*x[0], place, out);
+      return;
+    }
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()

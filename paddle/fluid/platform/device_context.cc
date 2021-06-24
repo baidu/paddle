@@ -563,7 +563,7 @@ Place CUDAPinnedDeviceContext::GetPlace() const { return place_; }
 MKLDNNDeviceContext::MKLDNNDeviceContext(CPUPlace place)
     : CPUDeviceContext(place), p_blobmap_() {
   p_blobmap_.reset(new BlobMap());
-  p_exec_items_.reset(new ExecMap());
+  p_exec_items_.reset(new ExecShape());
   p_mutex_.reset(new std::mutex());
 }
 
@@ -644,10 +644,15 @@ void MKLDNNDeviceContext::ResetBlobMap(void* ptr) {
     if (ptr == nullptr) {
       p_blobmap_->clear();
     } else {
-      for (auto& v : (*p_exec_items_)[ptr]) {
-        (v.first)->erase(v.second);
+      // Iterate through all shapes and release
+      // for each shape and active executor all entries
+      // of this executor
+      for (auto& s : *p_exec_items_) {
+        for (auto& v : (*s.second)[ptr]) {
+          (v.first)->erase(v.second);
+        }
+        s.second->erase(ptr);
       }
-      p_exec_items_->erase(ptr);
     }
   } else {
     VLOG(3) << "Prevented Clearing DNNL cache.";
@@ -655,11 +660,24 @@ void MKLDNNDeviceContext::ResetBlobMap(void* ptr) {
   }
 }
 
+void MKLDNNDeviceContext::RemoveShapeEntriesWithExecutor(void) const {
+  p_exec_items_->erase(p_exec_items_->begin());
+}
+
 void MKLDNNDeviceContext::LinkEntryWithExecutor(BlobPtr_t<KeyBlob> pblob,
                                                 KeyBlob::iterator it) const {
+  // Take current input shape from TLS
   // Take current executor addess from TLS
   // and for this executor's items add the one defined with arguments
-  (*p_exec_items_)[tls().get_curr_exec()].push_back(std::make_pair(pblob, it));
+  auto key_it = p_exec_items_
+                    ->insert(std::make_pair(tls().cur_input_shape_str,
+                                            std::make_shared<ExecMap>()))
+                    .first;
+  (*key_it->second)[tls().get_curr_exec()].push_back(std::make_pair(pblob, it));
+
+  VLOG(3) << "LinkEntryWithExecutor, shapes: " << p_exec_items_->size()
+          << " curr exec size: "
+          << (*key_it->second)[tls().get_curr_exec()].size() << "\n";
 }
 
 void MKLDNNDeviceContext::BlockNextCacheClearing() {
@@ -716,6 +734,7 @@ void MKLDNNDeviceContext::SetBlob(const std::string& name,
       VLOG(2) << "sid=" << sid
               << ", remove all blobs of shape: " << sBlob->begin()->first;
       sBlob->erase(sBlob->begin()->first);
+      RemoveShapeEntriesWithExecutor();
     }
     pBlob = std::make_shared<KeyBlob>();
     (*sBlob)[tls().cur_input_shape_str] = pBlob;
@@ -739,7 +758,7 @@ void MKLDNNDeviceContext::SetBlob(const std::string& name,
   return;
 }
 
-unsigned int MKLDNNDeviceContext::GetCachedObjectsNumber(void) {
+unsigned int MKLDNNDeviceContext::GetCachedObjectsNumber(void) const {
   unsigned int num_entries = 0;
   for (auto const& l3 : *p_blobmap_) {
     for (auto const& l2 : *(l3.second)) {

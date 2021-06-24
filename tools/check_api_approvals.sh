@@ -39,21 +39,29 @@ function add_failed(){
 
 api_spec_diff=`python ${PADDLE_ROOT}/tools/diff_api.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.spec.api  ${PADDLE_ROOT}/paddle/fluid/API_PR.spec.api` 
 if [ "$api_spec_diff" != "" ]; then
-    echo_line="You must have one RD (XiaoguangHu01 or lanxianghit) and one TPM (saxon-zh or jzhang533 or swtkiwi or Heeenrrry or TCChenlong) approval for the api change for the management reason of API interface.\n"
+    echo_line="You must have one RD (XiaoguangHu01 or lanxianghit) approval for API change.\n"
+    echo_line="${echo_line} and one TPM approval for API change: \n"
+    echo_line="${echo_line} jzhang533/ZhangJun, dingjiaweiww/DingJiaWei, Heeenrrry/LiKunLun, TCChenlong/ChenLong for general APIs\n"
+    echo_line="${echo_line} PangHua/XiangHui for distributed related APIs\n"
+    echo_line="${echo_line} twismon/WangYunKai, CheQiXiao/CheQiXiao for inference related APIs.\n"
+
     check_approval 1 46782768 47554610
-    echo_line=""
-    check_approval 1 2870059 29231 27208573 28379894 11935832
+    check_approval 1 29231 23093488 28379894 11935832 2682285 12050047 50894398
 fi
 
 api_doc_spec_diff=`python ${PADDLE_ROOT}/tools/diff_api.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.spec.doc  ${PADDLE_ROOT}/paddle/fluid/API_PR.spec.doc` 
 if [ "$api_doc_spec_diff" != "" ]; then
-    echo_line="You must have one TPM (saxon-zh or jzhang533 or swtkiwi or Heeenrrry or TCChenlong) approval for the api change for the management reason of API document.\n"
-    check_approval 1 2870059 29231 27208573 28379894 11935832
+    echo_line="You must have  one TPM approval for API documents change: \n"
+    echo_line="${echo_line} jzhang533/ZhangJun, dingjiaweiww/DingJiaWei, Heeenrrry/LiKunLun, TCChenlong/ChenLong for general API docs\n"
+    echo_line="${echo_line} PangHua/XiangHui for distributed related API docs\n"
+    echo_line="${echo_line} twismon/WangYunKai, CheQiXiao/CheQiXiao for inference related API docs.\n"
+
+    check_approval 1 29231 23093488 28379894 11935832 2682285 12050047 50894398
 fi
 
-api_spec_diff=`python ${PADDLE_ROOT}/tools/check_api_source_without_core_ops.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.source.md5  ${PADDLE_ROOT}/paddle/fluid/API_PR.source.md5` 
-if [ "$api_spec_diff" != "" ]; then
-    echo_line="APIs without core.ops: \n${api_spec_diff}\n"
+api_src_spec_diff=`python ${PADDLE_ROOT}/tools/check_api_source_without_core_ops.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.source.md5  ${PADDLE_ROOT}/paddle/fluid/API_PR.source.md5` 
+if [ "$api_src_spec_diff" != "" ]; then
+    echo_line="APIs without core.ops: \n${api_src_spec_diff}\n"
     echo_line="${echo_line}You must have one RD (zhiqiu (Recommend) or phlrain) approval for the api change for the opreator-related api without 'core.ops'.\n"
     echo_line="${echo_line}For more details, please click [https://github.com/PaddlePaddle/Paddle/wiki/paddle_api_development_manual.md]\n"
     check_approval 1 6888866 43953930
@@ -61,8 +69,8 @@ fi
 
 op_type_spec_diff=`python ${PADDLE_ROOT}/tools/check_op_register_type.py ${PADDLE_ROOT}/paddle/fluid/OP_TYPE_DEV.spec  ${PADDLE_ROOT}/paddle/fluid/OP_TYPE_PR.spec`
 if [ "$op_type_spec_diff" != "" ]; then
-    echo_line="You must have one RD (Aurelius84 (Recommend) or liym27 or zhhsplendid)approval for the data_type registration of new operator. More data_type of new operator should be registered in your PR. Please make sure that both float/double (or int/int64_t) have been registered.\n For more details, please click [https://github.com/PaddlePaddle/Paddle/wiki/Data-types-of-generic-Op-must-be-fully-registered].\n"
-    check_approval 1 9j301846 33742067 7913861
+    echo_line="You must have one RD (Aurelius84 (Recommend) or zhhsplendid)approval for the data_type registration of new operator. More data_type of new operator should be registered in your PR. Please make sure that both float/double (or int/int64_t) have been registered.\n For more details, please click [https://github.com/PaddlePaddle/Paddle/wiki/Data-types-of-generic-Op-must-be-fully-registered].\n"
+    check_approval 1 9301846 7913861
 fi
 
 op_desc_diff=`python ${PADDLE_ROOT}/tools/check_op_desc.py ${PADDLE_ROOT}/paddle/fluid/OP_DESC_DEV.spec  ${PADDLE_ROOT}/paddle/fluid/OP_DESC_PR.spec`
@@ -84,10 +92,13 @@ if [ -n "${echo_list}" ];then
   echo -e "${echo_list[@]}"
   echo "There are ${failed_num} approved errors."
   echo "****************"
-fi
 
-python ${PADDLE_ROOT}/tools/diff_api.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.spec  ${PADDLE_ROOT}/paddle/fluid/API_PR.spec
-python ${PADDLE_ROOT}/tools/check_op_register_type.py ${PADDLE_ROOT}/paddle/fluid/OP_TYPE_DEV.spec  ${PADDLE_ROOT}/paddle/fluid/OP_TYPE_PR.spec
-if [ -n "${echo_list}" ]; then
+  # L40 L48 L62 has fetch the result out, but there are splitted.
+  if [ "${api_spec_diff}" != "" -o "${api_doc_spec_diff}" != "" ] ; then
+    python ${PADDLE_ROOT}/tools/diff_api.py ${PADDLE_ROOT}/paddle/fluid/API_DEV.spec  ${PADDLE_ROOT}/paddle/fluid/API_PR.spec
+  fi
+  if [ "${op_type_spec_diff}" != "" ] ; then
+    echo "op_type_spec_diff: ${op_type_spec_diff}"
+  fi 
   exit 6
 fi

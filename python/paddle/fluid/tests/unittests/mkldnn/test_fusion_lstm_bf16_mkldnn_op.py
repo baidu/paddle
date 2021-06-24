@@ -27,7 +27,7 @@ from paddle.fluid.tests.unittests.test_fusion_gru_op import fusion_gru
                  "place does not support BF16 evaluation")
 class TestFusionLSTMBF16ONEDNNOp(OpTest):
     def set_confs(self):
-        self.mkldnn_data_type = False
+        pass
 
     def test_check_output(self):
         for use_seq in {True, False}:
@@ -48,6 +48,7 @@ class TestFusionLSTMBF16ONEDNNOp(OpTest):
         self.act_cell = 'tanh'
         self.act_cand = 'tanh'
         self.use_mkldnn = True
+        self.mkldnn_data_type = "bfloat16"
         self.force_fp32_output = False
         self.weights_dtype = 'fp32'
         self.set_confs()
@@ -130,7 +131,8 @@ class TestFusionLSTMBF16ONEDNNOp(OpTest):
             'cell_activation': self.act_cell,
             'candidate_activation': self.act_cand,
             'force_fp32_output': self.force_fp32_output,
-            'use_mkldnn': self.use_mkldnn
+            'use_mkldnn': self.use_mkldnn,
+            'mkldnn_data_type': self.mkldnn_data_type,
         }
 
 

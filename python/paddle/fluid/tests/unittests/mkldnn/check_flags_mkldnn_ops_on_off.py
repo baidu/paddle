@@ -19,18 +19,19 @@ import numpy as np
 import paddle.fluid as fluid
 import os
 from paddle.fluid.layer_helper import LayerHelper
+from paddle.fluid.framework import _global_flags
 
 
 def check():
-    print("check: fluid.core.globals()['FLAGS_use_mkldnn']=",
-          fluid.core.globals()["FLAGS_use_mkldnn"])
+    print("check: _global_flags()['FLAGS_use_mkldnn']=",
+          _global_flags()["FLAGS_use_mkldnn"])
     print("check: fluid.get_flags('FLAGS_use_mkldnn')=",
           fluid.get_flags(['FLAGS_use_mkldnn']))
     print("check: DNNL_VERBOSE=", os.environ['DNNL_VERBOSE'])
     print("check: FLAGS_tracer_mkldnn_ops_on=",
-          fluid.core.globals()['FLAGS_tracer_mkldnn_ops_on'])
+          _global_flags()['FLAGS_tracer_mkldnn_ops_on'])
     print("check: FLAGS_tracer_mkldnn_ops_off=",
-          fluid.core.globals()['FLAGS_tracer_mkldnn_ops_off'])
+          _global_flags()['FLAGS_tracer_mkldnn_ops_off'])
     a_np = np.random.uniform(-2, 2, (10, 20, 30)).astype(np.float32)
     b_np = np.random.uniform(-5, 5, (10, 20, 30)).astype(np.float32)
     helper = LayerHelper(fluid.unique_name.generate(str("test")), act="relu")

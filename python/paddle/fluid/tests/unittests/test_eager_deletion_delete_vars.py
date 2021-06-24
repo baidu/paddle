@@ -145,7 +145,7 @@ class TestExecutor(unittest.TestCase):
     def pe_main(self):
         image, label, loss = simple_fc_net()
         loss.persistable = False
-        persitables, non_persistables = get_persistables_and_non_persistables(
+        persistables, non_persistables = get_persistables_and_non_persistables(
             fluid.default_main_program(), [loss.name])
 
         exe = fluid.Executor(self.place)

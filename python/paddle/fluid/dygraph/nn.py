@@ -21,7 +21,7 @@ from ..layers import utils
 from ..layers import nn as F
 from .. import dygraph_utils
 from . import layers
-from ..framework import Variable, in_dygraph_mode, OpProtoHolder, Parameter, _dygraph_tracer, _varbase_creator, default_main_program
+from ..framework import Variable, in_dygraph_mode, OpProtoHolder, Parameter, _dygraph_tracer, _varbase_creator, default_main_program, _global_flags
 from ..data_feeder import convert_dtype, check_variable_and_dtype, check_type, check_dtype
 from ..param_attr import ParamAttr
 from ..initializer import Normal, Constant, NumpyArrayInitializer
@@ -188,7 +188,7 @@ class Conv2D(layers.Layer):
         if not isinstance(use_cudnn, bool):
             raise ValueError("use_cudnn should be True or False")
         self._use_cudnn = use_cudnn
-        self._use_mkldnn = core.globals()["FLAGS_use_mkldnn"]
+        self._use_mkldnn = _global_flags()["FLAGS_use_mkldnn"]
         self._filter_size = filter_size
         self._num_filters = num_filters
         self._param_attr = param_attr
@@ -837,7 +837,7 @@ class Pool2D(layers.Layer):
         if not isinstance(use_cudnn, bool):
             raise ValueError("use_cudnn should be True or False")
 
-        self._use_mkldnn = core.globals()["FLAGS_use_mkldnn"]
+        self._use_mkldnn = _global_flags()["FLAGS_use_mkldnn"]
 
         if data_format not in ["NCHW", "NHWC"]:
             raise ValueError(
@@ -966,7 +966,7 @@ class Linear(layers.Layer):
         self.bias = self.create_parameter(
             shape=[output_dim], attr=bias_attr, dtype=dtype, is_bias=True)
 
-        self._use_mkldnn = core.globals()["FLAGS_use_mkldnn"]
+        self._use_mkldnn = _global_flags()["FLAGS_use_mkldnn"]
 
     def forward(self, input):
         if in_dygraph_mode():
@@ -1268,7 +1268,7 @@ class BatchNorm(layers.Layer):
         self._param_attr = param_attr
         self._bias_attr = bias_attr
         self._act = act
-        self._use_mkldnn = core.globals()["FLAGS_use_mkldnn"]
+        self._use_mkldnn = _global_flags()["FLAGS_use_mkldnn"]
 
         assert bias_attr is not False, "bias_attr should not be False in batch_norm."
 

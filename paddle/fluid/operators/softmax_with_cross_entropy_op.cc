@@ -44,6 +44,19 @@ class SoftmaxWithCrossEntropyOpMaker
         "The outputs value of softmax activation by given the input batch, "
         "which will be used in backward calculation.")
         .AsIntermediate();
+#ifdef PADDLE_WITH_ASCEND_CL
+    AddOutput(
+        "Backprop",
+        "(Tensor, default: Tensor<float>), A tensor in same shape with "
+        "Input(Logits). "
+        "The intermediate value used for backward calculation. The calculation "
+        "is :"
+        "exp(logits -max_logits) / sum(exp(logits - max_logits)) - labels, "
+        "where labels is ont-hot."
+        "Currently, the tensor is generated and used in npu kernel only. ")
+        .AsIntermediate()
+        .AsDispensable();
+#endif
     AddOutput("Loss",
               "(Tensor, default: Tensor<float>), A tensor in same shape with "
               "Input(Logits) "
@@ -181,7 +194,10 @@ class SoftmaxWithCrossEntropyOp : public framework::OperatorWithKernel {
     }
 
     ctx->SetOutputDim("Softmax", logits_dims);
-
+#ifdef PADDLE_WITH_ASCEND_CL
+    ctx->SetOutputDim("Backprop", logits_dims);
+    ctx->ShareLoD("Logits", /*->*/ "Backprop");
+#endif
     logits_dims[axis] = 1;
     ctx->SetOutputDim("Loss", logits_dims);
 
@@ -285,6 +301,9 @@ class SoftmaxGradMaker : public framework::SingleGradOpMaker<T> {
     grad_op->SetType("softmax_with_cross_entropy_grad");
     grad_op->SetInput("Label", this->Input("Label"));
     grad_op->SetInput("Softmax", this->Output("Softmax"));
+#ifdef PADDLE_WITH_ASCEND_CL
+    grad_op->SetInput("Backprop", this->Output("Backprop"));
+#endif
     grad_op->SetInput(framework::GradVarName("Loss"), this->OutputGrad("Loss"));
     grad_op->SetOutput(framework::GradVarName("Logits"),
                        this->InputGrad("Logits"));
@@ -317,9 +336,29 @@ REGISTER_OP_CPU_KERNEL(softmax_with_cross_entropy,
 REGISTER_OP_CPU_KERNEL(softmax_with_cross_entropy_grad,
                        ops::SoftmaxWithCrossEntropyGradKernel<float>,
                        ops::SoftmaxWithCrossEntropyGradKernel<double>);
+
 REGISTER_OP_VERSION(softmax_with_cross_entropy)
+#ifdef PADDLE_WITH_ASCEND_CL
+    .AddCheckpoint(
+        R"ROC(
+              Add a new attribute [use_softmax] )ROC",
+        paddle::framework::compatible::OpVersionDesc().NewAttr(
+            "use_softmax", "A flag to indicate whether to do softmax", true))
+    .AddCheckpoint(
+        R"ROC(
+                Add a new dispensable/intermediate output [backprop] )ROC",
+        paddle::framework::compatible::OpVersionDesc().NewOutput(
+            "Backprop",
+            "The intermediate value used for backward calculation. The "
+            "calculation is :"
+            "exp(logits -max_logits) / sum(exp(logits - max_logits)) - labels, "
+            "where labels is ont-hot."
+            "Currently, the tensor is generated and used in npu kernel "
+            "only. "));
+#else
     .AddCheckpoint(
         R"ROC(
               Add a new attribute [use_softmax] )ROC",
         paddle::framework::compatible::OpVersionDesc().NewAttr(
             "use_softmax", "A flag to indicate whether to do softmax", true));
+#endif

@@ -141,7 +141,7 @@ static inline std::shared_ptr<imperative::VarBase> CastToFP32(
 }
 
 static inline framework::proto::VarType::Type GetPromoteType(
-    const NameVarBaseMap& ins) {
+    const std::string& op_type, const NameVarBaseMap& ins) {
   auto dst_type = framework::proto::VarType::FP16;
   for (const auto& pair : ins) {
     for (const auto& var : pair.second) {
@@ -151,6 +151,18 @@ static inline framework::proto::VarType::Type GetPromoteType(
       }
     }
   }
+
+  // NOTE(juncai): moving_average_abs_max_scale only consider the
+  // dtype of input(X)
+  if (op_type == "moving_average_abs_max_scale") {
+    for (const auto& pair : ins) {
+      if (pair.first == "X" &&
+          pair.second.front()->DataType() == framework::proto::VarType::FP16) {
+        dst_type = framework::proto::VarType::FP16;
+      }
+    }
+  }
+
   return dst_type;
 }
 
@@ -183,7 +195,8 @@ NameVarBaseMap AutoCastInputs(const std::string& op_type,
     }
     return new_ins;
   } else {
-    auto dst_type = GetPromoteType(ins);
+    auto dst_type = GetPromoteType(op_type, ins);
+
     // NOTE(zhiqiu): if the op has op fp16 kernel, fall back to fp32.
     if (dst_type == framework::proto::VarType::FP16 &&
         AmpOperators::Instance().GetMutableUnsupportedFp16Ops()->count(

@@ -249,8 +249,10 @@ struct OpInfoFiller<T, kGradOpBaseMaker> {
         const imperative::NameVarBaseMap& var_base_map_in,
         const imperative::NameVarBaseMap& var_base_map_out,
         const framework::AttributeMap& attrs,
+        const framework::AttributeMap& default_attrs,
         const std::map<std::string, std::string>& inplace_map) {
       T maker(type, var_base_map_in, var_base_map_out, attrs, inplace_map);
+      maker.SetDygraphDefaultAttrsMap(default_attrs);
       return maker();
     };
   }

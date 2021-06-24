@@ -44,7 +44,7 @@ class Graph;
 
 class SeqPoolCVMConcatFusePass : public FusePassBase {
  public:
-  virtual ~SeqPoolCVMConcatFusePass() {}
+  SeqPoolCVMConcatFusePass();
 
  protected:
   void ApplyImpl(ir::Graph* graph) const override;

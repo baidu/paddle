@@ -22,17 +22,28 @@ from paddle.fluid.framework import in_dygraph_mode
 from paddle.fluid.initializer import Constant
 from paddle.fluid.data_feeder import check_variable_and_dtype
 from paddle.nn import functional as F
+import logging
+from paddle.fluid.log_helper import get_logger
 
 __all__ = [
-    'FakeQuantMovingAverage', 'FakeQuantAbsMax',
-    'FakeChannelWiseQuantDequantAbsMax', 'QuantizedConv2D', 'QuantizedLinear',
-    'QuantizedNoweightLayer', 'MovingAverageAbsMaxScale'
+    'FakeQuantMovingAverageAbsMax',
+    'FakeQuantAbsMax',
+    'FakeQuantChannelWiseAbsMax',
+    'QuantizedConv2D',
+    'QuantizedLinear',
+    'QuantizedNoweightLayer',
+    'MovingAverageAbsMaxScale',
+    'MAOutputScaleLayer',
+    'FakeQuantMAOutputScaleLayer',
 ]
 
+_logger = get_logger(
+    __name__, logging.INFO, fmt='%(asctime)s-%(levelname)s: %(message)s')
 
-class FakeQuantMovingAverage(layers.Layer):
+
+class FakeQuantMovingAverageAbsMax(layers.Layer):
     r"""
-    FakeQuantMovingAverage layer does the moving_average_abs_max quant and then dequant.
+    FakeQuantMovingAverageAbsMax layer does the moving_average_abs_max quant and then dequant.
     Its computational formula is described as below:
 
     :math:`scale = (moving\_rate*accum+max(abs(x)))/(moving\_rate*state+1)`
@@ -45,7 +56,7 @@ class FakeQuantMovingAverage(layers.Layer):
                  moving_rate=0.9,
                  quant_bits=8,
                  dtype='float32'):
-        super(FakeQuantMovingAverage, self).__init__()
+        super(FakeQuantMovingAverageAbsMax, self).__init__()
         self._moving_rate = moving_rate
         self._quant_bits = quant_bits
 
@@ -98,7 +109,7 @@ class FakeQuantMovingAverage(layers.Layer):
             return out
 
         check_variable_and_dtype(input, 'input', ['float32'],
-                                 "FakeQuantMovingAverage")
+                                 "FakeQuantMovingAverageAbsMax")
         attrs = {
             'moving_rate': self._moving_rate,
             'bit_length': self._quant_bits,
@@ -210,7 +221,7 @@ class FakeQuantAbsMax(layers.Layer):
         return quant_out
 
 
-class FakeChannelWiseQuantDequantAbsMax(layers.Layer):
+class FakeQuantChannelWiseAbsMax(layers.Layer):
     def __init__(self,
                  name=None,
                  channel_num=None,
@@ -219,7 +230,7 @@ class FakeChannelWiseQuantDequantAbsMax(layers.Layer):
                  dtype='float32',
                  quant_on_weight=False):
         assert quant_on_weight == True, "Channel_wise only can be used on weight quantization."
-        super(FakeChannelWiseQuantDequantAbsMax, self).__init__()
+        super(FakeQuantChannelWiseAbsMax, self).__init__()
         self._quant_bits = quant_bits
         self._quant_axis = quant_axis
         self._dtype = dtype
@@ -265,7 +276,7 @@ class FakeChannelWiseQuantDequantAbsMax(layers.Layer):
             return out
 
         check_variable_and_dtype(input, 'input', ['float32'],
-                                 "FakeChannelWiseQuantDequantAbsMax")
+                                 "FakeQuantChannelWiseAbsMax")
         attrs = {'bit_length': self._quant_bits, 'quant_axis': self._quant_axis}
         inputs = {"X": [input]}
         quant_out = self._helper.create_variable(
@@ -313,8 +324,8 @@ def _get_fake_quant_type(quant_type, **kwargs):
             "when you use channel_wise_abs_max strategy.")
     fake_quant_map = {
         'abs_max': FakeQuantAbsMax,
-        'moving_average_abs_max': FakeQuantMovingAverage,
-        'channel_wise_abs_max': FakeChannelWiseQuantDequantAbsMax
+        'moving_average_abs_max': FakeQuantMovingAverageAbsMax,
+        'channel_wise_abs_max': FakeQuantChannelWiseAbsMax
     }
 
     return fake_quant_map[quant_type](**call_args)
@@ -498,12 +509,7 @@ class QuantizedNoweightLayer(layers.Layer):
             quant_on_weight=False)
 
     def forward(self, input):
-        quant_input = self._fake_quant_input(input)
-        # TODO (jc): support ops that have several inputs
-        if isinstance(input, list):
-            assert len(input) == 1, \
-                "The QuantizedNoweightLayer should only have one input."
-        return self._layer.forward(quant_input)
+        return self._layer.forward(self._fake_quant_input(input))
 
 
 class MovingAverageAbsMaxScale(layers.Layer):
@@ -590,19 +596,56 @@ class MovingAverageAbsMaxScale(layers.Layer):
         return quant_out
 
 
-class QuantizedOutputLayer(layers.Layer):
-    def __init__(self, layer=None, moving_rate=0.9, dtype='float32'):
-        r"""
-        Add MovingAverageMaxScale layer to the behind of the input layer.
-        """
-        super(QuantizedOutputLayer, self).__init__()
-        self._layer = layer
-        self._moving_average_abs_max_scale = \
-            MovingAverageAbsMaxScale(layer.full_name(), moving_rate, dtype)
+class MAOutputScaleLayer(layers.Layer):
+    """
+    Calculate the scale (moving average abs max) for the output of the input layer.
+    Add MovingAverageMaxScale layer to the behind of the input layer.
+    """
 
-    def forward(self, input):
-        if isinstance(input, list):
-            assert len(input) == 1, \
-                "The QuantizedOutputLayer should only have one input."
-        out = self._layer(input)
-        return self._moving_average_abs_max_scale(out)
+    def __init__(self, layer=None, moving_rate=0.9, name=None, dtype='float32'):
+        r"""
+        Construct
+        """
+        super(MAOutputScaleLayer, self).__init__()
+        self._layer = layer
+        if name is None:
+            name = layer.full_name()
+        self._ma_output_scale = \
+            MovingAverageAbsMaxScale(name, moving_rate, dtype)
+
+    def forward(self, *inputs, **kwargs):
+        out = self._layer(*inputs, **kwargs)
+        # TODO (jc): support the ops of several outputs
+        if (isinstance(out, list) or isinstance(out, tuple)) and len(out) > 1:
+            return out
+        else:
+            return self._ma_output_scale(out)
+
+
+class FakeQuantMAOutputScaleLayer(layers.Layer):
+    def __init__(self,
+                 layer,
+                 weight_bits=8,
+                 activation_bits=8,
+                 moving_rate=0.9,
+                 name=None,
+                 *args,
+                 **kwargs):
+
+        super(FakeQuantMAOutputScaleLayer, self).__init__()
+        self._layer = layer
+        self._fake_quant_output = _get_fake_quant_type(
+            'moving_average_abs_max',
+            name=layer.full_name() if name is None else name,
+            moving_rate=moving_rate,
+            quant_bits=activation_bits,
+            dtype=self._dtype,
+            quant_on_weight=False)
+
+    def forward(self, *inputs, **kwargs):
+        out = self._layer(*inputs, **kwargs)
+        # TODO (jc): support the ops of several outputs
+        if (isinstance(out, list) or isinstance(out, tuple)) and len(out) > 1:
+            return out
+        else:
+            return self._fake_quant_output(out)

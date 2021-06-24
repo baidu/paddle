@@ -28,7 +28,7 @@ void TensorRTSplitTest(const std::vector<int> &in_shape,
   TRTConvertValidation validator(BatchSize + 1, parameters, scope, 10000);
 
   auto make_dim = [](const std::vector<int> &shape) {
-    nvinfer1::DimsCHW dim;
+    nvinfer1::Dims3 dim;
     dim.c() = shape[0];
     dim.h() = shape[1];
     dim.w() = shape[2];

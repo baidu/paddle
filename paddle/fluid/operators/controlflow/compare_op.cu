@@ -21,21 +21,21 @@ namespace plat = paddle::platform;
 namespace paddle {
 namespace operators {
 
-#define DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(Func, op) \
+#define DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(func, op) \
   template <typename T, typename Enable = void>               \
-  struct Func##Functor {                                      \
+  struct func {                                               \
     using ELEMENT_TYPE = T;                                   \
     inline HOSTDEVICE bool operator()(const T* args) const {  \
       return args[0] op args[1];                              \
     }                                                         \
   };
 
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaLessThan, <)
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaLessEqual, <=)
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaGreaterThan, >)
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaGreaterEqual, >=)
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaEqual, ==)
-DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaNotEqual, !=)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaLessThanFunctor, <)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaLessEqualFunctor, <=)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaGreaterThanFunctor, >)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaGreaterEqualFunctor, >=)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaEqualFunctor, ==)
+DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT(CudaNotEqualFunctor, !=)
 #undef DEFINE_CMP_BINARY_FUNCTOR_WITH_PONTER_INPUT
 
 template <typename T>
@@ -67,10 +67,12 @@ class CompareOpKernel<platform::CUDADeviceContext, Functor, InverseFunctor>
     auto functor = Functor();
     std::vector<const framework::Tensor*> ins;
     std::vector<framework::Tensor*> outs;
+    const auto& cuda_ctx =
+        ctx.template device_context<platform::CUDADeviceContext>();
 
-    PackTensorsIntoVector<OutT>(ctx, &ins, &outs);
+    int axis = PackTensorsIntoVector<OutT>(ctx, &ins, &outs);
     LaunchElementwiseCudaKernel<ElementwiseType::kBinary, InT, OutT>(
-        ctx, ins, &outs, functor);
+        cuda_ctx, ins, &outs, axis, functor);
   }
 };
 
@@ -79,19 +81,17 @@ class CompareOpKernel<platform::CUDADeviceContext, Functor, InverseFunctor>
 
 #define REGISTER_CUDA_COMPARE_KERNEL(op_type, func)                            \
   REGISTER_OP_CUDA_KERNEL(                                                     \
-      op_type, ops::CompareOpKernel<plat::CUDADeviceContext,                   \
-                                    ops::func##Functor<int>, void>,            \
-      ops::CompareOpKernel<plat::CUDADeviceContext,                            \
-                           ops::func##Functor<int64_t>, void>,                 \
-      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func##Functor<float>, \
-                           void>,                                              \
-      ops::CompareOpKernel<plat::CUDADeviceContext,                            \
-                           ops::func##Functor<double>, void>);
+      op_type,                                                                 \
+      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func<bool>, void>,    \
+      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func<int>, void>,     \
+      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func<int64_t>, void>, \
+      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func<float>, void>,   \
+      ops::CompareOpKernel<plat::CUDADeviceContext, ops::func<double>, void>);
 
-REGISTER_CUDA_COMPARE_KERNEL(equal, CudaEqual)
-REGISTER_CUDA_COMPARE_KERNEL(not_equal, CudaNotEqual)
-REGISTER_CUDA_COMPARE_KERNEL(less_than, CudaLessThan)
-REGISTER_CUDA_COMPARE_KERNEL(less_equal, CudaLessEqual)
-REGISTER_CUDA_COMPARE_KERNEL(greater_than, CudaGreaterThan)
-REGISTER_CUDA_COMPARE_KERNEL(greater_equal, CudaGreaterEqual)
+REGISTER_CUDA_COMPARE_KERNEL(equal, CudaEqualFunctor)
+REGISTER_CUDA_COMPARE_KERNEL(not_equal, CudaNotEqualFunctor)
+REGISTER_CUDA_COMPARE_KERNEL(less_than, CudaLessThanFunctor)
+REGISTER_CUDA_COMPARE_KERNEL(less_equal, CudaLessEqualFunctor)
+REGISTER_CUDA_COMPARE_KERNEL(greater_than, CudaGreaterThanFunctor)
+REGISTER_CUDA_COMPARE_KERNEL(greater_equal, CudaGreaterEqualFunctor)
 #undef REGISTER_CUDA_COMPARE_KERNEL

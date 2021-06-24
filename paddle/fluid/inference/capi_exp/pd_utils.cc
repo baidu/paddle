@@ -196,6 +196,8 @@ DataType CvtToCxxDatatype(PD_DataType data_type) {
       return DataType::INT32;
     case PD_DATA_UINT8:
       return DataType::UINT8;
+    case PD_DATA_INT8:
+      return DataType::INT8;
     default:
       PADDLE_THROW(paddle::platform::errors::InvalidArgument(
           "Unsupport paddle data type %d.", data_type));

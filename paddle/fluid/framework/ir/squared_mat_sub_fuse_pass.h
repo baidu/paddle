@@ -31,11 +31,13 @@ class Graph;
 
 class SquaredMatSubFusePass : public FusePassBase {
  public:
+  SquaredMatSubFusePass();
+  bool IsAcceptable(const GraphPatternDetector::subgraph_t& subgraph,
+                    Graph* g) const;
   virtual ~SquaredMatSubFusePass() {}
 
  protected:
   void ApplyImpl(ir::Graph* graph) const override;
-
   const std::string name_scope_{"squared_mat_sub_fuse"};
 };
 

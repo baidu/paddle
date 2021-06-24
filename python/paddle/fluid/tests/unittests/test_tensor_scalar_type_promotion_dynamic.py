@@ -187,6 +187,13 @@ class TestTensorScalarTypePromotionDynamic(unittest.TestCase):
         c = paddle.full([2, 2, 2], 0.5, dtype="float32")
         self.check_operation(a, b, c, '/')
 
+        # tensor(float32) / scalar(int)
+        # this behavior should be equal to elementwise_div Op
+        a = paddle.to_tensor([99, 99, 99], dtype='float32')
+        b = 100
+        c = a / paddle.to_tensor([100, 100, 100], dtype='float32')
+        self.check_operation(a, b, c, '/')
+
         # tensor(int64) / scalar(float, .0)
         a = paddle.ones([2, 2, 2], dtype='int64')
         b = 2.0

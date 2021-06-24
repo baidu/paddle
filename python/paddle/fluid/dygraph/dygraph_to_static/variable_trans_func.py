@@ -98,17 +98,9 @@ def create_fill_constant_node(name, value):
         func_code += "dtype='float64', value={})".format(value)
         return gast.parse(func_code).body[0]
 
-    if six.PY2:
-        if isinstance(value, int):
-            func_code += "dtype='int32', value={})".format(value)
-            return gast.parse(func_code).body[0]
-        if isinstance(value, long):
-            func_code += "dtype='int64', value={})".format(value)
-            return gast.parse(func_code).body[0]
-    else:
-        if isinstance(value, int):
-            func_code += "dtype='int64', value={})".format(value)
-            return gast.parse(func_code).body[0]
+    if isinstance(value, int):
+        func_code += "dtype='int64', value={})".format(value)
+        return gast.parse(func_code).body[0]
 
 
 def to_static_variable(x):

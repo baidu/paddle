@@ -1,0 +1,54 @@
+type: "transpose2"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+  outputs {
+    name: "XShape"
+  }
+  attrs {
+    name: "axis"
+    type: INTS
+  }
+  attrs {
+    name: "data_format"
+    type: STRING
+  }
+}
+extra {
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

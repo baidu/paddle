@@ -1,0 +1,81 @@
+type: "elementwise_add"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Y"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "axis"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "out_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "Out0_threshold"
+    type: FLOAT
+  }  
+  attrs {
+    name: "x_data_format"
+    type: STRING
+    # no longer to use
+  }
+  attrs {
+    name: "y_data_format"
+    type: STRING
+    # no longer to use
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+    # no longer to use, Use 'mkldnn_data_type' instead.
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "Scale_x"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_y"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_out"
+    type: FLOAT
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

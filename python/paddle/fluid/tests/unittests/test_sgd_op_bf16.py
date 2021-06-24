@@ -158,6 +158,13 @@ class TestSparseGradSGDOpBF16Case2(TestSparseGradSGDOpBF16):
         self.grad_row_numel = 16
 
 
+class TestSparseGradSGDOpBF16Case3(TestSparseGradSGDOpBF16):
+    def setup_params(self):
+        self.grad_height = 10
+        self.grad_rows = [0, 4, 7]
+        self.grad_row_numel = 120
+
+
 @unittest.skipIf(not core.supports_bfloat16(),
                  'place does not support BF16 evaluation')
 class TestSparseGradParamSGDOpBF16(TestSparseSGDOpBF16):
@@ -194,8 +201,6 @@ class TestSparseGradParamSGDOpBF16(TestSparseSGDOpBF16):
         self.check_output(output, reference, atol=5e-3, rtol=1e-1)
 
 
-@unittest.skipIf(not core.supports_bfloat16(),
-                 'place does not support BF16 evaluation')
 class TestSparseGradParamSGDOpBF16Case2(TestSparseGradParamSGDOpBF16):
     def setup_params(self):
         self.grad_height = 14

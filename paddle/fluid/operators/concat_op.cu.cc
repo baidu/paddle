@@ -33,4 +33,4 @@ REGISTER_OP_CUDA_KERNEL(
     ops::ConcatGradKernel<paddle::platform::CUDADeviceContext, plat::float16>,
     ops::ConcatGradKernel<paddle::platform::CUDADeviceContext, int64_t>,
     ops::ConcatGradKernel<paddle::platform::CUDADeviceContext, int>,
-    ops::ConcatKernel<paddle::platform::CUDADeviceContext, uint8_t>);
+    ops::ConcatGradKernel<paddle::platform::CUDADeviceContext, uint8_t>);

@@ -126,7 +126,6 @@ class ElementwiseMulKernel : public framework::OpKernel<T> {
     }
   }
 };
-
 template <typename T>
 struct MulGradDX {
   HOSTDEVICE T operator()(T x, T y, T out, T dout) const { return dout * y; }

@@ -152,6 +152,7 @@ class ConstantInitializer(Initializer):
             out_dtype = var.dtype
             out_var = var
 
+        # fill constant should set the "str_value" to preserve precision
         op = block.append_op(
             type="fill_constant",
             outputs={"Out": out_var},
@@ -159,6 +160,7 @@ class ConstantInitializer(Initializer):
                 "shape": var.shape,
                 "dtype": int(out_dtype),
                 "value": float(self._value),
+                'str_value': str(float(self._value)),
                 'force_cpu': self._force_cpu
             },
             stop_gradient=True)

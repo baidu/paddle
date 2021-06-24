@@ -69,6 +69,7 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
 
     auto in_tensors = context.MultiInput<framework::LoDTensor>("Input");
     bool use_align = context.Attr<bool>("use_align");
+    auto align_size = context.Attr<int>("align_size");
 
     if (context.Attr<bool>("check_name")) {
       for (size_t i = 0; i < in_var_names.size(); ++i) {
@@ -95,7 +96,7 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
         context.Attr<int>("dtype"));
     size_t size_of_dtype = framework::SizeOfType(dtype);
     GetMemSizeAndDtype(in_tensors, in_var_names, &numel, size_of_dtype,
-                       context.GetPlace(), use_align);
+                       context.GetPlace(), use_align, align_size);
 
     // Alloc the continuous space
     auto fused_tensor = context.Output<framework::LoDTensor>("FusedOutput");
@@ -113,13 +114,14 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
         framework::TensorCopy(*in_tensors[i], context.GetPlace(), dev_ctx,
                               &sub_tensor);
 
-        offset +=
-            use_align
-                ? platform::Alignment(len * size_of_dtype, context.GetPlace()) /
-                      size_of_dtype
-                : len;
+        offset += use_align
+                      ? platform::Alignment(len * size_of_dtype,
+                                            context.GetPlace(), align_size) /
+                            size_of_dtype
+                      : len;
       }
     } else if (context.Attr<bool>("set_constant")) {
+      // TODO(Liu yuang) ADD NPU SET_CONSTANT FUNCTION.
       math::SetConstant<DeviceContext, T> set_constant;
       set_constant(dev_ctx, fused_tensor,
                    static_cast<T>(context.Attr<float>("constant")));
@@ -133,11 +135,11 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
           framework::TensorCopy(*out_tensors[i], context.GetPlace(), dev_ctx,
                                 &sub_tensor);
         }
-        offset +=
-            use_align
-                ? platform::Alignment(len * size_of_dtype, context.GetPlace()) /
-                      size_of_dtype
-                : len;
+        offset += use_align
+                      ? platform::Alignment(len * size_of_dtype,
+                                            context.GetPlace(), align_size) /
+                            size_of_dtype
+                      : len;
       }
     }
 
@@ -145,21 +147,31 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
     offset = 0;
     std::stringstream ss;
     ss << "alloc_space_for_vars: ";
+
     for (size_t i = 0; i < out_tensors.size(); ++i) {
       size_t len = static_cast<size_t>(out_tensors[i]->numel());
       auto dim = out_tensors[i]->dims();
+      VLOG(4) << len << " " << dim << " " << offset;
       out_tensors[i]
           ->ShareDataWith(fused_tensor->Slice(
               static_cast<int64_t>(offset), static_cast<int64_t>(offset + len)))
           .Resize(dim);
       len = use_align
-                ? platform::Alignment(len * size_of_dtype, context.GetPlace()) /
+                ? platform::Alignment(len * size_of_dtype, context.GetPlace(),
+                                      align_size) /
                       size_of_dtype
                 : len;
-      offset += len;
       ss << "output(" << out_var_names[i] << ")  dim:(" << dim << ")"
-         << " address: " << out_tensors[i]->data<void>() << ", ";
+         << " address: " << out_tensors[i]->data<void>() << " len: " << len
+         << ", ";
+      offset += len;
     }
+    PADDLE_ENFORCE_EQ(
+        (int64_t)offset, fused_tensor->numel(),
+        platform::errors::InvalidArgument(
+            "The alloc_space_for_vars's offset: %s is unequal with "
+            "fused_tensor's numel: %s.",
+            offset, fused_tensor->numel()));
     VLOG(10) << ss.str();
   }
 
@@ -168,7 +180,7 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
       const std::vector<const framework::LoDTensor *> &lod_tensors,
       const std::vector<std::string> var_names, size_t *numel,
       const size_t &size_of_dtype, const platform::Place &place,
-      const bool use_align = true) const {
+      const bool use_align = true, const int align_size = -1) const {
     PADDLE_ENFORCE_EQ(
         lod_tensors.size(), var_names.size(),
         platform::errors::InvalidArgument(
@@ -188,16 +200,19 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
           size, 0,
           platform::errors::InvalidArgument(
               "The number of tensor `%s`'s elements is 0.", var_names[i]));
+      auto len =
+          use_align
+              ? platform::Alignment(static_cast<size_t>(size) * size_of_dtype,
+                                    place, align_size) /
+                    size_of_dtype
+              : static_cast<size_t>(size);
+      VLOG(4) << size << " " << len;
       ss << "input(" << var_names[i] << ") dim:(" << lod_tensors[i]->dims()
          << ") "
-         << " addres:" << lod_tensors[i]->data<void>() << ", ";
-      *numel += use_align
-                    ? platform::Alignment(
-                          static_cast<size_t>(size) * size_of_dtype, place) /
-                          size_of_dtype
-                    : static_cast<size_t>(size);
+         << " addres:" << lod_tensors[i]->data<void>() << " len: " << len
+         << ", ";
+      *numel += len;
     }
-
     VLOG(10) << ss.str();
   }
 };
@@ -206,7 +221,42 @@ class CoalesceTensorOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
-  void InferShape(framework::InferShapeContext *ctx) const override {}
+  void InferShape(framework::InferShapeContext *ctx) const override {
+    if (ctx->IsRuntime()) {
+      return;
+    }
+    auto use_align = ctx->Attrs().Get<bool>("use_align");
+    auto align_size = ctx->Attrs().Get<int>("align_size");
+
+    auto dtype = static_cast<framework::proto::VarType::Type>(
+        ctx->Attrs().Get<int>("dtype"));
+    size_t size_of_dtype = framework::SizeOfType(dtype);
+
+    auto alignment = [](size_t size, size_t align_size) {
+      size_t remaining = size % align_size;
+      auto aligned_size =
+          remaining == 0 ? size : size + (align_size - remaining);
+      VLOG(4) << remaining << " " << size << " " << align_size << " "
+              << aligned_size;
+      return aligned_size;
+    };
+    VLOG(4) << "align_size: " << align_size;
+    if (use_align && align_size > 0) {
+      int64_t numel = 0;
+      auto dims = ctx->GetInputsDim("Input");
+      for (const auto &dim : dims) {
+        auto size = framework::product(dim);
+        auto len = use_align
+                       ? alignment(static_cast<size_t>(size) * size_of_dtype,
+                                   align_size) /
+                             size_of_dtype
+                       : static_cast<size_t>(size);
+        numel += len;
+      }
+      ctx->SetOutputDim("FusedOutput", framework::make_ddim({numel}));
+      VLOG(4) << "FusedOutput size:" << framework::make_ddim({numel});
+    }
+  }
 
  protected:
   framework::OpKernelType GetKernelTypeForVar(
@@ -256,6 +306,8 @@ class CoalesceTensorOpMaker : public framework::OpProtoAndCheckerMaker {
                   "Whether to consider memory chunk and take alignment into "
                   "account for inputs and outputs.")
         .SetDefault(true);
+    AddAttr<int>("align_size", "The alignment size when use_align is True")
+        .SetDefault(-1);
     AddComment(R"DOC(
 CoalesceTensor Operator.
 
@@ -299,6 +351,16 @@ REGISTER_OP_CUDA_KERNEL(
     ops::CoalesceTensorOpKernel<paddle::platform::CUDADeviceContext, double>);
 #endif
 
+#if defined(PADDLE_WITH_ASCEND_CL)
+REGISTER_OP_CUDA_KERNEL(
+    coalesce_tensor,
+    ops::CoalesceTensorOpKernel<paddle::platform::NPUDeviceContext,
+                                plat::float16>,
+    ops::CoalesceTensorOpKernel<paddle::platform::NPUDeviceContext, int>,
+    ops::CoalesceTensorOpKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::CoalesceTensorOpKernel<paddle::platform::NPUDeviceContext, double>);
+#endif
+
 #ifdef PADDLE_WITH_XPU
 REGISTER_OP_XPU_KERNEL(
     coalesce_tensor,
@@ -307,6 +369,16 @@ REGISTER_OP_XPU_KERNEL(
     ops::CoalesceTensorOpKernel<paddle::platform::XPUDeviceContext, int>,
     ops::CoalesceTensorOpKernel<paddle::platform::XPUDeviceContext, float>,
     ops::CoalesceTensorOpKernel<paddle::platform::XPUDeviceContext, double>);
+#endif
+
+#if defined(PADDLE_WITH_ASCEND_CL)
+REGISTER_OP_NPU_KERNEL(
+    coalesce_tensor,
+    ops::CoalesceTensorOpKernel<paddle::platform::CPUDeviceContext, int>,
+    ops::CoalesceTensorOpKernel<paddle::platform::CPUDeviceContext, float>,
+    ops::CoalesceTensorOpKernel<paddle::platform::CPUDeviceContext,
+                                plat::float16>,
+    ops::CoalesceTensorOpKernel<paddle::platform::CPUDeviceContext, double>);
 #endif
 
 REGISTER_OP_VERSION(coalesce_tensor)
@@ -318,4 +390,14 @@ REGISTER_OP_VERSION(coalesce_tensor)
             "In order to optionally take memory alignment into account when "
             "coalescing tensors. The default value is true to be compatible "
             "with before.",
-            true));
+            true))
+    .AddCheckpoint(
+        R"ROC(
+                Upgrade coalesce_tensor: add a new attribute [align_size].)ROC",
+        paddle::framework::compatible::OpVersionDesc().NewAttr(
+            "align_size",
+            "In order to optionally take memory alignment into account when "
+            "coalescing tensors. The default value is -1 and use the default "
+            "align_size "
+            "of each place to be compatible with before.",
+            -1));

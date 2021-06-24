@@ -244,4 +244,4 @@ REGISTER_OP_CPU_KERNEL(
     ops::ConcatGradKernel<paddle::platform::CPUDeviceContext,
                           paddle::platform::float16>,
     ops::ConcatGradKernel<paddle::platform::CPUDeviceContext, int>,
-    ops::ConcatKernel<paddle::platform::CPUDeviceContext, uint8_t>);
+    ops::ConcatGradKernel<paddle::platform::CPUDeviceContext, uint8_t>);

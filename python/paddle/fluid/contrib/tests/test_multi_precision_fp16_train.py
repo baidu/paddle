@@ -19,9 +19,33 @@ import paddle.fluid as fluid
 import contextlib
 import unittest
 import numpy as np
+from paddle.io import Dataset
 from paddle.fluid.contrib.mixed_precision.fp16_utils import cast_model_to_fp16
 
 paddle.enable_static()
+
+
+class RandomDataset(Dataset):
+    def __init__(self, num_samples, seed=123):
+        super(RandomDataset, self).__init__()
+        np.random.seed(seed)
+        self.num_samples = num_samples
+
+    def __getitem__(self, idx):
+        image = np.random.random([3, 32, 32]).astype('float32')
+        label = np.random.randint(0, 9, (1, )).astype('int64')
+        return image, label
+
+    def __len__(self):
+        return self.num_samples
+
+
+def reader_decorator(reader):
+    def __reader__():
+        for i in range(len(reader)):
+            yield reader[i]
+
+    return __reader__
 
 
 def resnet_cifar10(input, depth=32):
@@ -73,10 +97,9 @@ def resnet_cifar10(input, depth=32):
     return pool
 
 
-def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
+def train(use_pure_fp16=True, use_nesterov=False, optimizer=""):
     classdim = 10
     data_shape = [3, 32, 32]
-    BATCH_SIZE = 32
     PASS_NUM = 1
 
     train_program = fluid.Program()
@@ -96,12 +119,17 @@ def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
         # Test program
         test_program = train_program.clone(for_test=True)
 
-        if use_adam:
+        if optimizer == "Adam":
             optimizer = paddle.optimizer.AdamW(
                 learning_rate=0.001,
                 epsilon=1e-8,
                 weight_decay=0.0,
                 multi_precision=True)
+        elif optimizer == "Lars":
+            optimizer = paddle.fluid.optimizer.LarsMomentumOptimizer(
+                learning_rate=0.001,
+                momentum=0.9,
+                multi_precision=use_pure_fp16)
         else:
             optimizer = paddle.optimizer.Momentum(
                 learning_rate=0.001,
@@ -119,25 +147,31 @@ def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
 
         optimizer.minimize(sum_cost)
 
-    # no shuffle for unit test
     train_reader = paddle.batch(
-        paddle.dataset.cifar.train10(), batch_size=BATCH_SIZE)
+        reader_decorator(RandomDataset(
+            16 * 5, seed=123)),
+        batch_size=16,
+        drop_last=True)
 
     test_reader = paddle.batch(
-        paddle.dataset.cifar.test10(), batch_size=BATCH_SIZE)
+        reader_decorator(RandomDataset(
+            4 * 5, seed=456)),
+        batch_size=4,
+        drop_last=True)
 
     place = fluid.CUDAPlace(0)
     exe = fluid.Executor(place)
     feeder = fluid.DataFeeder(place=place, feed_list=[images, label])
 
-    def train_loop(main_program):
+    def train_loop():
         exe.run(startup_prog)
         if use_pure_fp16:
             optimizer.amp_init(
                 place, test_program=test_program, use_fp16_test=True)
-        loss = 0.0
+
+        train_loss_list = []
+        test_loss_list = []
         for pass_id in range(PASS_NUM):
-            train_loss_list = []
             for batch_id, data in enumerate(train_reader()):
                 loss, = exe.run(train_program,
                                 feed=feeder.feed(data),
@@ -147,21 +181,17 @@ def train(use_pure_fp16=True, use_nesterov=False, use_adam=False):
                       format(pass_id, batch_id + 1, float(loss_v)))
                 train_loss_list.append(float(loss_v))
 
-                if batch_id >= 4:  # For speeding up CI
-                    test_loss_list = []
-                    for tid, test_data in enumerate(test_reader()):
-                        loss_t, = exe.run(program=test_program,
-                                          feed=feeder.feed(test_data),
-                                          fetch_list=[sum_cost])
-                        test_loss_list.append(float(loss_t))
-                        print(
-                            'PassID {0:1}, Test Batch ID {1:04}, test loss {2:2.4}'.
-                            format(pass_id, tid + 1, float(loss_t)))
-                        if tid >= 4:
-                            break  # For speeding up CI
-                    return train_loss_list, test_loss_list
+            for tid, test_data in enumerate(test_reader()):
+                loss_t, = exe.run(program=test_program,
+                                  feed=feeder.feed(test_data),
+                                  fetch_list=[sum_cost])
+                test_loss_list.append(float(loss_t))
+                print('PassID {0:1}, Test Batch ID {1:04}, test loss {2:2.4}'.
+                      format(pass_id, tid + 1, float(loss_t)))
 
-    return train_loop(train_program)
+        return train_loss_list, test_loss_list
+
+    return train_loop()
 
 
 class TestImageMultiPrecision(unittest.TestCase):
@@ -169,9 +199,11 @@ class TestImageMultiPrecision(unittest.TestCase):
         if not fluid.core.is_compiled_with_cuda():
             return
 
-        def do_test(use_nesterov=False, use_adam=False):
-            if use_adam:
+        def do_test(use_nesterov=False, optimizer=""):
+            if optimizer == "Adam":
                 suffix = "use Adam"
+            elif optimizer == "Lars":
+                suffix = "use Lars"
             else:
                 suffix = "with Nesterov" if use_nesterov else "without Nesterov"
             with self.scope_prog_guard():
@@ -180,14 +212,14 @@ class TestImageMultiPrecision(unittest.TestCase):
                 train_loss_fp16, test_loss_fp16 = train(
                     use_pure_fp16=True,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    optimizer=optimizer)
             with self.scope_prog_guard():
                 print("-----------------FP32 Train {}-----------------".format(
                     suffix))
                 train_loss_fp32, test_loss_fp32 = train(
                     use_pure_fp16=False,
                     use_nesterov=use_nesterov,
-                    use_adam=use_adam)
+                    optimizer=optimizer)
 
             self.assertTrue(
                 np.allclose(
@@ -208,7 +240,8 @@ class TestImageMultiPrecision(unittest.TestCase):
 
         do_test(use_nesterov=False)
         do_test(use_nesterov=True)
-        do_test(use_adam=True)
+        do_test(optimizer="Adam")
+        do_test(optimizer="Lars")
 
     @contextlib.contextmanager
     def scope_prog_guard(self):

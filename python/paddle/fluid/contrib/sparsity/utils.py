@@ -27,7 +27,7 @@ from itertools import permutations
 import threading
 
 __all__ = [
-    'density', 'check_mask_1d', 'get_mask_1d', 'check_mask_2d',
+    'calculate_density', 'check_mask_1d', 'get_mask_1d', 'check_mask_2d',
     'get_mask_2d_greedy', 'get_mask_2d_best', 'create_mask', 'check_sparsity',
     'MaskAlgo', 'CheckMethod'
 ]
@@ -75,7 +75,7 @@ class CheckMethod(Enum):
             CheckMethod.get_checking_method(MaskAlgo.MASK_2D_BEST)
             # CheckMethod.CHECK_2D
         """
-        assert type(mask_algo) == MaskAlgo, \
+        assert isinstance(mask_algo, MaskAlgo), \
                "mask_algo should be MaskAlgo type"
         if mask_algo == MaskAlgo.MASK_1D:
             return CheckMethod.CHECK_1D
@@ -83,7 +83,7 @@ class CheckMethod(Enum):
             return CheckMethod.CHECK_2D
 
 
-def density(x):
+def calculate_density(x):
     r"""
     Return the density of the input tensor.
 
@@ -99,15 +99,15 @@ def density(x):
 
           x = np.array([[0, 1, 3, 0],
                         [1, 1, 0, 1]])
-          sparsity.density(x) # 0.625
+          sparsity.calculate_density(x) # 0.625
     """
     x_flattened = x.flatten()
     return float(np.nonzero(x_flattened)[0].size) / x_flattened.size
 
 
-def reshape_1d(mat, m):
+def _reshape_1d(mat, m):
     r"""
-    Reshape the input matrix to shape (-1, m).
+    Reshape the input 2D matrix to shape (-1, m).
     If the second dimension of :attr:`mat` is not a multiples of :attr:`m`, 
     then this function would pad the remainder with 0 before reshaping.
 
@@ -116,11 +116,13 @@ def reshape_1d(mat, m):
         remainder = mat.shape[1] % m
 
     Args:
-        mat (nparray): The input matrix.
+        mat (nparray): The input 2D matrix.
         m (int): The second dimension of reshaped matrix.
     Returns:
         tuple: A pair of the reshaped and padded matrix and the shape of padded matrix (non-reshaping).
     """
+    assert len(mat.shape) == 2, "The input mat should be a 2D matrix!"
+
     remainder = mat.shape[1] % m
     if mat.shape[1] % m > 0:
         mat_padded = np.zeros((mat.shape[0], mat.shape[1] + (m - remainder)))
@@ -165,9 +167,9 @@ def check_mask_1d(mat, n, m):
           sparsity.check_mask_1d(x, 2, 4) # True
     """
     if len(mat.shape) <= 1:
-        mat_flattern, shape = reshape_1d(mat.reshape(1, mat.shape[0]), m)
+        mat_flattern, shape = _reshape_1d(mat.reshape(1, mat.shape[0]), m)
     else:
-        mat_flattern, shape = reshape_1d(mat, m)
+        mat_flattern, shape = _reshape_1d(mat, m)
 
     for sub_mat in mat_flattern:
         if np.nonzero(sub_mat)[0].size > (m - n):
@@ -202,7 +204,7 @@ def get_mask_1d(mat, n, m):
           #          [0, 1, 0, 1]])
           sparsity.check_mask_1d(mask, 2, 4) # True
     """
-    mat_flattern, shape = reshape_1d(mat, m)
+    mat_flattern, shape = _reshape_1d(mat, m)
 
     mask_flattern = np.ones_like(mat_flattern)
     mask = np.ones_like(mat)
@@ -215,9 +217,9 @@ def get_mask_1d(mat, n, m):
     return mask
 
 
-def reshape_2d(mat, m):
+def _reshape_2d(mat, m):
     r"""
-    Reshape the input matrix to shape (-1, :math:`m \times m`).
+    Reshape the input 2D matrix to shape (-1, :math:`m \times m`).
     In each dimension of :attr:`mat`, if it is not a multiples of :attr:`m`, 
     then this function would pad the remainder with 0 before reshaping.
 
@@ -227,11 +229,13 @@ def reshape_2d(mat, m):
         remainder_1 = mat.shape[1] % m
 
     Args:
-        mat (nparray): The input matrix.
+        mat (nparray): The input 2D matrix.
         m (int): The square root of second dimension of reshaped matrix.
     Returns:
         tuple: A pair of the reshaped and padded matrix and the shape of padded matrix (non-reshaping).
     """
+    assert len(mat.shape) == 2, "The input mat should be a 2D matrix!"
+
     remainder_0 = mat.shape[0] % m
     remainder_1 = mat.shape[1] % m
 
@@ -297,7 +301,7 @@ def check_mask_2d(mat, n, m):
                         [1, 1, 0, 1]])
           sparsity.check_mask_2d(x, 2, 4) # True
     """
-    mat_padded, shape = reshape_2d(mat, m)
+    mat_padded, shape = _reshape_2d(mat, m)
     for sub_mat in mat_padded:
         sub_mask = np.absolute(np.squeeze(sub_mat.reshape(m, m))) > 0
         if (np.sum(np.sum(sub_mask, axis=1) > (m-n)) != 0) and \
@@ -338,7 +342,7 @@ def get_mask_2d_greedy(mat, n, m):
           #          [0. 1. 1. 0.]])
           sparsity.check_mask_2d(mask, 2, 4) # True
     """
-    mat_padded, shape = reshape_2d(mat, m)
+    mat_padded, shape = _reshape_2d(mat, m)
     mask_padded = np.zeros_like(mat_padded).reshape(-1, m, m)
 
     for idx in range(len(mat_padded)):
@@ -372,11 +376,11 @@ def get_mask_2d_greedy(mat, n, m):
     return mask[:mat.shape[0], :mat.shape[1]]
 
 
-valid_2d_patterns_lock = threading.Lock()
-valid_2d_patterns = {}
+_valid_2d_patterns_lock = threading.Lock()
+_valid_2d_patterns = {}
 
 
-def compute_valid_2d_patterns(n, m):
+def _compute_valid_2d_patterns(n, m):
     r"""
     Compute all vaild 2D `n:m` sparse patterns.
 
@@ -389,12 +393,12 @@ def compute_valid_2d_patterns(n, m):
     Returns:
         dictionary: A dictionary with key: *m_n* (string) and value: all vaild 2D `n:m` sparse patterns.
     """
-    global valid_2d_patterns_lock
-    global valid_2d_patterns
+    global _valid_2d_patterns_lock
+    global _valid_2d_patterns
 
     valid_key = '{}_{}'.format(m, n)
-    if valid_key in valid_2d_patterns:
-        return valid_2d_patterns[valid_key]
+    if valid_key in _valid_2d_patterns:
+        return _valid_2d_patterns[valid_key]
     else:
         patterns = np.zeros(m)
         patterns[:n] = 1
@@ -407,9 +411,9 @@ def compute_valid_2d_patterns(n, m):
         valid_patterns = np.empty((valid.shape[0], m, m))
         valid_patterns[:] = patterns[valid[:]]
 
-        valid_2d_patterns_lock.acquire()
-        valid_2d_patterns[valid_key] = valid_patterns
-        valid_2d_patterns_lock.release()
+        _valid_2d_patterns_lock.acquire()
+        _valid_2d_patterns[valid_key] = valid_patterns
+        _valid_2d_patterns_lock.release()
 
         return valid_patterns
 
@@ -446,9 +450,9 @@ def get_mask_2d_best(mat, n, m):
           print("L1 norm of `greedy` sparse matrix", np.multiply(mat, mask_greedy).sum()) # 56
           print("L1 norm of `best` sparse matrix", np.multiply(mat, mask_best).sum()) # 61
     """
-    patterns = compute_valid_2d_patterns(n, m)
+    patterns = _compute_valid_2d_patterns(n, m)
 
-    mat_flattern, shape = reshape_2d(mat, m)
+    mat_flattern, shape = _reshape_2d(mat, m)
     mask_flattern = np.ones_like(mat_flattern).reshape(-1, m, m)
     pmax = np.argmax(
         np.matmul(mat_flattern, patterns.reshape(patterns.shape[0], m * m).T),
@@ -504,30 +508,25 @@ def create_mask(tensor, func_name=MaskAlgo.MASK_1D, n=2, m=4):
     dtype = tensor.dtype
     t = tensor.astype(float)
 
-    assert type(func_name) == MaskAlgo, \
+    assert isinstance(func_name, MaskAlgo), \
            "func_name argumet of create_mask is only accepted as type MaskAlgo. " \
            "But got {}".format(type(func_name))
     func = getattr(sys.modules[__name__], func_name.value, None)
     if len(shape) == 1:
         t = t.reshape(1, shape[0])
-        mask = func(t, n=n, m=m)
-        return mask.reshape(shape).astype(dtype)
     elif len(shape) == 2:
         t = t.reshape(shape[0], shape[1])
-        mask = func(t, n=n, m=m)
-        return mask.reshape(shape).astype(dtype)
     elif len(shape) == 3:
         t = t.reshape(shape[0] * shape[1], shape[2])
-        mask = func(t, n=n, m=m)
-        return mask.reshape(shape).astype(dtype)
     # 4d-tensor conv (out, in, h, w) -> (out, in*h*w) in GemmConvKernel Op
     elif len(shape) == 4:
         t = t.reshape(shape[0], shape[1] * shape[2] * shape[3])
-        mask = func(t, n=n, m=m)
-        return mask.reshape(shape).astype(dtype)
     else:
-        assert True, "The dimension of input tensor is not supported in create_mask, " \
-                     "Only dimension < 4 is supported but got {}".format(len(shape))
+        raise ValueError("The dimension of input tensor is not supported in create_mask, " \
+                         "Only dimension < 4 is supported but got {}".format(len(shape)))
+
+    mask = func(t, n=n, m=m)
+    return mask.reshape(shape).astype(dtype)
 
 
 def check_sparsity(tensor, func_name=CheckMethod.CHECK_1D, n=2, m=4):
@@ -569,19 +568,15 @@ def check_sparsity(tensor, func_name=CheckMethod.CHECK_1D, n=2, m=4):
     func = getattr(sys.modules[__name__], func_name.value, None)
     if len(shape) == 1:
         t = t.reshape(1, shape[0])
-        return func(t, n=n, m=m)
     elif len(shape) == 2:
         t = t.reshape(shape[0], shape[1])
-        return func(t, n=n, m=m)
     elif len(shape) == 3:
         t = t.reshape(shape[0] * shape[1], shape[2])
-        return func(t, n=n, m=m)
     # 4d-tensor conv (out, in, h, w) -> (out, in*h*w) in GemmConvKernel Op
     elif len(shape) == 4:
         t = t.reshape(shape[0], shape[1] * shape[2] * shape[3])
-        return func(t, n=n, m=m)
     else:
-        assert True, "The dimension of input tensor is not supported in check_sparsity, " \
-                     "Only dimension < 4 is supported but got {}".format(len(shape))
+        raise ValueError("The dimension of input tensor is not supported in create_mask, " \
+                         "Only dimension < 4 is supported but got {}".format(len(shape)))
 
-    return False
+    return func(t, n=n, m=m)

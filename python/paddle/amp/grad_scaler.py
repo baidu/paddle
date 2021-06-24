@@ -14,7 +14,7 @@
 
 from paddle.fluid.dygraph.amp import AmpScaler
 
-__all__ = ['GradScaler']
+__all__ = []
 
 
 class GradScaler(AmpScaler):

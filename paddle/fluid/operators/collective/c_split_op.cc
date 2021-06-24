@@ -45,6 +45,12 @@ class CSplitOp : public framework::OperatorWithKernel {
                           rank, nranks));
 
     framework::DDim dim = ctx->GetInputDim("X");
+    PADDLE_ENFORCE_EQ(
+        dim[dim.size() - 1] % nranks, 0,
+        platform::errors::InvalidArgument("The last dimension (%d) of the X "
+                                          "should be divisible by nranks (%d)",
+                                          dim[dim.size() - 1], nranks));
+
     dim[dim.size() - 1] = dim[dim.size() - 1] / nranks;
     if (dim[0] < 0) dim[0] = -1;
     ctx->SetOutputDim("Out", dim);

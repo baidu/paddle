@@ -108,7 +108,7 @@ class VarBase {
 
   void ClearGradVarBase() { grad_var_ = nullptr; }
 
-  void SetGradVarBase(VarBase& grad_var) {
+  void SetGradVarBase(const VarBase& grad_var) {
     MutableGradVarBase()->CopyFrom(grad_var, true);
   }
 
@@ -283,7 +283,7 @@ class Layer {
 std::shared_ptr<GradOpNode> CreateGradOpNode(
     const framework::OperatorBase& op, const NameVarBaseMap& ins,
     const NameVarBaseMap& outs, const framework::AttributeMap& attrs,
-    const platform::Place& place,
+    const framework::AttributeMap& default_attrs, const platform::Place& place,
     const std::map<std::string, std::string>& inplace_map);
 
 void ClearNoNeedBufferInputs(OpBase* op);

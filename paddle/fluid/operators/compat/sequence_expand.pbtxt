@@ -1,0 +1,38 @@
+type: "sequence_expand"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Y"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "ref_level"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

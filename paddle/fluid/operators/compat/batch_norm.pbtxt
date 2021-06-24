@@ -1,0 +1,102 @@
+type: "batch_norm"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Scale"
+  }
+  inputs {
+    name: "Bias"
+  }
+  inputs {
+    name: "Mean"
+  }
+  inputs {
+    name: "Variance"
+  }
+  outputs {
+    name: "Y"
+  }
+  outputs {
+    name: "MeanOut"
+  }
+  outputs {
+    name: "VarianceOut"
+  }
+  outputs {
+    name: "SavedMean"
+  }
+  outputs {
+    name: "SavedVariance"
+  }
+  outputs {
+    name: "ReserveSpace"
+  }
+  attrs {
+    name: "epsilon"
+    type: FLOAT
+  }
+}
+extra {
+  inputs {
+    name: "MomentumTensor"
+  }
+   attrs {
+    name: "@ENABLE_CACHE_RUNTIME_CONTEXT@"
+    type: BOOLEAN
+  } 
+  attrs {
+    name: "@ENABLE_CACHE_RUNTIME_CONTEXT@"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "momentum"
+    type: FLOAT
+  }
+  attrs {
+    name: "data_layout"
+    type: STRING
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fuse_with_relu"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_global_stats"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "trainable_statistics"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}
+

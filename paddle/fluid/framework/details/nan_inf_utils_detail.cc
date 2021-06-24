@@ -297,13 +297,12 @@ void tensor_check<platform::CPUDeviceContext>(const std::string& op_type,
 }
 
 void CheckVarHasNanOrInf(const std::string& op_type,
-                         const framework::Scope& scope,
                          const std::string& var_name,
+                         const framework::Variable* var,
                          const platform::Place& place) {
-  auto* var = scope.FindVar(var_name);
   PADDLE_ENFORCE_NOT_NULL(
-      var, platform::errors::NotFound("In op=%s, can't find var:%s", op_type,
-                                      var_name));
+      var, platform::errors::NotFound("Cannot find var: `%s` in op `%s`.",
+                                      var_name, op_type));
 
   const Tensor* tensor{nullptr};
   if (var->IsType<framework::LoDTensor>()) {
@@ -391,6 +390,14 @@ void CheckVarHasNanOrInf(const std::string& op_type,
     return;
   }
   tensor_check<platform::CPUDeviceContext>(op_type, var_name, *tensor, place);
+}
+
+void CheckVarHasNanOrInf(const std::string& op_type,
+                         const framework::Scope& scope,
+                         const std::string& var_name,
+                         const platform::Place& place) {
+  auto* var = scope.FindVar(var_name);
+  CheckVarHasNanOrInf(op_type, var_name, var, place);
 }
 
 bool IsSkipOp(const framework::OperatorBase& op) {

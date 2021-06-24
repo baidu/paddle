@@ -421,7 +421,6 @@ void AnalysisConfig::Update() {
       pass_builder()->AppendPass(pass);
     }
   }
-  LOG(INFO) << "use_dlnne_:" << use_dlnne_ << std::endl;
   if (use_dlnne_) {
     pass_builder()->ClearPasses();
     for (const auto &pass : kDlnneSubgraphPasses) {

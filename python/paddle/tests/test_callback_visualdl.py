@@ -55,7 +55,7 @@ class TestCallbacks(unittest.TestCase):
         train_dataset = MnistDataset(mode='train', transform=transform)
         eval_dataset = MnistDataset(mode='test', transform=transform)
 
-        net = paddle.vision.LeNet()
+        net = paddle.vision.models.LeNet()
         model = paddle.Model(net, inputs, labels)
 
         optim = paddle.optimizer.Adam(0.001, parameters=net.parameters())

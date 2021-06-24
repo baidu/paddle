@@ -30,6 +30,7 @@ void Copy<platform::CPUPlace, platform::CPUPlace>(platform::CPUPlace, void* dst,
                                                   platform::CPUPlace,
                                                   const void* src, size_t num) {
   if (UNLIKELY(num == 0)) return;
+  VLOG(4) << "src: " << src << ", dst: " << dst << ", num: " << num;
   std::memcpy(dst, src, num);
 }
 

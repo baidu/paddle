@@ -1,0 +1,38 @@
+type: "fake_dequantize_max_abs"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Scale"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "max_range"
+    type: FLOAT
+  }
+}
+extra {
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

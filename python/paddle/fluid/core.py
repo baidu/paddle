@@ -269,14 +269,6 @@ if avx_supported():
         from .core_avx import _dygraph_debug_level
         from .core_avx import _switch_tracer
         from .core_avx import _set_paddle_lib_path
-        from .core_avx import _save_static_dict
-        from .core_avx import _load_static_dict
-        from .core_avx import _save_dygraph_dict
-        from .core_avx import _load_dygraph_dict
-        from .core_avx import _save_lod_tensor
-        from .core_avx import _load_lod_tensor
-        from .core_avx import _save_selected_rows
-        from .core_avx import _load_selected_rows
         from .core_avx import _create_loaded_parameter
         from .core_avx import _cuda_synchronize
         from .core_avx import _promote_types_if_complex_exists
@@ -328,14 +320,6 @@ if load_noavx:
         from .core_noavx import _dygraph_debug_level
         from .core_noavx import _switch_tracer
         from .core_noavx import _set_paddle_lib_path
-        from .core_noavx import _save_static_dict
-        from .core_noavx import _load_static_dict
-        from .core_noavx import _save_dygraph_dict
-        from .core_noavx import _load_dygraph_dict
-        from .core_noavx import _save_lod_tensor
-        from .core_noavx import _load_lod_tensor
-        from .core_noavx import _save_selected_rows
-        from .core_noavx import _load_selected_rows
         from .core_noavx import _create_loaded_parameter
         from .core_noavx import _cuda_synchronize
         from .core_noavx import _promote_types_if_complex_exists

@@ -85,24 +85,54 @@ class BatchNormMKLDNNHandler
           md, epsilon, flags);
     }
   }
-  BatchNormMKLDNNHandler(const std::vector<int64_t> &dims, const float &epsilon,
-                         const mkldnn::normalization_flags &flags,
-                         const MKLDNNMemoryFormat diff_fmt,
-                         const MKLDNNMemoryFormat src_fmt,
+
+  BatchNormMKLDNNHandler(const paddle::framework::ExecutionContext &ctx,
                          const platform::MKLDNNDeviceContext &dev_ctx,
-                         platform::Place cpu_place,
-                         const std::string &uniq_name)
+                         platform::Place cpu_place, const Tensor *in_x,
+                         const Tensor *scale, const Tensor *out_grad,
+                         const std::string &unique_name)
       : platform::MKLDNNHandlerT<T, mkldnn::batch_normalization_forward,
                                  mkldnn::batch_normalization_backward>(
             dev_ctx, dev_ctx.GetEngine(), cpu_place,
-            platform::CreateKey(dev_ctx, dims, uniq_name)) {
-    auto diff_dst_md =
-        mkldnn::memory::desc(dims, platform::MKLDNNGetDataType<T>(), diff_fmt);
-    auto src_md =
-        mkldnn::memory::desc(dims, platform::MKLDNNGetDataType<T>(), src_fmt);
+            platform::CreateKey(dev_ctx, framework::vectorize(in_x->dims()),
+                                unique_name)) {
+    if (!this->isBwdCached()) {
+      PADDLE_ENFORCE_EQ(out_grad->layout(), DataLayout::kMKLDNN,
+                        platform::errors::InvalidArgument(
+                            "Wrong layout set for Input out_grad tensor"));
+      PADDLE_ENFORCE_NE(out_grad->format(), MKLDNNMemoryFormat::undef,
+                        platform::errors::InvalidArgument(
+                            "Wrong format set for Input out_grad tensor"));
 
-    this->AcquireBackwardPrimitiveDescriptor(
-        mkldnn::prop_kind::backward, diff_dst_md, src_md, epsilon, flags);
+      auto src_tz = paddle::framework::vectorize<int64_t>(in_x->dims());
+      auto scale_tz = paddle::framework::vectorize<int64_t>(scale->dims());
+      PADDLE_ENFORCE_EQ(
+          scale_tz.size(), 1,
+          platform::errors::InvalidArgument(
+              "Dims of scale tensor must be 1, but received scale's size is %d",
+              scale_tz.size()));
+
+      MKLDNNMemoryFormat diff_fmt =
+          platform::MKLDNNFormatForSize(src_tz.size(), out_grad->format());
+
+      MKLDNNMemoryFormat src_fmt =
+          platform::MKLDNNFormatForSize(src_tz.size(), in_x->format());
+
+      auto dims = framework::vectorize(in_x->dims());
+      auto diff_dst_md = mkldnn::memory::desc(
+          dims, platform::MKLDNNGetDataType<T>(), diff_fmt);
+      auto src_md =
+          mkldnn::memory::desc(dims, platform::MKLDNNGetDataType<T>(), src_fmt);
+
+      const float epsilon = ctx.Attr<float>("epsilon");
+
+      this->AcquireForwardPrimitiveDescriptor(
+          mkldnn::prop_kind::forward_training, src_md, epsilon,
+          mkldnn::normalization_flags::use_scale_shift);
+      this->AcquireBackwardPrimitiveDescriptor(
+          mkldnn::prop_kind::backward, diff_dst_md, src_md, epsilon,
+          mkldnn::normalization_flags::use_scale_shift);
+    }
   }
 
   std::shared_ptr<mkldnn::memory> AcquireScaleShiftMemory(const Tensor *scale,
@@ -263,8 +293,6 @@ class BatchNormMKLDNNGradOpKernel : public paddle::framework::OpKernel<T> {
     auto &dev_ctx = ctx.template device_context<MKLDNNDeviceContext>();
     auto mkldnn_engine = dev_ctx.GetEngine();
 
-    const float epsilon = ctx.Attr<float>("epsilon");
-
     const auto *x = ctx.Input<Tensor>("X");
     const auto *scale = ctx.Input<Tensor>("Scale");
     const auto *shift = ctx.Input<Tensor>("Bias");
@@ -275,35 +303,11 @@ class BatchNormMKLDNNGradOpKernel : public paddle::framework::OpKernel<T> {
     auto *diff_scale = ctx.Output<Tensor>(framework::GradVarName("Scale"));
     auto *diff_shift = ctx.Output<Tensor>(framework::GradVarName("Bias"));
 
-    PADDLE_ENFORCE_EQ(diff_y->layout(), DataLayout::kMKLDNN,
-                      platform::errors::InvalidArgument(
-                          "Wrong layout set for Input diff_y tensor"));
-    PADDLE_ENFORCE_NE(diff_y->format(), MKLDNNMemoryFormat::undef,
-                      platform::errors::InvalidArgument(
-                          "Wrong format set for Input diff_y tensor"));
-
-    auto src_tz = paddle::framework::vectorize<int64_t>(x->dims());
-    auto scale_tz = paddle::framework::vectorize<int64_t>(scale->dims());
-    PADDLE_ENFORCE_EQ(
-        scale_tz.size(), 1,
-        platform::errors::InvalidArgument(
-            "Dims of scale tensor must be 1, but received scale's size is %d",
-            scale_tz.size()));
-
-    const unsigned int C = scale_tz[0];
-
-    MKLDNNMemoryFormat dst_format =
-        platform::MKLDNNFormatForSize(src_tz.size(), diff_y->format());
-
-    MKLDNNMemoryFormat input_format =
-        platform::MKLDNNFormatForSize(src_tz.size(), x->format());
-
-    BatchNormMKLDNNHandler<T> handler(
-        src_tz, epsilon, mkldnn::normalization_flags::use_scale_shift,
-        dst_format, input_format, dev_ctx, ctx.GetPlace(),
-        ctx.InputName("SavedMean"));
+    BatchNormMKLDNNHandler<T> handler(ctx, dev_ctx, ctx.GetPlace(), x, scale,
+                                      diff_y, ctx.InputName("SavedMean"));
 
     // MKLDNN requires a single piece of memory for scale and shift/bias data
+    const unsigned int C = paddle::framework::vectorize(scale->dims())[0];
     const size_t scaleshift_size = 2 * C;
     std::vector<T> diff_scaleshift_data;
     diff_scaleshift_data.reserve(scaleshift_size);
@@ -335,7 +339,7 @@ class BatchNormMKLDNNGradOpKernel : public paddle::framework::OpKernel<T> {
     T *diff_scale_data = diff_scale->mutable_data<T>(ctx.GetPlace());
     T *diff_shift_data = diff_shift->mutable_data<T>(ctx.GetPlace());
 
-    // copy back diff sacle/shift to output tensors (diff scale/shift)
+    // copy back diff scale/shift to output tensors (diff scale/shift)
     diff_scaleshift_data.resize(scaleshift_size);
     auto it = std::begin(diff_scaleshift_data);
     std::copy(it, std::next(it, C), diff_scale_data);

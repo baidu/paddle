@@ -18,14 +18,12 @@ import unittest
 import time
 import argparse
 import os
-import six
 import sys
 import subprocess
 import traceback
 import functools
 import pickle
 from contextlib import closing
-from six import string_types
 import paddle.fluid as fluid
 import paddle.fluid.unique_name as nameGen
 from paddle.fluid import core
@@ -37,7 +35,6 @@ class TestCollectiveRunnerBase(object):
             "get model should be implemented by child class.")
 
     def wait_server_ready(self, endpoints):
-        assert not isinstance(endpoints, string_types)
         while True:
             all_ok = True
             not_ready_endpoints = []
@@ -115,10 +112,7 @@ class TestCollectiveRunnerBase(object):
         out = exe.run(train_prog,
                       feed={'tindata': indata},
                       fetch_list=[result.name])
-        if six.PY2:
-            print(pickle.dumps(out))
-        else:
-            sys.stdout.buffer.write(pickle.dumps(out))
+        sys.stdout.buffer.write(pickle.dumps(out))
 
 
 def runtime_main(test_class, col_type, sub_type):

@@ -206,5 +206,85 @@ class TestMatMulNet(unittest.TestCase):
         self.assertTrue(np.allclose(npu_loss, cpu_loss))
 
 
+# The precision is aligned in NPU and GPU separately, which is only used for the usage method.
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestMatMulNet3_2(unittest.TestCase):
+    def _test(self, run_npu=True):
+        main_prog = paddle.static.Program()
+        startup_prog = paddle.static.Program()
+        main_prog.random_seed = SEED
+        startup_prog.random_seed = SEED
+        np.random.seed(SEED)
+        self._dtype = "float32"
+
+        a_np = np.random.random(size=(2, 1, 3)).astype(self._dtype)
+        b_np = np.random.random(size=(2, 1, 3)).astype(self._dtype)
+        c_np = np.random.random(size=(3, 2)).astype(self._dtype)
+        d_np = np.random.random(size=(3, 2)).astype(self._dtype)
+        label_np = np.random.randint(2, size=(2, 1)).astype('int64')
+
+        with paddle.static.program_guard(main_prog, startup_prog):
+            a = paddle.static.data(name="a", shape=[2, 1, 3], dtype=self._dtype)
+            b = paddle.static.data(name="b", shape=[2, 1, 3], dtype=self._dtype)
+            c = paddle.static.data(name="c", shape=[3, 2], dtype=self._dtype)
+            d = paddle.static.data(name="d", shape=[3, 2], dtype=self._dtype)
+            label = paddle.static.data(
+                name="label", shape=[2, 1], dtype='int64')
+
+            sum_1 = paddle.add(a, b)
+            sum_2 = paddle.add(c, d)
+            sum_1 = paddle.cast(sum_1, 'float16')
+            sum_2 = paddle.cast(sum_2, 'float16')
+            if not run_npu:
+                sum_1 = paddle.cast(sum_1, 'float32')
+                sum_2 = paddle.cast(sum_2, 'float32')
+
+            result = paddle.matmul(sum_1, sum_2)
+            if run_npu:
+                result = paddle.cast(result, 'float32')
+
+            result = paddle.reshape(result, shape=[2, 2])
+            fc_1 = fluid.layers.fc(input=result, size=8)
+            prediction = fluid.layers.fc(input=fc_1, size=2, act='softmax')
+
+            cost = fluid.layers.cross_entropy(input=prediction, label=label)
+            loss = fluid.layers.reduce_mean(cost)
+            sgd = fluid.optimizer.SGD(learning_rate=0.01)
+            sgd.minimize(loss)
+
+        if run_npu:
+            place = paddle.NPUPlace(0)
+        else:
+            place = paddle.CPUPlace()
+        exe = paddle.static.Executor(place)
+        exe.run(startup_prog)
+
+        print("Start run on {}".format(place))
+        for epoch in range(100):
+
+            pred_res, loss_res = exe.run(main_prog,
+                                         feed={
+                                             "a": a_np,
+                                             "b": b_np,
+                                             "c": c_np,
+                                             "d": d_np,
+                                             "label": label_np
+                                         },
+                                         fetch_list=[prediction, loss])
+            if epoch % 10 == 0:
+                print("Epoch {} | Prediction[0]: {}, Loss: {}".format(
+                    epoch, pred_res[0], loss_res))
+
+        return pred_res, loss_res
+
+    def test_npu(self):
+        cpu_pred, cpu_loss = self._test(False)
+        npu_pred, npu_loss = self._test(True)
+
+        self.assertTrue(np.allclose(npu_pred, cpu_pred, atol=1e-4))
+        self.assertTrue(np.allclose(npu_loss, cpu_loss, atol=1e-4))
+
+
 if __name__ == '__main__':
     unittest.main()

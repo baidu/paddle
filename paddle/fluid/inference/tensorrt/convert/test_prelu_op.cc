@@ -24,9 +24,9 @@ TEST(prelu_op, test_channel_wise) {
   std::unordered_set<std::string> parameters({"prelu_alpha"});
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("prelu_input", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclInputVar("prelu_input", nvinfer1::Dims3(3, 2, 2));
   validator.DeclParamVar("prelu_alpha", nvinfer1::Dims3(3, 1, 1));
-  validator.DeclOutputVar("prelu_out", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclOutputVar("prelu_out", nvinfer1::Dims3(3, 2, 2));
 
   // Prepare Op description
   framework::OpDesc desc;
@@ -46,9 +46,9 @@ TEST(prelu_op, test_element_wise) {
   std::unordered_set<std::string> parameters({"prelu_alpha"});
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("prelu_input", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclInputVar("prelu_input", nvinfer1::Dims3(3, 2, 2));
   validator.DeclParamVar("prelu_alpha", nvinfer1::Dims4(10, 3, 2, 2));
-  validator.DeclOutputVar("prelu_out", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclOutputVar("prelu_out", nvinfer1::Dims3(3, 2, 2));
 
   // Prepare Op description
   framework::OpDesc desc;
@@ -68,9 +68,9 @@ TEST(prelu_op, test_scalar) {
   std::unordered_set<std::string> parameters({"prelu_alpha"});
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("prelu_input", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclInputVar("prelu_input", nvinfer1::Dims3(3, 2, 2));
   validator.DeclParamVar("prelu_alpha", nvinfer1::Dims3(1, 1, 1));
-  validator.DeclOutputVar("prelu_out", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclOutputVar("prelu_out", nvinfer1::Dims3(3, 2, 2));
 
   // Prepare Op description
   framework::OpDesc desc;

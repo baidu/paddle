@@ -146,6 +146,8 @@ gray_list = {
     'cast',
     'fused_bn_add_activation',
     'c_identity',
+    'c_concat',
+    'c_allreduce_sum',
 }
 
 # The set of ops that don't support fp16 calculation

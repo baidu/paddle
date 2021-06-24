@@ -85,7 +85,7 @@ for WITH_STATIC_LIB in ON OFF; do
   if [ $(echo `uname` | grep "Win") != "" ]; then
     # TODO(wilber, T8T9): Do we still need to support windows gpu static library
     if [ $TEST_GPU_CPU == ON ] && [ $WITH_STATIC_LIB == ON ]; then
-      return 0
+      continue
     fi
     # -----simple_on_word2vec on windows-----
     cmake .. -G "Visual Studio 15 2017" -A x64 -T host=x64 -DPADDLE_LIB=${inference_install_dir} \

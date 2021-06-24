@@ -276,7 +276,7 @@ void SerializeToStream(std::ostream &os, const LoDTensor &tensor) {
   SerializeToStream(os, tensor, *dev_ctx);
 }
 
-void DeserializeFromStream(std::ifstream &os, LoDTensor *tensor) {
+void DeserializeFromStream(std::istream &os, LoDTensor *tensor) {
   platform::DeviceContextPool &pool = platform::DeviceContextPool::Instance();
   const platform::DeviceContext *dev_ctx;
   dev_ctx = pool.Get(platform::CPUPlace());

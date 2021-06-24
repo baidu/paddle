@@ -32,20 +32,28 @@ class RuntimeInferVarTypeContext : public framework::InferVarTypeContext {
  public:
   RuntimeInferVarTypeContext(const NameVarMap<VarType>& inputs,
                              const NameVarMap<VarType>& outputs,
-                             const framework::AttributeMap& attrs_map)
+                             const framework::AttributeMap& attrs_map,
+                             const framework::AttributeMap& default_attrs_map)
       : InferVarTypeContext(nullptr, nullptr),
         inputs_(inputs),
         outputs_(outputs),
-        attrs_(attrs_map) {}
+        attrs_(attrs_map),
+        default_attrs_(default_attrs_map) {}
 
   virtual ~RuntimeInferVarTypeContext() {}
 
   framework::Attribute GetAttr(const std::string& name) const override {
-    auto iter = attrs_.find(name);
-    PADDLE_ENFORCE_EQ(
-        iter != attrs_.end(), true,
-        platform::errors::NotFound("Cannot find attribute %s", name));
-    return iter->second;
+    auto it = attrs_.find(name);
+
+    if (it == attrs_.end()) {
+      it = default_attrs_.find(name);
+      if (it == default_attrs_.end()) {
+        PADDLE_THROW(platform::errors::NotFound(
+            "Can not find [%s] in attributes.", name));
+      }
+    }
+
+    return it->second;
   }
 
   bool HasInput(const std::string& name) const override {
@@ -233,6 +241,7 @@ class RuntimeInferVarTypeContext : public framework::InferVarTypeContext {
   const NameVarMap<VarType>& inputs_;
   const NameVarMap<VarType>& outputs_;
   const framework::AttributeMap& attrs_;
+  const framework::AttributeMap& default_attrs_;
 };
 
 }  // namespace imperative

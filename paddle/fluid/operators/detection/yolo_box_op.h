@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <vector>
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/hostdevice.h"
 
 namespace paddle {
@@ -43,8 +44,19 @@ HOSTDEVICE inline void GetYoloBox(T* box, const T* x, const int* anchors, int i,
 
 HOSTDEVICE inline int GetEntryIndex(int batch, int an_idx, int hw_idx,
                                     int an_num, int an_stride, int stride,
-                                    int entry) {
-  return (batch * an_num + an_idx) * an_stride + entry * stride + hw_idx;
+                                    int entry, bool iou_aware) {
+  if (iou_aware) {
+    return (batch * an_num + an_idx) * an_stride +
+           (batch * an_num + an_num + entry) * stride + hw_idx;
+  } else {
+    return (batch * an_num + an_idx) * an_stride + entry * stride + hw_idx;
+  }
+}
+
+HOSTDEVICE inline int GetIoUIndex(int batch, int an_idx, int hw_idx, int an_num,
+                                  int an_stride, int stride) {
+  return batch * an_num * an_stride + (batch * an_num + an_idx) * stride +
+         hw_idx;
 }
 
 template <typename T>
@@ -92,6 +104,8 @@ class YoloBoxKernel : public framework::OpKernel<T> {
     float conf_thresh = ctx.Attr<float>("conf_thresh");
     int downsample_ratio = ctx.Attr<int>("downsample_ratio");
     bool clip_bbox = ctx.Attr<bool>("clip_bbox");
+    bool iou_aware = ctx.Attr<bool>("iou_aware");
+    float iou_aware_factor = ctx.Attr<float>("iou_aware_factor");
     float scale = ctx.Attr<float>("scale_x_y");
     float bias = -0.5 * (scale - 1.);
 
@@ -127,15 +141,22 @@ class YoloBoxKernel : public framework::OpKernel<T> {
       for (int j = 0; j < an_num; j++) {
         for (int k = 0; k < h; k++) {
           for (int l = 0; l < w; l++) {
-            int obj_idx =
-                GetEntryIndex(i, j, k * w + l, an_num, an_stride, stride, 4);
+            int obj_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride,
+                                        stride, 4, iou_aware);
             T conf = sigmoid<T>(input_data[obj_idx]);
+            if (iou_aware) {
+              int iou_idx =
+                  GetIoUIndex(i, j, k * w + l, an_num, an_stride, stride);
+              T iou = sigmoid<T>(input_data[iou_idx]);
+              conf = pow(conf, static_cast<T>(1. - iou_aware_factor)) *
+                     pow(iou, static_cast<T>(iou_aware_factor));
+            }
             if (conf < conf_thresh) {
               continue;
             }
 
-            int box_idx =
-                GetEntryIndex(i, j, k * w + l, an_num, an_stride, stride, 0);
+            int box_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride,
+                                        stride, 0, iou_aware);
             GetYoloBox<T>(box, input_data, anchors_data, l, k, j, h, w,
                           input_size_h, input_size_w, box_idx, stride,
                           img_height, img_width, scale, bias);
@@ -143,8 +164,8 @@ class YoloBoxKernel : public framework::OpKernel<T> {
             CalcDetectionBox<T>(boxes_data, box, box_idx, img_height, img_width,
                                 clip_bbox);
 
-            int label_idx =
-                GetEntryIndex(i, j, k * w + l, an_num, an_stride, stride, 5);
+            int label_idx = GetEntryIndex(i, j, k * w + l, an_num, an_stride,
+                                          stride, 5, iou_aware);
             int score_idx = (i * box_num + j * stride + k * w + l) * class_num;
             CalcLabelScore<T>(scores_data, input_data, label_idx, score_idx,
                               class_num, conf, stride);

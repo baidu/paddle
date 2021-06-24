@@ -29,11 +29,10 @@ class TestNanInf(unittest.TestCase):
         self._python_interp = sys.executable
         if os.getenv('WITH_COVERAGE', 'OFF') == 'ON':
             self._python_interp += " -m coverage run --branch -p"
-        self._python_interp += " check_nan_inf_base.py"
 
         self.env = os.environ.copy()
 
-    def test_nan_inf(self):
+    def check_nan_inf(self):
         cmd = self._python_interp
 
         proc = subprocess.Popen(
@@ -52,6 +51,14 @@ class TestNanInf(unittest.TestCase):
         # in python3, type(out+err) is 'bytes', need use encode
         assert (out + err
                 ).find('There are `nan` or `inf` in tensor'.encode()) != -1
+
+    def test_nan_inf_in_static_mode(self):
+        self._python_interp += " check_nan_inf_base.py"
+        self.check_nan_inf()
+
+    def test_nan_inf_in_dynamic_mode(self):
+        self._python_interp += " check_nan_inf_base_dygraph.py"
+        self.check_nan_inf()
 
 
 class TestNanInfEnv(TestNanInf):

@@ -1,0 +1,46 @@
+type: "fake_channel_wise_quantize_dequantize_abs_max"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+  outputs {
+    name: "OutScale"
+  }
+  attrs {
+    name: "quant_axis"
+    type: INT
+  }
+  attrs {
+    name: "bit_length"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

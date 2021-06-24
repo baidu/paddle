@@ -167,7 +167,7 @@ def run_convert():
                os.path.getsize(output_file) == FULL_SIZE_BYTES):
         if os.path.exists(output_file):
             sys.stderr.write(
-                "\n\nThe existing binary file is broken. Start to generate new one...\n\n".
+                "\n\nThe existing binary file[{}] is broken. Start to generate new one...\n\n".
                 format(output_file))
             os.remove(output_file)
         if retry < try_limit:

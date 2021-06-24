@@ -34,6 +34,26 @@ namespace ir {
  */
 class Graph;
 
+SimplifyWithBasicOpsPass::SimplifyWithBasicOpsPass() {
+  AddOpCompat(OpCompat("scale"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("scale")
+      .IsNumGE(0.f)
+      .IsNumLE(1.f)
+      .End()
+      .AddAttr("bias")
+      .IsNumEQ(0.f)
+      .End()
+      .AddAttr("bias_after_scale")
+      .IsNumEQ(true)
+      .End();
+}
+
 void SimplifyWithBasicOpsPass::ApplyImpl(Graph* graph) const {
   VLOG(3) << "Simplify the Graph with basic ops.";
   std::unordered_set<const Node*> del_node_set;
@@ -144,6 +164,11 @@ bool SimplifyWithBasicOpsPass::SimplifyDropout(
     new_op_desc.SetAttr("scale", scale);
     new_op_desc.SetAttr("bias", static_cast<float>(0));
     new_op_desc.SetAttr("bias_after_scale", true);
+
+    if (!IsCompat(new_op_desc)) {
+      LOG(WARNING) << "Basic ops pass in scale op compat failed.";
+      return false;
+    }
 
     auto* scale_op_node = graph->CreateOpNode(&new_op_desc);
     IR_NODE_LINK_TO(dropout_x, scale_op_node);

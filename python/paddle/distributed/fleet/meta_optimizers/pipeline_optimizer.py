@@ -138,6 +138,9 @@ class PipelineOptimizer(MetaOptimizerBase):
                 first_node = pair[0] + start_index
                 second_node = pair[1] + start_index
                 if self.rank != first_node and self.rank != second_node:
+                    collective_helper._init_communicator(
+                        self.startup_program, None, None, None, None, False,
+                        self.global_ring_id, True)
                     continue
                 pipeline_endpoints = [
                     self.endpoints[first_node], self.endpoints[second_node]

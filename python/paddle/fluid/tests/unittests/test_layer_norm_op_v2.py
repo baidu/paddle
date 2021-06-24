@@ -51,6 +51,7 @@ class TestDygraphLayerNormv2(unittest.TestCase):
             self.assertTrue(np.allclose(y1, y2))
 
     def test_static(self):
+        paddle.enable_static()
         places = [fluid.CPUPlace()]
         if core.is_compiled_with_cuda() and core.op_support_gpu("layer_norm"):
             places.append(fluid.CUDAPlace(0))

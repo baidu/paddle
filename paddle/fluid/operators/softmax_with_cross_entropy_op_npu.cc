@@ -32,81 +32,53 @@ class SoftmaxWithCrossEntropyNPUKernel : public framework::OpKernel<T> {
     auto* labels = ctx.Input<Tensor>("Label");
     auto* softmax = ctx.Output<Tensor>("Softmax");
     auto* loss = ctx.Output<Tensor>("Loss");
+    auto* backprop = ctx.Output<Tensor>("Backprop");
+    auto soft_label = ctx.Attr<bool>("soft_label");
+    PADDLE_ENFORCE_EQ(soft_label, false,
+                      platform::errors::Unimplemented(
+                          "soft_label=True is not supported in "
+                          "the npu kernel of softmax_with_cross_entropy."));
 
-    int cls_num = logits->dims()[1];
     const int rank = logits->dims().size();
     const int axis = CanonicalAxis(ctx.Attr<int>("axis"), rank);
-    std::vector<int> axes;
-    for (auto i = axis; i < logits->dims().size(); ++i) {
-      axes.push_back(i);
-    }
+    const int n = SizeToAxis(axis, logits->dims());
+    const int d = SizeFromAxis(axis, logits->dims());
+
+    PADDLE_ENFORCE_EQ(
+        labels->numel(), n,
+        platform::errors::Unimplemented(
+            "The size of labels should be equal to SizeToAxis of logits,"
+            "but got size of labels is %d and SizeToAxis is %d.",
+            labels->numel(), n));
+
+    loss->mutable_data<T>(ctx.GetPlace());
+    backprop->mutable_data<T>(ctx.GetPlace());
+    softmax->mutable_data<T>(ctx.GetPlace());
+
+    Tensor logits_2d, labels_1d, loss_1d, backprop_2d, softmax_2d;
+    logits_2d.ShareDataWith(*logits).Resize({n, d});
+    labels_1d.ShareDataWith(*labels).Resize({n});
+    loss_1d.ShareDataWith(*loss).Resize({n});
+    backprop_2d.ShareDataWith(*backprop).Resize({n, d});
+    softmax_2d.ShareDataWith(*softmax).Resize({n, d});
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
 
-    // softmax
-    softmax->mutable_data<T>(ctx.GetPlace());
+    std::vector<int> axes;
+    for (auto i = axis; i < logits->dims().size(); ++i) {
+      axes.push_back(i);
+    }
     const auto& runner_softmax =
         NpuOpRunner("SoftmaxV2", {*logits}, {*softmax}, {{"axes", axes}});
     runner_softmax.Run(stream);
 
-    // cast label from int64/int32 to int32
-    Tensor tmp_labels(framework::proto::VarType::INT32);
-    if (labels->type() != framework::proto::VarType::INT32) {
-      tmp_labels.Resize(labels->dims());
-      tmp_labels.mutable_data(ctx.GetPlace(), framework::proto::VarType::INT32);
-      auto dst_dtype = ConvertToNpuDtype(framework::proto::VarType::INT32);
-      const auto& runner_cast_label =
-          NpuOpRunner("Cast", {*labels}, {tmp_labels},
-                      {{"dst_type", static_cast<int>(dst_dtype)}});
-      runner_cast_label.Run(stream);
-      labels = &tmp_labels;
-    }
-
-    // on and off
-    Tensor on_tensor(framework::proto::VarType::INT32);
-    on_tensor.mutable_data<int>({1}, ctx.GetPlace());
-    FillNpuTensorWithConstant<int>(&on_tensor, static_cast<int>(1));
-    Tensor off_tensor(framework::proto::VarType::INT32);
-    off_tensor.mutable_data<int>({1}, ctx.GetPlace());
-    FillNpuTensorWithConstant<int>(&off_tensor, static_cast<int>(0));
-
-    // one_hot
-    Tensor tmp_onehot(on_tensor.type());
-    tmp_onehot.Resize(logits->dims());
-    tmp_onehot.mutable_data<int>(ctx.GetPlace());
-
-    const auto& runner_onehot =
-        NpuOpRunner("OneHotD", {*labels, on_tensor, off_tensor}, {tmp_onehot},
-                    {{"axis", -1}, {"depth", cls_num}});
-    runner_onehot.Run(stream);
-
-    // cast one_hot from int32 to T
-    Tensor cast_onehot(logits->type());
-    cast_onehot.Resize(tmp_onehot.dims());
-    cast_onehot.mutable_data<T>(ctx.GetPlace());
-    auto dst_dtype = ConvertToNpuDtype(logits->type());
-    const auto& runner_cast_onehot =
-        NpuOpRunner("Cast", {tmp_onehot}, {cast_onehot},
-                    {{"dst_type", static_cast<int>(dst_dtype)}});
-    runner_cast_onehot.Run(stream);
-
-    // SoftmaxCrossEntropyWithLogits
-    Tensor backprop(logits->type());
-    backprop.Resize(logits->dims());
-    backprop.mutable_data<T>(ctx.GetPlace());
-
-    loss->mutable_data<T>(ctx.GetPlace());
-
-    // SoftmaxCrossEntropyWithLogits requires loss to be of shape [batch_size]
-    auto loss_dims = loss->dims();
-    loss->Resize({loss_dims[0]});
+    // SparseSoftmaxCrossEntropyWithLogits
     const auto& runner_s =
-        NpuOpRunner("SoftmaxCrossEntropyWithLogits", {*logits, cast_onehot},
-                    {*loss, backprop}, {});
+        NpuOpRunner("SparseSoftmaxCrossEntropyWithLogits",
+                    {logits_2d, labels_1d}, {loss_1d, backprop_2d}, {});
     runner_s.Run(stream);
-    loss->Resize(loss_dims);
   }
 };
 
@@ -114,70 +86,32 @@ template <typename DeviceContext, typename T>
 class SoftmaxWithCrossEntropyGradNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto* labels = ctx.Input<Tensor>("Label");
-    auto* softmax = ctx.Input<Tensor>("Softmax");
+    auto* backprop = ctx.Input<Tensor>("Backprop");
     auto* loss_grad = ctx.Input<Tensor>(framework::GradVarName("Loss"));
     auto* logits_grad = ctx.Output<Tensor>(framework::GradVarName("Logits"));
 
-    int cls_num = softmax->dims()[1];
+    PADDLE_ENFORCE_NOT_NULL(backprop,
+                            platform::errors::PreconditionNotMet(
+                                "backprop should not be null in NPU kernel of "
+                                "softmax_with_cross_entropy_grad."));
+    logits_grad->mutable_data<T>(ctx.GetPlace());
+
+    const int rank = logits_grad->dims().size();
+    const int axis = CanonicalAxis(ctx.Attr<int>("axis"), rank);
+    const int n = SizeToAxis(axis, logits_grad->dims());
+    const int d = SizeFromAxis(axis, logits_grad->dims());
+
+    Tensor logits_grad_2d, loss_grad_1d, backprop_2d;
+
+    logits_grad_2d.ShareDataWith(*logits_grad).Resize({n, d});
+    loss_grad_1d.ShareDataWith(*loss_grad).Resize({n});
+    backprop_2d.ShareDataWith(*backprop).Resize({n, d});
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
-
-    // cast label from int64/int32 to int32
-    Tensor tmp_labels(framework::proto::VarType::INT32);
-    if (labels->type() != framework::proto::VarType::INT32) {
-      tmp_labels.Resize(labels->dims());
-      tmp_labels.mutable_data(ctx.GetPlace(), framework::proto::VarType::INT32);
-      auto dst_dtype = ConvertToNpuDtype(framework::proto::VarType::INT32);
-      const auto& runner_cast_label =
-          NpuOpRunner("Cast", {*labels}, {tmp_labels},
-                      {{"dst_type", static_cast<int>(dst_dtype)}});
-      runner_cast_label.Run(stream);
-      labels = &tmp_labels;
-    }
-
-    // on and off
-    Tensor on_tensor(framework::proto::VarType::INT32);
-    on_tensor.mutable_data<int>({1}, ctx.GetPlace());
-    FillNpuTensorWithConstant<int>(&on_tensor, static_cast<int>(1));
-    Tensor off_tensor(framework::proto::VarType::INT32);
-    off_tensor.mutable_data<int>({1}, ctx.GetPlace());
-    FillNpuTensorWithConstant<int>(&off_tensor, static_cast<int>(0));
-
-    // one_hot
-    Tensor tmp_onehot(on_tensor.type());
-    tmp_onehot.Resize(softmax->dims());
-    tmp_onehot.mutable_data<int>(ctx.GetPlace());
-
-    const auto& runner_onehot =
-        NpuOpRunner("OneHotD", {*labels, on_tensor, off_tensor}, {tmp_onehot},
-                    {{"axis", -1}, {"depth", cls_num}});
-    runner_onehot.Run(stream);
-
-    // cast one_hot from int32 to T
-    Tensor cast_onehot(softmax->type());
-    cast_onehot.Resize(tmp_onehot.dims());
-    cast_onehot.mutable_data<T>(ctx.GetPlace());
-    auto dst_dtype = ConvertToNpuDtype(softmax->type());
-    const auto& runner_cast_onehot =
-        NpuOpRunner("Cast", {tmp_onehot}, {cast_onehot},
-                    {{"dst_type", static_cast<int>(dst_dtype)}});
-    runner_cast_onehot.Run(stream);
-
-    // sub
-    Tensor tmp_sub(softmax->type());
-    tmp_sub.Resize(softmax->dims());
-    tmp_sub.mutable_data<T>(ctx.GetPlace());
-    const auto& runner_sub =
-        NpuOpRunner("Sub", {*softmax, cast_onehot}, {tmp_sub}, {});
-
-    runner_sub.Run(stream);
-    // mul
-    logits_grad->mutable_data<T>(ctx.GetPlace());
     const auto& runner_mul =
-        NpuOpRunner("Mul", {*loss_grad, tmp_sub}, {*logits_grad}, {});
+        NpuOpRunner("Mul", {*loss_grad, *backprop}, {*logits_grad}, {});
     runner_mul.Run(stream);
   }
 };

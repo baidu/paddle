@@ -129,6 +129,11 @@ void SkipLayerNormFusePass::ApplyImpl(ir::Graph *graph) const {
       return;
     }
 
+    if (!IsCompat(subgraph, graph)) {
+      LOG(WARNING) << "skip_layernorm pass in op compat failed.";
+      return;
+    }
+
     VLOG(4) << "handle SkipLayerNorm fuse";
     GET_IR_NODE_FROM_SUBGRAPH(elementwise, elementwise, fused_pattern);
     GET_IR_NODE_FROM_SUBGRAPH(elementwise_out, elementwise_out, fused_pattern);

@@ -29,10 +29,10 @@ def dyfunc_tensor_shape_1(x):
 
 
 def dyfunc_tensor_shape_2(x):
-    x = fluid.dygraph.to_variable(x)
+    x = paddle.to_tensor(x)
     shape = x.shape
     shape2 = shape
-    res = fluid.layers.reshape(x, shape2)
+    res = paddle.reshape(x, shape2)
     return res
 
 
@@ -81,6 +81,13 @@ def dyfunc_tuple_shape_2(x):
     x = paddle.to_tensor(x)
     shape = x.shape
     a, b = shape
+    res = paddle.reshape(x, shape=(b, a))
+    return res
+
+
+def dyfunc_tuple_shape_3(x):
+    x = paddle.to_tensor(x)
+    a, b = paddle.shape(x)
     res = paddle.reshape(x, shape=(b, a))
     return res
 
@@ -190,7 +197,7 @@ def dyfunc_with_while_3(x):
 
 
 def dyfunc_with_while_4(x):
-    x = fluid.dygraph.to_variable(x)
+    x = paddle.to_tensor(x)
     y = numpy.ones(5)
     y_shape_0 = y.shape[0]
     i = 1
@@ -330,6 +337,18 @@ class TestTupleShape2(TestTensorShapeBasic):
         self.input = numpy.ones((5, 7)).astype("int32")
         self.input_spec = [paddle.static.InputSpec(shape=[5, 7], dtype="int32")]
         self.dygraph_func = dyfunc_tuple_shape_2
+
+    def _set_expected_op_num(self):
+        self.expected_op_num = 5
+        self.expected_shape_op_num = 1
+        self.expected_slice_op_num = 2
+
+
+class TestTupleShape3(TestTensorShapeBasic):
+    def init_test_func(self):
+        self.input = numpy.ones((5, 7)).astype("int32")
+        self.input_spec = [paddle.static.InputSpec(shape=[5, 7], dtype="int32")]
+        self.dygraph_func = dyfunc_tuple_shape_3
 
     def _set_expected_op_num(self):
         self.expected_op_num = 5

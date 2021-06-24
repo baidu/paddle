@@ -122,7 +122,11 @@ int ElementWisePlugin::initialize() {
 }
 
 int ElementWisePlugin::enqueue(int batch_size, const void *const *inputs,
+#if IS_TRT_VERSION_LT(8000)
                                void **outputs, void *workspace,
+#else
+                               void *const *outputs, void *workspace,
+#endif
                                cudaStream_t stream) {
   const float *x = reinterpret_cast<const float *>(inputs[0]);
   const float *y = reinterpret_cast<const float *>(inputs[1]);

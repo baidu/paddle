@@ -15,7 +15,9 @@
 from .mp_layers import VocabParallelEmbedding  # noqa: F401
 from .mp_layers import ColumnParallelLinear  # noqa: F401
 from .mp_layers import RowParallelLinear  # noqa: F401
+from .mp_layers import ParallelCrossEntropy  # noqa: F401
 from .pp_layers import LayerDesc  # noqa: F401
+from .pp_layers import SharedLayerDesc  # noqa: F401
 from .pp_layers import PipelineLayer  # noqa: F401
 from .random import RNGStatesTracker  # noqa: F401
 from .random import model_parallel_random_seed  # noqa: F401

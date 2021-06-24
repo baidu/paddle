@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import commands
 from xml.etree import ElementTree
 import re
 import time
@@ -51,7 +50,7 @@ def getPyCovResult(params):
     os.system('cd %s && coverage combine `ls python-coverage.data.*`' % path)
     os.system('cd %s && pwd && coverage xml -i -o python-coverage.xml' % path)
     xml_path = '%s/python-coverage.xml' % path
-    os.system("python %s/tools/analysisPyXml.py %s %s" %
+    os.system("python2.7 %s/tools/analysisPyXml.py %s %s" %
               (rootPath, rootPath, ut))
     endTime = int(time.time())
     print('pyCov Time: %s' % (endTime - startTime))

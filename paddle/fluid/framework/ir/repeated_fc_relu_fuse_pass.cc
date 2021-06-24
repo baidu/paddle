@@ -66,9 +66,13 @@ static bool IsFCWithPaddingWeights(Node* n) {
 }
 
 static bool IsParamOfFC(Node* n, const std::string& param_name) {
-  if (IsInputOfFC(n) && n->inputs.empty() &&
-      (n->Name() == n->outputs[0]->Op()->Input(param_name)[0])) {
-    return true;
+  if (IsInputOfFC(n) && n->inputs.empty()) {
+    for (auto* out : n->outputs) {
+      if (out->Op()->Type() == "fc" &&
+          n->Name() == out->Op()->Input(param_name)[0]) {
+        return true;
+      }
+    }
   }
   return false;
 }

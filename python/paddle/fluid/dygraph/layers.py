@@ -30,6 +30,7 @@ from . import parallel_helper
 from .. import unique_name
 from paddle.fluid import core
 from .layer_object_helper import LayerObjectHelper
+from .layer_hooks import record_program_ops_pre_hook, set_op_customized_attrs_post_hook, LayerOpsRecoder
 from .base import program_desc_tracing_guard, param_guard
 from paddle.fluid import framework
 from ..param_attr import ParamAttr
@@ -112,6 +113,10 @@ class Layer(core.Layer):
         self._non_persistable_buffer_names_set = set()
         self._sub_layers = collections.OrderedDict()
         self._loaddict_holder = collections.OrderedDict()
+
+        # Record generated op_descs in this layer
+        self._op_recorder = LayerOpsRecoder(ops=[], hooks=[])
+        self._customized_attrs = {}
 
         self._forward_pre_hooks = collections.OrderedDict()
         self._forward_post_hooks = collections.OrderedDict()
@@ -665,7 +670,7 @@ class Layer(core.Layer):
         Parameters:
             prefix(str, optional): Prefix to prepend to all parameter names. Default: ''.
             include_self(bool, optional): Whether include the Layer itself. Default: False.
-            layers_set(set, optioanl): The set to record duplicate sublayers. Default: None.
+            layers_set(set, optional): The set to record duplicate sublayers. Default: None.
 
         Yields:
             (string, Layer): Tuple of name and Layer
@@ -1027,6 +1032,54 @@ class Layer(core.Layer):
 
             self._parameters[name] = parameter
         return parameter
+
+    def _set_op_attrs(self, attrs):
+        """
+        Add customized attribute while append_op. In case of quantization, we want to save
+        some attributes into op_desc while exporting inference model by @to_static.
+
+        Arguments:
+            attrs(dict): customized attributes that will be added into op_descs.
+
+        NOTE: The interface is only exposed to developers.
+        """
+
+        def is_already_registered(is_pre_hook):
+            layers_hooks = self._forward_pre_hooks if is_pre_hook else self._forward_post_hooks
+            candidate_hook = record_program_ops_pre_hook if is_pre_hook else set_op_customized_attrs_post_hook
+
+            already_registed = False
+            if layers_hooks:
+                last_key = next(reversed(layers_hooks))
+                already_registed = (layers_hooks[last_key] == candidate_hook)
+
+            return already_registed
+
+        if not isinstance(attrs, dict):
+            raise TypeError("attrs should be type(dict), but received {}".
+                            format(type(attrs).__name__))
+
+        # NOTE: Overwrite behavior for same key.
+        self._customized_attrs.update(attrs)
+
+        if not is_already_registered(is_pre_hook=True):
+            pre_hook_helper = self.register_forward_pre_hook(
+                record_program_ops_pre_hook)
+            assert len(self._op_recorder.hooks) == 0
+            self._op_recorder.hooks = [pre_hook_helper]
+
+        # manually register post_hook to ensure it is inserted into the head.
+        if not is_already_registered(is_pre_hook=False):
+            post_hook_helper = self.register_forward_post_hook(
+                set_op_customized_attrs_post_hook)
+            if len(self._forward_post_hooks) > 1:
+                self._forward_post_hooks.move_to_end(
+                    post_hook_helper._hook_id, last=False)
+
+            assert len(self._op_recorder.hooks) == 1
+
+            # hooks that need to be removed once we finish executing them.
+            self._op_recorder.hooks.append(post_hook_helper)
 
     def __getstate__(self):
         return self.__dict__

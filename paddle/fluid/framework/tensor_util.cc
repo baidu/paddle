@@ -60,6 +60,7 @@ void TensorCopy(const Tensor& src, const platform::Place& dst_place,
             << dst_place;
     return;
   }
+  VLOG(4) << "src:" << src_ptr << ", dst:" << dst_ptr;
 
 #ifdef PADDLE_WITH_MKLDNN
   auto size = src.layout() == DataLayout::kMKLDNN

@@ -1,0 +1,55 @@
+type: "fake_quantize_range_abs_max"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "InScale"
+  }
+  inputs {
+    name: "Iter"
+  }
+  outputs {
+    name: "Out"
+  }
+  outputs {
+    name: "OutScale"
+  }
+  outputs {
+    name: "OutScales"
+  }
+  attrs {
+    name: "window_size"
+    type: INT
+  }
+  attrs {
+    name: "bit_length"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

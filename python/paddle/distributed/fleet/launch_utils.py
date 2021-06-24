@@ -29,6 +29,7 @@ import struct
 
 import paddle
 import paddle.fluid as fluid
+from distutils.util import strtobool
 logger = logging.getLogger("root")
 logger.propagate = False
 
@@ -83,7 +84,7 @@ class Cluster(object):
     def __ne__(self, cluster):
         return not self.__eq__(cluster)
 
-    def update_pods(cluster):
+    def update_pods(self, cluster):
         self.pods = copy.copy(cluster.pods)
 
     def trainers_nranks(self):
@@ -195,7 +196,7 @@ class Pod(object):
                 self.id != pod.id or \
                 self.addr != pod.addr or \
                 self.port != pod.port:
-            logger.debug("pod {} != pod".format(self, pod))
+            logger.debug("pod {} != {}".format(self, pod))
             return False
 
         if len(self.trainers) != len(pod.trainers):
@@ -349,7 +350,7 @@ def add_arguments(argname, type, default, help, argparser, **kwargs):
         add_argument("name", str, "Jonh", "User name.", parser)
         args = parser.parse_args()
     """
-    type = distutils.util.strtobool if type == bool else type
+    type = strtobool if type == bool else type
     argparser.add_argument(
         "--" + argname,
         default=default,
@@ -685,7 +686,7 @@ def get_device_proc_info(args):
         gpus = get_gpus(args.gpus)
         if args.nproc_per_node is not None:
             assert (len(gpus) % int(args.nproc_per_node)) ==0, \
-                "gpus' number:{} mod args.nproc_per_node:{} must == 0".format(len(gpus), arg.nproc_per_node)
+                "gpus' number:{} mod args.nproc_per_node:{} must == 0".format(len(gpus), args.nproc_per_node)
 
             n = int(len(gpus) / int(args.nproc_per_node))
             devices_per_proc = [
@@ -699,7 +700,7 @@ def get_device_proc_info(args):
         xpus = get_xpus(args.xpus)
         if args.nproc_per_node is not None:
             assert (len(xpus) % int(args.nproc_per_node)) == 0, \
-                "xpus' number:{} mod args.nproc_per_node:{} must == 0".format(len(xpus), arg.nproc_per_node)
+                "xpus' number:{} mod args.nproc_per_node:{} must == 0".format(len(xpus), args.nproc_per_node)
 
             n = int(len(xpus) / int(args.nproc_per_node))
             devices_per_proc = [

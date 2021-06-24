@@ -14,6 +14,7 @@
 
 from __future__ import print_function
 import sys
+import paddle
 from paddle.optimizer import Optimizer
 from paddle.fluid.clip import ClipGradByGlobalNorm
 from ...utils.hybrid_parallel_util import fused_allreduce_gradients
@@ -22,6 +23,8 @@ from paddle.fluid.dygraph import base as imperative_base
 from paddle.fluid import framework
 from paddle.fluid.framework import Variable
 from ...utils.log_util import logger
+from paddle.fluid import core
+from paddle.fluid import layers
 
 __all__ = []
 

@@ -268,7 +268,7 @@ class AutoCheckpointTest(AutoCheckPointACLBase):
     def test_checker(self):
         os.environ.pop("PADDLE_JOB_ID", None)
         try:
-            checker = AutoCheckpointChecker()
+            checker = acp.AutoCheckpointChecker()
             self.assertFalse(True)
         except Exception as e:
             pass

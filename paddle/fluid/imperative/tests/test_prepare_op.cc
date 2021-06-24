@@ -93,7 +93,7 @@ TEST(test_prepare_op, test_prepare_op) {
   ASSERT_NO_FATAL_FAILURE(PreparedOp preparedOp = PreparedOp::Prepare(
                               ins, outs,
                               dynamic_cast<framework::OperatorWithKernel&>(*op),
-                              place, split_attr_map));
+                              place, split_attr_map, {}));
 }
 
 const framework::Tensor* GetTensorFromVar(const framework::Variable& var);
@@ -144,7 +144,7 @@ TEST(test_prepare_op, test_prepare_data) {
   // test if it can be transformed to GPU place
   auto prepared_op = PreparedOp::Prepare(
       ins, outs, dynamic_cast<framework::OperatorWithKernel&>(*op), gpu_place,
-      attr_map);
+      attr_map, {});
   PrepareData<imperative::VarBase>(
       dynamic_cast<framework::OperatorWithKernel&>(*op), ins,
       prepared_op.kernel_type());
@@ -193,7 +193,7 @@ void TestPrepareDataSamePlace(framework::AttributeMap attr_map) {
   // test if it never transferred on GPU place
   auto prepared_op = PreparedOp::Prepare(
       ins, outs, dynamic_cast<framework::OperatorWithKernel&>(*op), cpu_place,
-      attr_map);
+      attr_map, {});
   PrepareData<imperative::VarBase>(
       dynamic_cast<framework::OperatorWithKernel&>(*op), ins,
       prepared_op.kernel_type());

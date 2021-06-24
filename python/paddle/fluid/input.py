@@ -309,7 +309,7 @@ def embedding(input,
 
     helper = LayerHelper('embedding', **locals())
     check_variable_and_dtype(input, 'input', ['int64'], 'fluid.embedding')
-    check_dtype(dtype, 'dtype', ['float16', 'float32', 'float64'],
+    check_dtype(dtype, 'dtype', ['float16', 'float32', 'float64', 'uint16'],
                 'fluid.embedding')
     remote_prefetch = is_sparse and (not is_distributed)
     if remote_prefetch:

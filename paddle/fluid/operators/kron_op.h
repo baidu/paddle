@@ -237,11 +237,13 @@ struct KronGradElemFunctor<platform::complex<T>> {
   const int ndims_;
 };
 
-template <typename T>
 struct IdentityFunctor {
   HOSTDEVICE explicit inline IdentityFunctor() {}
 
-  HOSTDEVICE inline T operator()(const T& x) const { return x; }
+  template <typename U>
+  HOSTDEVICE inline U operator()(const U& x) const {
+    return x;
+  }
 };
 
 template <typename DeviceContext, typename T>
@@ -312,13 +314,13 @@ struct KronGradOpFunctor {
 #if defined(__NVCC__) || defined(__HIPCC__)
     auto stream = dev_ctx.stream();  // it is a cuda device_context
     if (dx) {
-      TensorReduce<T, T, cub::Sum, IdentityFunctor<T>>(
-          dout_x, dx, {1}, static_cast<T>(0), cub::Sum(), IdentityFunctor<T>(),
+      TensorReduce<T, T, cub::Sum, IdentityFunctor>(
+          dout_x, dx, {1}, static_cast<T>(0), cub::Sum(), IdentityFunctor(),
           stream);
     }
     if (dy) {
-      TensorReduce<T, T, cub::Sum, IdentityFunctor<T>>(
-          dout_y, dy, {1}, static_cast<T>(0), cub::Sum(), IdentityFunctor<T>(),
+      TensorReduce<T, T, cub::Sum, IdentityFunctor>(
+          dout_y, dy, {1}, static_cast<T>(0), cub::Sum(), IdentityFunctor(),
           stream);
     }
 #else

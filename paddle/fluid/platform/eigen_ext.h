@@ -157,6 +157,12 @@ HOSTDEVICE inline paddle::platform::bfloat16 exp(
 }
 
 template <>
+HOSTDEVICE inline paddle::platform::bfloat16 expm1(
+    const paddle::platform::bfloat16& a) {
+  return paddle::platform::bfloat16(::expm1f(static_cast<float>(a)));
+}
+
+template <>
 HOSTDEVICE inline paddle::platform::bfloat16 erf(
     const paddle::platform::bfloat16& a) {
   return paddle::platform::bfloat16(::erff(static_cast<float>(a)));
@@ -375,6 +381,11 @@ HOSTDEVICE inline bool(isfinite)(const float16& a) {
 template <>
 HOSTDEVICE inline float16 exp(const float16& a) {
   return float16(::expf(static_cast<float>(a)));
+}
+
+template <>
+HOSTDEVICE inline float16 expm1(const float16& a) {
+  return float16(::expm1f(static_cast<float>(a)));
 }
 
 template <>

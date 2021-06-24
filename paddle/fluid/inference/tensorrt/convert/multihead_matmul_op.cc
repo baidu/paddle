@@ -191,9 +191,15 @@ class MultiheadMatMulOpConverter : public OpConverter {
         std::vector<nvinfer1::ITensor*> plugin_inputs;
         plugin_inputs.emplace_back(fc_layer->getOutput(0));
         plugin_inputs.emplace_back(mask_tensor);
-        plugin_inputs.emplace_back(engine_->GetITensor(
-            engine_->network()->getInput(2)->getName()));  // cu_seqlens,
-                                                           // eval_placeholder_2
+        if (engine_->Has("ernie_pos_name")) {
+          plugin_inputs.emplace_back(
+              engine_->GetITensor(engine_->Get<std::string>("ernie_pos_name")));
+        } else {
+          plugin_inputs.emplace_back(engine_->GetITensor(
+              engine_->network()
+                  ->getInput(2)
+                  ->getName()));  // cu_seqlens, eval_placeholder_2
+        }
         auto max_seqlen_tensor =
             engine_->GetITensor(engine_->network()->getInput(3)->getName());
         auto* shuffle_layer = TRT_ENGINE_ADD_LAYER(

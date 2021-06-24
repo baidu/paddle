@@ -20,7 +20,7 @@ SET(MKLDNN_SOURCE_DIR     ${THIRD_PARTY_PATH}/mkldnn/src/extern_mkldnn)
 SET(MKLDNN_INSTALL_DIR    ${THIRD_PARTY_PATH}/install/mkldnn)
 SET(MKLDNN_INC_DIR        "${MKLDNN_INSTALL_DIR}/include" CACHE PATH "mkldnn include directory." FORCE)
 SET(MKLDNN_REPOSITORY     ${GIT_URL}/oneapi-src/oneDNN.git)
-SET(MKLDNN_TAG            f3999b71d8e4415c1985a0dfb812a3ed77ee21fa)
+SET(MKLDNN_TAG            bbaf5d24dde1b6760435d5034d6f48feae7a30b9)
 
 
 # Introduce variables:
@@ -101,8 +101,11 @@ ADD_DEPENDENCIES(mkldnn ${MKLDNN_PROJECT})
 # it can be directly contained in wheel or capi
 if(WIN32)
     SET(MKLDNN_SHARED_LIB ${MKLDNN_INSTALL_DIR}/bin/mkldnn.dll)
+
+    file(TO_NATIVE_PATH ${MKLDNN_INSTALL_DIR} NATIVE_MKLDNN_INSTALL_DIR)
+    file(TO_NATIVE_PATH ${MKLDNN_SHARED_LIB} NATIVE_MKLDNN_SHARED_LIB)
     ADD_CUSTOM_COMMAND(TARGET ${MKLDNN_PROJECT} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${MKLDNN_INSTALL_DIR}/bin/dnnl.dll ${MKLDNN_SHARED_LIB})
+        COMMAND (copy ${NATIVE_MKLDNN_INSTALL_DIR}\\bin\\dnnl.dll ${NATIVE_MKLDNN_SHARED_LIB} /Y))
     add_custom_command(TARGET ${MKLDNN_PROJECT} POST_BUILD VERBATIM
         COMMAND dumpbin /exports ${MKLDNN_INSTALL_DIR}/bin/mkldnn.dll > ${MKLDNN_INSTALL_DIR}/bin/exports.txt)
     add_custom_command(TARGET ${MKLDNN_PROJECT} POST_BUILD VERBATIM

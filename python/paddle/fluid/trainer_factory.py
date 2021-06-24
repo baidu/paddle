@@ -27,7 +27,7 @@ from .device_worker import Hogwild, DownpourSGD, Section, DownpourSGDOPT
 from .framework import Variable
 from multiprocessing import Process, Manager
 
-__all__ = ["TrainerFactory", "FetchHandler", "FetchHandlerMonitor"]
+__all__ = ["TrainerFactory", "FetchHandlerMonitor"]
 
 
 class TrainerFactory(object):

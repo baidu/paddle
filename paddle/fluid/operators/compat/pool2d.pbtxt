@@ -1,0 +1,92 @@
+type: "pool2d"
+def {
+  inputs {
+    name: "X"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "pooling_type"
+    type: STRING
+  }
+  attrs {
+    name: "ksize"
+    type: INTS
+  }
+  attrs {
+    name: "global_pooling"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "strides"
+    type: INTS
+  }
+  attrs {
+    name: "paddings"
+    type: INTS
+  }
+  attrs {
+    name: "exclusive"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "adaptive"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "ceil_mode"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "data_format"
+    type: STRING
+  }
+  attrs {
+    name: "padding_algorithm"
+    type: STRING
+  }
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_cudnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}
+

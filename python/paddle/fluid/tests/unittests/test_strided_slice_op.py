@@ -216,6 +216,71 @@ class TestStrideSliceOp13(TestStrideSliceOp):
         self.infer_flags = [1, 1, 1, 1, 1]
 
 
+class TestStrideSliceOpBool(TestStrideSliceOp):
+    def test_check_grad(self):
+        pass
+
+
+class TestStrideSliceOpBool1D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(100).astype("bool")
+        self.axes = [0]
+        self.starts = [3]
+        self.ends = [8]
+        self.strides = [1]
+        self.infer_flags = [1]
+
+
+class TestStrideSliceOpBool2D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(10, 10).astype("bool")
+        self.axes = [0, 1]
+        self.starts = [1, 0]
+        self.ends = [2, 2]
+        self.strides = [1, 1]
+        self.infer_flags = [1, 1]
+
+
+class TestStrideSliceOpBool3D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(3, 4, 10).astype("bool")
+        self.axes = [0, 1, 2]
+        self.starts = [0, -1, 0]
+        self.ends = [2, -3, 5]
+        self.strides = [1, -1, 1]
+        self.infer_flags = [1, 1, 1]
+
+
+class TestStrideSliceOpBool4D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(3, 3, 3, 4).astype("bool")
+        self.axes = [0, 1, 2, 3]
+        self.starts = [1, 0, 0, 0]
+        self.ends = [2, 2, 3, 4]
+        self.strides = [1, 1, 1, 2]
+        self.infer_flags = [1, 1, 1, 1]
+
+
+class TestStrideSliceOpBool5D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(3, 3, 3, 4, 5).astype("bool")
+        self.axes = [0, 1, 2, 3, 4]
+        self.starts = [1, 0, 0, 0, 0]
+        self.ends = [2, 2, 3, 4, 4]
+        self.strides = [1, 1, 1, 1, 1]
+        self.infer_flags = [1, 1, 1, 1]
+
+
+class TestStrideSliceOpBool6D(TestStrideSliceOpBool):
+    def initTestCase(self):
+        self.input = np.random.rand(3, 3, 3, 6, 7, 8).astype("bool")
+        self.axes = [0, 1, 2, 3, 4, 5]
+        self.starts = [1, 0, 0, 0, 1, 2]
+        self.ends = [2, 2, 3, 1, 2, 8]
+        self.strides = [1, 1, 1, 1, 1, 2]
+        self.infer_flags = [1, 1, 1, 1, 1]
+
+
 class TestStridedSliceOp_starts_ListTensor(OpTest):
     def setUp(self):
         self.op_type = "strided_slice"

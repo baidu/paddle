@@ -112,7 +112,7 @@ class PRChecker(object):
                 print(e)
                 print(
                     'PREC download {} error, retry {} time(s) after {} secs.[proxy_option={}]'.
-                    format(url, ix, ix * 10, proxy))
+                    format(url, ix, ix * 10, cur_proxy))
                 continue
             else:
                 return True
@@ -179,7 +179,7 @@ class PRChecker(object):
     def get_comment_of_file(self, f):
         #content = self.repo.get_contents(f.replace(PADDLE_ROOT, ''), 'pull/').decoded_content
         #todo: get file from github
-        with open(f) as fd:
+        with open(f, encoding="utf-8") as fd:
             lines = fd.readlines()
         lineno = 1
         inputs = ''

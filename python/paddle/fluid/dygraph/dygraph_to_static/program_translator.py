@@ -20,7 +20,6 @@ import inspect
 import six
 import textwrap
 import threading
-import warnings
 import weakref
 
 from paddle.fluid import framework
@@ -314,7 +313,7 @@ class StaticFunction(object):
             # Here calls `warnings.warn` but not `logging_utils.warn` because by default warnings.warn(message)
             # will show up **only once**. StaticFunction.__call__ will run many times, it is appropriate to
             # display this warning message only once.
-            warnings.warn(
+            logging_utils.warn(
                 "The decorator '@paddle.jit.to_static' does NOT work when setting ProgramTranslator.enable to False. "
                 "We will just return dygraph output. If you would like to get static graph output, please call API "
                 "ProgramTranslator.enable(True)")
@@ -481,6 +480,10 @@ class StaticFunction(object):
                 # NOTE(chenweihang): we should always translated program based on the `input_spec`
                 # decorated on forward if it is valid
                 desired_input_spec = self._function_spec.input_spec
+                if input_spec is not None:
+                    logging_utils.warn(
+                        "\n\nYou have specified `input_spec` both in function definition (higher priority) and `paddle.jit.save` (will be ignored.)\n\n\t Using: {}\n\n\t Ignore: {}\n".
+                        format(desired_input_spec, input_spec))
 
             has_input_spec = (desired_input_spec is not None)
             if has_input_spec:
@@ -886,7 +889,7 @@ class ProgramTranslator(object):
         if not self.enable_to_static:
             # Here calls `warnings.warn` but not `logging_utils.warn` because by default warnings.warn(message)
             # will show up **only once**.
-            warnings.warn(
+            logging_utils.warn(
                 "The ProgramTranslator.get_output doesn't work when setting ProgramTranslator.enable to False. "
                 "We will just return dygraph output. "
                 "Please call ProgramTranslator.enable(True) if you would like to get static output."

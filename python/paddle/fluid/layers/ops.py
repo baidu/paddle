@@ -37,6 +37,7 @@ __activations_noattr__ = [
 
 __unary_func__ = [
     'exp',
+    'expm1',
     'atan',
     'sqrt',
     'rsqrt',
@@ -53,6 +54,7 @@ __unary_func__ = [
     'round',
     'reciprocal',
     'square',
+    'lgamma',
 ]
 
 __inplace_unary_func__ = [
@@ -85,26 +87,26 @@ for _OP in set(__activations_noattr__):
     _new_OP = _OP
     if _OP in __deprecated_func_name__:
         _new_OP = __deprecated_func_name__[_OP]
-    func = generate_activation_fn(_OP)
-    func = deprecated(
-        since="2.0.0", update_to="paddle.nn.functional.%s" % (_new_OP))(func)
-    globals()[_OP] = func
+    _func = generate_activation_fn(_OP)
+    _func = deprecated(
+        since="2.0.0", update_to="paddle.nn.functional.%s" % (_new_OP))(_func)
+    globals()[_OP] = _func
 
 for _OP in set(__unary_func__):
     _new_OP = _OP
     if _OP in __deprecated_func_name__:
         _new_OP = __deprecated_func_name__[_OP]
-    func = generate_activation_fn(_OP)
-    func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(func)
-    globals()[_OP] = func
+    _func = generate_activation_fn(_OP)
+    _func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(_func)
+    globals()[_OP] = _func
 
 for _OP in set(__inplace_unary_func__):
     _new_OP = _OP
     if _OP in __deprecated_func_name__:
         _new_OP = __deprecated_func_name__[_OP]
-    func = generate_inplace_fn(_OP)
-    func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(func)
-    globals()[_OP] = func
+    _func = generate_inplace_fn(_OP)
+    _func = deprecated(since="2.0.0", update_to="paddle.%s" % (_new_OP))(_func)
+    globals()[_OP] = _func
 
 add_sample_code(globals()["sigmoid"], r"""
 Examples:
@@ -158,6 +160,19 @@ Examples:
         out = paddle.exp(x)
         print(out)
         # [0.67032005 0.81873075 1.10517092 1.34985881]
+
+""")
+
+add_sample_code(globals()["expm1"], r"""
+Examples:
+    .. code-block:: python
+
+        import paddle
+
+        x = paddle.to_tensor([-0.4, -0.2, 0.1, 0.3])
+        out = paddle.expm1(x)
+        print(out)
+        # [-0.32967997, -0.18126924,  0.10517092,  0.34985882]
 
 """)
 
@@ -393,6 +408,19 @@ Examples:
         out = paddle.square(x)
         print(out)
         # [0.16 0.04 0.01 0.09]
+
+""")
+
+add_sample_code(globals()["lgamma"], r"""
+Examples:
+    .. code-block:: python
+
+        import paddle
+
+        x = paddle.to_tensor([-0.4, -0.2, 0.1, 0.3])
+        out = paddle.lgamma(x)
+        print(out)
+        # [1.31452441, 1.76149750, 2.25271273, 1.09579802]
 
 """)
 

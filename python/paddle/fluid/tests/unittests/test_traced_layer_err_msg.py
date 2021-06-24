@@ -15,7 +15,6 @@
 import numpy as np
 import paddle
 import paddle.fluid as fluid
-import six
 import unittest
 import paddle.nn as nn
 import os
@@ -50,10 +49,7 @@ class TestTracedLayerErrMsg(unittest.TestCase):
         self.feature_size = 3
         self.fc_size = 2
         self.layer = self._train_simple_net()
-        if six.PY2:
-            self.type_str = 'type'
-        else:
-            self.type_str = 'class'
+        self.type_str = 'class'
 
     def test_trace_err(self):
         with fluid.dygraph.guard():
@@ -72,7 +68,7 @@ class TestTracedLayerErrMsg(unittest.TestCase):
                     self.layer, 3)
             self.assertEqual(
                 "The type of 'each element of inputs' in fluid.dygraph.jit.TracedLayer.trace must be fluid.Variable, but received <{} 'int'>.".
-                format(self.type_str, self.type_str), str(e.exception))
+                format(self.type_str), str(e.exception))
             with self.assertRaises(TypeError) as e:
                 dygraph_out, traced_layer = fluid.dygraph.TracedLayer.trace(
                     self.layer, [True, 1])

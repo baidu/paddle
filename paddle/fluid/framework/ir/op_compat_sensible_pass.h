@@ -31,6 +31,10 @@ class AttrCompat {
   AttrCompat(const std::string& attr_name, OpCompat* op_compat)
       : optional_(false), attr_name_(attr_name), op_compat_(op_compat) {}
 
+  //! Assert the attribute type is `T`.
+  template <typename T>
+  AttrCompat& IsType();
+
   // @{ String-related methods
   //! Assert the attribute is an string in the `candidates` domain.
   AttrCompat& IsStringIn(const std::set<std::string>& candidates);
@@ -140,6 +144,8 @@ class OpCompat {
   std::unordered_map<std::string, AttrCompat> attr_compats_;
   std::unordered_map<std::string, InputOrOutputCompat> input_compats_;
   std::unordered_map<std::string, InputOrOutputCompat> output_compats_;
+  std::unordered_set<std::string> extra_attrs_;
+  bool is_first_judge_ = true;
 };
 
 /**
@@ -193,25 +199,7 @@ class OpCompatSensiblePass : public Pass {
 
   //! Tell the Op compability of a subgraph.
   bool IsCompat(const GraphPatternDetector::subgraph_t& subgraph,
-                Graph* g) const {
-    CHECK(!op_compat_judgers_.empty())
-        << "At least one OpCompat instance should be added in the "
-           "OpCompatSensiblePass.";
-    // Check the all the ops in the subgraph are contained in the
-    // op_compat.
-    for (auto& node_pair : subgraph) {
-      if (!node_pair.second->IsOp()) continue;
-      auto op_type = node_pair.second->Op()->Type();
-      if (!op_compat_judgers_.count(op_type)) {
-        return false;
-      }
-      auto& judger = *op_compat_judgers_.at(op_type);
-      if (!judger.Judge(*(node_pair.second->Op()))) {
-        return false;
-      }
-    }
-    return true;
-  }
+                Graph* g) const;
 
   //! Tell the op compatibility of a single Op.
   bool IsCompat(const OpDesc& op_desc) const {
@@ -222,6 +210,13 @@ class OpCompatSensiblePass : public Pass {
  private:
   std::map<std::string, std::unique_ptr<OpCompat>> op_compat_judgers_;
 };
+
+template <typename T>
+AttrCompat& AttrCompat::IsType() {
+  conditions_.emplace_back(
+      [](const Attribute& attr) -> bool { return attr.type() == typeid(T); });
+  return *this;
+}
 
 template <typename T>
 AttrCompat& AttrCompat::IsNumGT(T v) {

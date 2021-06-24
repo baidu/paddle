@@ -85,15 +85,18 @@ class CompareReduceOpKernel
 }  // namespace operators
 }  // namespace paddle
 
-#define REGISTER_COMPARE_REDUCE_CUDA_KERNEL(op_type, functor)          \
-  REGISTER_OP_CUDA_KERNEL(                                             \
-      op_type, paddle::operators::CompareReduceOpKernel<               \
-                   paddle::platform::CUDADeviceContext, functor<int>>, \
-      paddle::operators::CompareReduceOpKernel<                        \
-          paddle::platform::CUDADeviceContext, functor<int64_t>>,      \
-      paddle::operators::CompareReduceOpKernel<                        \
-          paddle::platform::CUDADeviceContext, functor<float>>,        \
-      paddle::operators::CompareReduceOpKernel<                        \
+#define REGISTER_COMPARE_REDUCE_CUDA_KERNEL(op_type, functor)           \
+  REGISTER_OP_CUDA_KERNEL(                                              \
+      op_type, paddle::operators::CompareReduceOpKernel<                \
+                   paddle::platform::CUDADeviceContext, functor<bool>>, \
+      paddle::operators::CompareReduceOpKernel<                         \
+          paddle::platform::CUDADeviceContext, functor<int>>,           \
+      paddle::operators::CompareReduceOpKernel<                         \
+          paddle::platform::CUDADeviceContext, functor<int64_t>>,       \
+      paddle::operators::CompareReduceOpKernel<                         \
+          paddle::platform::CUDADeviceContext, functor<float>>,         \
+      paddle::operators::CompareReduceOpKernel<                         \
           paddle::platform::CUDADeviceContext, functor<double>>);
+
 REGISTER_COMPARE_REDUCE_CUDA_KERNEL(equal_all,
                                     paddle::operators::EqualReduceFunctor);

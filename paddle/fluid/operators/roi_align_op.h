@@ -226,8 +226,10 @@ class CPUROIAlignOpKernel : public framework::OpKernel<T> {
 
       T roi_width = roi_xmax - roi_xmin;
       T roi_height = roi_ymax - roi_ymin;
-      roi_width = std::max(roi_width, static_cast<T>(1.));
-      roi_height = std::max(roi_height, static_cast<T>(1.));
+      if (!aligned) {
+        roi_width = std::max(roi_width, static_cast<T>(1.));
+        roi_height = std::max(roi_height, static_cast<T>(1.));
+      }
 
       T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
       T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
@@ -239,7 +241,7 @@ class CPUROIAlignOpKernel : public framework::OpKernel<T> {
       int roi_bin_grid_w = (sampling_ratio > 0)
                                ? sampling_ratio
                                : ceil(roi_width / pooled_width);
-      const T count = roi_bin_grid_h * roi_bin_grid_w;
+      const T count = std::max(roi_bin_grid_h * roi_bin_grid_w, 1);
       Tensor pre_pos;
       Tensor pre_w;
       int pre_size = count * out_stride[1];
@@ -362,6 +364,10 @@ class CPUROIAlignGradOpKernel : public framework::OpKernel<T> {
       T roi_height = roi_ymax - roi_ymin;
       roi_width = std::max(roi_width, static_cast<T>(1.));
       roi_height = std::max(roi_height, static_cast<T>(1.));
+      if (!aligned) {
+        roi_width = std::max(roi_width, static_cast<T>(1.));
+        roi_height = std::max(roi_height, static_cast<T>(1.));
+      }
 
       T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
       T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);

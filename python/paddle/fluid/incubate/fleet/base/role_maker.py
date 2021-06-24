@@ -591,7 +591,7 @@ class GeneralRoleMaker(RoleMakerBase):
     """
 
     def __init__(self, **kwargs):
-        super(RoleMakerBase, self).__init__()
+        super(GeneralRoleMaker, self).__init__()
         self._role_is_generated = False
         self._hdfs_name = kwargs.get("hdfs_name", "")
         self._hdfs_ugi = kwargs.get("hdfs_ugi", "")

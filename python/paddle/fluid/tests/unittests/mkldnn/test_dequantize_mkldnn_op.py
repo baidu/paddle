@@ -79,7 +79,7 @@ class TestDeQuantizeOp(OpTest):
     def set_shift(self):
         pass
 
-    def set_data_type(OpTest):
+    def set_data_type(self):
         pass
 
     def set_input_size(self):

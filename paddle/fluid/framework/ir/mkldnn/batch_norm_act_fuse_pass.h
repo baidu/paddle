@@ -31,6 +31,7 @@ namespace ir {
  */
 class FuseBatchNormActOneDNNPass : public FusePassBase {
  public:
+  FuseBatchNormActOneDNNPass();
   virtual ~FuseBatchNormActOneDNNPass() {}
 
  protected:

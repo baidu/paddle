@@ -335,7 +335,9 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
     Start multiple processes with ``spawn`` method for parallel training.
 
     .. note::
-        ``spawn`` now only supports GPU collective mode.
+        ``spawn`` now only supports GPU or XPU collective mode. The collective mode
+        of GPU and XPU cannot be started at the same time, so the option `gpus` and
+        `xpus` cannot be configured at the same time.
 
     Args:
         func (function): The target function is called by spawned process.
@@ -343,28 +345,27 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
             at the top level of a module.
         args (list|tuple, optional): Arguments passed to ``func``.
         nprocs (int, optional): Number of processed to start. Default: -1.
-            when nprocs is -1, the available device will be obtained from 
-            the environment variable when the model is executed: If use GPU, 
-            the currently available device ID is obtained from the environment 
-            variable CUDA_VISIBLE_DEVICES; If use CPU, the currently available
-            CPU number is obtained from the environment variable CPU_NUM. 
-            For example, export CPU_NUM=4, if the environment variable is not set, 
-            the spawn method will add default value to the environment variable 
-            and set its value to 1.
+            when nprocs is -1, the available device will be obtained from
+            the environment variable when the model is executed: If use GPU,
+            the currently available device ID is obtained from the environment
+            variable CUDA_VISIBLE_DEVICES; If use XPU, the currently available
+            device ID is obtained from the environment variable XPU_VISIBLE_DEVICES.
         join (bool, optional): Perform a blocking join on all spawned processes.
             Default: True.
         daemon (bool, optional): The spawned processes' daemon flag. Default: False.
-        **options(dict, optional): Other initial parallel execution environment 
-            configuration options. The following options are currently supported: 
-            (1) start_method (string): the way to start a process. 
-            The start method can be ``spawn`` , ``fork`` , ``forkserver`` . 
-            Because the CUDA runtime does not support the ``fork`` start method, 
-            when use CUDA in subprocesses, we should start process by ``spawn`` 
-            or ``forkserver`` method. Default: "spawn" ; 
-            (2) gpus (string): The training process will run on the 
-            selected gpus, such as "0,1,2,3". Default: None; 
-            (3) ips (string): Paddle cluster nodes ips, such as 
-            "192.168.0.16,192.168.0.17". Default: "127.0.0.1" . 
+        **options(dict, optional): Other initial parallel execution environment
+            configuration options. The following options are currently supported:
+            (1) start_method (string): the way to start a process.
+            The start method can be ``spawn`` , ``fork`` , ``forkserver`` .
+            Because the CUDA runtime does not support the ``fork`` start method,
+            when use CUDA in subprocesses, we should start process by ``spawn``
+            or ``forkserver`` method. Default: "spawn" ;
+            (2) gpus (string): The training process will run on the
+            selected gpus, such as "0,1,2,3". Default: None;
+            (3) xpus (string): The training process will run on the
+            selected xpus, such as "0,1,2,3". Default: None;
+            (4) ips (string): Paddle cluster nodes ips, such as
+            "192.168.0.16,192.168.0.17". Default: "127.0.0.1" .
 
     Returns:
         ``MultiprocessContext`` object, it hold the spawned processes.
@@ -384,11 +385,11 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
                     super(LinearNet, self).__init__()
                     self._linear1 = nn.Linear(10, 10)
                     self._linear2 = nn.Linear(10, 1)
-                    
+
                 def forward(self, x):
                     return self._linear2(self._linear1(x))
 
-            def train(print_result=False): 
+            def train(print_result=False):
                 # 1. initialize parallel environment
                 dist.init_parallel_env()
 
@@ -405,43 +406,43 @@ def spawn(func, args=(), nprocs=-1, join=True, daemon=False, **options):
                 outputs = dp_layer(inputs)
                 labels = paddle.randn([10, 1], 'float32')
                 loss = loss_fn(outputs, labels)
-                
+
                 if print_result is True:
                     print("loss:", loss.numpy())
-                
+
                 loss.backward()
 
                 adam.step()
                 adam.clear_grad()
 
-            # Usage 1: only pass function. 
-            # If your training method no need any argument, and 
-            # use all visible devices for parallel training. 
+            # Usage 1: only pass function.
+            # If your training method no need any argument, and
+            # use all visible devices for parallel training.
             if __name__ == '__main__':
                 dist.spawn(train)
 
             # Usage 2: pass function and arguments.
-            # If your training method need some arguments, and 
+            # If your training method need some arguments, and
             # use all visible devices for parallel training.
             if __name__ == '__main__':
                 dist.spawn(train, args=(True,))
 
             # Usage 3: pass function, arguments and nprocs.
-            # If your training method need some arguments, and 
+            # If your training method need some arguments, and
             # only use part of visible devices for parallel training.
             # If your machine hold 8 cards {0,1,2,3,4,5,6,7},
-            # this case will use cards {0,1}; If you set 
+            # this case will use cards {0,1}; If you set
             # CUDA_VISIBLE_DEVICES=4,5,6,7, this case will use
             # cards {4,5}
             if __name__ == '__main__':
                 dist.spawn(train, args=(True,), nprocs=2)
 
             # Usage 4: pass function, arguments, nprocs and gpus.
-            # If your training method need some arguments, and 
+            # If your training method need some arguments, and
             # only use part of visible devices for parallel training,
-            # but you can't set your machine's environment variable 
+            # but you can't set your machine's environment variable
             # CUDA_VISIBLE_DEVICES, such as it is None or all cards
-            # {0,1,2,3,4,5,6,7}, you can pass `gpus` to 
+            # {0,1,2,3,4,5,6,7}, you can pass `gpus` to
             # select the GPU cards you want to use. For example,
             # this case will use cards {4,5} if your machine hold 8 cards.
             if __name__ == '__main__':

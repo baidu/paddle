@@ -16,20 +16,26 @@ limitations under the License. */
 
 namespace paddle {
 namespace platform {
-size_t Alignment(size_t size, const platform::Place &place) {
-  size_t alignment = 1024;
-  if (platform::is_cpu_place(place)) {
-    alignment = CpuMinChunkSize();
+size_t Alignment(size_t size, const platform::Place &place, int align_size) {
+  size_t alignment = 0;
+  if (align_size > 0) {
+    alignment = align_size;
   } else {
+    alignment = 1024;
+    if (platform::is_cpu_place(place)) {
+      alignment = CpuMinChunkSize();
+    } else {
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
-    alignment = GpuMinChunkSize();
+      alignment = GpuMinChunkSize();
 #elif defined(PADDLE_WITH_XPU)
-    // TODO(wangxi): add XpuMinChunkSize
-    alignment = alignment;
+      alignment = alignment;
+#elif defined(PADDLE_WITH_ASCEND_CL)
+      alignment = NPUMinChunkSize();
 #else
-    PADDLE_THROW(platform::errors::PreconditionNotMet(
-        "Fluid is not compiled with CUDA."));
+      PADDLE_THROW(platform::errors::PreconditionNotMet(
+          "Fluid is not compiled with CUDA/XPU/NPU."));
 #endif
+    }
   }
   size_t remaining = size % alignment;
   return remaining == 0 ? size : size + (alignment - remaining);

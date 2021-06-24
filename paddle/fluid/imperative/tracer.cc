@@ -154,8 +154,13 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
   const auto& op_info = op->Info();
   auto* attr_checker = op_info.Checker();
   if (attr_checker) {
-    attr_checker->Check(&attrs, true);
+    attr_checker->Check(&attrs, true, /*only_check_exist_value=*/true);
   }
+
+  static paddle::framework::AttributeMap empty_attrs_map = {};
+  const paddle::framework::AttributeMap& default_attrs =
+      attr_checker == nullptr ? empty_attrs_map
+                              : attr_checker->GetDefaultAttrMap();
 
   NameVarBaseMap new_ins = ins;
   if (enable_autocast_) {
@@ -181,7 +186,7 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
 #endif
     }
 
-    OpBase::Run(*op, new_ins, outs, attrs, place);
+    OpBase::Run(*op, new_ins, outs, attrs, default_attrs, place);
   } catch (platform::EnforceNotMet& exception) {
     framework::AppendErrorOpHint(type, &exception);
     throw std::move(exception);
@@ -204,7 +209,8 @@ void Tracer::TraceOp(const std::string& type, const NameVarBaseMap& ins,
   }
 
   if (ComputeRequiredGrad(new_ins, outs, trace_backward)) {
-    CreateGradOpNode(*op, new_ins, outs, attrs, place, inplace_map);
+    CreateGradOpNode(*op, new_ins, outs, attrs, default_attrs, place,
+                     inplace_map);
   } else {
     VLOG(3) << "No Grad to track for Op: " << type;
   }

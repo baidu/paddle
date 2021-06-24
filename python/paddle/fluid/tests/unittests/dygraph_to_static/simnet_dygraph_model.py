@@ -18,6 +18,7 @@ import paddle.fluid.param_attr as attr
 from functools import reduce
 from paddle.fluid.dygraph import declarative, to_variable
 from paddle.fluid.dygraph import Embedding, Layer, Linear
+from paddle.static import Variable
 
 
 class EmbeddingLayer(object):

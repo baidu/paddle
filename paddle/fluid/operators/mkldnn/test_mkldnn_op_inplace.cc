@@ -128,12 +128,6 @@ TEST(test_softmax_inplace, cpu_place) {
   ASSERT_TRUE(TestMain<float>(p, "softmax", dims, 1));
 }
 
-TEST(test_elementwise_add_inplace, cpu_place) {
-  framework::DDim dims({1, 12, 20, 20});
-  platform::CPUPlace p;
-  ASSERT_TRUE(TestMain<float>(p, "elementwise_add", dims, 2));
-}
-
 TEST(test_relu_inplace, cpu_place) {
   framework::DDim dims({1, 12, 20, 20});
   platform::CPUPlace p;

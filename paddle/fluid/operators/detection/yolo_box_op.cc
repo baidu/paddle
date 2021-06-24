@@ -11,6 +11,7 @@
 
 #include "paddle/fluid/operators/detection/yolo_box_op.h"
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
 namespace operators {
@@ -31,19 +32,44 @@ class YoloBoxOp : public framework::OperatorWithKernel {
     auto anchors = ctx->Attrs().Get<std::vector<int>>("anchors");
     int anchor_num = anchors.size() / 2;
     auto class_num = ctx->Attrs().Get<int>("class_num");
+    auto iou_aware = ctx->Attrs().Get<bool>("iou_aware");
+    auto iou_aware_factor = ctx->Attrs().Get<float>("iou_aware_factor");
 
     PADDLE_ENFORCE_EQ(dim_x.size(), 4, platform::errors::InvalidArgument(
                                            "Input(X) should be a 4-D tensor."
                                            "But received X dimension(%s)",
                                            dim_x.size()));
-    PADDLE_ENFORCE_EQ(
-        dim_x[1], anchor_num * (5 + class_num),
-        platform::errors::InvalidArgument(
-            "Input(X) dim[1] should be equal to (anchor_mask_number * (5 "
-            "+ class_num))."
-            "But received dim[1](%s) != (anchor_mask_number * "
-            "(5+class_num)(%s).",
-            dim_x[1], anchor_num * (5 + class_num)));
+    if (iou_aware) {
+      PADDLE_ENFORCE_EQ(
+          dim_x[1], anchor_num * (6 + class_num),
+          platform::errors::InvalidArgument(
+              "Input(X) dim[1] should be equal to (anchor_mask_number * (6 "
+              "+ class_num)) while iou_aware is true."
+              "But received dim[1](%s) != (anchor_mask_number * "
+              "(6+class_num)(%s).",
+              dim_x[1], anchor_num * (6 + class_num)));
+      PADDLE_ENFORCE_GE(
+          iou_aware_factor, 0,
+          platform::errors::InvalidArgument(
+              "Attr(iou_aware_factor) should greater than or equal to 0."
+              "But received iou_aware_factor (%s)",
+              iou_aware_factor));
+      PADDLE_ENFORCE_LE(
+          iou_aware_factor, 1,
+          platform::errors::InvalidArgument(
+              "Attr(iou_aware_factor) should less than or equal to 1."
+              "But received iou_aware_factor (%s)",
+              iou_aware_factor));
+    } else {
+      PADDLE_ENFORCE_EQ(
+          dim_x[1], anchor_num * (5 + class_num),
+          platform::errors::InvalidArgument(
+              "Input(X) dim[1] should be equal to (anchor_mask_number * (5 "
+              "+ class_num))."
+              "But received dim[1](%s) != (anchor_mask_number * "
+              "(5+class_num)(%s).",
+              dim_x[1], anchor_num * (5 + class_num)));
+    }
     PADDLE_ENFORCE_EQ(dim_imgsize.size(), 2,
                       platform::errors::InvalidArgument(
                           "Input(ImgSize) should be a 2-D tensor."
@@ -140,6 +166,10 @@ class YoloBoxOpMaker : public framework::OpProtoAndCheckerMaker {
                    "Scale the center point of decoded bounding "
                    "box. Default 1.0")
         .SetDefault(1.);
+    AddAttr<bool>("iou_aware", "Whether use iou aware. Default false.")
+        .SetDefault(false);
+    AddAttr<float>("iou_aware_factor", "iou aware factor. Default 0.5.")
+        .SetDefault(0.5);
     AddComment(R"DOC(
          This operator generates YOLO detection boxes from output of YOLOv3 network.
          
@@ -147,7 +177,8 @@ class YoloBoxOpMaker : public framework::OpProtoAndCheckerMaker {
          should be the same, H and W specify the grid size, each grid point predict 
          given number boxes, this given number, which following will be represented as S,
          is specified by the number of anchors. In the second dimension(the channel
-         dimension), C should be equal to S * (5 + class_num), class_num is the object 
+         dimension), C should be equal to S * (5 + class_num) if :attr:`iou_aware` is false,
+         otherwise C should be equal to S * (6 + class_num). class_num is the object
          category number of source dataset(such as 80 in coco dataset), so the 
          second(channel) dimension, apart from 4 box location coordinates x, y, w, h, 
          also includes confidence score of the box and class one-hot key of each anchor 
@@ -183,6 +214,15 @@ class YoloBoxOpMaker : public framework::OpProtoAndCheckerMaker {
          score_{pred} = score_{conf} * score_{class}
          $$
 
+         where the confidence scores follow the formula bellow
+
+         .. math::
+
+            score_{conf} = \begin{case}
+                             obj, \text{if } iou_aware == flase \\
+                             obj^{1 - iou_aware_factor} * iou^{iou_aware_factor}, \text{otherwise}
+                           \end{case}
+
          )DOC");
   }
 };
@@ -197,3 +237,12 @@ REGISTER_OPERATOR(
     paddle::framework::EmptyGradOpMaker<paddle::imperative::OpBase>);
 REGISTER_OP_CPU_KERNEL(yolo_box, ops::YoloBoxKernel<float>,
                        ops::YoloBoxKernel<double>);
+
+REGISTER_OP_VERSION(yolo_box)
+    .AddCheckpoint(
+        R"ROC(
+      Upgrade yolo box to add new attribute [iou_aware, iou_aware_factor].
+    )ROC",
+        paddle::framework::compatible::OpVersionDesc()
+            .NewAttr("iou_aware", "Whether use iou aware", false)
+            .NewAttr("iou_aware_factor", "iou aware factor", 0.5f));

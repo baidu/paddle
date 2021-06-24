@@ -24,6 +24,7 @@ from collections import OrderedDict
 import copy
 from .node import DownpourWorker, DownpourServer
 from . import ps_pb2 as pslib
+import os
 
 OpRole = core.op_proto_and_checker_maker.OpRole
 # this dict is for store info about pull/push sparse ops.
@@ -765,7 +766,8 @@ class DistributedAdam(DistributedOptimizerImplBase):
             "user_define_dump_filename", "")
         opt_info["dump_fields_path"] = strategy.get("dump_fields_path", "")
         opt_info["dump_param"] = strategy.get("dump_param", [])
-        opt_info["worker_places"] = strategy.get("worker_places", [])
+        gpus_env = os.getenv("FLAGS_selected_gpus")
+        opt_info["worker_places"] = [int(s) for s in gpus_env.split(",")]
         opt_info["use_ps_gpu"] = strategy.get("use_ps_gpu", False)
         if server._server.downpour_server_param.downpour_table_param[
                 0].accessor.accessor_class in [

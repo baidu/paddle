@@ -16,7 +16,7 @@ from __future__ import print_function
 
 import copy
 import six
-from ..framework import Parameter, in_dygraph_mode
+from ..framework import Parameter, in_dygraph_mode, _global_flags
 from ..param_attr import ParamAttr
 from .. import core
 from six.moves import zip
@@ -158,7 +158,7 @@ class LayerObjectHelper(LayerHelperBase):
 
         if (use_cudnn is not None) and use_cudnn:
             act['use_cudnn'] = use_cudnn
-        use_mkldnn = core.globals()["FLAGS_use_mkldnn"]
+        use_mkldnn = _global_flags()["FLAGS_use_mkldnn"]
         if (use_mkldnn is not None) and use_mkldnn:
             act['use_mkldnn'] = use_mkldnn
         act_type = act.pop('type')

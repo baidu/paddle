@@ -33,7 +33,8 @@ class ProgressBar(object):
                  width=30,
                  verbose=1,
                  start=True,
-                 file=sys.stdout):
+                 file=sys.stdout,
+                 name='step'):
         self._num = num
         if isinstance(num, int) and num <= 0:
             raise TypeError('num should be None or integer (> 0)')
@@ -47,6 +48,7 @@ class ProgressBar(object):
         if start:
             self._start = time.time()
         self._last_update = 0
+        self.name = name
 
         self._dynamic_display = (
             (hasattr(self.file, 'isatty') and
@@ -74,7 +76,7 @@ class ProgressBar(object):
         self.file.flush()
         self._start = time.time()
 
-    def update(self, current_num, values=None):
+    def update(self, current_num, values={}):
         now = time.time()
 
         if current_num:
@@ -83,11 +85,11 @@ class ProgressBar(object):
             time_per_unit = 0
 
         if time_per_unit >= 1 or time_per_unit == 0:
-            fps = ' - %.0fs/%s' % (time_per_unit, 'step')
+            fps = ' - %.0fs/%s' % (time_per_unit, self.name)
         elif time_per_unit >= 1e-3:
-            fps = ' - %.0fms/%s' % (time_per_unit * 1e3, 'step')
+            fps = ' - %.0fms/%s' % (time_per_unit * 1e3, self.name)
         else:
-            fps = ' - %.0fus/%s' % (time_per_unit * 1e6, 'step')
+            fps = ' - %.0fus/%s' % (time_per_unit * 1e6, self.name)
 
         info = ''
         if self._verbose == 1:
@@ -102,7 +104,7 @@ class ProgressBar(object):
             if self._num is not None:
                 numdigits = int(np.log10(self._num)) + 1
 
-                bar_chars = ('step %' + str(numdigits) + 'd/%d [') % (
+                bar_chars = (self.name + ' %' + str(numdigits) + 'd/%d [') % (
                     current_num, self._num)
                 prog = float(current_num) / self._num
                 prog_width = int(self._width * prog)
@@ -116,7 +118,7 @@ class ProgressBar(object):
                 bar_chars += ('.' * (self._width - prog_width))
                 bar_chars += ']'
             else:
-                bar_chars = 'step %3d' % current_num
+                bar_chars = self.name + ' %3d' % current_num
 
             self._total_width = len(bar_chars)
             sys.stdout.write(bar_chars)
@@ -162,10 +164,10 @@ class ProgressBar(object):
         elif self._verbose == 2 or self._verbose == 3:
             if self._num:
                 numdigits = int(np.log10(self._num)) + 1
-                count = ('step %' + str(numdigits) + 'd/%d') % (current_num,
-                                                                self._num)
+                count = (self.name + ' %' + str(numdigits) + 'd/%d') % (
+                    current_num, self._num)
             else:
-                count = 'step %3d' % current_num
+                count = self.name + ' %3d' % current_num
             info = count + info
 
             for k, val in values:

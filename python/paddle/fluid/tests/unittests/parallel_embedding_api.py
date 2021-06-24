@@ -48,23 +48,27 @@ class TestParallelEmbeddingAPI(TestCollectiveAPIRunnerBase):
         with fluid.program_guard(main_prog, startup_program):
             fleet.init(is_collective=True)
             np.random.seed(2020)
-            np_array = np.random.rand(10, 8)
+            # (num_embeddings, embedding_dim) = (12, 8)
+            size = (12, 8)
+            np_array = np.random.rand(size[0], size[1])
             paddle.seed(2020)
-            data_in = paddle.randint(0, 8, shape=(10, 4))
+            data_in = paddle.randint(0, size[0], shape=(10, 4))
 
             data = paddle.static.data(
                 name='tindata', shape=[10, 1000], dtype="float32")
+            per_part_size = size[0] // 2
             if rank == 0:
                 param_attr = paddle.fluid.ParamAttr(
                     initializer=paddle.fluid.initializer.NumpyArrayInitializer(
-                        np_array[0:5, :]), )
+                        np_array[0:per_part_size, :]), )
             else:
                 param_attr = paddle.fluid.ParamAttr(
                     initializer=paddle.fluid.initializer.NumpyArrayInitializer(
-                        np_array[5:10, :]), )
+                        np_array[per_part_size:size[0], :]), )
 
             emb_out = paddle.distributed.split(
-                data_in, (8, 8),
+                data_in,
+                size,
                 operation="embedding",
                 num_partitions=2,
                 weight_attr=param_attr)

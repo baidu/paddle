@@ -85,10 +85,21 @@ __all__ = [     #noqa
            'load',
            'save_inference_model',
            'load_inference_model',
+           'serialize_program',
+           'serialize_persistables',
+           'save_to_file',
+           'deserialize_program',
+           'deserialize_persistables',
+           'load_from_file',
+           'normalize_program',
            'load_program_state',
            'set_program_state',
            'cpu_places',
            'cuda_places',
            'Variable',
-           'create_global_var'
+           'create_global_var',
+           'accuracy',
+           'auc',
+           'device_guard',
+           'create_parameter'
 ]

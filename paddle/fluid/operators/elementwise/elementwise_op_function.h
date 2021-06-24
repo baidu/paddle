@@ -61,23 +61,68 @@ namespace paddle {
 namespace operators {
 
 /*
-* To pack the input and output tnesors into vector for
-*  LaunchElementwiseCudaKernel
+*  Pack input and output tensors into respective vectors with
+*  consideration of varible X`s class type.
+*  Input variable X is supported to be whether LoDTensor or
+*  SelectedRows class type in this package function, once X
+*  was SelectedRows type, a valid pointer x_for_selectedrows
+*  is excepted to be passed in from op kernel for acquisition
+*  of the valid address of LoDTensor created ahead in the function.
 */
-template <typename T>
-void PackTensorsIntoVector(const framework::ExecutionContext &ctx,
-                           std::vector<const framework::Tensor *> *ins,
-                           std::vector<framework::Tensor *> *outs) {
-  auto *x = ctx.Input<framework::LoDTensor>("X");
+template <typename OutT>
+int PackTensorsIntoVector(const framework::ExecutionContext &ctx,
+                          std::vector<const framework::Tensor *> *ins,
+                          std::vector<framework::Tensor *> *outs,
+                          framework::Tensor *x_for_selectedrows = nullptr) {
+  int axis = -1;
+  auto x_var = ctx.InputVar("X");
+  PADDLE_ENFORCE_NOT_NULL(
+      x_var, platform::errors::InvalidArgument(
+                 "Unable to get input Variable X, Variable name is %s.\n",
+                 ctx.InputName("X")));
   auto *y = ctx.Input<framework::LoDTensor>("Y");
-  auto *z = ctx.Output<framework::LoDTensor>("Out");
-  z->mutable_data<T>(ctx.GetPlace());
-  ins->emplace_back(x);
+  framework::Tensor *z;
+
+  if (x_var->IsType<framework::LoDTensor>()) {
+    auto *x = ctx.Input<framework::LoDTensor>("X");
+    z = ctx.Output<framework::LoDTensor>("Out");
+    ins->emplace_back(x);
+  } else if (x_var->IsType<framework::SelectedRows>()) {
+    PADDLE_ENFORCE_EQ(y->dims().size() == 1 && y->dims()[0] == 1, true,
+                      platform::errors::InvalidArgument(
+                          "For elementwise_op, if X is Sparse, Y must be "
+                          "scalar. But reveived the size of Y = %d.",
+                          y->dims().size()));
+    PADDLE_ENFORCE_NOT_NULL(
+        x_for_selectedrows,
+        platform::errors::InvalidArgument(
+            "The parameter x_for_selectedrows is excepted to "
+            "be valid, once input varible X`s class type is "
+            "SelectedRows.\n"));
+    auto &x_sele = x_var->Get<framework::SelectedRows>();
+    auto out_sele = ctx.Output<framework::SelectedRows>("Out");
+    *x_for_selectedrows = x_sele.value();
+    out_sele->set_rows(x_sele.rows());
+    out_sele->set_height(x_sele.height());
+    out_sele->mutable_value()->Resize(x_sele.value().dims());
+    out_sele->mutable_value()->mutable_data(ctx.GetPlace(),
+                                            x_for_selectedrows->type());
+    z = ctx.Output<framework::SelectedRows>("Out")->mutable_value();
+    ins->emplace_back(x_for_selectedrows);
+  } else {
+    PADDLE_THROW(platform::errors::InvalidArgument(
+        "X's type[%s] is not supported by elementwise_op. X's type should be "
+        "LoDTensor or SelectedRows.",
+        framework::ToTypeName(x_var->Type())));
+  }
+  z->mutable_data<OutT>(ctx.GetPlace());
   outs->emplace_back(z);
 
   if (y != nullptr) {
     ins->emplace_back(y);
+    axis = ctx.HasAttr("axis") ? ctx.Attr<int>("axis") : -1;
   }
+  return axis;
 }
 
 /*

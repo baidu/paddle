@@ -16,10 +16,7 @@
 
 import unittest
 import os
-import tempfile
 import shutil
-import sys
-import importlib
 import re
 import sampcd_processor
 from sampcd_processor import find_all

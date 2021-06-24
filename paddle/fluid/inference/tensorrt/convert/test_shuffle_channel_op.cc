@@ -24,8 +24,8 @@ TEST(leaky_relu_op, test_leaky_relu) {
   std::unordered_set<std::string> parameters;
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("sc_input", nvinfer1::DimsCHW(4, 2, 2));
-  validator.DeclOutputVar("sc_out", nvinfer1::DimsCHW(4, 2, 2));
+  validator.DeclInputVar("sc_input", nvinfer1::Dims3(4, 2, 2));
+  validator.DeclOutputVar("sc_out", nvinfer1::Dims3(4, 2, 2));
 
   // Prepare Op description
   framework::OpDesc desc;

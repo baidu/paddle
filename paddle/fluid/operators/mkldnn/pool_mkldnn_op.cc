@@ -43,7 +43,7 @@ class PoolingMKLDNNHandler
             platform::CreateKey(dev_ctx, framework::vectorize(input->dims()),
                                 framework::ToMKLDNNDataType(input->type()),
                                 unique_name)) {
-    if (!this->isCachedNonBlocking()) {
+    if (!this->isCached()) {
       PADDLE_ENFORCE_EQ(input->layout(), DataLayout::kMKLDNN,
                         platform::errors::InvalidArgument(
                             "Wrong layout set for Input tensor."));
@@ -123,7 +123,7 @@ class PoolingMKLDNNHandler
 
       ComputeAdaptivePoolParameters(ctx, src_tz, &ksize, &strides);
 
-      this->AcquireForwardPrimitiveDescriptorNonBlocking(
+      this->AcquireForwardPrimitiveDescriptor(
           is_test ? mkldnn::prop_kind::forward_inference
                   : mkldnn::prop_kind::forward_training,
           pooling_type == "max"
@@ -220,7 +220,7 @@ class PoolingMKLDNNHandler
 
       const auto exclude_padding = ctx.Attr<bool>("exclusive");
 
-      this->AcquireForwardPrimitiveDescriptorNonBlocking(
+      this->AcquireForwardPrimitiveDescriptor(
           mkldnn::prop_kind::forward_training,
           pooling_type == "max"
               ? mkldnn::algorithm::pooling_max
@@ -230,7 +230,7 @@ class PoolingMKLDNNHandler
           src_md, dst_md, strides, ksize, mkldnn_paddings[0],
           mkldnn_paddings[1]);
 
-      this->AcquireBackwardPrimitiveDescriptorNonBlocking(
+      this->AcquireBackwardPrimitiveDescriptor(
           pooling_type == "max"
               ? mkldnn::algorithm::pooling_max
               : (exclude_padding

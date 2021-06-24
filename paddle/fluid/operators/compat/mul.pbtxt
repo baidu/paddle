@@ -1,0 +1,99 @@
+type: "mul"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Y"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "x_num_col_dims"
+    type: INT
+  }
+  attrs {
+    name: "y_num_col_dims"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "Out0_threshold"
+    type: FLOAT
+  } 
+  attrs {
+    name: "bit_length"
+    type: INT
+  }
+  attrs {
+    name: "quantization_type"
+    type: STRING
+  } 
+  attrs {
+    name: "skip_quant"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "scale_x"
+    type: FLOAT
+  }
+  attrs {
+    name: "scale_y"
+    type: FLOATS
+  }
+  attrs {
+    name: "scale_out"
+    type: FLOAT
+  }
+  attrs {
+    name: "force_fp32_output"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "enable_int8"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "X_scale"
+    type: FLOAT
+  }
+  attrs {
+    name: "weight_scale"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_scale"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+
+}

@@ -23,6 +23,8 @@ import paddle.nn.functional as F
 import sys
 import collections
 
+__all__ = []
+
 
 def _assert_image_tensor(img, data_format):
     if not isinstance(

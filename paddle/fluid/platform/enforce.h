@@ -775,13 +775,13 @@ inline std::string GetExternalErrorMsg(T status) {
       }
     }
 #else
-    char buf[100];
+    char buf[512];
     MEMORY_BASIC_INFORMATION mbi;
     HMODULE h_module =
         (::VirtualQuery(GetCurrentTraceBackString, &mbi, sizeof(mbi)) != 0)
             ? (HMODULE)mbi.AllocationBase
             : NULL;
-    GetModuleFileName(h_module, buf, 100);
+    GetModuleFileName(h_module, buf, 512);
     std::string strModule(buf);
     const size_t last_slash_idx = strModule.find_last_of("\\");
     std::string compare_path = strModule.substr(strModule.length() - 7);

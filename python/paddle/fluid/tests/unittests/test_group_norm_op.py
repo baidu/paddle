@@ -46,7 +46,7 @@ class TestGroupNormOpError(unittest.TestCase):
 
             def test_x_type():
                 input = np.random.random(2, 100, 3, 5).astype('float32')
-                goups = 2
+                groups = 2
                 fluid.layers.group_norm(input, groups)
 
             self.assertRaises(TypeError, test_x_type)

@@ -71,6 +71,7 @@ using DygraphGradOpMakerFN =
         const imperative::NameVarBaseMap& /*var_base_map_in*/,
         const imperative::NameVarBaseMap& /*var_base_map_out*/,
         const framework::AttributeMap& /*attributes*/,
+        const framework::AttributeMap& /*default attributes*/,
         const std::map<std::string, std::string>& /*inplace_map*/)>;
 
 using InferVarTypeFN =

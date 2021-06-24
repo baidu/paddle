@@ -15,7 +15,6 @@
 from __future__ import print_function
 
 import gast
-import six
 import unittest
 
 import numpy as np
@@ -58,18 +57,9 @@ class TestVariableTransFunc(unittest.TestCase):
         source = "b = paddle.fluid.layers.fill_constant(shape=[1], dtype='bool', value=True)"
         self.assertEqual(ast_to_source_code(node).strip(), source)
 
-        if six.PY2:
-            node = create_fill_constant_node("c", 214)
-            source = "c = paddle.fluid.layers.fill_constant(shape=[1], dtype='int32', value=214)"
-            self.assertEqual(ast_to_source_code(node).strip(), source)
-
-            node = create_fill_constant_node("d", long(10086))
-            source = "d = paddle.fluid.layers.fill_constant(shape=[1], dtype='int64', value=10086)"
-            self.assertEqual(ast_to_source_code(node).strip(), source)
-        else:
-            node = create_fill_constant_node("c", 4293)
-            source = "c = paddle.fluid.layers.fill_constant(shape=[1], dtype='int64', value=4293)"
-            self.assertEqual(ast_to_source_code(node).strip(), source)
+        node = create_fill_constant_node("c", 4293)
+        source = "c = paddle.fluid.layers.fill_constant(shape=[1], dtype='int64', value=4293)"
+        self.assertEqual(ast_to_source_code(node).strip(), source)
 
         self.assertIsNone(create_fill_constant_node("e", None))
         self.assertIsNone(create_fill_constant_node("e", []))

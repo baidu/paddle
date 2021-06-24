@@ -23,6 +23,61 @@ namespace paddle {
 namespace framework {
 namespace ir {
 
+AttentionLSTMFusePass::AttentionLSTMFusePass() {
+  AddOpCompat(OpCompat("while"))
+      .AddInput("X")  // A set of variables, unconstrained
+      .End()
+      .AddInput("Condition")  // An scalar
+      .IsTensor()
+      .End()
+      .AddOutput("Out")  // A set of variables, unconstrained
+      .End()
+      .AddOutput("StepScopes")  // A vector of local scope, unconstrained
+      .End()
+      .AddAttr("sub_block")
+      .IsType<framework::BlockDesc*>()
+      .End();
+
+  AddOpCompat(OpCompat("fill_constant"))
+      .AddInput("ValueTensor")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddInput("ShapeTensor")
+      .IsTensor()
+      .IsOptional()
+      .End()
+      .AddInput("ShapeTensorList")  // vector<Tensor<int>>
+      .IsOptional()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("dtype")
+      .IsNumGE(0)
+      .IsNumLE(25)
+      .End()
+      .AddAttr("shape")
+      .IsType<std::vector<int>>()
+      .End()
+      .AddAttr("value")
+      .IsType<float>()
+      .End();
+
+  AddOpCompat(OpCompat("sequence_expand"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddInput("Y")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddAttr("ref_level")
+      .IsNumGE(-1)
+      .End();
+}
 struct Param {
   std::string X = "concat_0.tmp_0";
   std::string C0 = "cell_init";
@@ -43,7 +98,7 @@ struct Param {
 
 void PrepareParameters(Graph* graph, const Param& param, ir::Node* lstm_op);
 
-void FindWhileOp(Graph* graph) {
+void AttentionLSTMFusePass::FindWhileOp(Graph* graph) const {
   GraphPatternDetector gpd;
   std::unordered_set<int> fused_external_ops(
       {35, 36, 37, 38, 43, 44, 49, 45, 46, 47, 41, 42, 53, 54, 48,
@@ -60,6 +115,10 @@ void FindWhileOp(Graph* graph) {
 
   auto handle = [&](const GraphPatternDetector::subgraph_t& subgraph,
                     Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass in op compat failed.";
+      return;
+    }
     auto* while_pat_node = gpd.pattern().RetrieveNode("while");
     auto* while_node = subgraph.at(while_pat_node);
     marked_nodes.insert(while_node);

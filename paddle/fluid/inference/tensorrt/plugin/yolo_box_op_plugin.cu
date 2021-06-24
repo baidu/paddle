@@ -243,7 +243,11 @@ int YoloBoxPlugin::enqueue_impl(int batch_size, const void* const* inputs,
 }
 
 int YoloBoxPlugin::enqueue(int batch_size, const void* const* inputs,
+#if IS_TRT_VERSION_LT(8000)
                            void** outputs, void* workspace,
+#else
+                           void* const* outputs, void* workspace,
+#endif
                            cudaStream_t stream) {
   if (data_type_ == nvinfer1::DataType::kFLOAT) {
     return enqueue_impl<float>(batch_size, inputs, outputs, workspace, stream);

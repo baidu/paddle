@@ -26,6 +26,7 @@ from ..data_feeder import check_variable_and_dtype, check_type
 from ..param_attr import ParamAttr
 from ..initializer import NumpyArrayInitializer, Constant
 from .. import core
+import warnings
 
 __all__ = [
     'center_loss',
@@ -1258,10 +1259,16 @@ def softmax_with_cross_entropy(logits,
             print(out)
     """
     if in_dygraph_mode():
-        softmax, loss = core.ops.softmax_with_cross_entropy(
-            logits, label, 'soft_label', soft_label, 'ignore_index',
-            ignore_index, 'numeric_stable_mode', numeric_stable_mode, 'axis',
-            axis)
+        if core.is_compiled_with_npu():
+            softmax, backprop, loss = core.ops.softmax_with_cross_entropy(
+                logits, label, 'soft_label', soft_label, 'ignore_index',
+                ignore_index, 'numeric_stable_mode', numeric_stable_mode,
+                'axis', axis)
+        else:
+            softmax, loss = core.ops.softmax_with_cross_entropy(
+                logits, label, 'soft_label', soft_label, 'ignore_index',
+                ignore_index, 'numeric_stable_mode', numeric_stable_mode,
+                'axis', axis)
         if not return_softmax:
             return loss
         else:
@@ -1276,12 +1283,16 @@ def softmax_with_cross_entropy(logits,
     helper = LayerHelper('softmax_with_cross_entropy', **locals())
     softmax = helper.create_variable_for_type_inference(dtype=logits.dtype)
     loss = helper.create_variable_for_type_inference(dtype=logits.dtype)
+
+    outputs = {'Softmax': softmax, 'Loss': loss}
+    if core.is_compiled_with_npu():
+        backprop = helper.create_variable_for_type_inference(dtype=logits.dtype)
+        outputs['Backprop'] = backprop
     helper.append_op(
         type='softmax_with_cross_entropy',
         inputs={'Logits': logits,
                 'Label': label},
-        outputs={'Softmax': softmax,
-                 'Loss': loss},
+        outputs=outputs,
         attrs=attrs)
 
     if return_softmax:

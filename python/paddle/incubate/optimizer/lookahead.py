@@ -20,7 +20,7 @@ import paddle
 import numpy as np
 from paddle.fluid.dygraph import base as imperative_base
 
-__all__ = ["LookAhead"]
+__all__ = []
 
 
 class LookAhead(Optimizer):
@@ -99,7 +99,7 @@ class LookAhead(Optimizer):
             layer = LinearNet()
             loss_fn = nn.CrossEntropyLoss()
             optimizer = paddle.optimizer.SGD(learning_rate=0.1, parameters=layer.parameters())
-            lookahead = paddle.incubate.optimizer.LookAhead(optimizer, alpha=0.2, k=5)
+            lookahead = paddle.incubate.LookAhead(optimizer, alpha=0.2, k=5)
 
             # create data loader
             dataset = RandomDataset(BATCH_NUM * BATCH_SIZE)
@@ -163,7 +163,7 @@ class LookAhead(Optimizer):
                 out = linear(inp)
                 loss = paddle.mean(out)
                 sgd = paddle.optimizer.SGD(learning_rate=0.1,parameters=linear.parameters())
-                lookahead = paddle.incubate.optimizer.LookAhead(sgd, alpha=0.2, k=5)
+                lookahead = paddle.incubate.LookAhead(sgd, alpha=0.2, k=5)
                 loss.backward()
                 lookahead.step()
                 lookahead.clear_grad()
@@ -274,16 +274,13 @@ class LookAhead(Optimizer):
                 out = linear(inp)
                 loss = paddle.mean(out)
                 sgd = paddle.optimizer.SGD(learning_rate=0.1,parameters=linear.parameters())
-                lookahead = paddle.incubate.optimizer.LookAhead(sgd, alpha=0.2, k=5)
+                lookahead = paddle.incubate.LookAhead(sgd, alpha=0.2, k=5)
                 loss.backward()
                 lookahead.minimize(loss)
                 lookahead.clear_grad()
 
         """
         assert isinstance(loss, Variable), "The loss should be an Tensor."
-
-        parameter_list = parameters if parameters \
-            else self._parameter_list
 
         # Apply inner optimizer to the main_program
         optimize_ops, params_grads = self.inner_optimizer.minimize(

@@ -208,15 +208,27 @@ Attribute GetAttrValue(const proto::OpDesc::Attr& attr_desc);
 
 class AttrReader {
  public:
-  explicit AttrReader(const AttributeMap& attrs) : attrs_(attrs) {}
+  explicit AttrReader(const AttributeMap& attrs)
+      : attrs_(attrs), default_attrs_(nullptr) {}
+
+  AttrReader(const AttributeMap& attrs, const AttributeMap& default_attrs)
+      : attrs_(attrs), default_attrs_(&default_attrs) {}
 
   template <typename T>
   inline const T& Get(const std::string& name) const {
-    PADDLE_ENFORCE_NE(attrs_.count(name), 0,
+    auto it = attrs_.find(name);
+    bool found = it != attrs_.end();
+    if (!found) {
+      if (default_attrs_ != nullptr) {
+        it = default_attrs_->find(name);
+        found = it != default_attrs_->end();
+      }
+    }
+    PADDLE_ENFORCE_EQ(found, true,
                       platform::errors::NotFound(
                           "Attribute (%s) should be in AttributeMap.", name));
 
-    Attribute& attr = const_cast<Attribute&>(attrs_.at(name));
+    Attribute& attr = const_cast<Attribute&>(it->second);
     ExtractAttribute<T> extract_attr(name);
     T* attr_value = extract_attr(attr);
     return *attr_value;
@@ -224,6 +236,7 @@ class AttrReader {
 
  private:
   const AttributeMap& attrs_;
+  const AttributeMap* default_attrs_;
 };
 
 // check whether a value(attribute) fit a certain limit
@@ -234,8 +247,8 @@ class GreaterThanChecker {
   void operator()(const T& value) const {
     PADDLE_ENFORCE_GT(
         value, lower_bound_,
-        platform::errors::OutOfRange(
-            "Check for attribute value greater than a certain value failed."));
+        platform::errors::OutOfRange("Check for attribute value greater than "
+                                     "a certain value failed."));
   }
 
  private:
@@ -332,9 +345,9 @@ class TypedAttrChecker {
   TypedAttrChecker& SetDefault(const T& default_value) {
     PADDLE_ENFORCE_EQ(
         default_value_setter_.empty(), true,
-        platform::errors::AlreadyExists(
-            "Attribute (%s) has a default value and cannot be set repeatedly.",
-            attr_name_));
+        platform::errors::AlreadyExists("Attribute (%s) has a default value "
+                                        "and cannot be set repeatedly.",
+                                        attr_name_));
     default_value_setter_.push_back(DefaultValueSetter<T>(default_value));
     return *this;
   }
@@ -345,8 +358,8 @@ class TypedAttrChecker {
     return *this;
   }
 
-  void operator()(AttributeMap* attr_map,
-                  bool get_default_value_only = false) const {
+  void operator()(AttributeMap* attr_map, bool get_default_value_only = false,
+                  bool only_check_exist_value = false) const {
     if (get_default_value_only) {
       if (!default_value_setter_.empty()) {
         attr_map->emplace(attr_name_, default_value_setter_[0]());
@@ -354,21 +367,32 @@ class TypedAttrChecker {
       return;
     }
 
-    auto it = attr_map->find(attr_name_);
-    if (it == attr_map->end()) {
-      // user do not set this attr
-      PADDLE_ENFORCE_EQ(
-          default_value_setter_.empty(), false,
-          platform::errors::InvalidArgument(
-              "Attribute (%s) is not set correctly.", attr_name_));
-      // default_value_setter_ has no more than one element
-      attr_map->emplace(attr_name_, default_value_setter_[0]());
-    }
-    it = attr_map->find(attr_name_);
-    ExtractAttribute<T> extract_attr(attr_name_);
-    T* attr_value = extract_attr(it->second);
-    for (const auto& checker : value_checkers_) {
-      checker(*attr_value);
+    if (only_check_exist_value) {
+      auto it = attr_map->find(attr_name_);
+      if (it != attr_map->end()) {
+        ExtractAttribute<T> extract_attr(attr_name_);
+        T* attr_value = extract_attr(it->second);
+        for (const auto& checker : value_checkers_) {
+          checker(*attr_value);
+        }
+      }
+    } else {
+      auto it = attr_map->find(attr_name_);
+      if (it == attr_map->end()) {
+        // user do not set this attr
+        PADDLE_ENFORCE_EQ(
+            default_value_setter_.empty(), false,
+            platform::errors::InvalidArgument(
+                "Attribute (%s) is not set correctly.", attr_name_));
+        // default_value_setter_ has no more than one element
+        auto tmp = attr_map->emplace(attr_name_, default_value_setter_[0]());
+        it = tmp.first;
+      }
+      ExtractAttribute<T> extract_attr(attr_name_);
+      T* attr_value = extract_attr(it->second);
+      for (const auto& checker : value_checkers_) {
+        checker(*attr_value);
+      }
     }
   }
 
@@ -380,7 +404,7 @@ class TypedAttrChecker {
 
 // check whether op's all attributes fit their own limits
 class OpAttrChecker {
-  typedef std::function<void(AttributeMap*, bool)> AttrChecker;
+  typedef std::function<void(AttributeMap*, bool, bool)> AttrChecker;
 
  public:
   template <typename T>
@@ -390,18 +414,19 @@ class OpAttrChecker {
     return *(checker.target<TypedAttrChecker<T>>());
   }
 
-  void Check(AttributeMap* attr_map, bool explicit_only = false) const {
+  void Check(AttributeMap* attr_map, bool explicit_only = false,
+             bool only_check_exist_value = false) const {
     auto checker_num = attr_checkers_.size();
     if (explicit_only) checker_num = explicit_checker_num_;
     for (size_t i = 0; i < checker_num; ++i) {
-      attr_checkers_[i](attr_map, false);
+      attr_checkers_[i](attr_map, false, only_check_exist_value);
     }
   }
 
-  AttributeMap GetAttrsDefaultValuesMap() const {
+  AttributeMap GetDefaultAttrsMap() const {
     AttributeMap default_values_map;
     for (const auto& checker : attr_checkers_) {
-      checker(&default_values_map, true);
+      checker(&default_values_map, true, false);
     }
     return default_values_map;
   }
@@ -410,15 +435,26 @@ class OpAttrChecker {
     explicit_checker_num_ = attr_checkers_.size();
   }
 
+  void InitDefaultAttributeMap() {
+    for (const auto& checker : attr_checkers_) {
+      checker(&default_attrs_, true, false);
+    }
+  }
+
+  const AttributeMap& GetDefaultAttrMap() const { return default_attrs_; }
+
  private:
   std::vector<AttrChecker> attr_checkers_;
+
+  AttributeMap default_attrs_;
 
   // in order to improve the efficiency of dynamic graph mode,
   // we divede the attribute into explicit type and implicit type.
   // for explicit attribute, we mean the attribute added in the customized
   // op makers, usually it's defined in the overloaded Make method.
   // for implicit attribute, we mean the attribute added outside of the Make
-  // method like "op_role", "op_role_var", and they are useless in dynamic graph
+  // method like "op_role", "op_role_var", and they are useless in dynamic
+  // graph
   // mode
   size_t explicit_checker_num_;
 };

@@ -143,6 +143,13 @@ PADDLE_CAPI_EXPORT extern uint64_t PD_PredictorTryShrinkMemory(
 PADDLE_CAPI_EXPORT extern void PD_PredictorDestroy(
     __pd_take PD_Predictor* pd_predictor);
 
+///
+/// \brief Get version info.
+///
+/// \return version
+///
+PADDLE_CAPI_EXPORT extern const char* PD_GetVersion();
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

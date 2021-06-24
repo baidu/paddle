@@ -155,6 +155,38 @@ def create_paddle_case(op_type, callback):
                                fetch_list=[out])
             self.assertEqual((res == real_result).all(), True)
 
+        def test_bool_api_4(self):
+            paddle.enable_static()
+            with program_guard(Program(), Program()):
+                x = paddle.static.data(name='x', shape=[3, 1], dtype='bool')
+                y = paddle.static.data(name='y', shape=[3, 1], dtype='bool')
+                op = eval("paddle.%s" % (self.op_type))
+                out = op(x, y)
+                exe = paddle.static.Executor(self.place)
+                input_x = np.array([True, False, True]).astype(np.bool)
+                input_y = np.array([True, True, False]).astype(np.bool)
+                real_result = callback(input_x, input_y)
+                res, = exe.run(feed={"x": input_x,
+                                     "y": input_y},
+                               fetch_list=[out])
+            self.assertEqual((res == real_result).all(), True)
+
+        def test_bool_broadcast_api_4(self):
+            paddle.enable_static()
+            with program_guard(Program(), Program()):
+                x = paddle.static.data(name='x', shape=[3, 1], dtype='bool')
+                y = paddle.static.data(name='y', shape=[1], dtype='bool')
+                op = eval("paddle.%s" % (self.op_type))
+                out = op(x, y)
+                exe = paddle.static.Executor(self.place)
+                input_x = np.array([True, False, True]).astype(np.bool)
+                input_y = np.array([True]).astype(np.bool)
+                real_result = callback(input_x, input_y)
+                res, = exe.run(feed={"x": input_x,
+                                     "y": input_y},
+                               fetch_list=[out])
+            self.assertEqual((res == real_result).all(), True)
+
         def test_attr_name(self):
             paddle.enable_static()
             with program_guard(Program(), Program()):

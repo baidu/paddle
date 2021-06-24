@@ -28,11 +28,11 @@ namespace operators {
    1. For Unary Op, the length of input array is 1,
       e.g. Relu: return args[0] > 0 ? args[0] : 0;
    2. For Binary Op, the length of input array is 2,
-      e.g. Add: return args[0] + args[1];
+      e.g. Add: return args[0] expr args[1];
 */
 template <typename T>
 struct CudaAddFunctor {
-  __device__ __forceinline__ T operator()(const T* args) const {
+  inline HOSTDEVICE T operator()(const T* args) const {
     return args[0] + args[1];
   }
 };
@@ -44,9 +44,12 @@ class ElementwiseAddKernel<platform::CUDADeviceContext, T>
   void Compute(const framework::ExecutionContext& ctx) const override {
     std::vector<const framework::Tensor*> ins;
     std::vector<framework::Tensor*> outs;
-    PackTensorsIntoVector<T>(ctx, &ins, &outs);
+    const auto& cuda_ctx =
+        ctx.template device_context<platform::CUDADeviceContext>();
+
+    int axis = PackTensorsIntoVector<T>(ctx, &ins, &outs);
     LaunchElementwiseCudaKernel<ElementwiseType::kBinary, T, T>(
-        ctx, ins, &outs, CudaAddFunctor<T>());
+        cuda_ctx, ins, &outs, axis, CudaAddFunctor<T>());
   }
 };
 

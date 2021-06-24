@@ -90,7 +90,7 @@ class ConvMKLDNNHandlerT
             dev_ctx, mkldnn_engine, cpu_place,
             platform::CreateKey(dev_ctx, framework::vectorize(input->dims()),
                                 unique_name)) {
-    if (!this->isCachedNonBlocking()) {
+    if (!this->isCached()) {
       PADDLE_ENFORCE_EQ(
           input->layout(), DataLayout::kMKLDNN,
           platform::errors::InvalidArgument(
@@ -228,12 +228,12 @@ class ConvMKLDNNHandlerT
         auto bias_md =
             platform::MKLDNNMemDesc(bias_tz, data_type, MKLDNNMemoryFormat::x);
 
-        this->AcquireForwardPrimitiveDescriptorNonBlocking(
+        this->AcquireForwardPrimitiveDescriptor(
             conv_attr, fwd_prop_kind, dnnl::algorithm::convolution_direct,
             src_md, weights_md, bias_md, dst_md, stride_dims, dilations_dims,
             mkldnn_paddings[0], mkldnn_paddings[1]);
       } else {
-        this->AcquireForwardPrimitiveDescriptorNonBlocking(
+        this->AcquireForwardPrimitiveDescriptor(
             conv_attr, fwd_prop_kind, dnnl::algorithm::convolution_direct,
             src_md, weights_md, dst_md, stride_dims, dilations_dims,
             mkldnn_paddings[0], mkldnn_paddings[1]);
@@ -352,25 +352,25 @@ class ConvMKLDNNHandlerT
         auto bias_md = platform::MKLDNNMemDesc(
             bias_tz, mkldnn::memory::data_type::f32, MKLDNNMemoryFormat::x);
 
-        this->AcquireForwardPrimitiveDescriptorNonBlocking(
+        this->AcquireForwardPrimitiveDescriptor(
             conv_attr, mkldnn::prop_kind::forward_training,
             dnnl::algorithm::convolution_direct, src_md, weights_md, bias_md,
             dst_md, stride_dims, dilations_dims, mkldnn_paddings[0],
             mkldnn_paddings[1]);
       } else {
-        this->AcquireForwardPrimitiveDescriptorNonBlocking(
+        this->AcquireForwardPrimitiveDescriptor(
             conv_attr, mkldnn::prop_kind::forward_training,
             dnnl::algorithm::convolution_direct, src_md, weights_md, dst_md,
             stride_dims, dilations_dims, mkldnn_paddings[0],
             mkldnn_paddings[1]);
       }
 
-      this->AcquireBackwardPrimitiveDescriptorNonBlocking(
+      this->AcquireBackwardPrimitiveDescriptor(
           mkldnn::algorithm::convolution_direct, diff_src_md, weights_md,
           diff_dst_md, strides, dilations_dims, mkldnn_paddings[0],
           mkldnn_paddings[1]);
 
-      this->AcquireBackwardWeightsPrimitiveDescriptorNonBlocking(
+      this->AcquireBackwardWeightsPrimitiveDescriptor(
           mkldnn::algorithm::convolution_direct, src_md, diff_weights_md,
           diff_dst_md, strides, dilations_dims, mkldnn_paddings[0],
           mkldnn_paddings[1]);

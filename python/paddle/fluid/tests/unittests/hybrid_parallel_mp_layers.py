@@ -212,7 +212,7 @@ class TestDistTraning(unittest.TestCase):
             optimizer_b.step()
 
             np.testing.assert_allclose(
-                loss_a.numpy(), loss_b.numpy(), rtol=1e-5)
+                loss_a.numpy(), loss_b.numpy(), rtol=5e-6)
 
     def test_parallel_embedding(self):
         batch_size = 17
@@ -265,8 +265,66 @@ class TestDistTraning(unittest.TestCase):
 
             optimizer_a.step()
             optimizer_b.step()
+            print(loss_a.numpy(), loss_b.numpy())
+
+            np.testing.assert_allclose(loss_a.numpy(), loss_b.numpy())
+
+    def test_parallel_cross_entropy(self):
+        batch_size = 8
+        seq_length = 16
+        class_size_per_card = 2
+        vocab_size = class_size_per_card * self.model_parallel_size
+        seed = 1025
+
+        set_random_seed(seed)
+        rank_id = dist.get_rank()
+
+        # model_a
+        model_a = fleet.meta_parallel.ParallelCrossEntropy()
+
+        model_b = paddle.nn.CrossEntropyLoss(reduction="none")
+
+        paddle.seed(rank_id * 10)
+        random.seed(seed)
+        np.random.seed(seed)
+
+        for _ in range(5):
+            np_label = np.random.randint(0, vocab_size,
+                                         (batch_size, seq_length))
+            label = paddle.to_tensor(np_label, dtype="int64")
+
+            data = paddle.randn(
+                shape=[batch_size, seq_length, class_size_per_card],
+                dtype='float32')
+            data.stop_gradient = False
+
+            check_group = dist.new_group(list(range(self.model_parallel_size)))
+            integral_data = []
+            partial_data = data.clone().detach()
+            paddle.distributed.all_gather(
+                integral_data, partial_data, group=check_group)
+            integral_data = paddle.concat(integral_data, axis=-1)
+            integral_data = integral_data.detach().clone()
+            integral_data.stop_gradient = False
+
+            loss_a = model_a(data, label).sum() / batch_size
+            loss_b = model_b(integral_data, label).sum() / batch_size
+            print("loss_a: ", loss_a.numpy(), "loss_b: ", loss_b.numpy())
+
             np.testing.assert_allclose(
                 loss_a.numpy(), loss_b.numpy(), rtol=1e-6)
+
+            loss_a.backward()
+            loss_b.backward()
+
+            integral_grad = []
+            partial_grad = data.grad.clone().detach()
+            paddle.distributed.all_gather(
+                integral_grad, partial_grad, group=check_group)
+            integral_grad = paddle.concat(integral_grad, axis=-1)
+
+            np.testing.assert_allclose(
+                integral_data.grad.numpy(), integral_grad.numpy(), rtol=1e-6)
 
 
 if __name__ == '__main__':

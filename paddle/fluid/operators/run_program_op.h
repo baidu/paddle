@@ -131,6 +131,9 @@ static void ShareVarsIntoScope(const std::vector<Variable *> &vars,
                                const std::vector<std::string> &var_names,
                                framework::Scope *scope) {
   for (size_t i = 0; i < vars.size(); ++i) {
+    if (var_names[i] == "Fake_var") {
+      continue;
+    }
     auto *var = scope->Var(var_names[i]);
     CheckInputVarStatus(*vars[i], var_names[i]);
     VariableShare(*vars[i], var);
@@ -141,9 +144,9 @@ static void ShareVarsFromScope(const std::vector<Variable *> &vars,
                                const std::vector<std::string> &var_names,
                                framework::Scope *scope) {
   for (size_t i = 0; i < vars.size(); ++i) {
-    if (var_names[i] == framework::kEmptyVarName) {
-      VLOG(2) << "find variable name is " << framework::kEmptyVarName
-              << ", skip it!";
+    if (var_names[i] == framework::kEmptyVarName ||
+        var_names[i] == "Fake_var") {
+      VLOG(2) << "find variable name is " << var_names[i] << ", skip it!";
       continue;
     }
     // NOTE: Here skip not found var is dangerous, if a bug is caused here,
@@ -170,9 +173,11 @@ class RunProgramOpKernel : public framework::OpKernel<T> {
     auto &input_vars = ctx.MultiInputVar("X");
     auto &param_vars = ctx.MultiInputVar("Params");
     auto output_vars = ctx.MultiOutputVar("Out");
+    auto dout_vars = ctx.MultiOutputVar("DOut");
 
     auto input_var_names = ctx.InputNames("X");
     auto output_var_names = ctx.OutputNames("Out");
+    auto dout_var_names = ctx.OutputNames("DOut");
 
     // current program may not hold parameters
     std::vector<std::string> param_names;
@@ -195,7 +200,7 @@ class RunProgramOpKernel : public framework::OpKernel<T> {
     // Step 2. prepare executor and init persistable variables
     framework::Executor exe(ctx.GetPlace());
     auto exe_ctx = framework::GetExecutorInfoFromCache(
-        exe, ctx, {output_var_names}, /*is_grad=*/false);
+        exe, ctx, {output_var_names, dout_var_names}, /*is_grad=*/false);
 
     // NOTE(Aurelius84): While training some models, forward can be called many
     // times and then apply backpropagation all at once, such as Reinforcement
@@ -219,6 +224,7 @@ class RunProgramOpKernel : public framework::OpKernel<T> {
 
     // Step 4. Get Output
     details::ShareVarsFromScope(output_vars, output_var_names, &scope);
+    details::ShareVarsFromScope(dout_vars, dout_var_names, &scope);
 
     // Debug info: scope info when run end
     VLOG(3) << framework::GenScopeTreeDebugInfo(out_scope_vec->front());

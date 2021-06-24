@@ -23,13 +23,9 @@ sample lines from API_DEV.spec:
 """
 import unittest
 import hashlib
-import inspect
 import functools
 from print_signatures import md5
-from print_signatures import get_functools_partial_spec
-from print_signatures import format_spec
-from print_signatures import queue_dict
-from print_signatures import member_dict
+from print_signatures import is_primitive
 
 
 def func_example(param_a, param_b):
@@ -65,30 +61,27 @@ class Test_all_in_print_signatures(unittest.TestCase):
         digest = algo.hexdigest()
         self.assertEqual(digest, md5(func_example.__doc__))
 
-    def test_get_functools_partial_spec(self):
-        partailed_func = functools.partial(func_example, 1)
-        # args = inspect.getargspec(partailed_func)
-        self.assertEqual('func_example(args=(1,), keywords={})',
-                         get_functools_partial_spec(partailed_func))
 
+class Test_is_primitive(unittest.TestCase):
+    def test_single(self):
+        self.assertTrue(is_primitive(2))
+        self.assertTrue(is_primitive(2.1))
+        self.assertTrue(is_primitive("2.1.1"))
+        self.assertFalse(
+            is_primitive("hello paddle".encode('UTF-8')))  # True for python2
+        self.assertFalse(is_primitive(1j))
+        self.assertTrue(is_primitive(True))
 
-class Test_format_spec(unittest.TestCase):
-    def test_normal_func_spec(self):
-        args = inspect.getargspec(func_example)
-        self.assertEqual(
-            '''ArgSpec(args=['param_a', 'param_b'], varargs=None, keywords=None, defaults=None)''',
-            format_spec(args))
-
-    def test_func_spec_with_partialedfunc_as_param_default(self):
-        # but there is no function belongs to this type in API_DEV.spec
-        args = inspect.getargspec(func_example_2)
-        self.assertEqual(
-            '''ArgSpec(args=['func'], varargs=None, keywords=None, defaults=('func_example(args=(1,), keywords={})',))''',
-            format_spec(args))
-
-
-class Test_queue_dict(unittest.TestCase):
-    pass
+    def test_collection(self):
+        self.assertTrue(is_primitive([]))
+        self.assertTrue(is_primitive(tuple()))
+        self.assertTrue(is_primitive(set()))
+        self.assertTrue(is_primitive([1, 2]))
+        self.assertTrue(is_primitive((1.1, 2.2)))
+        self.assertTrue(is_primitive(set([1, 2.3])))
+        self.assertFalse(is_primitive(range(3)))  # True for python2
+        self.assertFalse(is_primitive({}))
+        self.assertFalse(is_primitive([1, 1j]))
 
 
 if __name__ == '__main__':

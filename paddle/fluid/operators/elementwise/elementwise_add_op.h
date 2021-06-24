@@ -72,12 +72,10 @@ class ElementwiseAddKernel : public framework::OpKernel<T> {
     auto *z = ctx.Output<framework::LoDTensor>("Out");
     z->mutable_data<T>(ctx.GetPlace());
     if (x->dims() == y->dims()) {
-      SameDimsElemwiseAdd<platform::CPUDeviceContext, T>
-          LaunchElementwiseCpuKernel;
+      SameDimsElemwiseAdd<DeviceContext, T> LaunchElementwiseCpuKernel;
       LaunchElementwiseCpuKernel(ctx, x, y, z);
     } else {
-      LaunchBroadcastElementwiseCpuKernel<platform::CPUDeviceContext, T>(ctx, x,
-                                                                         y, z);
+      LaunchBroadcastElementwiseCpuKernel<DeviceContext, T>(ctx, x, y, z);
     }
   }
 };

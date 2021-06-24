@@ -565,6 +565,30 @@ struct CudaExpGradFunctor : public BaseActivationFunctor<T> {
 };
 
 template <typename T>
+struct CudaExpm1Functor : public BaseActivationFunctor<T> {
+  using MPType = typename details::MPTypeTrait<T>::Type;
+
+  // expm1(x) = expm1(x)
+  // Inputs: args[0], the input x
+  __device__ __forceinline__ T operator()(const T* args) const {
+    MPType x = static_cast<MPType>(args[0]);
+    return static_cast<T>(expm1(x));
+  }
+};
+
+template <typename T>
+struct CudaExpm1GradFunctor : public BaseActivationFunctor<T> {
+  // dx = dout * out
+  // Inputs: args[0], the input dout
+  //         args[1], the input out
+  __device__ __forceinline__ T operator()(const T* args) const {
+    return args[0] * args[1] + args[0];
+  }
+
+  static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepOut; }
+};
+
+template <typename T>
 struct CudaLogFunctor : public BaseActivationFunctor<T> {
   using MPType = typename details::MPTypeTrait<T>::Type;
 
@@ -1595,6 +1619,24 @@ REGISTER_OP_CUDA_KERNEL(
                                   ops::CudaExpGradFunctor<int64_t>>,
     ops::ActivationGradCudaKernel<plat::CUDADeviceContext,
                                   ops::CudaExpGradFunctor<plat::float16>>);
+/* ========================================================================== */
+
+/* ==========================   expm1 register  ============================ */
+
+REGISTER_OP_CUDA_KERNEL(
+    expm1, ops::ActivationCudaKernel<plat::CUDADeviceContext,
+                                     ops::CudaExpm1Functor<float>>,
+    ops::ActivationCudaKernel<plat::CUDADeviceContext,
+                              ops::CudaExpm1Functor<double>>,
+    ops::ActivationCudaKernel<plat::CUDADeviceContext,
+                              ops::CudaExpm1Functor<plat::float16>>);
+REGISTER_OP_CUDA_KERNEL(
+    expm1_grad, ops::ActivationGradCudaKernel<plat::CUDADeviceContext,
+                                              ops::CudaExpm1GradFunctor<float>>,
+    ops::ActivationGradCudaKernel<plat::CUDADeviceContext,
+                                  ops::CudaExpm1GradFunctor<double>>,
+    ops::ActivationGradCudaKernel<plat::CUDADeviceContext,
+                                  ops::CudaExpm1GradFunctor<plat::float16>>);
 /* ========================================================================== */
 
 /* ==========================  Log register ==================================*/

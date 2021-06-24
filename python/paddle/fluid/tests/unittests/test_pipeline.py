@@ -44,6 +44,15 @@ class TestPipeline(TestDistBase):
                 check_error_log=True,
                 log_name=flag_name)
 
+    def test_dist_train_multi_device(self):
+        import paddle.fluid as fluid
+        if fluid.core.is_compiled_with_cuda():
+            self.check_with_place(
+                "pipeline_mnist_multi_device.py",
+                check_error_log=True,
+                delta=1e0,
+                log_name=flag_name)
+
     def test_dist_train_one_device(self):
         import paddle.fluid as fluid
         if fluid.core.is_compiled_with_cuda():

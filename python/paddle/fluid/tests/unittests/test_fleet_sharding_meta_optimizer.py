@@ -530,7 +530,8 @@ class TestFleetMetaOptimizer(TestFleetMetaOptimizer):
             'uniform_random', 'fill_constant', 'fill_constant', 'fill_constant',
             'fill_constant', 'fill_constant', 'fill_constant', 'fill_constant',
             'c_gen_nccl_id', 'c_comm_init', 'fill_constant', 'c_allreduce_sum',
-            'c_gen_nccl_id', 'c_comm_init', 'fill_constant', 'c_allreduce_sum',
+            'c_sync_calc_stream', 'c_gen_nccl_id', 'c_comm_init',
+            'fill_constant', 'c_allreduce_sum', 'c_sync_calc_stream',
             'c_gen_nccl_id', 'c_comm_init', 'c_gen_nccl_id', 'c_comm_init'
         ])
 

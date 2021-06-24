@@ -329,6 +329,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                           const NameVarMap<VarType>& ins,
                           const NameVarMap<VarType>& outs,
                           const framework::AttributeMap& attrs,
+                          const framework::AttributeMap& default_attrs,
                           const platform::Place& place) {
   auto* op_kernel = dynamic_cast<const framework::OperatorWithKernel*>(&op);
   PADDLE_ENFORCE_NOT_NULL(
@@ -336,7 +337,8 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                      "Only support operator with kernel in Dygraph mode."));
   auto& info = op.Info();
   if (info.infer_var_type_) {
-    RuntimeInferVarTypeContext<VarType> infer_var_type_ctx(ins, outs, attrs);
+    RuntimeInferVarTypeContext<VarType> infer_var_type_ctx(ins, outs, attrs,
+                                                           default_attrs);
     info.infer_var_type_(&infer_var_type_ctx);
   }
 
@@ -369,13 +371,14 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
    * after the execution of op, but the original input is directly
    * overwritten in the previous dynamic graph implemention.
    */
-  auto prepared_op = PreparedOp::Prepare(ins, outs, *op_kernel, place, attrs);
+  auto prepared_op =
+      PreparedOp::Prepare(ins, outs, *op_kernel, place, attrs, default_attrs);
   auto tmp_ins_ptr =
       PrepareData<VarType>(*op_kernel, ins, prepared_op.kernel_type());
   if (tmp_ins_ptr == nullptr) {
-    prepared_op.Run(ins, outs, attrs);
+    prepared_op.Run(ins, outs, attrs, default_attrs);
   } else {
-    prepared_op.Run(*tmp_ins_ptr, outs, attrs);
+    prepared_op.Run(*tmp_ins_ptr, outs, attrs, default_attrs);
   }
 
   VLOG(4) << LayerDebugString(op.Type(), ins, outs);
@@ -395,16 +398,18 @@ void OpBase::Run(const framework::OperatorBase& op,
                  const NameVarMap<VarBase>& ins,
                  const NameVarMap<VarBase>& outs,
                  const framework::AttributeMap& attrs,
+                 const framework::AttributeMap& default_attrs,
                  const platform::Place& place) {
-  OpBaseRunImpl<VarBase>(op, ins, outs, attrs, place);
+  OpBaseRunImpl<VarBase>(op, ins, outs, attrs, default_attrs, place);
 }
 
 void OpBase::Run(const framework::OperatorBase& op,
                  const NameVarMap<VariableWrapper>& ins,
                  const NameVarMap<VariableWrapper>& outs,
                  const framework::AttributeMap& attrs,
+                 const framework::AttributeMap& default_attrs,
                  const platform::Place& place) {
-  OpBaseRunImpl<VariableWrapper>(op, ins, outs, attrs, place);
+  OpBaseRunImpl<VariableWrapper>(op, ins, outs, attrs, default_attrs, place);
 }
 
 void ClearNoNeedBufferInputs(OpBase* op) {
@@ -446,15 +451,15 @@ void ClearNoNeedBufferInputs(OpBase* op) {
 std::shared_ptr<GradOpNode> CreateGradOpNode(
     const framework::OperatorBase& op, const NameVarBaseMap& ins,
     const NameVarBaseMap& outs, const framework::AttributeMap& attrs,
-    const platform::Place& place,
+    const framework::AttributeMap& default_attrs, const platform::Place& place,
     const std::map<std::string, std::string>& inplace_map) {
   const auto& info = op.Info();
   if (!info.dygraph_grad_op_maker_) {
     return nullptr;
   }
 
-  auto grad_node =
-      info.dygraph_grad_op_maker_(op.Type(), ins, outs, attrs, inplace_map);
+  auto grad_node = info.dygraph_grad_op_maker_(op.Type(), ins, outs, attrs,
+                                               default_attrs, inplace_map);
   if (grad_node && !grad_node->empty()) {
     for (auto& grad_op : *grad_node) {
       grad_op.SetId(OpBase::GenerateUniqueId());

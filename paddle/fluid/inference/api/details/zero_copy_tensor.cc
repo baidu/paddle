@@ -104,6 +104,8 @@ DataType Tensor::type() const {
     return DataType::INT32;
   } else if (type == paddle::framework::proto::VarType::UINT8) {
     return DataType::UINT8;
+  } else if (type == paddle::framework::proto::VarType::INT8) {
+    return DataType::INT8;
   }
   return DataType::FLOAT32;
 }

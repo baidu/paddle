@@ -51,6 +51,8 @@ limitations under the License. */
 namespace paddle {
 namespace pybind {
 
+PyTypeObject *g_varbase_pytype = nullptr;
+
 namespace py = ::pybind11;
 
 class Layer : public imperative::Layer {
@@ -243,7 +245,7 @@ static void InitVarBaseFromNumpyWithArgDefault(imperative::VarBase *self,
 }
 
 static void InitVarBaseFromTensorWithArgDefault(
-    imperative::VarBase *self, const framework::LoDTensor &tensor) {
+    imperative::VarBase *self, const framework::Tensor &tensor) {
   VLOG(4) << "Init VarBase";
   auto place = imperative::GetCurrentTracer()->ExpectedPlace();
   new (self) imperative::VarBase(
@@ -470,9 +472,9 @@ static void ParseIndexingSlice(framework::LoDTensor *tensor, PyObject *_index,
 }
 
 template <typename P>
-static void VarBaseCopy(std::shared_ptr<imperative::VarBase> &src,
-                        imperative::VarBase &dst, const P &dst_device,
-                        const bool blocking) {
+static void VarBaseCopy(std::shared_ptr<imperative::VarBase> &src,  // NOLINT
+                        imperative::VarBase &dst,                   // NOLINT
+                        const P &dst_device, const bool blocking) {
   if (dst.SharedVar()->IsEmpty()) {
     VLOG(3) << "deep copy Variable from " << src->Name() << " to "
             << dst.Name();
@@ -667,9 +669,10 @@ void BindImperative(py::module *m_ptr) {
           imperative::SetCurrentTracer(tracer);
         });
 
-  py::class_<imperative::VarBase, std::shared_ptr<imperative::VarBase>>(
-      m, "VarBase", R"DOC()DOC")
-      .def_static("_alive_vars", &imperative::VarBase::AliveVarNames)
+  py::class_<imperative::VarBase, std::shared_ptr<imperative::VarBase>> varbase(
+      m, "VarBase", R"DOC()DOC");
+  g_varbase_pytype = (PyTypeObject *)varbase.ptr();  // NOLINT
+  varbase.def_static("_alive_vars", &imperative::VarBase::AliveVarNames)
       .def("__init__",
            [](imperative::VarBase &self) {
              std::string name =
@@ -1468,28 +1471,22 @@ void BindImperative(py::module *m_ptr) {
                     &imperative::VarBase::SetOverridedStopGradient)
       .def_property("persistable", &imperative::VarBase::Persistable,
                     &imperative::VarBase::SetPersistable)
-      .def_property_readonly("shape",
-                             [](imperative::VarBase &self) {
-                               if (self.Var().IsType<framework::LoDTensor>()) {
-                                 return framework::vectorize<int>(
-                                     self.Var()
-                                         .Get<framework::LoDTensor>()
-                                         .dims());
-                               } else if (self.Var()
-                                              .IsType<
-                                                  framework::SelectedRows>()) {
-                                 return framework::vectorize<int>(
-                                     self.Var()
-                                         .Get<framework::SelectedRows>()
-                                         .value()
-                                         .dims());
-                               } else {
-                                 VLOG(2) << "It is meaningless to get shape of "
-                                            "variable type "
-                                         << GetTypeName(self);
-                                 return std::vector<int>();
-                               }
-                             })
+      .def_property_readonly(
+          "shape",
+          [](imperative::VarBase &self) {
+            if (self.Var().IsType<framework::LoDTensor>()) {
+              return framework::vectorize<int>(
+                  self.Var().Get<framework::LoDTensor>().dims());
+            } else if (self.Var().IsType<framework::SelectedRows>()) {
+              return framework::vectorize<int>(
+                  self.Var().Get<framework::SelectedRows>().value().dims());
+            } else {
+              VLOG(2) << "It is meaningless to get shape of "
+                         "variable type "
+                      << GetTypeName(self);
+              return std::vector<int>();
+            }
+          })
       .def_property_readonly("is_leaf", &imperative::VarBase::IsLeaf,
                              R"DOC(
       Whether a Tensor is leaf Tensor.

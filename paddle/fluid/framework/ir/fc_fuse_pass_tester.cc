@@ -58,12 +58,12 @@ TEST(FCFusePass, basic) {
   auto* weights_0 = layers.data("weights_0", {}, true);
   auto* mul_out_0 = layers.mul(relu_out_0, weights_0);
   auto* bias_1 = layers.data("bias_1", {}, true);
-  auto* add_out_0 = layers.elementwise_add(mul_out_0, bias_1);
+  auto* add_out_0 = layers.elementwise_add(mul_out_0, bias_1, nullptr, 1);
   auto* relu_out_1 = layers.relu(add_out_0);
   auto* weights_1 = layers.data("weights_1", {}, true);
   auto* mul_out_1 = layers.mul(relu_out_1, weights_1);
   auto* bias_2 = layers.data("bias_2", {}, true);
-  auto* add_out_1 = layers.elementwise_add(mul_out_1, bias_2);
+  auto* add_out_1 = layers.elementwise_add(mul_out_1, bias_2, nullptr, 1);
   VLOG(4) << add_out_1;
 
   std::unique_ptr<ir::Graph> graph(new ir::Graph(layers.main_program()));

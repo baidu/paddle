@@ -1446,7 +1446,9 @@ def linear(x, weight, bias=None, name=None):
           #     [2.1077576  2.1077576  2.1077576  2.1077576 ]]
     """
     if in_dygraph_mode():
-        pre_bias = core.ops.matmul_v2(x, weight)
+        pre_bias = _varbase_creator(dtype=x.dtype)
+        core.ops.matmul(x, weight, pre_bias, 'transpose_X', False,
+                        'transpose_Y', False, "alpha", 1)
 
         if bias is None:
             return pre_bias

@@ -1,0 +1,65 @@
+type: "gru"
+def {
+  inputs {
+    name: "Input"
+  }
+  inputs {
+    name: "H0"
+  }
+  inputs {
+    name: "Weight"
+  }
+  inputs {
+    name: "Bias"
+  }
+  outputs {
+    name: "BatchGate"
+  }
+  outputs {
+    name: "BatchResetHiddenPrev"
+  }
+  outputs {
+    name: "BatchHidden"
+  }
+  outputs {
+    name: "Hidden"
+  }
+  attrs {
+    name: "activation"
+    type: STRING
+  }
+  attrs {
+    name: "gate_activation"
+    type: STRING
+  }
+  attrs {
+    name: "is_reverse"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "origin_mode"
+    type: BOOLEAN
+  }
+}
+extra {
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

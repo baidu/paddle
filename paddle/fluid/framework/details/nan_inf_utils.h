@@ -19,6 +19,7 @@
 
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/framework/scope.h"
+#include "paddle/fluid/imperative/type_defs.h"
 #include "paddle/fluid/platform/place.h"
 
 namespace paddle {
@@ -30,9 +31,28 @@ void CheckVarHasNanOrInf(const std::string& op_type,
                          const std::string& var_name,
                          const platform::Place& place);
 
+void CheckVarHasNanOrInf(const std::string& op_type,
+                         const std::string& var_name,
+                         const framework::Variable* var,
+                         const platform::Place& place);
+
 void CheckOpHasNanOrInf(const framework::OperatorBase& op,
                         const framework::Scope& scope,
                         const platform::Place& place);
+
+template <typename VarType>
+void CheckOpHasNanOrInfInDygraph(const std::string& op_type,
+                                 const imperative::NameVarMap<VarType>& op_outs,
+                                 platform::Place place) {
+  for (const auto& pair : op_outs) {
+    for (const auto& ivar : pair.second) {
+      auto* var = ivar->MutableVar();
+      if (var == nullptr) continue;
+      CheckVarHasNanOrInf(op_type, ivar->Name(), var, place);
+    }
+  }
+}
+
 }  // namespace details
 }  // namespace framework
 }  // namespace paddle

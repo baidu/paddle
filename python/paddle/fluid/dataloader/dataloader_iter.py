@@ -27,10 +27,7 @@ from collections import namedtuple
 from paddle.fluid.framework import _set_expected_place, _current_expected_place
 
 # NOTE: queue has a different name in python2 and python3
-if six.PY2:
-    import Queue as queue
-else:
-    import queue
+import queue
 
 import paddle
 from .. import core, layers

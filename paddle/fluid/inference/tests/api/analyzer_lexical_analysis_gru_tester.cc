@@ -38,7 +38,6 @@ void SetAnalysisConfig(AnalysisConfig *cfg,
   cfg->SwitchSpecifyInputNames(false);
   cfg->SetCpuMathLibraryNumThreads(num_threads);
   cfg->EnableMKLDNN();
-  cfg->pass_builder()->AppendPass("mkldnn_placement_pass");
 }
 
 std::vector<size_t> ReadSentenceLod(std::ifstream &file, size_t offset,

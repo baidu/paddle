@@ -113,9 +113,18 @@ class GradOpBaseMakerBase {
     return vec_temp;
   }
 
+  // Only for dygraph
+  void SetDygraphDefaultAttrsMap(const framework::AttributeMap& default_attrs) {
+    default_attrs_ = &default_attrs;
+  }
+
+  const framework::AttributeMap& DefaultAttrsMap() const {
+    return *default_attrs_;
+  }
+
   const framework::AttributeMap& Attrs() const { return attrs_; }
 
-  const framework::Attribute& GetAttr(const std::string& name) const {
+  virtual const framework::Attribute& GetAttr(const std::string& name) const {
     auto it = attrs_.find(name);
     PADDLE_ENFORCE_EQ(
         it != attrs_.end(), true,
@@ -199,6 +208,7 @@ class GradOpBaseMakerBase {
   const NameVarBaseMap& var_base_map_in_;
   const NameVarBaseMap& var_base_map_out_;
   const framework::AttributeMap& attrs_;
+  const framework::AttributeMap* default_attrs_;
   const std::map<std::string, std::string>& inplace_map_;
 };
 
@@ -283,6 +293,10 @@ class TracedGradOp {
 
   void SetAttrMap(const framework::AttributeMap& attrs) {
     return op_->SetAttrMap(attrs);
+  }
+
+  void SetDefaultAttrsMap(const framework::AttributeMap& attrs) {
+    return op_->SetDefaultAttrsMap(attrs);
   }
 
   void SetAttr(const std::string& name, const framework::Attribute& v) {

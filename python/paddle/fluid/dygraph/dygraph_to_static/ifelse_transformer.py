@@ -402,7 +402,7 @@ def parse_cond_return(parent_vars_dict, if_vars_dict, else_vars_dict,
             var for var in _vars_with_store(child_dict) if var in parent_dict
         ])
 
-    def _vars_loaded_before_store(ids_dict):
+    def _vars_loaded(ids_dict):
         """
         gast.Param is also a kind of `load` semantic.
         """
@@ -411,8 +411,6 @@ def parse_cond_return(parent_vars_dict, if_vars_dict, else_vars_dict,
             for ctx in ctxs:
                 if isinstance(ctx, (gast.Load, gast.Param)):
                     new_dict[k].append(ctx)
-                elif isinstance(ctx, gast.Store):
-                    break
         return new_dict
 
     # modified vars
@@ -439,8 +437,12 @@ def parse_cond_return(parent_vars_dict, if_vars_dict, else_vars_dict,
     new_vars_in_body_and_orelse = body_new_vars & orelse_new_vars
 
     # 3. new var is created only in one of If.body or If.orelse node, and it used as gast.Load firstly after gast.If node.
+    # TODO(zhhsplendid): the _vars_loaded can be optimized as _vars_loaded_before_store. Because if a variable is stored before load,
+    # the value would change by the store statement, we don't have to return to change the value. However, analysis is
+    # complex because if the IfElse is nested and outer IfElse store statement may not run at all. We will put this optimization
+    # as the future TODO
     used_vars_after_ifelse = set(
-        [var for var in _vars_loaded_before_store(after_ifelse_vars_dict)])
+        [var for var in _vars_loaded(after_ifelse_vars_dict)])
     new_vars_to_create = new_vars_in_one_of_body_or_orelse & used_vars_after_ifelse | new_vars_in_body_and_orelse
 
     # 4. generate return_ids of if/else node.

@@ -111,7 +111,12 @@ nvinfer1::Dims SlicePlugin::getOutputDimensions(int index,
 }
 
 int SlicePlugin::enqueue(int batch_size, const void *const *inputs,
+#if IS_TRT_VERSION_LT(8000)
                          void **outputs, void *workspace, cudaStream_t stream) {
+#else
+                         void *const *outputs, void *workspace,
+                         cudaStream_t stream) {
+#endif
   auto input_dims = getInputDims(0);
 
   // notice input dims is [C, H, W], add input batch dim here

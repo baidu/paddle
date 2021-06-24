@@ -68,7 +68,6 @@ __all__ = [     #noqa
     'conv2d_transpose',
     'conv3d',
     'conv3d_transpose',
-    'create_parameter',
     'crf_decoding',
     'data_norm',
     'deform_conv2d',

@@ -20,7 +20,7 @@ import paddle
 from paddle.io import Dataset
 from paddle.utils import try_import
 
-__all__ = ["DatasetFolder", "ImageFolder"]
+__all__ = []
 
 
 def has_valid_extension(filename, extensions):

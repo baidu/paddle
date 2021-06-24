@@ -239,31 +239,39 @@ def new_group(ranks=None, backend=None):
     if global_rank not in ranks:
         gp = Group(-1, -1, ring_id, ranks)
         _group_map[ring_id] = gp
-        return gp
-
-    ranks = sorted(ranks)
-    group_rank = ranks.index(global_rank)
-    group_size = len(ranks)
-    gp = Group(group_rank, group_size, ring_id, ranks)
-    _group_map[ring_id] = gp
-
-    if group_size < 2:
-        return gp
-
-    strategy = core.ParallelStrategy()
-    strategy.nranks = group_size
-    strategy.local_rank = group_rank
-    strategy.trainer_endpoints = [genv.trainer_endpoints[i] for i in ranks]
-    strategy.current_endpoint = genv.current_endpoint
-    strategy.nrings = 1
-
-    if core.is_compiled_with_cuda():
-        place = core.CUDAPlace(genv.device_id)
-        core.NCCLParallelContext(strategy, place).init_with_ring_id(ring_id)
     else:
-        assert False, ("no cuda device found")
-    # need to barrier to construct group
-    barrier(gp)
+        ranks = sorted(ranks)
+        group_rank = ranks.index(global_rank)
+        group_size = len(ranks)
+        gp = Group(group_rank, group_size, ring_id, ranks)
+        _group_map[ring_id] = gp
+
+        if group_size >= 2:
+            strategy = core.ParallelStrategy()
+            strategy.nranks = group_size
+            strategy.local_rank = group_rank
+            strategy.trainer_endpoints = [
+                genv.trainer_endpoints[i] for i in ranks
+            ]
+            strategy.current_endpoint = genv.current_endpoint
+            strategy.nrings = 1
+
+            if core.is_compiled_with_cuda():
+                place = core.CUDAPlace(genv.device_id)
+                core.NCCLParallelContext(strategy,
+                                         place).init_with_ring_id(ring_id)
+            else:
+                assert False, ("no cuda device found")
+        else:
+            return gp
+
+    # TODO(shenliang03): This is a temporary solution to solve the problem of 
+    # hang caused by cross-creation of new_group
+    tmp = paddle.to_tensor(
+        [1], dtype="int32") if in_dygraph_mode() else fill_constant(
+            [0], dtype="int32", value="1")
+    paddle.distributed.all_reduce(tmp, use_calc_stream=True)
+    paddle.distributed.wait(tmp)
     return gp
 
 
@@ -775,7 +783,7 @@ def _c_identity(tensor, group=None):
     return out
 
 
-def _c_concat(tensor, nranks, group=None):
+def _c_concat(tensor, group=None):
     """
     Return allgather of the tensor, mainly used with model parallel.
 
@@ -791,10 +799,14 @@ def _c_concat(tensor, nranks, group=None):
         return
     ring_id = 0 if group is None else group.id
 
+    global_rank = _get_global_env().rank
+    rank = global_rank if group is None else group.get_group_rank(global_rank)
+    nranks = _get_global_env().world_size if group is None else group.nranks
+
     if in_dygraph_mode():
         return core.ops.c_concat(tensor, 'ring_id', ring_id, 'use_calc_stream',
-                                 True, 'nranks', nranks, 'use_model_parallel',
-                                 True)
+                                 True, 'rank', rank, 'nranks', nranks,
+                                 'use_model_parallel', True)
 
     op_type = 'c_concat'
     helper = LayerHelper(op_type, **locals())
@@ -812,12 +824,13 @@ def _c_concat(tensor, nranks, group=None):
             'ring_id': ring_id,
             'use_calc_stream': True,
             'use_model_parallel': True,
-            'nranks': nranks
+            'nranks': nranks,
+            'rank': rank
         })
     return out
 
 
-def _c_split(tensor, rank, nranks, group=None):
+def _c_split(tensor, group=None):
     """
     Split tensor evenly among all members, mainly used with model parallel.
 
@@ -833,6 +846,10 @@ def _c_split(tensor, rank, nranks, group=None):
     if group is not None and not group.is_member():
         return
     ring_id = 0 if group is None else group.id
+
+    global_rank = _get_global_env().rank
+    rank = global_rank if group is None else group.get_group_rank(global_rank)
+    nranks = _get_global_env().world_size if group is None else group.nranks
 
     if in_dygraph_mode():
         return core.ops.c_split(tensor, 'use_calc_stream', True, 'ring_id',
@@ -879,8 +896,56 @@ def _mp_allreduce(tensor,
                 "use_model_parallel", use_model_parallel)
         else:
             raise ValueError("Unknown parameter: {}.".format(op))
-    else:
-        raise NotImplementedError("No support _mp_allreduce in dygraph mode.")
+
+    op_type = 'c_allreduce_sum'
+    helper = LayerHelper(op_type, **locals())
+    out = helper.create_variable_for_type_inference(dtype=tensor.dtype)
+
+    check_variable_and_dtype(
+        tensor, 'tensor', ['float16', 'float32', 'float64', 'int32', 'int64'],
+        op_type)
+
+    helper.append_op(
+        type=op_type,
+        inputs={'X': tensor},
+        outputs={'Out': out},
+        attrs={
+            'ring_id': ring_id,
+            'use_calc_stream': use_calc_stream,
+            'use_model_parallel': use_model_parallel,
+        })
+    return out
+
+
+def _c_lookup_table(table, index, start_index=0, name=None):
+    """
+    Lookup table according to index.
+
+    Args:
+        table (Tensor): The input Tensor. Its data type
+            should be float16, float32, float64.
+        index (Tensor): The index to lookup table.
+        start_index (int): The initial index for table range.
+        name (string): The name of the api
+
+    Returns:
+        Tensor.
+    """
+    if in_dygraph_mode():
+        return core.ops.c_embedding(table, index, "start_index", start_index)
+
+    op_type = 'c_embedding'
+    helper = LayerHelper(op_type, **locals())
+    dtype = helper.input_dtype(input_param_name='table')
+    check_variable_and_dtype(index, 'input', ['int32', 'int64'], op_type)
+    tmp = helper.create_variable_for_type_inference(dtype)
+    helper.append_op(
+        type='c_embedding',
+        inputs={'Ids': index,
+                'W': table},
+        outputs={'Out': tmp},
+        attrs={"start_index": start_index})
+    return tmp
 
 
 class _Linear(layers.Layer):
@@ -919,6 +984,35 @@ class _Linear(layers.Layer):
         name_str = ', name={}'.format(self.name) if self.name else ''
         return 'in_features={}, out_features={}, dtype={}{}'.format(
             self.weight.shape[0], self.weight.shape[1], self._dtype, name_str)
+
+
+def _c_softmax_with_cross_entropy(logits,
+                                  label,
+                                  group=None,
+                                  return_softmax=False):
+    if group is not None and not group.is_member():
+        return
+    ring_id = 0 if group is None else group.id
+    global_rank = _get_global_env().rank
+    rank = global_rank if group is None else group.get_group_rank(global_rank)
+    nranks = _get_global_env().world_size if group is None else group.nranks
+
+    input_dims = len(list(logits.shape))
+    label_dims = len(list(label.shape))
+    if input_dims - 1 != label_dims and input_dims != label_dims:
+        raise ValueError(
+            'Expected nput_dims - 1 = label_dims or input_dims == label_dims\
+             (got nput_dims{}, label_dims{})'.format(input_dims, label_dims))
+    if input_dims - 1 == label_dims:
+        label = paddle.unsqueeze(label, axis=-1)
+
+    if in_dygraph_mode():
+        softmax, loss = core.ops.c_softmax_with_cross_entropy(
+            logits, label, 'ring_id', ring_id, 'rank', rank, 'nranks', nranks)
+        if not return_softmax:
+            return loss
+        else:
+            return loss, softmax
 
 
 def _linear(x, weight, bias=None, name=None):
@@ -989,7 +1083,7 @@ def _parallel_linear(x,
 
     if axis == 0:
         if split_tensor:
-            x = _c_split(x, inner_rank, nranks, group=group)
+            x = _c_split(x, group=group)
     else:
         x = _c_identity(x, group=group)
 
@@ -1074,47 +1168,34 @@ def _parallel_embedding(x,
         return
     ring_id = 0 if group is None else group.id
 
-    origin_num_embeddings = origin_size[0]
-    embedding = paddle.nn.Embedding(
-        per_part_embeddings,
-        origin_size[1],
-        padding_idx=per_part_embeddings - 1,
-        sparse=False,
-        weight_attr=param_attr,
-        name=name)
+    helper = LayerHelper("_parallel_embedding", **locals())
 
-    origin_input_shape = x.shape
-    if len(origin_input_shape) == 2:
-        x = paddle.unsqueeze(x, axis=-1)
-    else:
-        assert origin_input_shape[-1] == 1, (
-            "The last dimension size of x must be 1.")
-    x_shard = paddle.shard_index(x, origin_num_embeddings, num_partitions,
-                                 inner_rank, per_part_embeddings - 1)
-    if len(origin_input_shape) == 2:
-        x_shard = paddle.squeeze(x_shard, axis=-1)
-    emb_out = embedding(x_shard)
+    per_part_size = per_part_embeddings
+    rank = inner_rank
+
+    vocab_start_index = rank * per_part_size
+    dtype = helper.get_default_dtype()
+    size = [per_part_size, origin_size[1]]
+
+    weight = helper.create_parameter(
+        attr=param_attr, shape=size, dtype=dtype, is_bias=False)
+
+    if num_partitions == 1:
+        return paddle.nn.functional.embedding(
+            x, weight=weight, padding_idx=None, sparse=False, name=name)
+
     startup_block = paddle.static.default_startup_program().global_block()
     main_block = paddle.static.default_main_program().global_block()
-    startup_block.vars[embedding.weight.name].is_distributed = True
-    main_block.vars[embedding.weight.name].is_distributed = True
-    out = main_block.create_var(
-        shape=emb_out.shape,
-        dtype=emb_out.dtype,
-        type=emb_out.type,
-        lod_level=emb_out.lod_level,
-        persistable=False,
-        is_data=False,
-        need_check_feed=emb_out.desc.need_check_feed())
-    main_block.append_op(
-        type='c_allreduce_sum',
-        inputs={'X': emb_out},
-        outputs={'Out': out},
-        attrs={
-            'ring_id': ring_id,
-            'use_calc_stream': True,
-            'use_model_parallel': True
-        })
+    startup_block.vars[weight.name].is_distributed = True
+    main_block.vars[weight.name].is_distributed = True
+
+    output_parallel = paddle.distributed.collective._c_lookup_table(
+        weight, x, start_index=vocab_start_index, name=name)
+    out = paddle.distributed.collective._mp_allreduce(
+        output_parallel,
+        group=group,
+        use_calc_stream=True,
+        use_model_parallel=True)
     return out
 
 
@@ -1226,11 +1307,11 @@ def split(x,
     if operation == "embedding":
         assert axis == 0, ("We only support to split the weight of embedding "
                            "along the first axis now.")
-        per_part_size = (size[0] + num_partitions - 1) // num_partitions
-        last_part_size = size[0] - per_part_size * (num_partitions - 1)
-        if inner_rank == num_partitions - 1: per_part_size = last_part_size
-        per_part_size += 1  # make the last row as the padding index
+        assert size[0] % num_partitions == 0, \
+            "The length of the vocabulary must be divisible by num_partitions " \
+            "but received vocabulary={} num_partitions={}".format(size[0], num_partitions)
 
+        per_part_size = size[0] // num_partitions
         emb_out = _parallel_embedding(
             x,
             per_part_size,

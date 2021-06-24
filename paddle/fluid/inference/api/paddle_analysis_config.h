@@ -31,6 +31,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle_infer_declare.h"  // NOLINT
 
 /*! \file */
@@ -177,6 +178,26 @@ struct PD_INFER_DECL AnalysisConfig {
   ///
   void DisableGpu();
 
+  ///
+  /// \brief Turn on XPU.
+  ///
+  /// \param l3_workspace_size The size of the video memory allocated by the l3
+  ///         cache, the maximum is 16M.
+  /// \param locked Whether the allocated L3 cache can be locked. If false,
+  ///       it means that the L3 cache is not locked, and the allocated L3
+  ///       cache can be shared by multiple models, and multiple models
+  ///       sharing the L3 cache will be executed sequentially on the card.
+  /// \param autotune Whether to autotune the conv operator in the model. If
+  ///       true, when the conv operator of a certain dimension is executed
+  ///       for the first time, it will automatically search for a better
+  ///       algorithm to improve the performance of subsequent conv operators
+  ///       of the same dimension.
+  /// \param autotune_file Specify the path of the autotune file. If
+  ///       autotune_file is specified, the algorithm specified in the
+  ///       file will be used and autotune will not be performed again.
+  /// \param precision Calculation accuracy of multi_encoder
+  /// \param adaptive_seqlen Is the input of multi_encoder variable length
+  ///
   void EnableXpu(int l3_workspace_size = 0xfffc00, bool locked = false,
                  bool autotune = true, const std::string& autotune_file = "",
                  const std::string& precision = "int16",
@@ -294,7 +315,7 @@ struct PD_INFER_DECL AnalysisConfig {
   /// workspace.
   /// \param max_batch_size The maximum batch size of this prediction task,
   /// better set as small as possible for less performance loss.
-  /// \param min_subgrpah_size The minimum TensorRT subgraph size needed, if a
+  /// \param min_subgraph_size The minimum TensorRT subgraph size needed, if a
   /// subgraph is smaller than this, it will not be transferred to TensorRT
   /// engine.
   /// \param precision The precision used in TensorRT.
@@ -678,7 +699,7 @@ struct PD_INFER_DECL AnalysisConfig {
   bool xpu_adaptive_seqlen_;
 
   // mkldnn related.
-  int mkldnn_cache_capacity_{0};
+  int mkldnn_cache_capacity_{10};
   bool use_mkldnn_quantizer_{false};
   std::shared_ptr<MkldnnQuantizerConfig> mkldnn_quantizer_config_;
   bool use_mkldnn_bfloat16_{false};

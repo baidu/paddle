@@ -19,11 +19,12 @@ import numpy as np
 import paddle.fluid as fluid
 import os
 from paddle.fluid.layer_helper import LayerHelper
+from paddle.fluid.framework import _global_flags
 
 
 def check():
-    print("check: fluid.core.globals()['FLAGS_use_mkldnn']=",
-          fluid.core.globals()["FLAGS_use_mkldnn"])
+    print("check: _global_flags()['FLAGS_use_mkldnn']=",
+          _global_flags()["FLAGS_use_mkldnn"])
     print("check: fluid.get_flags('FLAGS_use_mkldnn')=",
           fluid.get_flags(['FLAGS_use_mkldnn']))
     print("check: DNNL_VERBOSE=", os.environ['DNNL_VERBOSE'])

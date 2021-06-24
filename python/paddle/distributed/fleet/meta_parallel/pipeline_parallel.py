@@ -138,6 +138,8 @@ class PipelineParallel(MetaParallelBase):
             self._backward(cache_id=backward_steps)
             backward_steps += 1
 
+        self._layers.allreduce_shared_weight_gradients()
+
         # optimizer
         self._step()
         self.train_loss = self._reduce_final_loss()

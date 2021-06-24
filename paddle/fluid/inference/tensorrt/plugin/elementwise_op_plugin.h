@@ -58,8 +58,11 @@ class ElementWisePlugin : public PluginTensorRT {
 
   int initialize() override;
 
-  // execute the layer
+#if IS_TRT_VERSION_LT(8000)
   int enqueue(int batch_size, const void* const* inputs, void** outputs,
+#else
+  int enqueue(int batch_size, const void* const* inputs, void* const* outputs,
+#endif
               void* workspace, cudaStream_t stream);
 
  protected:

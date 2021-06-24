@@ -357,7 +357,7 @@ def convert_shape_to_list(shape):
             map(lambda x: x.numpy()[0] if isinstance(x, Variable) else x,
                 shape))
     else:
-        shape = list(shape.numpy().astype(int))
+        shape = shape.numpy().astype(int).tolist()
     return shape
 
 

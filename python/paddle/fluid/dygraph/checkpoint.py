@@ -19,7 +19,6 @@ import collections
 import functools
 from ..framework import Variable, default_main_program, in_dygraph_mode, dygraph_only, Parameter, ParamBase, _varbase_creator, _dygraph_tracer
 import pickle
-import six
 from . import learning_rate_scheduler
 import warnings
 from .. import core
@@ -194,16 +193,14 @@ def load_dygraph(model_path, **configs):
         para_dict = {}
         if os.path.exists(params_file_path):
             with open(params_file_path, 'rb') as f:
-                para_dict = pickle.load(f) if six.PY2 else pickle.load(
-                    f, encoding='latin1')
+                para_dict = pickle.load(f, encoding='latin1')
 
         if not config.keep_name_table and "StructuredToParameterName@@" in para_dict:
             del para_dict["StructuredToParameterName@@"]
 
         if os.path.exists(opti_file_path):
             with open(opti_file_path, 'rb') as f:
-                opti_dict = pickle.load(f) if six.PY2 else pickle.load(
-                    f, encoding='latin1')
+                opti_dict = pickle.load(f, encoding='latin1')
     else:
         # check model path
         if not os.path.isdir(model_prefix):

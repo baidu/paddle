@@ -9,6 +9,9 @@ def {
   inputs {
     name: "Bias"
   }
+  inputs {
+    name: "ResidualData"
+  }
   outputs {
     name: "Output"
   }
@@ -32,14 +35,27 @@ def {
     name: "dilations"
     type: INTS
   }
+  attrs {
+    name: "data_format"
+    type: STRING
+  }
 }
 extra {
-  inputs {
-    name: "ResidualData"
+  attrs {
+    name: "@ENABLE_CACHE_RUNTIME_CONTEXT@"
+    type: BOOLEAN
+  } 
+  attrs {
+    name: "skip_quant"
+    type: BOOLEAN
   }
   attrs {
     name: "is_test"
     type: BOOLEAN
+  }
+  attrs {
+    name: "name"
+    type: STRING
   }
   attrs {
     name: "use_cudnn"
@@ -112,10 +128,6 @@ extra {
   attrs {
     name: "force_fp32_output"
     type: BOOLEAN
-  }
-  attrs {
-    name: "data_format"
-    type: STRING
   }
   attrs {
     name: "workspace_size_MB"

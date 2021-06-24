@@ -31,8 +31,19 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
   auto* op = prog->MutableBlock(0)->AppendOp();
   op->SetType(type);
   if (type == "conv2d") {
+    const std::vector<int> strides({1, 1});
+    const std::vector<int> paddings({0, 0});
+    const std::vector<int> dilations({1, 1});
     op->SetAttr("use_mkldnn", true);
     op->SetAttr("name", name);
+    op->SetAttr("strides", strides);
+    op->SetAttr("groups", 1);
+    op->SetAttr("paddings", paddings);
+    op->SetAttr("padding_algorithm", std::string("EXPLICIT"));
+    op->SetAttr("dilations", dilations);
+    op->SetAttr("data_format", std::string("NCHW"));
+
+    op->SetOutput("Output", outputs);
     op->SetInput("Input", {inputs[0]});
     op->SetInput("Filter", {inputs[1]});
     if (inputs.size() > 2)
@@ -41,10 +52,11 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
       op->SetInput("Bias", {});
   } else if (type == "elementwise_add") {
     op->SetAttr("use_mkldnn", true);
+    op->SetAttr("axis", -1);
     op->SetInput("X", {inputs[0]});
     op->SetInput("Y", {inputs[1]});
+    op->SetOutput("Out", outputs);
   }
-  op->SetOutput("Out", outputs);
   op->SetAttr(OpProtoAndCheckerMaker::OpRoleAttrName(),
               static_cast<int>(OpRole::kForward));
 }

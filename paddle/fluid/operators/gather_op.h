@@ -35,45 +35,30 @@ class GatherOpKernel : public framework::OpKernel<T> {
     auto *index = ctx.Input<Tensor>("Index");
     auto *output = ctx.Output<Tensor>("Out");
 
+    int axis = ctx.Attr<int>("axis");
+    // get axis from tensor
     if (ctx.HasInput("Axis")) {
-      const Tensor *axis = ctx.Input<Tensor>("Axis");
-      const auto &index_type = index->type();
-      const auto &axis_type = axis->type();
-      auto place = ctx.GetPlace();
-      if (index_type == framework::proto::VarType::INT32 &&
-          axis_type == framework::proto::VarType::INT32) {
-        GatherV2Function<T, int32_t, int32_t>(x, index, axis, output, place);
+      const Tensor *axis_tensor = ctx.Input<Tensor>("Axis");
+      const auto &axis_type = axis_tensor->type();
+      if (axis_type == framework::proto::VarType::INT32) {
+        axis = static_cast<int>(axis_tensor->data<int32_t>()[0]);
+      } else if (axis_type == framework::proto::VarType::INT64) {
+        axis = static_cast<int>(axis_tensor->data<int64_t>()[0]);
       }
-      if (index_type == framework::proto::VarType::INT32 &&
-          axis_type == framework::proto::VarType::INT64) {
-        GatherV2Function<T, int32_t, int64_t>(x, index, axis, output, place);
-      }
-      if (index_type == framework::proto::VarType::INT64 &&
-          axis_type == framework::proto::VarType::INT32) {
-        GatherV2Function<T, int64_t, int32_t>(x, index, axis, output, place);
-      }
-      if (index_type == framework::proto::VarType::INT64 &&
-          axis_type == framework::proto::VarType::INT64) {
-        GatherV2Function<T, int64_t, int64_t>(x, index, axis, output, place);
+    }
+    const auto &place = ctx.GetPlace();
+    const auto &index_type = index->type();
+    if (axis != 0) {
+      if (index_type == framework::proto::VarType::INT32) {
+        GatherV2Function<T, int32_t>(x, index, axis, output, place);
+      } else if (index_type == framework::proto::VarType::INT64) {
+        GatherV2Function<T, int64_t>(x, index, axis, output, place);
       }
       return;
     }
 
     output->mutable_data<T>(ctx.GetPlace());
     if (x->numel() == 0) return;
-
-    const auto &index_type = index->type();
-    bool index_type_match = index_type == framework::proto::VarType::INT32 ||
-                            index_type == framework::proto::VarType::INT64;
-    PADDLE_ENFORCE_EQ(index_type_match, true,
-                      platform::errors::InvalidArgument(
-                          "Index holds the wrong type, it holds [%s],"
-                          "but desires to be [%s] or [%s].",
-                          paddle::framework::DataTypeToString(index_type),
-                          paddle::framework::DataTypeToString(
-                              framework::proto::VarType::INT32),
-                          paddle::framework::DataTypeToString(
-                              framework::proto::VarType::INT64)));
     if (index_type == framework::proto::VarType::INT32) {
       CPUGather<T, int>(ctx.device_context(), *x, *index, output);
     } else if (index_type == framework::proto::VarType::INT64) {
@@ -94,26 +79,23 @@ class GatherGradientOpKernel : public framework::OpKernel<T> {
     auto *dX = ctx.Output<Tensor>(framework::GradVarName("X"));
     auto *dO = ctx.Input<Tensor>(framework::GradVarName("Out"));
 
+    int axis = ctx.Attr<int>("axis");
     if (ctx.HasInput("Axis")) {
-      const Tensor *axis = ctx.Input<Tensor>("Axis");
-      const auto &index_type = index->type();
-      const auto &axis_type = axis->type();
-      auto place = ctx.GetPlace();
-      if (index_type == framework::proto::VarType::INT32 &&
-          axis_type == framework::proto::VarType::INT32) {
-        GatherV2GradFunction<T, int32_t, int32_t>(dO, index, axis, dX, place);
+      const Tensor *axis_tensor = ctx.Input<Tensor>("Axis");
+      const auto &axis_type = axis_tensor->type();
+      if (axis_type == framework::proto::VarType::INT32) {
+        axis = static_cast<int>(axis_tensor->data<int32_t>()[0]);
+      } else if (axis_type == framework::proto::VarType::INT64) {
+        axis = static_cast<int>(axis_tensor->data<int64_t>()[0]);
       }
-      if (index_type == framework::proto::VarType::INT32 &&
-          axis_type == framework::proto::VarType::INT64) {
-        GatherV2GradFunction<T, int32_t, int64_t>(dO, index, axis, dX, place);
-      }
-      if (index_type == framework::proto::VarType::INT64 &&
-          axis_type == framework::proto::VarType::INT32) {
-        GatherV2GradFunction<T, int64_t, int32_t>(dO, index, axis, dX, place);
-      }
-      if (index_type == framework::proto::VarType::INT64 &&
-          axis_type == framework::proto::VarType::INT64) {
-        GatherV2GradFunction<T, int64_t, int64_t>(dO, index, axis, dX, place);
+    }
+    const auto &index_type = index->type();
+
+    if (axis != 0) {
+      if (index_type == framework::proto::VarType::INT32) {
+        GatherV2GradFunction<T, int32_t>(dO, index, axis, dX, ctx.GetPlace());
+      } else if (index_type == framework::proto::VarType::INT64) {
+        GatherV2GradFunction<T, int64_t>(dO, index, axis, dX, ctx.GetPlace());
       }
       return;
     }
@@ -126,18 +108,6 @@ class GatherGradientOpKernel : public framework::OpKernel<T> {
     if (dO->numel() == 0) return;
     bool overwrite = ctx.Attr<bool>("overwrite");
 
-    const auto &index_type = index->type();
-    bool index_type_match = index_type == framework::proto::VarType::INT32 ||
-                            index_type == framework::proto::VarType::INT64;
-    PADDLE_ENFORCE_EQ(index_type_match, true,
-                      platform::errors::InvalidArgument(
-                          "Index holds the wrong type, it holds [%s],"
-                          "but desires to be [%s] or [%s].",
-                          paddle::framework::DataTypeToString(index_type),
-                          paddle::framework::DataTypeToString(
-                              framework::proto::VarType::INT32),
-                          paddle::framework::DataTypeToString(
-                              framework::proto::VarType::INT64)));
     if (index_type == framework::proto::VarType::INT32) {
       if (overwrite) {
         ScatterAssign<T, int32_t>(ctx.device_context(), *dO, *index, dX);

@@ -66,6 +66,19 @@ def insert_pile_to_h_file(rootPath):
         os.system('echo "\n#endif" >> %s' % line)
 
 
+def remove_pile_from_h_file(rootPath):
+    h_cu_files = '%s/tools/h_cu_files.log' % rootPath
+    f = open(h_cu_files)
+    lines = f.readlines()
+    count = 12
+    for line in lines:
+        line = line.strip()
+        while count > 0:
+            os.system("sed -i '$d' %s" % line)
+            count = count - 1
+        count = 12
+
+
 def get_h_cu_file(file_path):
     rootPath = file_path[0]
     dir_path = file_path[1]
@@ -110,3 +123,6 @@ if __name__ == "__main__":
         dir_path = sys.argv[2]
         rootPath = sys.argv[3]
         main(rootPath, dir_path)
+    elif func == 'remove_pile_from_h_file':
+        rootPath = sys.argv[2]
+        remove_pile_from_h_file(rootPath)

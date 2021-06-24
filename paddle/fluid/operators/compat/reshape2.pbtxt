@@ -1,0 +1,52 @@
+type: "reshape2"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "Shape"
+  }
+  inputs {
+    name: "ShapeTensor"
+  }
+  outputs {
+    name: "XShape"
+  }
+  outputs {
+    name: "Out"
+  }
+  attrs {
+    name: "shape"
+    type: INTS
+  }
+}
+extra {
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

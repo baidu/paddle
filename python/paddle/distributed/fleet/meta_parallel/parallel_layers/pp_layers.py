@@ -15,6 +15,7 @@ import math
 import paddle
 from paddle.fluid.dygraph.layers import Layer
 from ...utils.log_util import logger, layer_to_str
+from functools import partial
 
 __all__ = []
 
@@ -56,6 +57,20 @@ class LayerDesc(object):
     def __repr__(self):
         return layer_to_str(self.layer_func.__name__, *self.inputs,
                             **self.kwargs)
+
+
+class SharedLayerDesc(LayerDesc):
+    def __init__(self,
+                 key,
+                 layer_func,
+                 forward_func=None,
+                 shared_weight_attr='weight',
+                 *inputs,
+                 **kwargs):
+        super(SharedLayerDesc, self).__init__(layer_func, *inputs, **kwargs)
+        self.layer_name = key
+        self.forward_func = forward_func
+        self.shared_weight_attr = shared_weight_attr
 
 
 class PipelineLayer(Layer):
@@ -104,10 +119,85 @@ class PipelineLayer(Layer):
         self._start_pos = 0
         self._end_pos = self._num_layers - 1
         self._segment_network(seg_method)
+        self.shared_layers = paddle.nn.LayerDict()
+        self.shared_weight_attrs = {}
 
         # construct layer
         self.run_function = []
         self._build_layer()
+
+        self.shared_comm = self._construct_shared_comm()
+        self._synchronize_shared_weights()
+
+    def get_stage_from_index(self, layer_idx):
+        assert 0 <= layer_idx < self._num_layers, "layer_idx is out of bound"
+        for stage in range(self._topo.get_dim('pipe')):
+            if self.segment_parts[stage] <= layer_idx < self.segment_parts[stage
+                                                                           + 1]:
+                return stage
+
+    def _construct_shared_comm(self):
+        shared_comm = {}
+        if self._topo.get_dim("pipe") == 1:
+            return
+
+        layers_desc = self._layers_desc
+        shared_layer_names = set(
+            s.layer_name for s in layers_desc if isinstance(s, SharedLayerDesc))
+        for key in shared_layer_names:
+            shared_layers = []
+            for idx, layer in enumerate(layers_desc):
+                if isinstance(layer,
+                              SharedLayerDesc) and layer.layer_name == key:
+                    shared_layers.append(idx)
+
+            shared_stages = set(
+                self.get_stage_from_index(idx) for idx in shared_layers)
+            self._dp_degree = self._topo.get_dim('data')
+            self._mp_degree = self._topo.get_dim('model')
+
+            shared_ranks = []
+            for dp in range(self._dp_degree):
+                for mp in range(self._mp_degree):
+                    shared_ranks = []
+                    for s in sorted(shared_stages):
+                        shared_ranks.append(
+                            self._topo.get_rank_from_stage(
+                                self.global_rank, pipe=s, data=dp, model=mp))
+
+                    group = paddle.distributed.new_group(ranks=shared_ranks)
+                    if self.global_rank in shared_ranks:
+                        assert key in self.shared_layers
+                        if key in self.shared_layers:
+                            shared_comm[key] = {
+                                'ranks': shared_ranks,
+                                'group': group,
+                                'weight_attr': self.shared_weight_attrs[key],
+                                'layer': self.shared_layers[key],
+                            }
+        return shared_comm
+
+    def _synchronize_shared_weights(self):
+        for key, comm in self.shared_comm.items():
+            with paddle.framework.no_grad():
+                paddle.distributed.broadcast(
+                    getattr(comm['layer'], comm['weight_attr']),
+                    src=min(comm['ranks']),
+                    group=comm['group'])
+
+    def allreduce_shared_weight_gradients(self):
+        for key, comm in self.shared_comm.items():
+            param = getattr(self.shared_layers[key], comm['weight_attr'])
+            # need use trace_op to allreduce weight
+            with paddle.framework.no_grad():
+                paddle.fluid.framework._dygraph_tracer().trace_op(
+                    type="c_allreduce_sum",
+                    inputs={'X': param._grad_ivar()},
+                    outputs={'Out': param._grad_ivar()},
+                    attrs={
+                        'ring_id': comm['group'].id,
+                        'use_calc_stream': True
+                    })
 
     def _segment_network(self, seg_method):
         logger.info("start segment network..")
@@ -142,6 +232,21 @@ class PipelineLayer(Layer):
             if isinstance(layer, Layer):
                 self.run_function.append(layer)
                 self.add_sublayer(str(layer_index), layer)
+            elif isinstance(layer, SharedLayerDesc):
+                if layer.layer_name not in self.shared_layers:
+                    self.shared_layers[layer.layer_name] = layer.build_layer()
+                    self.shared_weight_attrs[
+                        layer.layer_name] = layer.shared_weight_attr
+
+                if layer.forward_func is None:
+                    self.run_function.append(self.shared_layers[
+                        layer.layer_name])
+
+                else:
+                    self.run_function.append(
+                        partial(layer.forward_func, self.shared_layers[
+                            layer.layer_name]))
+
             elif isinstance(layer, LayerDesc):
                 model = layer.build_layer()
                 self.run_function.append(model)

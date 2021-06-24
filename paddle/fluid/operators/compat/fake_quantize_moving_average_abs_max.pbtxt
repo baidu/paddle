@@ -1,0 +1,61 @@
+type: "fake_quantize_moving_average_abs_max"
+def {
+  inputs {
+    name: "X"
+  }
+  inputs {
+    name: "InScale"
+  }
+  inputs {
+    name: "InAccum"
+  }
+  inputs {
+    name: "InState"
+  }
+  outputs {
+    name: "Out"
+  }
+  outputs {
+    name: "OutScale"
+  }
+  outputs {
+    name: "OutState"
+  }
+  outputs {
+    name: "OutAccum"
+  }
+  attrs {
+    name: "moving_rate"
+    type: FLOAT
+  }
+  attrs {
+    name: "bit_length"
+    type: INT
+  }
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+}

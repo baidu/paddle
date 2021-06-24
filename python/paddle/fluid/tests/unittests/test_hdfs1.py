@@ -39,6 +39,7 @@ class FSTest1(FSTestBase):
         fs.mkdirs(dst)
         fs.mkdirs(dst + "/" + src)
         output = ""
+        cmd = "{} -mv {} {}".format(fs._base_cmd, src, dst)
         try:
             fs.mv(src, dst, test_exists=False)
             self.assertFalse(1, "can't execute cmd:{} output:{}".format(cmd,
@@ -46,7 +47,6 @@ class FSTest1(FSTestBase):
         except FSTimeOut as e:
             print("execute mv {} to {} timeout".format(src, dst))
 
-        cmd = "{} -mv {} {}".format(fs._base_cmd, src, dst)
         ret, output = fluid.core.shell_execute_cmd(cmd, 6 * 1000, 2 * 1000)
         self.assertNotEqual(ret, 0)
         print("second mv ret:{} output:{}".format(ret, output))

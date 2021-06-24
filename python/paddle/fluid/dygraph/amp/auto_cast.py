@@ -29,6 +29,8 @@ WHITE_LIST = {
     'matmul',
     'matmul_v2',
     'mul',
+    'fake_quantize_dequantize_abs_max',
+    'fake_quantize_dequantize_moving_average_abs_max',
 }
 
 # The set of ops that support fp16 calculation and are considered numerically-

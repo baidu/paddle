@@ -175,7 +175,7 @@ void DeserializeFromStream(std::istream& is, SelectedRows* selected_rows,
 
 void SerializeToStream(std::ostream& os, const SelectedRows& selected_rows);
 
-void DeserializeFromStream(std::ifstream& os, SelectedRows* selected_rows);
+void DeserializeFromStream(std::istream& os, SelectedRows* selected_rows);
 
 }  // namespace framework
 }  // namespace paddle

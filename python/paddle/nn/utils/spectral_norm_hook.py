@@ -20,7 +20,7 @@ from ..layer.conv import Conv1DTranspose, Conv2DTranspose, Conv3DTranspose
 from ..layer.common import Linear
 from .. import functional as F
 
-__all__ = ['spectral_norm']
+__all__ = []
 
 
 def normal_(x, mean=0., std=1.):

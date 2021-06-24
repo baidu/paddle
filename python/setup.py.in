@@ -213,6 +213,7 @@ packages=['paddle',
           'paddle.nn',
           'paddle.nn.functional',
           'paddle.nn.layer',
+          'paddle.nn.quant',
           'paddle.nn.initializer',
           'paddle.nn.utils',
           'paddle.metric',
@@ -345,18 +346,6 @@ if '${WITH_XPU}' == 'ON':
 if '${WITH_XPU_BKCL}' == 'ON':
     shutil.copy('${XPU_BKCL_LIB}', libs_path)
     package_data['paddle.libs']+=['${XPU_BKCL_LIB_NAME}']
-
-# Only for lite xpu inference.
-if '${WITH_XPU}' == 'OFF' and '${XPU_SDK_ROOT}' != '':
-    xpu_api_lib = os.path.join('${XPU_SDK_ROOT}', 'XTDK/shlib/', 'libxpuapi.so')
-    xpu_rt_lib = os.path.join('${XPU_SDK_ROOT}', 'XTDK/runtime/shlib/', 'libxpurt.so')
-    if os.path.exists(xpu_api_lib):
-        shutil.copy(xpu_api_lib, libs_path)
-        package_data['paddle.libs']+=['libxpuapi.so']
-    if os.path.exists(xpu_rt_lib):
-        shutil.copy(xpu_rt_lib, libs_path)
-        package_data['paddle.libs']+=['libxpurt.so']
-
 
 # remove unused paddle/libs/__init__.py
 if os.path.isfile(libs_path+'/__init__.py'):

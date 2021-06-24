@@ -30,6 +30,7 @@ class Graph;
 
 class FCFusePass : public FusePassBase {
  public:
+  FCFusePass();
   virtual ~FCFusePass() {}
 
  protected:

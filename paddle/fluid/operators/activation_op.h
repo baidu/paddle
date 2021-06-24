@@ -378,6 +378,26 @@ struct ExpGradFunctor : public BaseActivationFunctor<T> {
   static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepOut; }
 };
 
+// expm1(x) = e^x - 1
+template <typename T>
+struct Expm1Functor : public BaseActivationFunctor<T> {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) = x.expm1();
+  }
+};
+
+template <typename T>
+struct Expm1GradFunctor : public BaseActivationFunctor<T> {
+  template <typename Device, typename X, typename Out, typename dOut,
+            typename dX>
+  void operator()(Device d, X x, Out out, dOut dout, dX dx) const {
+    dx.device(d) = dout * out + dout;
+  }
+
+  static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepOut; }
+};
+
 // relu(x) = max(x, 0)
 template <typename T>
 struct ReluCPUFunctor : public BaseActivationFunctor<T> {

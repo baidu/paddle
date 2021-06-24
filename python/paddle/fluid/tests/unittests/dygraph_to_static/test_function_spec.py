@@ -39,10 +39,6 @@ class TestFunctionSpec(unittest.TestCase):
         with self.assertRaises(TypeError):
             foo_spec = FunctionSpec(foo_func, input_spec=a_spec)
 
-        # each element of input_spec should be `InputSpec`
-        with self.assertRaises(ValueError):
-            foo_spec = FunctionSpec(foo_func, input_spec=[a_spec, 10])
-
         foo_spec = FunctionSpec(foo_func, input_spec=[a_spec, b_spec])
         self.assertTrue(len(foo_spec.flat_input_spec) == 2)
 

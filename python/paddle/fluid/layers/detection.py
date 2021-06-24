@@ -1139,7 +1139,9 @@ def yolo_box(x,
              downsample_ratio,
              clip_bbox=True,
              name=None,
-             scale_x_y=1.):
+             scale_x_y=1.,
+             iou_aware=False,
+             iou_aware_factor=0.5):
     """
 
     ${comment}
@@ -1156,6 +1158,8 @@ def yolo_box(x,
         name (string): The default value is None.  Normally there is no need 
                        for user to set this property.  For more information, 
                        please refer to :ref:`api_guide_Name`
+        iou_aware (bool): ${iou_aware_comment}
+        iou_aware_factor (float): ${iou_aware_factor_comment}
 
     Returns:
         Variable: A 3-D tensor with shape [N, M, 4], the coordinates of boxes,
@@ -1204,6 +1208,8 @@ def yolo_box(x,
         "downsample_ratio": downsample_ratio,
         "clip_bbox": clip_bbox,
         "scale_x_y": scale_x_y,
+        "iou_aware": iou_aware,
+        "iou_aware_factor": iou_aware_factor
     }
 
     helper.append_op(

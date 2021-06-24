@@ -182,6 +182,7 @@ class TestGatherOp4(TestGatherOp1):
         self.index_type = "int64"
         self.axis = [0]
         self.axis_type = "int32"
+        self.attrs = {'overwrite': False}
 
 
 class API_TestGather(unittest.TestCase):

@@ -28,12 +28,12 @@ TEST(batch_norm_op, test) {
   TRTConvertValidation validator(5, parameters, scope, 1 << 15);
   std::vector<int> param_shape{2};
 
-  validator.DeclInputVar("batch_norm_X", nvinfer1::DimsCHW(2, 5, 5));
+  validator.DeclInputVar("batch_norm_X", nvinfer1::Dims3(2, 5, 5));
   validator.DeclParamVar("batch_norm_scale", param_shape);
   validator.DeclParamVar("batch_norm_bias", param_shape);
   validator.DeclParamVar("batch_norm_mean", param_shape);
   validator.DeclParamVar("batch_norm_variance", param_shape);
-  validator.DeclOutputVar("batch_norm_Y", nvinfer1::DimsCHW(2, 5, 5));
+  validator.DeclOutputVar("batch_norm_Y", nvinfer1::Dims3(2, 5, 5));
   validator.DeclOutputVar("batch_norm_save_mean", param_shape);
   validator.DeclOutputVar("batch_norm_save_variance", param_shape);
 

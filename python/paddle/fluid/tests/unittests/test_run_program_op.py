@@ -19,9 +19,12 @@ import unittest
 import numpy as np
 import six
 
+import paddle
 import paddle.fluid as fluid
 from paddle import compat as cpt
 from paddle.fluid import core, framework, executor
+
+paddle.enable_static()
 
 
 @contextlib.contextmanager
@@ -164,6 +167,8 @@ class RunProgramOpTest(unittest.TestCase):
             persistable=True)
         inner_scope = core.Scope()
         outputs['OutScope'].value().set_scope(inner_scope)
+
+        outputs['DOut'] = [create_var_base(False, "Fake_var")]
         return outputs
 
     def calc_dygraph_output(self, place):

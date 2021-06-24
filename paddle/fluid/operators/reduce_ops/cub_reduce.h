@@ -31,6 +31,7 @@ namespace cub = hipcub;
 
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/framework/tensor_util.h"
+#include "paddle/fluid/operators/amp/fp16_type_traits.h"
 
 namespace paddle {
 namespace operators {
@@ -66,39 +67,66 @@ struct Array {
   T data_[ElementCount];
 };
 
-// reduce the last axis of 2d array
-template <typename Tx, typename Ty, typename ReduceOp, typename TransformOp,
-          int BlockDim>
-__global__ void ReduceKernel2D(const Tx* x, Ty* y, ReduceOp reducer,
-                               TransformOp transformer, Ty init,
+// reduce the 1d array to one element
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp, int BlockDim>
+__global__ void ReduceKernel1D(const Tx* x, Ty* y, ReduceOp reducer,
+                               TransformOp transformer, MPType init,
                                int reduce_num) {
-  __shared__ typename cub::BlockReduce<Ty, BlockDim>::TempStorage temp_storage;
-  int idx_x = blockIdx.x * reduce_num;
-  int idx_y = threadIdx.x;
-  Ty reduce_var = init;
-  for (int idx_y = threadIdx.x; idx_y < reduce_num; idx_y += BlockDim)
-    reduce_var =
-        reducer(reduce_var, static_cast<Ty>(transformer(x[idx_x + idx_y])));
+  int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+  typedef cub::BlockReduce<MPType, BlockDim> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+
+  MPType local_data = init;
+  for (int i = thread_id; i < reduce_num; i += gridDim.x * blockDim.x) {
+    local_data = static_cast<MPType>(
+        reducer(local_data, static_cast<MPType>(transformer(x[i]))));
+  }
   __syncthreads();
 
-  reduce_var =
-      cub::BlockReduce<Ty, BlockDim>(temp_storage).Reduce(reduce_var, reducer);
+  local_data = BlockReduce(temp_storage).Reduce(local_data, reducer);
 
   if (threadIdx.x == 0) {
-    y[blockIdx.x] = reduce_var;
+    y[blockIdx.x] = static_cast<Ty>(local_data);
   }
 }
 
-template <typename Tx, typename Ty, typename ReduceOp, typename TransformOp,
-          int BlockDim, int Rank, int ReduceRank>
+// reduce the last axis of 2d array
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp, int BlockDim>
+__global__ void ReduceKernel2D(const Tx* x, Ty* y, ReduceOp reducer,
+                               TransformOp transformer, MPType init,
+                               int reduce_num) {
+  __shared__
+      typename cub::BlockReduce<MPType, BlockDim>::TempStorage temp_storage;
+  int idx_x = blockIdx.x * reduce_num;
+  int idx_y = threadIdx.x;
+  MPType reduce_var = init;
+  for (int idx_y = threadIdx.x; idx_y < reduce_num; idx_y += BlockDim)
+    reduce_var =
+        reducer(reduce_var, static_cast<MPType>(transformer(x[idx_x + idx_y])));
+  __syncthreads();
+
+  reduce_var = cub::BlockReduce<MPType, BlockDim>(temp_storage)
+                   .Reduce(reduce_var, reducer);
+
+  if (threadIdx.x == 0) {
+    y[blockIdx.x] = static_cast<Ty>(reduce_var);
+  }
+}
+
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp, int BlockDim, int Rank, int ReduceRank>
 __global__ void ReduceKernel(const Tx* x, Ty* y, ReduceOp reducer,
-                             TransformOp transformer, Ty init, int reduce_num,
-                             Array<int, Rank> x_strides,
+                             TransformOp transformer, MPType init,
+                             int reduce_num, Array<int, Rank> x_strides,
                              Array<int, ReduceRank> reduce_dim,
                              Array<int, ReduceRank> reduce_strides,
                              Array<int, Rank - ReduceRank> left_dim,
                              Array<int, Rank - ReduceRank> left_strides) {
-  __shared__ typename cub::BlockReduce<Ty, BlockDim>::TempStorage temp_storage;
+  __shared__
+      typename cub::BlockReduce<MPType, BlockDim>::TempStorage temp_storage;
   Array<int, Rank> sub_index;
   int left_idx = blockIdx.x;
   for (int i = 0; i < Rank - ReduceRank; ++i) {
@@ -114,7 +142,7 @@ __global__ void ReduceKernel(const Tx* x, Ty* y, ReduceOp reducer,
 
   int idx_x = 0;
   for (int k = 0; k < Rank; ++k) idx_x += (sub_index[k] * x_strides[k]);
-  Ty reduce_var = static_cast<Ty>(transformer(x[idx_x]));
+  MPType reduce_var = static_cast<MPType>(transformer(x[idx_x]));
 
   for (int i = threadIdx.x + BlockDim; i < reduce_num; i += BlockDim) {
     int reduce_idx = i;
@@ -125,16 +153,16 @@ __global__ void ReduceKernel(const Tx* x, Ty* y, ReduceOp reducer,
 
     int idx_x = 0;
     for (int k = 0; k < Rank; ++k) idx_x += (sub_index[k] * x_strides[k]);
-    reduce_var = static_cast<Ty>(
-        reducer(reduce_var, static_cast<Ty>(transformer(x[idx_x]))));
+    reduce_var = static_cast<MPType>(
+        reducer(reduce_var, static_cast<MPType>(transformer(x[idx_x]))));
   }
   __syncthreads();
 
-  reduce_var =
-      cub::BlockReduce<Ty, BlockDim>(temp_storage).Reduce(reduce_var, reducer);
+  reduce_var = cub::BlockReduce<MPType, BlockDim>(temp_storage)
+                   .Reduce(reduce_var, reducer);
 
   if (threadIdx.x == 0) {
-    y[blockIdx.x] = reduce_var;
+    y[blockIdx.x] = static_cast<Ty>(reduce_var);
   }
 }
 
@@ -192,6 +220,53 @@ static inline void CheckReduceRankIsValid(int reduce_rank, int rank) {
   }
 }
 
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp, int BlockDim>
+typename std::enable_if<!std::is_same<Tx, paddle::platform::float16>::value,
+                        void>::type
+LaunchCubReduceKernel(const Tx* x_data, Ty* y_data,
+                      const platform::Place& place, const ReduceOp& reducer,
+                      const TransformOp& transformer, const MPType& init,
+                      int reduce_num, gpuStream_t stream) {
+  cub::TransformInputIterator<Ty, TransformOp, const Tx*> trans_x(x_data,
+                                                                  transformer);
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::Reduce(nullptr, temp_storage_bytes, trans_x, y_data,
+                            reduce_num, reducer, init, stream);
+  framework::Tensor tmp;
+  auto* temp_storage = tmp.mutable_data<uint8_t>(
+      framework::make_ddim({static_cast<int64_t>(temp_storage_bytes)}), place);
+  cub::DeviceReduce::Reduce(temp_storage, temp_storage_bytes, trans_x, y_data,
+                            reduce_num, reducer, init, stream);
+}
+
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp, int BlockDim>
+typename std::enable_if<std::is_same<Tx, paddle::platform::float16>::value,
+                        void>::type
+LaunchCubReduceKernel(const Tx* x_data, Ty* y_data,
+                      const platform::Place& place, const ReduceOp& reducer,
+                      const TransformOp& transformer, const MPType& init,
+                      int reduce_num, gpuStream_t stream) {
+  int element_per_block = BlockDim * 10;
+  int block_per_grid = (reduce_num + element_per_block - 1) / element_per_block;
+
+  framework::Tensor tmp;
+  auto* temp_storage = tmp.mutable_data<MPType>(
+      framework::make_ddim(
+          {static_cast<int64_t>(block_per_grid * sizeof(MPType))}),
+      place);
+
+  // each block reduce number to interim result
+  ReduceKernel1D<Tx, MPType, MPType, ReduceOp, TransformOp,
+                 BlockDim><<<block_per_grid, BlockDim, 0, stream>>>(
+      x_data, temp_storage, reducer, transformer, init, reduce_num);
+  // reduce all number to final result
+  ReduceKernel1D<MPType, MPType, Ty, ReduceOp, TransformOp,
+                 BlockDim><<<1, BlockDim, 0, stream>>>(
+      temp_storage, y_data, reducer, transformer, init, block_per_grid);
+}
+
 template <typename Tx, typename Ty, int BlockDim, typename ReduceOp,
           typename TransformOp>
 static void TensorReduceImpl(
@@ -201,45 +276,40 @@ static void TensorReduceImpl(
     const std::vector<int>& reduce_dim, const std::vector<int>& reduce_strides,
     const std::vector<int>& left_dim, const std::vector<int>& left_strides,
     gpuStream_t stream) {
+  using MPType = typename details::MPTypeTrait<Ty>::Type;
+  MPType init_mp = static_cast<MPType>(init);
+
 #define CUB_RANK_CASE(i, ...)             \
   case i: {                               \
     constexpr auto kRank = i;             \
     switch (reduce_rank) { __VA_ARGS__; } \
   } break
 
-#define CUB_REDUCE_RANK_CASE(i, ...)                              \
-  case i: {                                                       \
-    constexpr auto kReduceRank = i;                               \
-    ReduceKernel<Tx, Ty, ReduceOp, TransformOp, BlockDim, kRank,  \
-                 kReduceRank><<<left_num, BlockDim, 0, stream>>>( \
-        x_data, y_data, reducer, transformer, init, reduce_num,   \
-        Array<int, kRank>::From(x_strides),                       \
-        Array<int, kReduceRank>::From(reduce_dim),                \
-        Array<int, kReduceRank>::From(reduce_strides),            \
-        Array<int, kRank - kReduceRank>::From(left_dim),          \
-        Array<int, kRank - kReduceRank>::From(left_strides));     \
+#define CUB_REDUCE_RANK_CASE(i, ...)                                     \
+  case i: {                                                              \
+    constexpr auto kReduceRank = i;                                      \
+    ReduceKernel<Tx, MPType, Ty, ReduceOp, TransformOp, BlockDim, kRank, \
+                 kReduceRank><<<left_num, BlockDim, 0, stream>>>(        \
+        x_data, y_data, reducer, transformer, init_mp, reduce_num,       \
+        Array<int, kRank>::From(x_strides),                              \
+        Array<int, kReduceRank>::From(reduce_dim),                       \
+        Array<int, kReduceRank>::From(reduce_strides),                   \
+        Array<int, kRank - kReduceRank>::From(left_dim),                 \
+        Array<int, kRank - kReduceRank>::From(left_strides));            \
   } break
 
   int rank = x_strides.size();
   int reduce_rank = reduce_strides.size();
   if (rank == reduce_rank) {
-    cub::TransformInputIterator<Ty, TransformOp, const Tx*> trans_x(
-        x_data, transformer);
-    size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(nullptr, temp_storage_bytes, trans_x, y_data,
-                              reduce_num, reducer, init, stream);
-    framework::Tensor tmp;
-    auto* temp_storage = tmp.mutable_data<uint8_t>(
-        framework::make_ddim({static_cast<int64_t>(temp_storage_bytes)}),
-        place);
-    cub::DeviceReduce::Reduce(temp_storage, temp_storage_bytes, trans_x, y_data,
-                              reduce_num, reducer, init, stream);
+    LaunchCubReduceKernel<Tx, MPType, Ty, ReduceOp, TransformOp, BlockDim>(
+        x_data, y_data, place, reducer, transformer, init_mp, reduce_num,
+        stream);
     return;
   }
   if (rank == 2 && reduce_rank == 1 && reduce_dim[0] == 1) {
-    ReduceKernel2D<Tx, Ty, ReduceOp, TransformOp,
+    ReduceKernel2D<Tx, MPType, Ty, ReduceOp, TransformOp,
                    BlockDim><<<left_num, BlockDim, 0, stream>>>(
-        x_data, y_data, reducer, transformer, init, reduce_num);
+        x_data, y_data, reducer, transformer, init_mp, reduce_num);
     return;
   }
   /*
@@ -366,8 +436,7 @@ void TensorReduce(const framework::Tensor& x, framework::Tensor* y,
 #undef CUB_BLOCK_DIM_CASE
 }
 
-template <typename Tx, typename ReduceOp,
-          template <typename, typename> class TransformOp>
+template <typename Tx, typename ReduceOp, template <typename> class TransformOp>
 struct TensorReduceFunctor {
   const framework::Tensor& x;
   framework::Tensor* y;
@@ -389,9 +458,9 @@ struct TensorReduceFunctor {
 
   void apply() const {
     const Ty& init_cast = static_cast<Ty>(init);
-    TensorReduce<Tx, Ty, ReduceOp, TransformOp<Tx, Ty>>(
-        x, y, origin_reduce_dims, init_cast, reducer, TransformOp<Tx, Ty>(),
-        stream);
+    TensorReduce<Tx, Ty, ReduceOp, TransformOp<Ty>>(x, y, origin_reduce_dims,
+                                                    init_cast, reducer,
+                                                    TransformOp<Ty>(), stream);
   }
 };
 

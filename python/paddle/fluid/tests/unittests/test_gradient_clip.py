@@ -133,7 +133,7 @@ class TestGradientClip(unittest.TestCase):
         print(val)
         self.assertFalse(np.isnan(val))
 
-    def backward_and_optimize(cost):
+    def backward_and_optimize(self, cost):
         pass
 
 

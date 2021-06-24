@@ -23,6 +23,7 @@ import pickle
 import contextlib
 from functools import reduce
 import sys
+from io import BytesIO
 
 import numpy as np
 import math
@@ -69,6 +70,52 @@ __all__ = [
 
 _logger = get_logger(
     __name__, logging.INFO, fmt='%(asctime)s-%(levelname)s: %(message)s')
+
+
+class _open_buffer(object):
+    def __init__(self, buffer):
+        self.buffer = buffer
+
+    def __enter__(self):
+        return self.buffer
+
+
+class _buffer_reader(_open_buffer):
+    def __init__(self, buffer):
+        super(_buffer_reader, self).__init__(buffer)
+        self.initial_tell = self.buffer.tell()
+
+    def __exit__(self, *args):
+        # `args[0]` is type of exception. When the `read` is abnormal, the file pointer returns to the initial position.
+        if args[0] is not None:
+            self.buffer.seek(self.initial_tell)
+
+
+class _buffer_writer(_open_buffer):
+    def __exit__(self, *args):
+        self.buffer.flush()
+
+
+def _is_file_path(path):
+    return isinstance(path, str)
+
+
+def _open_file_buffer(path_or_buffer, mode):
+
+    if _is_file_path(path_or_buffer):
+        return open(path_or_buffer, mode)
+    else:
+        if 'w' in mode:
+            return _buffer_writer(path_or_buffer)
+        elif 'r' in mode:
+            return _buffer_reader(path_or_buffer)
+        else:
+            raise ValueError("Expected 'r' or 'w' in mode but got {}".format(
+                mode))
+
+
+def _is_memory_buffer(buffer):
+    return isinstance(buffer, BytesIO)
 
 
 def is_parameter(var):
@@ -1776,14 +1823,16 @@ def _legacy_save(param_dict, model_path, protocol=2):
     param_dict = {name: get_tensor(param_dict[name]) for name in param_dict}
 
     # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
-    if sys.platform == 'darwin' and sys.version_info.major == 3:
+    if _is_file_path(
+            model_path
+    ) and sys.platform == 'darwin' and sys.version_info.major == 3:
         pickle_bytes = pickle.dumps(param_dict, protocol=protocol)
         with open(model_path, 'wb') as f:
             max_bytes = 2**30
             for i in range(0, len(pickle_bytes), max_bytes):
                 f.write(pickle_bytes[i:i + max_bytes])
     else:
-        with open(model_path, 'wb') as f:
+        with _open_file_buffer(model_path, 'wb') as f:
             pickle.dump(param_dict, f, protocol=protocol)
 
 
@@ -1891,8 +1940,7 @@ def _pickle_loads_mac(path, f):
     max_bytes = 2**30
     for _ in range(0, file_size, max_bytes):
         pickle_bytes += f.read(max_bytes)
-    load_result = pickle.loads(pickle_bytes) if six.PY2 else pickle.loads(
-        pickle_bytes, encoding='latin1')
+    load_result = pickle.loads(pickle_bytes, encoding='latin1')
     return load_result
 
 
@@ -2064,8 +2112,7 @@ def load(program, model_path, executor=None, var_list=None):
         if sys.platform == 'darwin' and sys.version_info.major == 3:
             load_dict = _pickle_loads_mac(parameter_file_name, f)
         else:
-            load_dict = pickle.load(f) if six.PY2 else pickle.load(
-                f, encoding='latin1')
+            load_dict = pickle.load(f, encoding='latin1')
         load_dict = _pack_loaded_dict(load_dict)
     for v in parameter_list:
         assert v.name in load_dict, \
@@ -2086,8 +2133,7 @@ def load(program, model_path, executor=None, var_list=None):
                 optimizer_var_list, global_scope(), executor._default_executor)
 
         with open(opt_file_name, 'rb') as f:
-            load_dict = pickle.load(f) if six.PY2 else pickle.load(
-                f, encoding='latin1')
+            load_dict = pickle.load(f, encoding='latin1')
         for v in optimizer_var_list:
             assert v.name in load_dict, \
                 "Can not find [{}] in model file [{}]".format(
@@ -2248,15 +2294,13 @@ def load_program_state(model_path, var_list=None):
         if sys.platform == 'darwin' and sys.version_info.major == 3:
             para_dict = _pickle_loads_mac(parameter_file_name, f)
         else:
-            para_dict = pickle.load(f) if six.PY2 else pickle.load(
-                f, encoding='latin1')
+            para_dict = pickle.load(f, encoding='latin1')
     para_dict = _pack_loaded_dict(para_dict)
 
     opt_file_name = model_prefix + ".pdopt"
     if os.path.exists(opt_file_name):
         with open(opt_file_name, 'rb') as f:
-            opti_dict = pickle.load(f) if six.PY2 else pickle.load(
-                f, encoding='latin1')
+            opti_dict = pickle.load(f, encoding='latin1')
 
         para_dict.update(opti_dict)
 

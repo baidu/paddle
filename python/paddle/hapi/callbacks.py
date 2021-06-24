@@ -324,7 +324,7 @@ class ProgBarLogger(Callback):
             ])
             train_dataset = MNIST(mode='train', transform=transform)
 
-            lenet = paddle.vision.LeNet()
+            lenet = paddle.vision.models.LeNet()
             model = paddle.Model(lenet,
                 inputs, labels)
 
@@ -558,7 +558,7 @@ class ModelCheckpoint(Callback):
             ])
             train_dataset = MNIST(mode='train', transform=transform)
 
-            lenet = paddle.vision.LeNet()
+            lenet = paddle.vision.models.LeNet()
             model = paddle.Model(lenet,
                 inputs, labels)
 
@@ -618,7 +618,7 @@ class LRScheduler(Callback):
             ])
             train_dataset = paddle.vision.datasets.MNIST(mode='train', transform=transform)
 
-            lenet = paddle.vision.LeNet()
+            lenet = paddle.vision.models.LeNet()
             model = paddle.Model(lenet,
                 inputs, labels)
 
@@ -634,7 +634,7 @@ class LRScheduler(Callback):
                     boundaries=boundaries, values=values)
                 learning_rate = paddle.optimizer.lr.LinearWarmup(
                     learning_rate=learning_rate,
-                    warmup_steps=wamup_epochs,
+                    warmup_steps=wamup_steps,
                     start_lr=base_lr / 5.,
                     end_lr=base_lr,
                     verbose=True)
@@ -860,7 +860,7 @@ class VisualDL(Callback):
             train_dataset = paddle.vision.datasets.MNIST(mode='train', transform=transform)
             eval_dataset = paddle.vision.datasets.MNIST(mode='test', transform=transform)
 
-            net = paddle.vision.LeNet()
+            net = paddle.vision.models.LeNet()
             model = paddle.Model(net, inputs, labels)
 
             optim = paddle.optimizer.Adam(0.001, parameters=net.parameters())

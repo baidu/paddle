@@ -32,6 +32,37 @@ namespace ir {
   GET_IR_NODE(quant_dequant_op_outscale); \
   GET_IR_NODE(any_op2);
 
+DeleteQuantDequantFilterOpPass::DeleteQuantDequantFilterOpPass() {
+  AddOpCompat(OpCompat("fake_quantize_dequantize_abs_max"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddOutput("OutScale")
+      .IsTensor()
+      .End()
+      .AddAttr("bit_length")
+      .IsIntIn({8, 16})
+      .End();
+  AddOpCompat(OpCompat("fake_channel_wise_quantize_dequantize_abs_max"))
+      .AddInput("X")
+      .IsTensor()
+      .End()
+      .AddOutput("Out")
+      .IsTensor()
+      .End()
+      .AddOutput("OutScale")
+      .IsTensor()
+      .End()
+      .AddAttr("bit_length")
+      .IsIntIn({8, 16})
+      .End()
+      .AddAttr("quant_axis")
+      .IsIntIn({0, 1})
+      .End();
+}
 // Delete quant_dequant_op, then quantize and dequantize weight
 void DeleteQuantDequantFilterOpPass::ApplyImpl(ir::Graph* graph) const {
   const std::string pattern_name = "delete_quantdequant_filter_op_pattern";
@@ -50,6 +81,11 @@ void DeleteQuantDequantFilterOpPass::ApplyImpl(ir::Graph* graph) const {
                      Graph* g) {
     GET_NODES;
 
+    if (!IsCompat(*quant_dequant_op->Op())) {
+      LOG(WARNING) << "quant_dequant_op in delete_quant_dequant_filter_op_pass "
+                      "compat check failed.";
+      return;
+    }
     std::unordered_set<const Node*> nodes2rm = {};
     int bit_length =
         BOOST_GET_CONST(int, quant_dequant_op->Op()->GetAttr("bit_length"));

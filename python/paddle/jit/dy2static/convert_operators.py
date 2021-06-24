@@ -13,27 +13,21 @@
 # limitations under the License.
 from __future__ import print_function
 
-from ...fluid.dygraph.dygraph_to_static.convert_operators import cast_bool_if_necessary  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_assert  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_ifelse  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_len  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_and  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_not  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_or  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_pop  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_print  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_shape_compare  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_dtype  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_shape  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_shape_simple  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import eval_if_exist_else_none  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import choose_shape_attr_or_api  #DEFINE_ALIAS
-from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_while_loop  #DEFINE_ALIAS
+from ...fluid.dygraph.dygraph_to_static.convert_operators import cast_bool_if_necessary  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_assert  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_ifelse  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_len  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_and  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_not  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_logical_or  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_pop  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_print  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_shape_compare  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_dtype  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_shape  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_var_shape_simple  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import eval_if_exist_else_none  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import choose_shape_attr_or_api  # noqa: F401
+from ...fluid.dygraph.dygraph_to_static.convert_operators import convert_while_loop  # noqa: F401
 
-__all__ = [
-    'cast_bool_if_necessary', 'convert_assert', 'convert_ifelse', 'convert_len',
-    'convert_logical_and', 'convert_logical_not', 'convert_logical_or',
-    'convert_pop', 'convert_print', 'convert_shape_compare',
-    'convert_var_dtype', 'convert_var_shape', 'convert_var_shape_simple',
-    'eval_if_exist_else_none', 'choose_shape_attr_or_api', 'convert_while_loop'
-]
+__all__ = []

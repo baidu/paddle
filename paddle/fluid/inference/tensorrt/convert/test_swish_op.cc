@@ -24,8 +24,8 @@ TEST(swish_op, test_swish) {
   std::unordered_set<std::string> parameters;
   framework::Scope scope;
   TRTConvertValidation validator(10, parameters, scope, 1000);
-  validator.DeclInputVar("sw_input", nvinfer1::DimsCHW(3, 2, 2));
-  validator.DeclOutputVar("sw_out", nvinfer1::DimsCHW(3, 2, 2));
+  validator.DeclInputVar("sw_input", nvinfer1::Dims3(3, 2, 2));
+  validator.DeclOutputVar("sw_out", nvinfer1::Dims3(3, 2, 2));
 
   // Prepare Op description
   framework::OpDesc desc;

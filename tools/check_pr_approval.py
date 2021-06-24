@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
 import sys
 import json
 
@@ -24,17 +23,24 @@ def check_approval(count, required_reviewers):
     json_resp = json.loads(json_buff)
     approves = 0
     approved_user_ids = []
+    approved_user_logins = set()
     for review in json_resp:
         if review["state"] == "APPROVED":
             approves += 1
             approved_user_ids.append(review["user"]["id"])
+            approved_user_logins.add(review["user"]["login"])
 
     # convert to int
     required_reviewers_int = set()
+    required_reviewers_login = set()
     for rr in required_reviewers:
-        required_reviewers_int.add(int(rr))
+        if rr.isdigit():
+            required_reviewers_int.add(int(rr))
+        else:
+            required_reviewers_login.add(rr)
 
-    if len(set(approved_user_ids) & required_reviewers_int) >= count:
+    if len(set(approved_user_ids) & required_reviewers_int) + len(
+            approved_user_logins & required_reviewers_login) >= count:
         print("TRUE")
     else:
         print("FALSE")

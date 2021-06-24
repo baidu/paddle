@@ -154,6 +154,13 @@ IF(WITH_GPU)
             DSTS ${dst_dir})
 ENDIF()
 
+IF(WITH_XPU)
+    set(dst_dir "${PADDLE_INFERENCE_INSTALL_DIR}/third_party/install/xpu")
+    copy(inference_lib_dist
+        SRCS ${XPU_INC_DIR} ${XPU_LIB_DIR}
+        DSTS ${dst_dir} ${dst_dir})
+ENDIF()
+
 # CMakeCache Info
 copy(inference_lib_dist
         SRCS ${CMAKE_CURRENT_BINARY_DIR}/CMakeCache.txt
@@ -335,7 +342,7 @@ function(version version_file)
     file(APPEND ${version_file} "CXX compiler version: ${CMAKE_CXX_COMPILER_VERSION}\n")
     if(TENSORRT_FOUND)
         file(APPEND ${version_file}
-                "WITH_TENSORRT: ${TENSORRT_FOUND}\n" "TensorRT version: v${TENSORRT_MAJOR_VERSION}\n")
+                "WITH_TENSORRT: ${TENSORRT_FOUND}\n" "TensorRT version: v${TENSORRT_MAJOR_VERSION}.${TENSORRT_MINOR_VERSION}.${TENSORRT_PATCH_VERSION}.${TENSORRT_BUILD_VERSION}\n")
     endif()
     if(WITH_LITE)
         file(APPEND ${version_file} "WITH_LITE: ${WITH_LITE}\n" "LITE_GIT_TAG: ${LITE_GIT_TAG}\n")

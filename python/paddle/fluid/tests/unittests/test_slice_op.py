@@ -22,6 +22,8 @@ import paddle.fluid as fluid
 import paddle.fluid.layers as layers
 import paddle
 
+paddle.enable_static()
+
 
 # Situation 1: starts(list, no tensor), ends(list, no tensor)
 # 1.1 without attr(decrease)
@@ -681,6 +683,16 @@ class TestImperativeVarBaseGetItem(unittest.TestCase):
                 sliced = var[1.1]
 
         self.assertRaises(Exception, test_float_in_index)
+
+
+class TestInferShape(unittest.TestCase):
+    def test(self):
+        x = paddle.ones(shape=[3, 4, 5])
+        x.desc.set_shape([3, -1, 5])
+        self.assertEqual(x.shape, (3, -1, 5))
+
+        out0 = paddle.slice(x, axes=[1], starts=[0], ends=[3])
+        self.assertEqual(out0.shape, (3, 3, 5))
 
 
 @unittest.skipIf(not core.is_compiled_with_cuda(),

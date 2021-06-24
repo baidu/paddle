@@ -199,7 +199,7 @@ class TestCloudRoleMaker2(unittest.TestCase):
             """
 
             def __init__(self):
-                super(Fleet, self).__init__()
+                super(TmpFleet, self).__init__()
                 self._role_maker = None
 
             def init_worker(self):

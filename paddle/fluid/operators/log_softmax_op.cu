@@ -104,7 +104,7 @@ __global__ void ComputeLogSoftmaxForwardInWarp(T *dst, const T *src,
 #pragma unroll
   for (int it = 0; it < warp_iter; ++it) {
     int element_index = thread_in_warp_idx + it * kernel_warp_size;
-    if (element_index < element_count) {
+    if (element_index < effective_element_count) {
       dst[batch_id * element_count + element_index] =
           static_cast<T>(elements[it] - max_value - sum);
     } else {
@@ -226,7 +226,7 @@ __global__ void ComputeLogSoftmaxBackwardInWarp(const T *output,
 #pragma unroll
   for (int iter = 0; iter < warp_iter; ++iter) {
     int element_index = thread_in_warp_idx + iter * kernel_warp_size;
-    if (element_index < element_count) {
+    if (element_index < effective_element_count) {
       grad_input[batch_id * element_count + element_index] = static_cast<T>(
           (grad_output_register[iter] - std::exp(output_register[iter]) * sum));
     }

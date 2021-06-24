@@ -218,6 +218,12 @@ class TestTensorScalarTypePromotionStatic(unittest.TestCase):
             c = paddle.full([2, 2, 2], 0.5, dtype="float32")
             self.check_operation(a, b, c, '/')
 
+            # this behavior should be equal to elementwise_div Op
+            a = paddle.full([2, 2, 2], 99, dtype="float32")
+            b = 100
+            c = a / paddle.full([2, 2, 2], 100, dtype="float32")
+            self.check_operation(a, b, c, '/')
+
         # tensor(int64) / scalar(float, .0)
         with program_guard(Program()):
             a = paddle.ones([2, 2, 2], dtype='int64')
