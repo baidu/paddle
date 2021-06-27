@@ -44,8 +44,11 @@ class TestSimpleRNNOp(OpTest):
 
     def setUp(self):
         self.op_type = "rnn"
-        self.dtype = np.float64
-        self.sequence_length = np.array([12, 11, 10, 9, 8], dtype=np.int32)
+        self.dtype = np.float32 if fluid.core.is_compiled_with_rocm(
+        ) else np.float64
+        self.sequence_length = None if fluid.core.is_compiled_with_rocm(
+        ) else np.array(
+            [12, 11, 10, 9, 8], dtype=np.int32)
         self.num_layers = 1
         self.is_bidirec = False
         self.is_test = False
@@ -76,11 +79,18 @@ class TestSimpleRNNOp(OpTest):
             time_major=True,
             direction=direction,
             dropout=self.dropout,
-            nonlinearity=self.mode)
+            nonlinearity=self.mode,
+            dtype=self.dtype)
 
         flat_w = get_params_for_net(rnn1)
 
         output, last_hidden = rnn1(input, sequence_length=self.sequence_length)
+
+        if fluid.core.is_compiled_with_rocm():
+            self._get_places = lambda: [fluid.core.CUDAPlace(0)]
+            if self.is_bidirec:
+                for i in range(0, len(flat_w), 4):
+                    flat_w[i + 1], flat_w[i + 2] = flat_w[i + 2], flat_w[i + 1]
 
         init_h = np.zeros((self.num_layers * self.direction_num, batch_size,
                            hidden_size)).astype(self.dtype)

@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import paddle
-paddle.set_default_dtype("float64")
+from paddle.fluid.core import is_compiled_with_rocm
+default_dtype = 'float32' if is_compiled_with_rocm() else 'float64'
+paddle.set_default_dtype(default_dtype)
 from paddle.fluid.layers import sequence_mask
 
 import numpy as np
@@ -39,13 +41,21 @@ class TestSimpleRNN(unittest.TestCase):
         place = paddle.set_device(self.place)
         paddle.disable_static(place)
         rnn1 = SimpleRNN(
-            16, 32, 2, time_major=self.time_major, direction=self.direction)
+            16,
+            32,
+            2,
+            time_major=self.time_major,
+            direction=self.direction,
+            dtype=default_dtype)
         rnn2 = paddle.nn.SimpleRNN(
             16, 32, 2, time_major=self.time_major, direction=self.direction)
         convert_params_for_net(rnn1, rnn2)
 
         self.rnn1 = rnn1
         self.rnn2 = rnn2
+
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
 
     def test_with_initial_state(self):
         rnn1 = self.rnn1
@@ -55,11 +65,15 @@ class TestSimpleRNN(unittest.TestCase):
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
 
         y1, h1 = rnn1(x, prev_h)
         y2, h2 = rnn2(paddle.to_tensor(x), paddle.to_tensor(prev_h))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         rnn1 = self.rnn1
@@ -68,11 +82,14 @@ class TestSimpleRNN(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x)
         y2, h2 = rnn2(paddle.to_tensor(x))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         rnn1 = self.rnn1
@@ -81,20 +98,27 @@ class TestSimpleRNN(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x, sequence_length=sequence_length)
 
-        seq_len = paddle.to_tensor(sequence_length)
-        mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-        if self.time_major:
-            mask = paddle.transpose(mask, [1, 0])
-        y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
-        mask = paddle.unsqueeze(mask, -1)
-        y2 = paddle.multiply(y2, mask)
+        if not is_compiled_with_rocm():
+            seq_len = paddle.to_tensor(sequence_length)
+            mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
+            if self.time_major:
+                mask = paddle.transpose(mask, [1, 0])
+            y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
+            mask = paddle.unsqueeze(mask, -1)
+            y2 = paddle.multiply(y2, mask)
+        else:
+            y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=None)
 
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_predict(self):
         predict_test_util(self.place, "SimpleRNN")
@@ -123,7 +147,8 @@ class TestGRU(unittest.TestCase):
                    32,
                    2,
                    time_major=self.time_major,
-                   direction=self.direction)
+                   direction=self.direction,
+                   dtype=default_dtype)
         rnn2 = paddle.nn.GRU(16,
                              32,
                              2,
@@ -134,6 +159,9 @@ class TestGRU(unittest.TestCase):
         self.rnn1 = rnn1
         self.rnn2 = rnn2
 
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
+
     def test_with_initial_state(self):
         rnn1 = self.rnn1
         rnn2 = self.rnn2
@@ -142,11 +170,15 @@ class TestGRU(unittest.TestCase):
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
 
         y1, h1 = rnn1(x, prev_h)
         y2, h2 = rnn2(paddle.to_tensor(x), paddle.to_tensor(prev_h))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         rnn1 = self.rnn1
@@ -155,11 +187,14 @@ class TestGRU(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x)
         y2, h2 = rnn2(paddle.to_tensor(x))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         rnn1 = self.rnn1
@@ -168,20 +203,27 @@ class TestGRU(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x, sequence_length=sequence_length)
 
-        seq_len = paddle.to_tensor(sequence_length)
-        mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-        if self.time_major:
-            mask = paddle.transpose(mask, [1, 0])
-        y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
-        mask = paddle.unsqueeze(mask, -1)
-        y2 = paddle.multiply(y2, mask)
+        if not is_compiled_with_rocm():
+            seq_len = paddle.to_tensor(sequence_length)
+            mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
+            if self.time_major:
+                mask = paddle.transpose(mask, [1, 0])
+            y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
+            mask = paddle.unsqueeze(mask, -1)
+            y2 = paddle.multiply(y2, mask)
+        else:
+            y2, h2 = rnn2(paddle.to_tensor(x), sequence_length=None)
 
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_predict(self):
         predict_test_util(self.place, "GRU")
@@ -207,13 +249,21 @@ class TestLSTM(unittest.TestCase):
         place = paddle.set_device(self.place)
         paddle.disable_static(place)
         rnn1 = LSTM(
-            16, 32, 2, time_major=self.time_major, direction=self.direction)
+            16,
+            32,
+            2,
+            time_major=self.time_major,
+            direction=self.direction,
+            dtype=default_dtype)
         rnn2 = paddle.nn.LSTM(
             16, 32, 2, time_major=self.time_major, direction=self.direction)
         convert_params_for_net(rnn1, rnn2)
 
         self.rnn1 = rnn1
         self.rnn2 = rnn2
+
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
 
     def test_with_initial_state(self):
         rnn1 = self.rnn1
@@ -224,14 +274,20 @@ class TestLSTM(unittest.TestCase):
             x = np.transpose(x, [1, 0, 2])
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
         prev_c = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
+        prev_c = prev_c.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x, (prev_h, prev_c))
         y2, (h2, c2) = rnn2(
             paddle.to_tensor(x),
             (paddle.to_tensor(prev_h), paddle.to_tensor(prev_c)))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            c1, c2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         rnn1 = self.rnn1
@@ -240,12 +296,16 @@ class TestLSTM(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x)
         y2, (h2, c2) = rnn2(paddle.to_tensor(x))
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            c1, c2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         rnn1 = self.rnn1
@@ -254,21 +314,29 @@ class TestLSTM(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x, sequence_length=sequence_length)
 
-        seq_len = paddle.to_tensor(sequence_length)
-        mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-        if self.time_major:
-            mask = paddle.transpose(mask, [1, 0])
-        y2, (h2, c2) = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
-        mask = paddle.unsqueeze(mask, -1)
-        y2 = paddle.multiply(y2, mask)
+        if not is_compiled_with_rocm():
+            seq_len = paddle.to_tensor(sequence_length)
+            mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
+            if self.time_major:
+                mask = paddle.transpose(mask, [1, 0])
+            y2, (h2, c2) = rnn2(paddle.to_tensor(x), sequence_length=seq_len)
+            mask = paddle.unsqueeze(mask, -1)
+            y2 = paddle.multiply(y2, mask)
+        else:
+            y2, (h2, c2) = rnn2(paddle.to_tensor(x), sequence_length=None)
 
-        np.testing.assert_allclose(y1, y2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2.numpy(), atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2.numpy(), atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(
+            y1, y2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            h1, h2.numpy(), atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(
+            c1, c2.numpy(), atol=self.atol, rtol=self.rtol)
 
     def test_predict(self):
         predict_test_util(self.place, "LSTM")

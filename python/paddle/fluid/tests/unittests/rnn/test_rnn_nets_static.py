@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import paddle
-paddle.set_default_dtype("float64")
+from paddle.fluid.core import is_compiled_with_rocm
+default_dtype = 'float32' if is_compiled_with_rocm() else 'float64'
+paddle.set_default_dtype(default_dtype)
 from paddle.fluid.layers import sequence_mask
 paddle.enable_static()
 
@@ -39,7 +41,12 @@ class TestSimpleRNN(unittest.TestCase):
         # `__init__` to avoid using an error device set by another test case.
         place = paddle.set_device(self.place)
         rnn1 = SimpleRNN(
-            16, 32, 2, time_major=self.time_major, direction=self.direction)
+            16,
+            32,
+            2,
+            time_major=self.time_major,
+            direction=self.direction,
+            dtype=default_dtype)
 
         mp = paddle.static.Program()
         sp = paddle.static.Program()
@@ -67,6 +74,9 @@ class TestSimpleRNN(unittest.TestCase):
         self.executor = exe
         self.scope = scope
 
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
+
     def test_with_initial_state(self):
         mp = self.mp.clone().clone()
         sp = self.sp
@@ -79,6 +89,8 @@ class TestSimpleRNN(unittest.TestCase):
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
 
         y1, h1 = rnn1(x, prev_h)
 
@@ -96,8 +108,8 @@ class TestSimpleRNN(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         mp = self.mp.clone()
@@ -110,6 +122,7 @@ class TestSimpleRNN(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x)
 
@@ -125,8 +138,8 @@ class TestSimpleRNN(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         mp = self.mp.clone()
@@ -139,7 +152,9 @@ class TestSimpleRNN(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x, sequence_length=sequence_length)
 
@@ -148,21 +163,27 @@ class TestSimpleRNN(unittest.TestCase):
                 x_data = paddle.fluid.data(
                     "input", [-1, -1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
-                mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-                if self.time_major:
-                    mask = paddle.transpose(mask, [1, 0])
-                y, h = rnn2(x_data, sequence_length=seq_len)
-                mask = paddle.unsqueeze(mask, -1)
-                y = paddle.multiply(y, mask)
+                if not is_compiled_with_rocm():
+                    seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
+                    mask = sequence_mask(
+                        seq_len, dtype=paddle.get_default_dtype())
+                    if self.time_major:
+                        mask = paddle.transpose(mask, [1, 0])
+                    y, h = rnn2(x_data, sequence_length=seq_len)
+                    mask = paddle.unsqueeze(mask, -1)
+                    y = paddle.multiply(y, mask)
+                else:
+                    y, h = rnn2(x_data, sequence_length=None)
 
-        feed_dict = {x_data.name: x, seq_len.name: sequence_length}
+        feed_dict = {x_data.name: x}
+        if not is_compiled_with_rocm():
+            feed_dict[seq_len.name] = sequence_length
 
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def runTest(self):
         self.test_with_initial_state()
@@ -186,7 +207,8 @@ class TestGRU(unittest.TestCase):
                    32,
                    2,
                    time_major=self.time_major,
-                   direction=self.direction)
+                   direction=self.direction,
+                   dtype=default_dtype)
 
         mp = paddle.static.Program()
         sp = paddle.static.Program()
@@ -213,6 +235,9 @@ class TestGRU(unittest.TestCase):
         self.executor = exe
         self.scope = scope
 
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
+
     def test_with_initial_state(self):
         mp = self.mp.clone()
         sp = self.sp
@@ -226,6 +251,8 @@ class TestGRU(unittest.TestCase):
             x = np.transpose(x, [1, 0, 2])
 
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
 
         y1, h1 = rnn1(x, prev_h)
 
@@ -243,8 +270,8 @@ class TestGRU(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         mp = self.mp.clone()
@@ -257,6 +284,7 @@ class TestGRU(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x)
 
@@ -272,8 +300,8 @@ class TestGRU(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         mp = self.mp.clone()
@@ -286,7 +314,9 @@ class TestGRU(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, h1 = rnn1(x, sequence_length=sequence_length)
 
@@ -295,21 +325,27 @@ class TestGRU(unittest.TestCase):
                 x_data = paddle.fluid.data(
                     "input", [-1, -1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
-                mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-                if self.time_major:
-                    mask = paddle.transpose(mask, [1, 0])
-                y, h = rnn2(x_data, sequence_length=seq_len)
-                mask = paddle.unsqueeze(mask, -1)
-                y = paddle.multiply(y, mask)
+                if not is_compiled_with_rocm():
+                    seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
+                    mask = sequence_mask(
+                        seq_len, dtype=paddle.get_default_dtype())
+                    if self.time_major:
+                        mask = paddle.transpose(mask, [1, 0])
+                    y, h = rnn2(x_data, sequence_length=seq_len)
+                    mask = paddle.unsqueeze(mask, -1)
+                    y = paddle.multiply(y, mask)
+                else:
+                    y, h = rnn2(x_data, sequence_length=None)
 
-        feed_dict = {x_data.name: x, seq_len.name: sequence_length}
+        feed_dict = {x_data.name: x}
+        if not is_compiled_with_rocm():
+            feed_dict[seq_len.name] = sequence_length
 
         with paddle.static.scope_guard(scope):
             y2, h2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
 
     def runTest(self):
         self.test_with_initial_state()
@@ -329,7 +365,12 @@ class TestLSTM(unittest.TestCase):
         # `__init__` to avoid using an error device set by another test case.
         place = paddle.set_device(self.place)
         rnn1 = LSTM(
-            16, 32, 2, time_major=self.time_major, direction=self.direction)
+            16,
+            32,
+            2,
+            time_major=self.time_major,
+            direction=self.direction,
+            dtype=default_dtype)
 
         mp = paddle.static.Program()
         sp = paddle.static.Program()
@@ -357,6 +398,9 @@ class TestLSTM(unittest.TestCase):
         self.executor = exe
         self.scope = scope
 
+        self.atol = 1e-6 if is_compiled_with_rocm() else 1e-8
+        self.rtol = 1e-3 if is_compiled_with_rocm() else 1e-5
+
     def test_with_initial_state(self):
         mp = self.mp.clone()
         sp = self.sp
@@ -370,6 +414,9 @@ class TestLSTM(unittest.TestCase):
             x = np.transpose(x, [1, 0, 2])
         prev_h = np.random.randn(2 * self.num_directions, 4, 32)
         prev_c = np.random.randn(2 * self.num_directions, 4, 32)
+        x = x.astype(default_dtype)
+        prev_h = prev_h.astype(default_dtype)
+        prev_c = prev_c.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x, (prev_h, prev_c))
 
@@ -390,9 +437,9 @@ class TestLSTM(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2, c2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h, c])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(c1, c2, atol=self.atol, rtol=self.rtol)
 
     def test_with_zero_state(self):
         mp = self.mp.clone()
@@ -405,6 +452,7 @@ class TestLSTM(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
+        x = x.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x)
 
@@ -420,9 +468,9 @@ class TestLSTM(unittest.TestCase):
         with paddle.static.scope_guard(scope):
             y2, h2, c2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h, c])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(c1, c2, atol=self.atol, rtol=self.rtol)
 
     def test_with_input_lengths(self):
         mp = self.mp.clone()
@@ -435,7 +483,9 @@ class TestLSTM(unittest.TestCase):
         x = np.random.randn(12, 4, 16)
         if not self.time_major:
             x = np.transpose(x, [1, 0, 2])
-        sequence_length = np.array([12, 10, 9, 8], dtype=np.int64)
+        sequence_length = None if is_compiled_with_rocm() else np.array(
+            [12, 10, 9, 8], dtype=np.int64)
+        x = x.astype(default_dtype)
 
         y1, (h1, c1) = rnn1(x, sequence_length=sequence_length)
 
@@ -444,22 +494,28 @@ class TestLSTM(unittest.TestCase):
                 x_data = paddle.fluid.data(
                     "input", [-1, -1, 16],
                     dtype=paddle.framework.get_default_dtype())
-                seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
-                mask = sequence_mask(seq_len, dtype=paddle.get_default_dtype())
-                if self.time_major:
-                    mask = paddle.transpose(mask, [1, 0])
-                y, (h, c) = rnn2(x_data, sequence_length=seq_len)
-                mask = paddle.unsqueeze(mask, -1)
-                y = paddle.multiply(y, mask)
+                if not is_compiled_with_rocm():
+                    seq_len = paddle.fluid.data("seq_len", [-1], dtype="int64")
+                    mask = sequence_mask(
+                        seq_len, dtype=paddle.get_default_dtype())
+                    if self.time_major:
+                        mask = paddle.transpose(mask, [1, 0])
+                    y, (h, c) = rnn2(x_data, sequence_length=seq_len)
+                    mask = paddle.unsqueeze(mask, -1)
+                    y = paddle.multiply(y, mask)
+                else:
+                    y, (h, c) = rnn2(x_data, sequence_length=None)
 
-        feed_dict = {x_data.name: x, seq_len.name: sequence_length}
+        feed_dict = {x_data.name: x}
+        if not is_compiled_with_rocm():
+            feed_dict[seq_len.name] = sequence_length
 
         with paddle.static.scope_guard(scope):
             y2, h2, c2 = exe.run(mp, feed=feed_dict, fetch_list=[y, h, c])
 
-        np.testing.assert_allclose(y1, y2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(h1, h2, atol=1e-8, rtol=1e-5)
-        np.testing.assert_allclose(c1, c2, atol=1e-8, rtol=1e-5)
+        np.testing.assert_allclose(y1, y2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(h1, h2, atol=self.atol, rtol=self.rtol)
+        np.testing.assert_allclose(c1, c2, atol=self.atol, rtol=self.rtol)
 
     def runTest(self):
         self.test_with_initial_state()

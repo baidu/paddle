@@ -29,9 +29,9 @@ from paddle.device import get_device, get_cudnn_version
 from paddle.nn import functional as F
 from paddle.nn import initializer as I
 from paddle.fluid.dygraph import Layer, LayerList
-from paddle.fluid.layers import utils
+from paddle.fluid.layers import utils, split, concat
 from paddle.fluid.layers.utils import map_structure, flatten, pack_sequence_as
-from paddle.fluid.data_feeder import convert_dtype
+from paddle.fluid.data_feeder import convert_dtype, check_dtype
 
 __all__ = []
 
@@ -980,9 +980,26 @@ class RNNBase(LayerList):
         if not self.time_major:
             inputs = paddle.tensor.transpose(inputs, [1, 0, 2])
 
+        if fluid.core.is_compiled_with_rocm() and get_device() != 'cpu':
+            _all_weights = [x for x in self._all_weights]
+            if self.num_directions == 2:
+                for i in range(0, len(_all_weights), 4):
+                    _all_weights[i + 1], _all_weights[i + 2] = _all_weights[
+                        i + 2], _all_weights[i + 1]
+            if self.mode == 'GRU':
+                for i in range(len(_all_weights)):
+                    _w = split(_all_weights[i], 3, 0)
+                    _all_weights[i] = concat([_w[1], _w[0], _w[2]])
+            elif self.mode == 'LSTM':
+                for i in range(len(_all_weights)):
+                    _w = split(_all_weights[i], 4, 0)
+                    _all_weights[i] = concat([_w[0], _w[1], _w[3], _w[2]])
+        else:
+            _all_weights = self._all_weights
+
         if fluid.framework.in_dygraph_mode():
             _, _, out, state = framework.core.ops.rnn(
-                inputs, initial_states, self._all_weights, sequence_length,
+                inputs, initial_states, _all_weights, sequence_length,
                 self._dropout_state, self.state_components, 'dropout_prob',
                 self.dropout, 'is_bidirec', self.num_directions == 2,
                 'input_size', self.input_size, 'hidden_size', self.hidden_size,
@@ -999,7 +1016,7 @@ class RNNBase(LayerList):
 
             inputs = {
                 'Input': inputs,
-                'WeightList': self._all_weights,
+                'WeightList': _all_weights,
                 'PreState': initial_states,
                 'SequenceLength': sequence_length
             }
@@ -1028,8 +1045,14 @@ class RNNBase(LayerList):
         return out, tuple(state) if len(state) > 1 else state[0]
 
     def forward(self, inputs, initial_states=None, sequence_length=None):
+        if fluid.core.is_compiled_with_rocm() and get_device(
+        ) != 'cpu' and sequence_length is not None:
+            raise ValueError(
+                "sequence_length should be None while use rocm gpu.")
         batch_index = 1 if self.time_major else 0
         dtype = inputs.dtype
+        if fluid.core.is_compiled_with_rocm() and get_device() != 'cpu':
+            check_dtype(dtype, 'dtype', ['float32'], 'RNNBase.forward')
         if initial_states is None:
             state_shape = (self.num_layers * self.num_directions, -1,
                            self.hidden_size)
