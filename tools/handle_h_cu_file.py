@@ -85,7 +85,7 @@ def get_h_cu_file(file_path):
     filename = file_path[2]
     ut = filename.replace('^', '').replace('$', '').replace('.log', '')
     os.system(
-        "cat %s/%s | grep 'precise test map fileeee:'| uniq >> %s/build/ut_map/%s/%s.txt"
+        "cat %s/%s | grep 'precise test map fileeee:'| uniq >> %s/build/ut_map/%s/related_%s.txt"
         % (dir_path, filename, rootPath, ut, ut))
 
 

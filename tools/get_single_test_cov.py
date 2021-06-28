@@ -37,24 +37,47 @@ def getFNDAFile(rootPath, test):
 
 
 def analysisFNDAFile(rootPath, test):
-    ut_map_file = '%s/build/ut_map/%s/%s.txt' % (rootPath, test, test)
-    os.system('touch %s' % ut_map_file)
+    related_ut_map_file = '%s/build/ut_map/%s/related_%s.txt' % (rootPath, test,
+                                                                 test)
+    notrelated_ut_map_file = '%s/build/ut_map/%s/notrelated_%s.txt' % (
+        rootPath, test, test)
+    os.system('touch %s' % related_ut_map_file)
+    os.system('touch %s' % notrelated_ut_map_file)
     fn_filename = '%s/build/ut_map/%s/fnda.tmp' % (rootPath, test)
     f = open(fn_filename)
     data = f.read().split('SF:')
+    related_file_list = []
     for message in data:
+        message_list = message.split('\n')
+        clazz_filename = message_list[0]
+        if '/build/' in clazz_filename:
+            clazz_filename = clazz_filename.replace('/build', '')
+        if '.pb.h' in clazz_filename:
+            clazz_filename = clazz_filename.replace('.pb.h', '.proto')
+        if '.pb.cc' in clazz_filename:
+            clazz_filename = clazz_filename.replace('.pb.cc', '.proto')
         if 'FNDA:' in message:
-            message_list = message.split('\n')
-            clazz_filename = message_list[0]
-            #if not clazz_filename.endswith('.h'):  #filter .h's Analysis
+            OP_REGIST = True
             for i in range(1, len(message_list) - 1):
                 fn = message_list[i]
                 matchObj = re.match(
                     r'(.*)Maker(.*)|(.*)Touch(.*)Regist(.*)|(.*)Touch(.*)JitKernel(.*)|(.*)converterC2Ev(.*)',
                     fn, re.I)
                 if matchObj == None:
-                    os.system('echo %s >> %s' % (clazz_filename, ut_map_file))
+                    OP_REGIST = False
                     break
+            if OP_REGIST == False:
+                related_file_list.append(clazz_filename)
+                os.system('echo %s >> %s' %
+                          (clazz_filename, related_ut_map_file))
+            else:
+                os.system('echo %s >> %s' %
+                          (clazz_filename, notrelated_ut_map_file))
+        else:
+            if clazz_filename != '':
+                if clazz_filename not in related_file_list:  # xx.pb.cc in RELATED xx.pb.h not in RELATED 
+                    os.system('echo %s >> %s' %
+                              (clazz_filename, notrelated_ut_map_file))
     f.close()
 
 
@@ -64,7 +87,7 @@ def getCovinfo(rootPath, test):
         'cd %s && lcov --capture -d . -o coverage.info --rc lcov_branch_coverage=0 > /dev/null 2>&1'
         % ut_map_path)
     os.system(
-        "cd %s && lcov --extract coverage.info '/paddle/paddle/fluid/framework/*' '/paddle/paddle/fluid/imperative/*' '/paddle/paddle/fluid/inference/*' '/paddle/paddle/fluid/memory/*' '/paddle/paddle/fluid/operators/*' '/paddle/paddle/fluid/string/*' '/paddle/paddle/fluid/distributed/*' '/paddle/paddle/fluid/extension/*' '/paddle/paddle/fluid/platform/*' '/paddle/paddle/fluid/pybind/*' -o coverage.info.tmp --rc lcov_branch_coverage=0 > /dev/null 2>&1"
+        "cd %s && lcov --extract coverage.info '/paddle/paddle/fluid/framework/*' '/paddle/paddle/fluid/imperative/*' '/paddle/paddle/fluid/inference/*' '/paddle/paddle/fluid/memory/*' '/paddle/paddle/fluid/operators/*' '/paddle/paddle/fluid/string/*' '/paddle/paddle/fluid/distributed/*' '/paddle/paddle/fluid/extension/*' '/paddle/paddle/fluid/platform/*' '/paddle/paddle/fluid/pybind/*' '/paddle/build/*' -o coverage.info.tmp --rc lcov_branch_coverage=0 > /dev/null 2>&1"
         % ut_map_path)
     os.system('rm -rf %s/paddle' % ut_map_path)
     os.system('rm -rf %s/coverage.info' % ut_map_path)

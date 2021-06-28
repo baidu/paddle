@@ -25,7 +25,8 @@ import sys
 
 def analysisPyXml(rootPath, ut):
     xml_path = '%s/build/pytest/%s/python-coverage.xml' % (rootPath, ut)
-    ut_map_file = '%s/build/ut_map/%s/%s.txt' % (rootPath, ut, ut)
+    related_ut_map_file = '%s/build/ut_map/%s/related_%s.txt' % (rootPath, ut, ut)
+    notrelated_ut_map_file = '%s/build/ut_map/%s/notrelated_%s.txt' % (rootPath, ut, ut)
     tree = ElementTree.parse(xml_path)
     root = tree.getroot()
     error_files = []
@@ -46,16 +47,26 @@ def analysisPyXml(rootPath, ut):
                          '@', '\'\'\'', 'logger', '_logger', 'logging', 'r"""',
                          'pass', 'try', 'except', 'if __name__ == "__main__"'
                          )) == False:
-                        #print(line_hits, line_number)
                         pattern = "(.*) = ('*')|(.*) = (\"*\")|(.*) = (\d)|(.*) = (-\d)|(.*) = (None)|(.*) = (True)|(.*) = (False)|(.*) = (URL_PREFIX*)|(.*) = (\[)|(.*) = (\{)|(.*) = (\()"  #a='b'/a="b"/a=0
                         if re.match(pattern, output.strip()) == None:
                             pyCov_file.append(clazz_filename)
-                            os.system('echo %s >> %s' %
-                                      (clazz_filename, ut_map_file))
+                            coverageMessage = 'RELATED'
                             break
+                        else:
+                            coverageMessage = 'FILTER' #hit filter logic
+                    else:
+                        coverageMessage = 'FILTER'
                 else:
+                    coverageMessage = 'ERROR'
                     error_files.append(clazz_filename)
                     break
+            else:
+                coverageMessage = 'NOT_RELATED'
+        if coverageMessage in ['NOT_RELATED', 'ERROR', 'FILTER']: 
+            os.system('echo %s >> %s' %(clazz_filename, notrelated_ut_map_file))
+        elif coverageMessage == 'RELATED':
+            os.system('echo %s >> %s' %(clazz_filename, related_ut_map_file))
+
     print("============len(pyCov_file)")
     print(len(pyCov_file))
     print("============error")

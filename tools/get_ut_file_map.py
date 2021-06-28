@@ -20,7 +20,7 @@ import json
 
 def get_all_paddle_file(rootPath):
     """get all file in Paddle repo: paddle/fluild, python"""
-    traverse_files = ['%s/paddle/fluid' % rootPath, '%s/python' % rootPath]
+    traverse_files = ['%s' % rootPath]
     all_file_paddle = '%s/build/all_file_paddle' % rootPath
     all_file_paddle_list = []
     with open(all_file_paddle, 'w') as f:
@@ -56,7 +56,7 @@ def remove_useless_file(rootPath):
 
 
 def handle_ut_file_map(rootPath):
-    utNotSuccess = ''
+    utNotSuccess_list = []
     ut_map_path = "%s/build/ut_map" % rootPath
     files = os.listdir(ut_map_path)
     ut_file_map = {}
@@ -67,7 +67,7 @@ def handle_ut_file_map(rootPath):
         print("ut %s: %s" % (count, ut))
         coverage_info = '%s/%s/coverage.info.tmp' % (ut_map_path, ut)
         if os.path.exists(coverage_info):
-            filename = '%s/%s/%s.txt' % (ut_map_path, ut, ut)
+            filename = '%s/%s/related_%s.txt' % (ut_map_path, ut, ut)
             f = open(filename)
             lines = f.readlines()
             for line in lines:
@@ -86,19 +86,32 @@ def handle_ut_file_map(rootPath):
                     ut_file_map[source_file] = []
                 if ut not in ut_file_map[source_file]:
                     ut_file_map[source_file].append(ut)
-
         else:
             not_success_file.write('%s\n' % ut)
-            utNotSuccess = utNotSuccess + '^%s$|' % ut
-
+            utNotSuccess_list.append(ut)
     not_success_file.close()
+    
+    print("utNotSuccess:")
+    print(utNotSuccess_list)
+
+    for ut in files:
+        if ut not in utNotSuccess_list:
+            filename = '%s/%s/notrelated_%s.txt' % (ut_map_path, ut, ut)
+            f = open(filename)
+            lines = f.readlines()
+            for line in lines:
+                line = line.replace('\n', '').strip()
+                if line == '':
+                    continue
+                elif line.startswith('/paddle/build'):
+                    source_file = line.replace('/build', '')
+                else:
+                    source_file = line
+                if source_file not in ut_file_map:
+                    ut_file_map[source_file] = []
 
     with open("%s/build/ut_file_map.json" % rootPath, "w") as f:
         json.dump(ut_file_map, f, indent=4)
-
-    print("utNotSuccess:")
-    print(utNotSuccess)
-
 
 def notsuccessfuc(rootPath):
     utNotSuccess = ''
@@ -153,10 +166,7 @@ def ut_file_map_supplement(rootPath):
 
     for filename in load_dict_old:
         if filename not in load_dict_new:
-            if filename.endswith(('.h')):
-                load_dict_new[filename] = []
-            else:
-                load_dict_new[filename] = load_dict_old[filename]
+            load_dict_new[filename] = load_dict_old[filename]
 
     with open("/pre_test/ut_file_map.json", "w") as f:
         json.dump(load_dict_new, f, indent=4)
