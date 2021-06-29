@@ -120,6 +120,12 @@ gen_diff_html_report || true
 export COVERAGE_FILE=/paddle/build/python-coverage.data
 
 set +x
+$PWD
+echo '==================================='
+ls
+echo '==================================='
+ls python-coverage.data.*
+echo '==================================='
 coverage combine `ls python-coverage.data.*`
 set -x
 
