@@ -121,7 +121,9 @@ class TestImperativeQatAmp(unittest.TestCase):
                 scaled_loss = scaler.scale(avg_loss)
                 scaled_loss.backward()
 
-                scaler.minimize(adam, scaled_loss)
+                scaler.unscale(adam)
+                scaler.step(adam, scaled_loss)
+                scaler.update()
                 adam.clear_gradients()
             else:
                 out = model(img)

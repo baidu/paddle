@@ -30,10 +30,11 @@ class AmpScaler(object):
 
     AmpScaler is used for Auto-Mixed-Precision training/inferring in imperative
     mode. It controls the scaling of loss, helps avoiding numerical overflow.
-    The object of this class has two methods `scale()`, `minimize()`.
+    The object of this class has some methods such as `scale()`, `unscale()`, `step()`, `update()`.
 
     `scale()` is used to multiply the loss by a scale ratio.
-    `minimize()` is similar as `Optimizer.minimize()`, performs parameters updating.
+    `unscale()` + `step()` is similar as `Optimizer.minimize()`, performs parameters updating.
+    `update()` is used to update the loss scaling.
 
     Commonly, it is used together with `amp_guard` to achieve Auto-Mixed-Precision in 
     imperative mode.
@@ -72,7 +73,9 @@ class AmpScaler(object):
                 loss = fluid.layers.reduce_mean(conv)
                 scaled = scaler.scale(loss)
                 scaled.backward()
-                scaler.minimize(optimizer, scaled)         
+                scaler.unscale(optimizer)
+                scaler.step(optimizer, scaled)
+                scaler.update()      
     """
 
     @dygraph_only
@@ -145,7 +148,9 @@ class AmpScaler(object):
                     loss = fluid.layers.reduce_mean(conv)
                     scaled = scaler.scale(loss)
                     scaled.backward()
-                    scaler.minimize(optimizer, scaled) 
+                    scaler.unscale(optimizer)
+                    scaler.step(optimizer, scaled)
+                    scaler.update() 
         """
         check_type(var, "var", core.VarBase, 'AmpScaler.scale()')
 
@@ -154,20 +159,16 @@ class AmpScaler(object):
 
         return var * self._scale
 
-    def minimize(self, optimizer, *args, **kwargs):
+    def unscale(self, optimizer):
         """
-        This function is similar as `Optimizer.minimize()`, which performs parameters updating.
-        
-        If the scaled gradients of parameters contains NAN or INF, the parameters updating is skipped.
-        Otherwise, it first unscales the scaled gradients of parameters, then updates the parameters.
-
-        Finally, the loss scaling ratio is updated.
+        Unscale the gradients of parameters, multiplies the gradients of parameters by 1/scale.  
+        If this instance of :class:`GradScaler` is not enabled, output are returned unmodified.
 
         Args:
             optimizer(Optimizer):  The optimizer used to update parameters.
-            args:  Arguments, which will be forward to `optimizer.minimize()`.
-            kwargs: Keyword arguments, which will be forward to `Optimizer.minimize()`.
-
+        Returns:
+            The unscaled parameters or original parameters.
+        
         Examples:
             .. code-block:: python
 
@@ -186,13 +187,105 @@ class AmpScaler(object):
                     loss = fluid.layers.reduce_mean(conv)
                     scaled = scaler.scale(loss)
                     scaled.backward()
-                    scaler.minimize(optimizer, scaled) 
+                    scaler.unscale(optimizer)
+                    scaler.step(optimizer, scaled)
+                    scaler.update() 
+        """
+        if not self._enable:
+            return
+        param_grads = [
+            param._grad_ivar() for param in optimizer._parameter_list
+            if param._grad_ivar() is not None
+        ]
+        core.ops.check_finite_and_unscale(param_grads, self._scale, param_grads,
+                                          self._found_inf)
+
+    def step(self, optimizer, *args, **kwargs):
+        """
+        This function is similar as `Optimizer.minimize()`, which performs parameters updating.
+
+        If the scaled gradients of parameters contains NAN or INF, the parameters updating is skipped.
+        Otherwise, it first unscales the scaled gradients of parameters, then updates the parameters.
+
+        Args:
+            optimizer(Optimizer):  The optimizer used to update parameters.
+            args:  Arguments, which will be forward to `optimizer.minimize()`.
+            kwargs: Keyword arguments, which will be forward to `Optimizer.minimize()`.
+        
+        Examples:
+            .. code-block:: python
+
+            import numpy as np
+            import paddle.fluid as fluid
+
+            data = np.random.uniform(-1, 1, [10, 3, 32, 32]).astype('float32')
+            with fluid.dygraph.guard():
+                model = fluid.dygraph.Conv2D(3, 2, 3)
+                optimizer = fluid.optimizer.SGDOptimizer(
+                        learning_rate=0.01, parameter_list=model.parameters())
+                scaler = fluid.dygraph.AmpScaler(init_loss_scaling=1024)
+                data = fluid.dygraph.to_variable(data)
+                with fluid.dygraph.amp_guard():
+                    conv = model(data)
+                    loss = fluid.layers.reduce_mean(conv)
+                    scaled = scaler.scale(loss)
+                    scaled.backward()
+                    scaler.unscale(optimizer)
+                    scaler.step(optimizer, scaled)
+                    scaler.update() 
         """
         if not self._enable:
             return optimizer.minimize(*args, **kwargs)
 
-        #  unscale the grad
-        self._unscale(optimizer)
+        optimize_ops, params_grads = self.minimize_(optimizer, *args, **kwargs)
+        return optimize_ops, params_grads
+
+    def update(self):
+        """
+        Updates the loss_scaling.
+        
+        Examples:
+            .. code-block:: python
+
+            import numpy as np
+            import paddle.fluid as fluid
+
+            data = np.random.uniform(-1, 1, [10, 3, 32, 32]).astype('float32')
+            with fluid.dygraph.guard():
+                model = fluid.dygraph.Conv2D(3, 2, 3)
+                optimizer = fluid.optimizer.SGDOptimizer(
+                        learning_rate=0.01, parameter_list=model.parameters())
+                scaler = fluid.dygraph.AmpScaler(init_loss_scaling=1024)
+                data = fluid.dygraph.to_variable(data)
+                with fluid.dygraph.amp_guard():
+                    conv = model(data)
+                    loss = fluid.layers.reduce_mean(conv)
+                    scaled = scaler.scale(loss)
+                    scaled.backward()
+                    scaler.unscale(optimizer)
+                    scaler.step(optimizer, scaled)
+                    scaler.update() 
+        """
+        if not self._enable:
+            return
+        if self._use_dynamic_loss_scaling:
+            self._update()
+        return
+
+    def minimize_(self, optimizer, *args, **kwargs):
+        """
+        This function is similar as `Optimizer.minimize()`, which performs parameters updating.
+        
+        If the scaled gradients of parameters contains NAN or INF, the parameters updating is skipped.
+        Otherwise, it first unscales the scaled gradients of parameters, then updates the parameters.
+
+        Args:
+            optimizer(Optimizer):  The optimizer used to update parameters.
+            args:  Arguments, which will be forward to `optimizer.minimize()`.
+            kwargs: Keyword arguments, which will be forward to `Optimizer.minimize()`.     
+        """
+        if not self._enable:
+            return optimizer.minimize(*args, **kwargs)
 
         optimize_ops, params_grads = (None, None)
 
@@ -202,21 +295,7 @@ class AmpScaler(object):
             optimize_ops, params_grads = optimizer.minimize(*args, **kwargs)
             self._cache_founf_inf = False
 
-        if self._use_dynamic_loss_scaling:
-            # uopdate the scale
-            self._update()
-
         return optimize_ops, params_grads
-
-    def _unscale(self, optimizer):
-        if not self._enable:
-            return
-        param_grads = [
-            param._grad_ivar() for param in optimizer._parameter_list
-            if param._grad_ivar() is not None
-        ]
-        core.ops.check_finite_and_unscale(param_grads, self._scale, param_grads,
-                                          self._found_inf)
 
     def _update(self):
         """
@@ -244,3 +323,94 @@ class AmpScaler(object):
                 self._incr_count = 0
 
         return
+
+    def get_enable(self):
+        """
+        Get the parameter of `_enable`.
+        """
+        return self._enable
+
+    def get_use_dynamic_loss_scaling(self):
+        """
+        Get the parameter of `_use_dynamic_loss_scaling`.
+        """
+        return self._use_dynamic_loss_scaling
+
+    def get_init_loss_scaling(self):
+        """
+        Get the parameter of `_init_loss_scaling`.
+        """
+        return self._init_loss_scaling
+
+    def set_init_loss_scaling(self, new_init_loss_scaling):
+        """
+        Set the parameter of `_init_loss_scaling` by `new_init_loss_scaling`.
+
+        Args:
+            new_init_loss_scaling(int):  The new_init_loss_scaling used to update _init_loss_scaling.
+        """
+        self._init_loss_scaling = new_init_loss_scaling
+        self._scale = to_variable(
+            np.array([self._init_loss_scaling]).astype(np.float32))
+
+    def get_incr_ratio(self):
+        """
+        Get the parameter of `_incr_ratio`.
+        """
+        return self._incr_ratio
+
+    def set_incr_ratio(self, new_incr_ratio):
+        """
+        Set the parameter of `_incr_ratio` by `new_incr_ratio`, `new_incr_ratio` should > 1.0.
+
+        Args:
+            new_incr_ratio(float):  The new_incr_ratio used to update _incr_ratio.
+        """
+        assert new_incr_ratio > 1.0, "The new_incr_ratio must be > 1.0."
+        self._incr_ratio = new_incr_ratio
+
+    def get_decr_ratio(self):
+        """
+        Get the parameter of `_decr_ratio`.
+        """
+        return self._decr_ratio
+
+    def set_decr_ratio(self, new_decr_ratio):
+        """
+        Set the parameter of `_decr_ratio` by `new_incr_ratio`, `new_decr_ratio` should < 1.0.
+
+        Args:
+            new_decr_ratio(float):  The new_decr_ratio used to update _decr_ratio.
+        """
+        assert new_decr_ratio < 1.0, "The new_decr_ratio must be < 1.0."
+        self._decr_ratio = new_decr_ratio
+
+    def get_incr_every_n_steps(self):
+        """
+        Get the parameter of `_incr_every_n_steps`.
+        """
+        return self._incr_every_n_steps
+
+    def set_incr_every_n_steps(self, new_incr_every_n_steps):
+        """
+        Set the parameter of `_incr_every_n_steps` by `new_incr_every_n_steps`.
+
+        Args:
+            new_incr_every_n_steps(float):  The new_incr_every_n_steps used to update _incr_every_n_steps.
+        """
+        self._incr_every_n_steps = new_incr_every_n_steps
+
+    def get_decr_every_n_nan_or_inf(self):
+        """
+        Get the parameter of `_decr_every_n_nan_or_inf`.
+        """
+        return self._decr_every_n_nan_or_inf
+
+    def set_decr_every_n_nan_or_inf(self, new_decr_every_n_nan_or_inf):
+        """
+        Set the parameter of `_decr_every_n_nan_or_inf` by `new_decr_every_n_nan_or_inf`.
+
+        Args:
+            new_decr_every_n_nan_or_inf(float):  The new_decr_every_n_nan_or_inf used to update _decr_every_n_nan_or_inf.
+        """
+        self._decr_every_n_nan_or_inf = new_decr_every_n_nan_or_inf

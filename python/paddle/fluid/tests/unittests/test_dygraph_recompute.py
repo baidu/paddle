@@ -123,7 +123,9 @@ def run_model(recompute_block=[], recompute_kwargs={}, enable_autocast=False):
             loss = y_pred.mean()
         if enable_autocast:
             scaler.scale(loss).backward()
-            scaler.minimize(optimizer, loss)
+            scaler.unscale(optimizer)
+            scaler.step(optimizer, loss)
+            scaler.update()
         else:
             loss_.append(np.asarray(loss).tolist())
             loss.backward()
