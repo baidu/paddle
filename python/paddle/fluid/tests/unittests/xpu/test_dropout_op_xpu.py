@@ -22,9 +22,11 @@ from op_test import OpTest, skip_check_grad_ci
 import paddle
 import paddle.fluid as fluid
 from paddle.fluid import Program, program_guard
+from op_test_xpu import XPUOpTest
+paddle.enable_static()
 
 
-class TestDropoutOp(OpTest):
+class TestDropoutOp(XPUOpTest):
     def setUp(self):
         self.op_type = "dropout"
         self.inputs = {'X': np.random.random((32, 64)).astype("float32")}
@@ -47,7 +49,7 @@ class TestDropoutOp(OpTest):
             self.check_grad_with_place(place, ['X'], 'Out')
 
 
-class TestDropoutOpInput1d(OpTest):
+class TestDropoutOpInput1d(XPUOpTest):
     def setUp(self):
         self.op_type = "dropout"
         self.inputs = {'X': np.random.random((2000, )).astype("float32")}

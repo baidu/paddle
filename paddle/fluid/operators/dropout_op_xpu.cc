@@ -16,11 +16,11 @@ namespace paddle {
 namespace operators {
 
 #ifdef PADDLE_WITH_XPU
-static std::map<int, float*> mask_data_tables;
-static const int max_data_size = 32 * 1024 * 1024;
-static std::mutex s_mask_data_table_lock;
+
 template <typename DeviceContext, typename T>
 class DropoutXPUKernel : public framework::OpKernel<T> {
+  using XPUTyp = typename XPUTypeTrait<T>::Type;
+
  public:
   void Compute(const framework::ExecutionContext& context) const override {
     auto* x = context.Input<Tensor>("X");
@@ -30,93 +30,70 @@ class DropoutXPUKernel : public framework::OpKernel<T> {
     float dropout_prob = context.Attr<float>("dropout_prob");
     auto dropout_implementation =
         context.Attr<std::string>("dropout_implementation");
-    float* mask_data_table = nullptr;
+    auto& dev_ctx = context.template device_context<DeviceContext>();
+
     PADDLE_ENFORCE_EQ(!context.HasInput("Seed"), true,
                       platform::errors::InvalidArgument(
                           ("Input(Seed) not supported on XPU")));
+    int is_upscale = (dropout_implementation == "upscale_in_train");
+
     if (!context.Attr<bool>("is_test")) {
-      int dev_id =
-          BOOST_GET_CONST(platform::XPUPlace, context.GetPlace()).GetDeviceId();
-      int prop = static_cast<int>(dropout_prob * 100);
-      int is_upscale = (dropout_implementation == "upscale_in_train");
-      /* mask_data_tables key contains 3 part:
-       *  | 31-16  | 15-8 | 7-0        |
-       *  | dev_id | prob | is_upscale |
-       */
-      int index = (dev_id << 16) + (prop << 8) + is_upscale;
-      std::lock_guard<std::mutex> lock(s_mask_data_table_lock);
-      if (mask_data_tables.find(index) == mask_data_tables.end()) {
-        float* mask_data_host = new float[max_data_size];
-        std::random_device rnd;
-        std::minstd_rand engine;
-        int seed =
-            context.Attr<bool>("fix_seed") ? context.Attr<int>("seed") : rnd();
-        engine.seed(seed);
-        std::uniform_real_distribution<float> dist(0, 1);
-        for (size_t i = 0; i < max_data_size; ++i) {
-          if (dist(engine) < dropout_prob) {
-            mask_data_host[i] = 0.0f;
-          } else {
-            if (is_upscale) {
-              mask_data_host[i] = 1.0f / static_cast<T>(1.0f - dropout_prob);
-            } else {
-              mask_data_host[i] = 1.0;
-            }
-          }
-        }
-        PADDLE_ENFORCE_EQ(
-            xpu_malloc(reinterpret_cast<void**>(&mask_data_table),
-                       max_data_size * sizeof(float)),
-            XPU_SUCCESS,
-            platform::errors::ResourceExhausted(
-                "\n\nOut of memory error on XPU, Cannot"
-                "allocate %s memory on XPU. \n\nPlease "
-                "check whether there is any other process "
-                "using XPU.\n",
-                string::HumanReadableSize(max_data_size * sizeof(void*))));
-        memory::Copy(BOOST_GET_CONST(platform::XPUPlace, context.GetPlace()),
-                     mask_data_table, platform::CPUPlace(), mask_data_host,
-                     max_data_size * sizeof(float));
-        mask_data_tables[index] = mask_data_table;
-        free(mask_data_host);
+      std::random_device rnd;
+      // int seed = (context.Attr<bool>("fix_seed")) ?
+      // int(context.Attr<int>("seed")) : (rnd());
+      int seed = 0;
+      if (context.Attr<bool>("fix_seed") == true) {
+        seed = static_cast<int>(context.Attr<int>("seed"));
       } else {
-        mask_data_table = mask_data_tables[index];
+        seed = rnd();
       }
-    }
-    if (!context.Attr<bool>("is_test")) {  // Train
+
       auto* mask = context.Output<Tensor>("Mask");
       auto* mask_data = mask->mutable_data<T>(context.GetPlace());
-      size_t size = framework::product(mask->dims());
-      auto& dev_ctx = context.template device_context<DeviceContext>();
-      int r = xpu::dropout(dev_ctx.x_context(), mask_data_table, x_data,
-                           mask_data, y_data, max_data_size, size);
-      PADDLE_ENFORCE_EQ(
-          r, xpu::Error_t::SUCCESS,
-          platform::errors::External(
-              "XPU dropout return wrong value[%d], please check whether "
-              "Baidu Kunlun Card is properly installed.",
-              r));
-    } else {  // Infer
-      float scale = 0.0f;
-      if (dropout_implementation == "upscale_in_train") {
-        scale = 1.0f;
-      } else {
-        scale = static_cast<T>(1.0f - dropout_prob);
+      // Special case when dropout_prob is 1.0
+      if (dropout_prob == 1.0f) {
+        int r = xpu::constant(dev_ctx.x_context(),
+                              reinterpret_cast<XPUTyp*>(y_data), y->numel(),
+                              XPUTyp(0));
+        PADDLE_ENFORCE_EQ(r, XPU_SUCCESS, platform::errors::External(
+                                              "XPU API(constant) return wrong "
+                                              "value[%d %s]",
+                                              r, XPUAPIErrorMsg[r]));
+        r = xpu::constant(dev_ctx.x_context(),
+                          reinterpret_cast<XPUTyp*>(mask_data), mask->numel(),
+                          XPUTyp(0));
+        PADDLE_ENFORCE_EQ(r, XPU_SUCCESS, platform::errors::External(
+                                              "XPU API(constant) return wrong "
+                                              "value[%d %s]",
+                                              r, XPUAPIErrorMsg[r]));
+        return;
       }
-      auto& dev_ctx = context.template device_context<DeviceContext>();
-      int r = xpu::scale(dev_ctx.x_context(), x->numel(), scale, 0.0f, 0,
-                         x_data, y_data);
-      PADDLE_ENFORCE_EQ(
-          r, xpu::Error_t::SUCCESS,
-          platform::errors::External(
-              "XPU dropout return wrong value[%d], please check whether "
-              "Baidu Kunlun Card is properly installed.",
-              r));
+      int r = xpu::dropout(dev_ctx.x_context(),
+                           reinterpret_cast<const XPUTyp*>(x->data<T>()),
+                           reinterpret_cast<XPUTyp*>(y->data<T>()),
+                           reinterpret_cast<XPUTyp*>(mask_data), seed,
+                           mask->numel(), is_upscale, dropout_prob);
+      PADDLE_ENFORCE_EQ(r, XPU_SUCCESS, platform::errors::External(
+                                            "XPU API(dropout) return wrong "
+                                            "value[%d %s]",
+                                            r, XPUAPIErrorMsg[r]));
+    } else {
+      float scale =
+          (is_upscale) ? (1.0) : (static_cast<float>(1.0f - dropout_prob));
+      int r = xpu::scale(
+          dev_ctx.x_context(), reinterpret_cast<const XPUTyp*>(x_data),
+          reinterpret_cast<XPUTyp*>(y_data), x->numel(), false, scale, 0.0f);
+      PADDLE_ENFORCE_EQ(r, XPU_SUCCESS, platform::errors::External(
+                                            "XPU API(scale) return wrong "
+                                            "value[%d %s]",
+                                            r, XPUAPIErrorMsg[r]));
     }
   }
 };
 template <typename DeviceContext, typename T>
 class DropoutGradXPUKernel : public framework::OpKernel<T> {
+  using XPUTyp = typename XPUTypeTrait<T>::Type;
+
  public:
   void Compute(const framework::ExecutionContext& context) const override {
     PADDLE_ENFORCE_EQ(!context.Attr<bool>("is_test"), true,
@@ -127,9 +104,33 @@ class DropoutGradXPUKernel : public framework::OpKernel<T> {
     auto* mask = context.Input<Tensor>("Mask");
     grad_x->mutable_data<T>(context.GetPlace());
     auto& dev_ctx = context.template device_context<DeviceContext>();
-    int r = xpu::elementwise_mul(dev_ctx.x_context(), grad_y->data<T>(),
-                                 mask->data<T>(), grad_x->data<T>(),
-                                 grad_y->numel());
+    auto& dropout_implementation =
+        context.Attr<std::string>("dropout_implementation");
+    float dropout_prob = context.Attr<float>("dropout_prob");
+    const T* mask_data = mask->data<T>();
+    framework::Tensor mask_new;
+    if (dropout_implementation == "upscale_in_train") {
+      mask_new = context.AllocateTmpTensor<T, platform::XPUDeviceContext>(
+          mask->dims(), dev_ctx);
+      float scale =
+          (dropout_prob == 1.0f) ? (1.0f) : (1.0f / (1.0f - dropout_prob));
+      int r = xpu::scale(dev_ctx.x_context(),
+                         reinterpret_cast<const XPUTyp*>(mask->data<T>()),
+                         reinterpret_cast<XPUTyp*>(mask_new.data<T>()),
+                         mask->numel(), false, scale, 0.0f);
+      PADDLE_ENFORCE_EQ(
+          r, xpu::Error_t::SUCCESS,
+          platform::errors::External(
+              "XPU dropout return wrong value[%d], please check whether "
+              "Baidu Kunlun Card is properly installed.",
+              r));
+      mask_data = mask_new.data<T>();
+    }
+
+    int r = xpu::mul(
+        dev_ctx.x_context(), reinterpret_cast<const XPUTyp*>(grad_y->data<T>()),
+        reinterpret_cast<const XPUTyp*>(mask_data),
+        reinterpret_cast<XPUTyp*>(grad_x->data<T>()), grad_y->numel());
     PADDLE_ENFORCE_EQ(
         r, xpu::Error_t::SUCCESS,
         platform::errors::External(
@@ -141,9 +142,13 @@ class DropoutGradXPUKernel : public framework::OpKernel<T> {
 }  // namespace operators
 }  // namespace paddle
 namespace ops = paddle::operators;
+namespace plat = paddle::platform;
 REGISTER_OP_XPU_KERNEL(
-    dropout, ops::DropoutXPUKernel<paddle::platform::XPUDeviceContext, float>);
+    dropout, ops::DropoutXPUKernel<paddle::platform::XPUDeviceContext, float>,
+    ops::DropoutXPUKernel<paddle::platform::XPUDeviceContext, plat::float16>);
 REGISTER_OP_XPU_KERNEL(
     dropout_grad,
-    ops::DropoutGradXPUKernel<paddle::platform::XPUDeviceContext, float>);
+    ops::DropoutGradXPUKernel<paddle::platform::XPUDeviceContext, float>,
+    ops::DropoutGradXPUKernel<paddle::platform::XPUDeviceContext,
+                              plat::float16>);
 #endif
