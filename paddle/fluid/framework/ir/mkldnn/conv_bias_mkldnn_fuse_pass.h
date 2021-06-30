@@ -48,6 +48,7 @@ class Conv2DTransposeBiasFusePass : public ConvBiasFusePass {
 
 class Conv3DBiasFusePass : public ConvBiasFusePass {
  public:
+  Conv3DBiasFusePass();
   std::string type() const override { return "conv3d"; }
 };
 }  // namespace ir
