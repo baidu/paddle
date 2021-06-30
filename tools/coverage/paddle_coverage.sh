@@ -124,9 +124,7 @@ pwd
 echo '==================================='
 ls
 echo '==================================='
-ls python-coverage.data.*
-echo '==================================='
-coverage combine `ls python-coverage.data.*`
+coverage combine `ls python-coverage.data.*` || echo "no python-coverage.data files were found"
 set -x
 
 coverage xml -i -o python-coverage.xml
