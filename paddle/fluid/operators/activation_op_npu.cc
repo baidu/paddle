@@ -33,6 +33,7 @@ class PowNPUKernel : public framework::OpKernel<T> {
     auto* out = ctx.Output<Tensor>("Out");
     auto factor = ctx.Attr<float>("factor");
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(ctx.GetPlace());
 
     const auto& runner = NpuOpRunner("Power", {*x}, {*out},
@@ -67,7 +68,9 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
 
     // Step1: Compute x_pow = x.pow(factor-1)
     Tensor x_pow(x->type());
-    x_pow.mutable_data<T>(x->dims(), place);
+    x_pow.Resize(x->dims());
+    InferNPUStorageFormatAndDims(&x_pow, x->npu_storage_layout());
+    x_pow.mutable_data<T>(place);
     const auto& runner_pow = NpuOpRunner(
         "Power", {*x}, {x_pow}, {{"power", factor - static_cast<float>(1)}});
     runner_pow.Run(stream);
@@ -76,12 +79,19 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
 
     // 2.1 Get a factor tensor with shape [1].
     Tensor factor_tensor(framework::proto::VarType::FP32);
+    // factor_tensor.Resize(framework::make_ddim({1}));
+    // // NOTE(pangyoki): Fixed to use NCHW data_format
+    // InferNPUStorageFormatAndDims(&factor_tensor, x->layout());
+    // factor_tensor.mutable_data<float>(place);
     factor_tensor.mutable_data<float>({1}, place);
     FillNpuTensorWithConstant<float>(&factor_tensor, factor);
 
     // 2.2 Get the factor which has the shape with x and the same value with
     // factor.
     Tensor factor_bc_tensor(framework::proto::VarType::FP32);
+    // factor_bc_tensor.Resize(x->dims());
+    // InferNPUStorageFormatAndDims(&factor_bc_tensor, x->npu_storage_layout());
+    // factor_bc_tensor.mutable_data<float>(place);
     factor_bc_tensor.mutable_data<float>(x_dims, place);
     const auto& runner_bc =
         NpuOpRunner("FillD", {factor_tensor}, {factor_bc_tensor},
@@ -90,7 +100,9 @@ class PowGradNPUKernel : public framework::OpKernel<T> {
 
     // Step 3: Compute x_power_mul_factor = factor * x.pow(factor-1)
     Tensor x_power_mul_factor(x->type());
-    x_power_mul_factor.mutable_data<T>(x->dims(), place);
+    x_power_mul_factor.Resize(x->dims());
+    InferNPUStorageFormatAndDims(&x_power_mul_factor, x->npu_storage_layout());
+    x_power_mul_factor.mutable_data<T>(place);
     const auto& runner_mul_1 =
         NpuOpRunner("Mul", {factor_bc_tensor, x_pow}, {x_power_mul_factor}, {});
     runner_mul_1.Run(stream);
@@ -110,6 +122,7 @@ class ReluNPUKernel : public framework::OpKernel<T> {
     auto* x = ctx.Input<Tensor>("X");
     auto* out = ctx.Output<Tensor>("Out");
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(ctx.GetPlace());
 
     const auto& runner = NpuOpRunner("Relu",
@@ -137,6 +150,7 @@ class ReluGradNPUKernel : public framework::OpKernel<T> {
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
 
+    InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
     dx->mutable_data<T>(ctx.GetPlace());
     const auto& runner = NpuOpRunner("ReluGrad", {*dout, *out}, {*dx}, {});
 
@@ -154,6 +168,7 @@ class SqrtNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(place);
 
     auto stream =
@@ -176,6 +191,7 @@ class SqrtGradNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
     dx->mutable_data<T>(place);
 
     auto stream =
@@ -197,6 +213,7 @@ class LogNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(place);
 
     auto stream =
@@ -204,11 +221,13 @@ class LogNPUKernel : public framework::OpKernel<T> {
             .stream();
 
     Tensor one(x->type());
+    InferNPUStorageFormatAndDims(&one, x->npu_storage_layout());
     one.mutable_data<T>(x->dims(), place);
     const auto& runner_one = NpuOpRunner("OnesLike", {*x}, {one}, {});
     runner_one.Run(stream);
 
     Tensor sub(x->type());
+    InferNPUStorageFormatAndDims(&sub, x->npu_storage_layout());
     sub.mutable_data<T>(x->dims(), place);
     const auto& runner_sub = NpuOpRunner("Sub", {*x, one}, {sub}, {});
     runner_sub.Run(stream);
@@ -229,6 +248,7 @@ class LogGradNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
     dx->mutable_data<T>(place);
 
     auto stream =
@@ -249,6 +269,7 @@ class TanhNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(place);
 
     auto stream =
@@ -271,6 +292,7 @@ class TanhGradNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
     dx->mutable_data<T>(place);
 
     auto stream =
@@ -292,6 +314,7 @@ class SquareNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(place);
 
     auto stream =

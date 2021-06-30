@@ -30,9 +30,37 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     auto* x = ctx.Input<framework::LoDTensor>("X");
     auto* y = ctx.Input<framework::LoDTensor>("Y");
     auto* out = ctx.Output<framework::LoDTensor>("Out");
+    // out->mutable_data<T>(ctx.GetPlace());
+
+    Tensor tmp_x(x->type());
+    Tensor tmp_y(y->type());
+    tmp_x.ShareDataWith(*x);
+    tmp_y.ShareDataWith(*y);
+    VLOG(4) << "yoki: elementwise x format"
+            << framework::DataLayoutToString(x->npu_storage_layout());
+    VLOG(4) << "yoki: elementwise y format"
+            << framework::DataLayoutToString(y->npu_storage_layout());
+    if (tmp_x.npu_storage_layout() != DataLayout::kFractalNZ) {
+      VLOG(4) << "yoki: elementwise set format x";
+      tmp_x.set_npu_storage_layout(x->layout());
+      tmp_x.ResizeNPUDims(x->dims());
+    }
+
+    if (tmp_y.npu_storage_layout() != DataLayout::kFractalNZ) {
+      VLOG(4) << "yoki: elementwise set format y";
+      tmp_y.set_npu_storage_layout(y->layout());
+      tmp_y.ResizeNPUDims(y->dims());
+    }
+
+    if (tmp_x.npu_storage_layout() == DataLayout::kFractalNZ ||
+        tmp_y.npu_storage_layout() == DataLayout::kFractalNZ) {
+      InferNPUStorageFormatAndDims(out, DataLayout::kFractalNZ);
+    } else {
+      InferNPUStorageFormatAndDims(out, DataLayout::kNCHW);
+    }
     out->mutable_data<T>(ctx.GetPlace());
 
-    const auto& runner = NpuOpRunner("Add", {*x, *y}, {*out}, {});
+    const auto& runner = NpuOpRunner("Add", {tmp_x, tmp_y}, {*out}, {});
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();

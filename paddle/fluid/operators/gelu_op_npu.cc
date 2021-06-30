@@ -33,6 +33,7 @@ class GeluNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out->mutable_data<T>(place);
 
     auto stream =
@@ -55,6 +56,7 @@ class GeluGradNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
     dx->mutable_data<T>(place);
 
     auto stream =
@@ -62,6 +64,7 @@ class GeluGradNPUKernel : public framework::OpKernel<T> {
             .stream();
 
     Tensor out(x->type());
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
     out.mutable_data<T>(x->dims(), place);
     const auto& runner_out = NpuOpRunner("Gelu", {*x}, {out}, {});
     runner_out.Run(stream);

@@ -29,6 +29,7 @@ class SoftmaxNPUKernel : public framework::OpKernel<T> {
     framework::NPUAttributeMap attr_input = {{"axes", axes}};
 
     auto* out = ctx.Output<framework::LoDTensor>("Out");
+    InferNPUStorageFormatAndDims(out, in->npu_storage_layout());
     out->mutable_data<T>(ctx.GetPlace());
 
     const auto& runner = NpuOpRunner("SoftmaxV2", {*in}, {*out}, attr_input);
@@ -61,11 +62,37 @@ class SoftmaxGradNPUKernel : public framework::OpKernel<T> {
       sec_dim *= dims[i];
     }
 
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
     Tensor tmp_out;
-    tmp_out.ShareDataWith(*out).Resize({first_dim, sec_dim});
+    if (dOut->npu_storage_layout() != DataLayout::kFractalNZ) {
+      tmp_out.ShareDataWith(*out).Resize({first_dim, sec_dim});
+    } else {
+      tmp_out.Resize(out->dims());
+      InferNPUStorageFormatAndDims(&tmp_out, DataLayout::kNCHW);
+      tmp_out.mutable_data<T>(ctx.GetPlace());
+      RunTransDataNPUOP(*out, &tmp_out, stream);
+      VLOG(3) << "Transform data_format of softmax grad op.";
+
+      tmp_out.Resize({first_dim, sec_dim});
+      tmp_out.ResizeNPUDims({first_dim, sec_dim});
+    }
 
     Tensor tmp_dOut;
-    tmp_dOut.ShareDataWith(*dOut).Resize({first_dim, sec_dim});
+    if (dOut->npu_storage_layout() != DataLayout::kFractalNZ) {
+      tmp_dOut.ShareDataWith(*dOut).Resize({first_dim, sec_dim});
+    } else {
+      tmp_dOut.Resize(dOut->dims());
+      InferNPUStorageFormatAndDims(&tmp_dOut, DataLayout::kNCHW);
+      tmp_dOut.mutable_data<T>(ctx.GetPlace());
+      RunTransDataNPUOP(*dOut, &tmp_dOut, stream);
+      VLOG(3) << "Transform data_format of softmax grad op.";
+
+      tmp_dOut.Resize({first_dim, sec_dim});
+      tmp_dOut.ResizeNPUDims({first_dim, sec_dim});
+    }
 
     dX->Resize(framework::make_ddim({first_dim, sec_dim}));
     dX->mutable_data<T>(ctx.GetPlace());
@@ -74,9 +101,6 @@ class SoftmaxGradNPUKernel : public framework::OpKernel<T> {
     const auto& runner = NpuOpRunner(std::string("SoftmaxGrad"),
                                      {tmp_out, tmp_dOut}, {*dX}, attr_input);
 
-    auto stream =
-        ctx.template device_context<paddle::platform::NPUDeviceContext>()
-            .stream();
     runner.Run(stream);
 
     dX->Resize(dims);

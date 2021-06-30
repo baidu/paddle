@@ -185,7 +185,37 @@ Tensor& Tensor::Resize(const DDim& dims) {
 
 const DDim& Tensor::dims() const { return dims_; }
 
-int64_t Tensor::numel() const { return product(dims_); }
+int64_t Tensor::numel() const {
+#ifdef PADDLE_WITH_ASCEND_CL
+  int64_t npu_storage_numel = product(npu_storage_dims_);
+  if (npu_storage_layout_ == DataLayout::kFractalNZ) {
+    PADDLE_ENFORCE_GT(npu_storage_numel, 0,
+                      paddle::platform::errors::InvalidArgument(
+                          "The size of NPU Tensor's storage dims should be "
+                          "larger than 0, but get %d",
+                          npu_storage_numel));
+    VLOG(3) << "use npu storage numel: " << npu_storage_numel;
+    return npu_storage_numel;
+  } else if (npu_storage_numel != 0) {
+    int64_t basic_numel = product(dims_);
+    PADDLE_ENFORCE_EQ(npu_storage_numel, basic_numel,
+                      paddle::platform::errors::InvalidArgument(
+                          "NPU storage size %d should be equal with basic "
+                          "size %d in NCHW data format",
+                          npu_storage_numel, basic_numel));
+  }
+#endif
+  return product(dims_);
+}
+
+Tensor& Tensor::ResizeNPUDims(const DDim& npu_storage_dims) {
+  npu_storage_dims_ = npu_storage_dims;
+  return *this;
+}
+
+const DDim& Tensor::npu_storage_dims() const { return npu_storage_dims_; }
+
+int64_t Tensor::npu_storage_numel() const { return product(npu_storage_dims_); }
 
 void Tensor::ResetHolder(std::shared_ptr<memory::Allocation> holder) {
   PADDLE_ENFORCE_EQ(

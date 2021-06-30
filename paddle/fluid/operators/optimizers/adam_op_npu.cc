@@ -147,10 +147,20 @@ class AdamNPUKernel : public framework::OpKernel<T> {
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
+    Tensor tmp_param;
+    if (param->npu_storage_layout() != DataLayout::kFractalNZ) {
+      tmp_param.ShareDataWith(*param);
+    } else {
+      tmp_param.Resize(param->dims());
+      InferNPUStorageFormatAndDims(&tmp_param, DataLayout::kNCHW);
+      tmp_param.mutable_data<T>(ctx.GetPlace());
+      RunTransDataNPUOP(*param, &tmp_param, stream);
+      VLOG(3) << "Transform data_format of adam grad op.";
+    }
     const auto& runner =
         NpuOpRunner("ApplyAdamD",
                     {
-                        *param, *mom1, *mom2, *beta1_pow, *beta2_pow, *lr,
+                        tmp_param, *mom1, *mom2, *beta1_pow, *beta2_pow, *lr,
                         *beta1_tensor, *beta2_tensor, *epsilon_tensor, *grad,
                     },
                     {

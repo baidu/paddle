@@ -133,6 +133,7 @@ class LayerNormNPUKernel : public framework::OpKernel<T> {
       cast_bias.ShareDataWith(*bias);
     }
 
+    InferNPUStorageFormatAndDims(y, x->npu_storage_layout());
     y->mutable_data<T>(ctx.GetPlace());
 
     // mean should be of  U type
@@ -309,6 +310,7 @@ class LayerNormGradNPUKernel : public framework::OpKernel<T> {
     dbias = (dbias == nullptr) ? &dbias_ : dbias;
 
     dx->Resize(x->dims());
+    InferNPUStorageFormatAndDims(dx, dy->npu_storage_layout());
     dx->mutable_data<T>(ctx.GetPlace());
 
     dscale->Resize(framework::make_ddim(axes));

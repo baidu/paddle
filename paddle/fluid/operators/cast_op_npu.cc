@@ -43,6 +43,8 @@ class CastNPUKernel : public framework::OpKernel<T> {
     auto* out = ctx.Output<Tensor>("Out");
     auto place = ctx.GetPlace();
 
+    InferNPUStorageFormatAndDims(out, x->npu_storage_layout());
+
     if (x->type() == dtype) {
       // NOTE(zhiqiu): NPU cast op may result in wrong value, so
       // add special case here.

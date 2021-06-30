@@ -38,8 +38,23 @@ class Reshape2NPUKernel : public framework::OpKernel<T> {
                           "Input(Shape) is not supported on NPU."));
     auto shape = out->dims();
     out->mutable_data(ctx.GetPlace(), x->type());
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    Tensor trans_x(x->type());
+    trans_x.Resize(x->dims());
+    InferNPUStorageFormatAndDims(&trans_x, DataLayout::kNCHW);
+    trans_x.mutable_data<T>(ctx.GetPlace());
+    if (x->npu_storage_layout() == DataLayout::kFractalNZ) {
+      RunTransDataNPUOP(*x, &trans_x, stream);
+      VLOG(3) << "Transform data_format of reshape op.";
+    } else {
+      trans_x.ShareDataWith(*x);
+    }
+
     framework::TensorCopy(
-        *x, ctx.GetPlace(),
+        trans_x, ctx.GetPlace(),
         ctx.template device_context<platform::DeviceContext>(), out);
     out->Resize(shape);
   }
@@ -53,9 +68,23 @@ class Reshape2GradNPUKernel : public framework::OpKernel<T> {
     auto* d_out = ctx.Input<framework::Tensor>(framework::GradVarName("Out"));
     auto in_dims = d_x->dims();
 
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    Tensor trans_d_out(d_out->type());
+    trans_d_out.Resize(d_out->dims());
+    InferNPUStorageFormatAndDims(&trans_d_out, DataLayout::kNCHW);
+    trans_d_out.mutable_data<T>(ctx.GetPlace());
+    if (d_out->npu_storage_layout() == DataLayout::kFractalNZ) {
+      RunTransDataNPUOP(*d_out, &trans_d_out, stream);
+      VLOG(3) << "Transform data_format of reshape grad op.";
+    } else {
+      trans_d_out.ShareDataWith(*d_out);
+    }
+
     d_x->mutable_data(ctx.GetPlace(), d_out->type());
     framework::TensorCopy(
-        *d_out, ctx.GetPlace(),
+        trans_d_out, ctx.GetPlace(),
         ctx.template device_context<platform::DeviceContext>(), d_x);
     d_x->Resize(in_dims);
   }

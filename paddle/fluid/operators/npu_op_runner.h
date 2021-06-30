@@ -96,7 +96,35 @@ class NpuOpRunner {
 
 aclDataType ConvertToNpuDtype(framework::proto::VarType::Type dtype);
 
+aclFormat ConvertToNpuFormat(DataLayout layout);
+
+DataLayout ConvertNpuFormatToDataLayout(aclFormat acl_format);
+
+aclFormat FindBaseFormat(aclFormat acl_format);
+
 aclrtStream GetCurrentNPUStream(int device_id = -1);
+
+platform::Place GetCurrentNPUPlace(int device_id = -1);
+
+std::vector<int64_t> InferShapeLessTo4(std::vector<int64_t> dims);
+
+std::vector<int64_t> InferShapeNCHWToND(std::vector<int64_t> base_dims);
+
+Tensor FormatCastBetweenGroup(const Tensor &src_tensor, Tensor dst_tensor,
+                              Tensor trans_src_tensor);
+
+std::vector<int64_t> InferShapeNDToNZ(std::vector<int64_t> dims);
+
+void RunTransDataNPUOP(const Tensor &src_tensor, Tensor *dst_tensor,
+                       aclrtStream stream);
+
+Tensor RunTransDataToCastFormat(const Tensor &src_tensor, Tensor dst_tensor);
+
+Tensor CastNPUFormat(const Tensor &src_tensor, int acl_format);
+
+Tensor GenerateNZTensor(const Tensor &src_tensor);
+
+void InferNPUStorageFormatAndDims(Tensor *dst, DataLayout layout);
 
 template <typename T>
 void FillNpuTensorWithConstant(Tensor *tensor, T val) {

@@ -35,6 +35,33 @@ class ElementwiseMulNPUKernel : public framework::OpKernel<T> {
 
     auto place = ctx.GetPlace();
 
+    Tensor tmp_x(x->type());
+    Tensor tmp_y(y->type());
+    tmp_x.ShareDataWith(*x);
+    tmp_y.ShareDataWith(*y);
+    VLOG(4) << "yoki: elementwise x format"
+            << framework::DataLayoutToString(x->npu_storage_layout());
+    VLOG(4) << "yoki: elementwise y format"
+            << framework::DataLayoutToString(y->npu_storage_layout());
+    if (tmp_x.npu_storage_layout() != DataLayout::kFractalNZ) {
+      VLOG(4) << "yoki: elementwise set format x";
+      tmp_x.set_npu_storage_layout(x->layout());
+      tmp_x.ResizeNPUDims(x->dims());
+    }
+
+    if (tmp_y.npu_storage_layout() != DataLayout::kFractalNZ) {
+      VLOG(4) << "yoki: elementwise set format y";
+      tmp_y.set_npu_storage_layout(y->layout());
+      tmp_y.ResizeNPUDims(y->dims());
+    }
+
+    if (tmp_x.npu_storage_layout() == DataLayout::kFractalNZ ||
+        tmp_y.npu_storage_layout() == DataLayout::kFractalNZ) {
+      InferNPUStorageFormatAndDims(out, DataLayout::kFractalNZ);
+    } else {
+      InferNPUStorageFormatAndDims(out, DataLayout::kNCHW);
+    }
+
     out->mutable_data<T>(place);
 
     auto stream =
@@ -64,12 +91,14 @@ class ElementwiseMulGradNPUKernel : public framework::OpKernel<T> {
             .stream();
 
     if (dx) {
+      InferNPUStorageFormatAndDims(dx, dout->npu_storage_layout());
       dx->mutable_data<T>(place);
       const auto& runner_dx = NpuOpRunner("Mul", {*dout, *y}, {*dx}, {});
       runner_dx.Run(stream);
     }
 
     if (dy) {
+      InferNPUStorageFormatAndDims(dy, dout->npu_storage_layout());
       dy->mutable_data<T>(place);
       const auto& runner_dy = NpuOpRunner("Mul", {*x, *dout}, {*dy}, {});
       runner_dy.Run(stream);
