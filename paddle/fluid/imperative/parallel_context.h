@@ -69,13 +69,14 @@ class ParallelContext {
   // synchorize compute stream
   virtual void SynchronizeCompute() = 0;
 
-  inline int GetNRings() const { return strategy_.nrings_; }
+  inline int GetNRings() const { return ring_ids_.size(); }
 
   inline int64_t GetNRanks() const { return strategy_.nranks_; }
 
  protected:
   ParallelStrategy strategy_;
   platform::Place place_;
+  std::vector<int> ring_ids_;
 };
 
 }  //  namespace imperative

@@ -96,6 +96,9 @@ class HybridParallelOptimizer:
         self._use_dp_mode = (
             self._hcg.get_parallel_mode() == ParallelMode.DATA_PARALLEL)
 
+        self._use_pp_mode = (
+            self._hcg.get_parallel_mode() == ParallelMode.PIPELINE_PARALLEL)
+
         self._need_dp = (self._hcg.get_data_parallel_world_size() > 1)
 
         if isinstance(self._inner_opt._grad_clip,
@@ -108,7 +111,7 @@ class HybridParallelOptimizer:
     @imperative_base.no_grad
     @framework.dygraph_only
     def step(self):
-        if not self._use_dp_mode and self._need_dp:
+        if self._use_pp_mode and self._need_dp:
             fused_allreduce_gradients(
                 list(self._inner_opt._parameter_list), self._hcg)
         self._inner_opt.step()
@@ -124,7 +127,7 @@ class HybridParallelOptimizer:
         parameter_list = parameters if parameters \
             else self._parameter_list
 
-        if not self._use_dp_mode and self._need_dp:
+        if self._use_pp_mode and self._need_dp:
             fused_allreduce_gradients(list(parameter_list), self._hcg)
 
         return self._inner_opt.minimize(loss, startup_program, parameters,

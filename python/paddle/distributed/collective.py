@@ -85,6 +85,7 @@ class Group():
         self.nranks = rank_num
         self.id = id
         self.ranks = ranks
+        self.parallel_context = None
 
     def is_member(self):
         if self.rank < 0:
@@ -259,8 +260,8 @@ def new_group(ranks=None, backend=None):
 
             if core.is_compiled_with_cuda():
                 place = core.CUDAPlace(genv.device_id)
-                core.NCCLParallelContext(strategy,
-                                         place).init_with_ring_id(ring_id)
+                gp.parallel_context = core.NCCLParallelContext(strategy, place)
+                gp.parallel_context.init_with_ring_id(ring_id)
             else:
                 assert False, ("no cuda device found")
         else:
