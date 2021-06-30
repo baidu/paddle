@@ -120,7 +120,11 @@ gen_diff_html_report || true
 export COVERAGE_FILE=/paddle/build/python-coverage.data
 
 set +x
-coverage combine `ls python-coverage.data.*`
+pwd
+echo '==================================='
+ls
+echo '==================================='
+coverage combine `ls python-coverage.data.*` || echo "no python-coverage.data files were found"
 set -x
 
 coverage xml -i -o python-coverage.xml
