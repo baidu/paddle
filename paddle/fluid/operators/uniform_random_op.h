@@ -16,17 +16,19 @@
 #include <algorithm>
 #include <utility>
 #include <vector>
+#include "paddle/fluid/framework/generator.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
+#include "paddle/fluid/platform/bfloat16.h"
 
 namespace paddle {
 namespace operators {
 using Tensor = framework::Tensor;
 
 inline std::vector<int64_t> GetNewDataFromShapeTensor(
-    const Tensor* new_data_tensor) {
+    const Tensor *new_data_tensor) {
   if (new_data_tensor->type() == framework::proto::VarType::INT64) {
-    auto* new_data = new_data_tensor->data<int64_t>();
+    auto *new_data = new_data_tensor->data<int64_t>();
     framework::Tensor cpu_starts_tensor;
     if (platform::is_gpu_place(new_data_tensor->place())) {
       TensorCopySync(*new_data_tensor, platform::CPUPlace(),
@@ -37,7 +39,7 @@ inline std::vector<int64_t> GetNewDataFromShapeTensor(
                                       new_data + new_data_tensor->numel());
     return vec_new_data;
   } else if (new_data_tensor->type() == framework::proto::VarType::INT32) {
-    auto* new_data = new_data_tensor->data<int32_t>();
+    auto *new_data = new_data_tensor->data<int32_t>();
     std::vector<int64_t> vec_new_data;
     framework::Tensor cpu_starts_tensor;
     if (platform::is_gpu_place(new_data_tensor->place())) {
@@ -58,7 +60,7 @@ inline std::vector<int64_t> GetNewDataFromShapeTensor(
 }
 
 inline std::vector<int64_t> GetNewDataFromShapeTensorList(
-    const std::vector<const Tensor*>& list_new_shape_tensor) {
+    const std::vector<const Tensor *> &list_new_shape_tensor) {
   std::vector<int64_t> vec_new_shape;
   vec_new_shape.reserve(list_new_shape_tensor.size());
   for (size_t i = 0; i < list_new_shape_tensor.size(); ++i) {
@@ -97,5 +99,33 @@ inline std::vector<int64_t> GetNewDataFromShapeTensorList(
 
   return vec_new_shape;
 }
+
+template <typename T>
+inline void UniformRealDistribution(T *data, const int64_t &size,
+                                    const float &min, const float &max,
+                                    const unsigned &seed) {
+  VLOG(4) << "[CPU] UniformRandomKernel<T>";
+  std::uniform_real_distribution<T> dist(static_cast<T>(min),
+                                         static_cast<T>(max));
+  auto engine = paddle::framework::GetCPURandomEngine(seed);
+
+  for (int64_t i = 0; i < size; ++i) {
+    data[i] = dist(*engine);
+  }
+}
+
+template <>
+inline void UniformRealDistribution(paddle::platform::bfloat16 *data,
+                                    const int64_t &size, const float &min,
+                                    const float &max, const unsigned &seed) {
+  VLOG(4) << "[CPU] UniformRandomKernel<bfloat16>";
+  std::uniform_real_distribution<float> dist(min, max);
+  auto engine = paddle::framework::GetCPURandomEngine(seed);
+
+  for (int64_t i = 0; i < size; ++i) {
+    data[i] = static_cast<paddle::platform::bfloat16>(dist(*engine));
+  }
+}
+
 }  // namespace operators
 }  // namespace paddle
