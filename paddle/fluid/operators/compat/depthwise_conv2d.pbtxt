@@ -1,0 +1,159 @@
+type: "depthwise_conv2d"
+def {
+  inputs {
+    name: "Input"
+  }
+  inputs {
+    name: "Filter"
+  }
+  inputs {
+    name: "Bias"
+  }
+  inputs {
+    name: "ResidualData"
+  }
+  outputs {
+    name: "Output"
+  }
+  attrs {
+    name: "strides"
+    type: INTS
+  }
+  attrs {
+    name: "paddings"
+    type: INTS
+  }
+  attrs {
+    name: "padding_algorithm"
+    type: STRING
+  }
+  attrs {
+    name: "groups"
+    type: INT
+  }
+  attrs {
+    name: "dilations"
+    type: INTS
+  }
+  attrs {
+    name: "data_format"
+    type: STRING
+  }
+  
+}
+extra {
+  attrs {
+    name: "is_test"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_cudnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fuse_relu_before_depthwise_conv"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_mkldnn"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "use_quantizer"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "mkldnn_data_type"
+    type: STRING
+  }
+  attrs {
+    name: "fuse_relu"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fuse_brelu"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fuse_brelu_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "fuse_activation"
+    type: STRING
+  }
+  attrs {
+    name: "fuse_alpha"
+    type: FLOAT
+  }
+  attrs {
+    name: "fuse_beta"
+    type: FLOAT
+  }
+  attrs {
+    name: "use_addto"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "fuse_residual_connection"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "force_fp32_output"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "workspace_size_MB"
+    type: INT
+  }
+  attrs {
+    name: "exhaustive_search"
+    type: BOOLEAN
+  }
+  attrs {
+    name: "op_role"
+    type: INT
+  }
+  attrs {
+    name: "op_role_var"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_namescope"
+    type: STRING
+  }
+  attrs {
+    name: "op_callstack"
+    type: STRINGS
+  }
+  attrs {
+    name: "op_device"
+    type: STRING
+  }
+   attrs {
+    name: "Scale_in"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_out"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_in_eltwise"
+    type: FLOAT
+  }
+  attrs {
+    name: "Scale_weights"
+    type: FLOATS
+  }
+  attrs {
+    name: "name"
+    type: STRING
+  }
+  attrs {
+    name: "@ENABLE_CACHE_RUNTIME_CONTEXT@"
+    type: BOOLEAN
+  } 
+}
+
+

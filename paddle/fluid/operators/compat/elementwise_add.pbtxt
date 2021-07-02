@@ -75,6 +75,10 @@ extra {
     type: STRINGS
   }
   attrs {
+    name: "@ENABLE_CACHE_RUNTIME_CONTEXT@"
+    type: BOOLEAN
+  }
+  attrs {
     name: "op_device"
     type: STRING
   }

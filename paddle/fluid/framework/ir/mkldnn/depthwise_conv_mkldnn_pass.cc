@@ -31,6 +31,46 @@ class Graph;
   PADDLE_ENFORCE_NOT_NULL(                                        \
       id, platform::errors::InvalidArgument("Subgraph has no node %s.", #id));
 
+DepthwiseConvMKLDNNPass::DepthwiseConvMKLDNNPass() {
+  AddOpCompat(OpCompat("depthwise_conv2d"))
+      .AddInput("Input")
+      .IsTensor()
+      .End()
+      .AddInput("Filter")
+      .IsTensor()
+      .End()
+      .AddInput("Bias")
+      .IsTensor()
+      .End()
+      .AddInput("ResidualData")
+      .IsOptional()
+      .IsTensor()
+      .End()
+      .AddOutput("Output")
+      .IsTensor()
+      .End()
+      .AddAttr("strides")
+      .IsType<std::vector<int>>()
+      .End()
+      .AddAttr("paddings")
+      .IsType<std::vector<int>>()
+      .End()
+      .AddAttr("padding_algorithm")
+      // mobilenet-ssd has no "padding_algorithm"
+      .IsOptional()
+      .IsStringIn({"EXPLICIT", "SAME", "VALID"})
+      .End()
+      .AddAttr("groups")
+      .IsNumGE(1)
+      .End()
+      .AddAttr("dilations")
+      .IsType<std::vector<int>>()
+      .End()
+      .AddAttr("data_format")
+      .IsStringIn({"NHWC", "NCHW", "AnyLayout"})
+      .End();
+}
+
 void DepthwiseConvMKLDNNPass::ApplyImpl(ir::Graph* graph) const {
   PADDLE_ENFORCE_NOT_NULL(
       graph, platform::errors::InvalidArgument("Graph cannot be nullptr."));
@@ -45,6 +85,10 @@ void DepthwiseConvMKLDNNPass::ApplyImpl(ir::Graph* graph) const {
   int found_depthwise_conv_mkldnn_count = 0;
   auto handler = [&](const GraphPatternDetector::subgraph_t& subgraph,
                      Graph* g) {
+    if (!IsCompat(subgraph, g)) {
+      LOG(WARNING) << "Pass op compat failed.";
+      return;
+    }
     VLOG(3) << "handle DepthwiseConvMKLDNN fuse";
     GET_NODE(depthwise_conv, (*pattern));
     depthwise_conv->Op()->SetType("conv2d");
