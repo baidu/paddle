@@ -955,6 +955,9 @@ class InMemoryDataset(DatasetBase):
             return global_data_size[0]
         return local_data_size[0]
 
+    def set_heter_ps(self, enable_heter_ps=False):
+        self.dataset.set_heter_ps(enable_heter_ps)
+
 
 class QueueDataset(DatasetBase):
     """

@@ -329,6 +329,7 @@ class InMemoryDataFeed : public DataFeed {
   virtual bool ParseOneInstance(T* instance) = 0;
   virtual bool ParseOneInstanceFromPipe(T* instance) = 0;
   virtual void PutToFeedVec(const std::vector<T>& ins_vec) = 0;
+  virtual void PutToFeedVec(const T* ins_vec, int num) = 0;
 
   int thread_id_;
   int thread_num_;
@@ -346,6 +347,11 @@ class InMemoryDataFeed : public DataFeed {
   paddle::framework::ChannelObject<PvInstance>* input_pv_channel_;
   paddle::framework::ChannelObject<PvInstance>* output_pv_channel_;
   paddle::framework::ChannelObject<PvInstance>* consume_pv_channel_;
+
+  std::vector<std::pair<int, int>> batch_offsets_;
+  uint64_t offset_index_ = 0;
+  bool enable_heterps_ = false;
+  T* records_ = nullptr;
 };
 
 // This class define the data type of instance(ins_vec) in MultiSlotDataFeed
@@ -508,7 +514,7 @@ paddle::framework::Archive<AR>& operator>>(paddle::framework::Archive<AR>& ar,
   for (size_t& x : offset) {
     uint64_t t;
     ar >> t;
-    x = (size_t)t;
+    x = static_cast<size_t>(t);
   }
 #endif
   ar >> ins.MutableFloatData();
@@ -684,6 +690,11 @@ class MultiSlotInMemoryDataFeed : public InMemoryDataFeed<Record> {
   MultiSlotInMemoryDataFeed() {}
   virtual ~MultiSlotInMemoryDataFeed() {}
   virtual void Init(const DataFeedDesc& data_feed_desc);
+  void SetRecord(Record* records) { records_ = records; }
+  int GetDefaultBatchSize() { return default_batch_size_; }
+  void AddBatchOffset(const std::pair<int, int>& offset) {
+    batch_offsets_.push_back(offset);
+  }
 
  protected:
   virtual bool ParseOneInstance(Record* instance);
@@ -691,6 +702,7 @@ class MultiSlotInMemoryDataFeed : public InMemoryDataFeed<Record> {
   virtual void PutToFeedVec(const std::vector<Record>& ins_vec);
   virtual void GetMsgFromLogKey(const std::string& log_key, uint64_t* search_id,
                                 uint32_t* cmatch, uint32_t* rank);
+  virtual void PutToFeedVec(const Record* ins_vec, int num);
   std::vector<std::vector<float>> batch_float_feasigns_;
   std::vector<std::vector<uint64_t>> batch_uint64_feasigns_;
   std::vector<std::vector<size_t>> offset_;

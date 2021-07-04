@@ -77,6 +77,10 @@ class NCCLCommContext {
 
   void CreateAllNCCLComms(const std::vector<int>& dev_ids, int ring_id = 0);
 
+  void CreateNCCLCommMultiTrainer(const std::vector<int>& dev_ids,
+                                  ncclUniqueId* nccl_id, int nranks, int rank,
+                                  int ring_id);
+
   // a latter comm with the same dev_id and the same ring_id
   // will override the former
   NCCLComm* AssignNCCLComm(ncclComm_t comm, int nranks, int rank, int dev_id,
