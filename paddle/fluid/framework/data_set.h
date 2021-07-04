@@ -145,6 +145,7 @@ class Dataset {
   virtual void DynamicAdjustReadersNum(int thread_num) = 0;
   // set fleet send sleep seconds
   virtual void SetFleetSendSleepSeconds(int seconds) = 0;
+  virtual void SetHeterPs(bool enable_heterps) = 0;
 
  protected:
   virtual int ReceiveFromClient(int msg_type, int client_id,
@@ -228,6 +229,7 @@ class DatasetImpl : public Dataset {
                                        bool discard_remaining_ins = false);
   virtual void DynamicAdjustReadersNum(int thread_num);
   virtual void SetFleetSendSleepSeconds(int seconds);
+  virtual void SetHeterPs(bool enable_heterps);
 
   std::vector<paddle::framework::Channel<T>>& GetMultiOutputChannel() {
     return multi_output_channel_;
@@ -292,6 +294,7 @@ class DatasetImpl : public Dataset {
   int64_t global_index_ = 0;
   std::vector<std::shared_ptr<ThreadPool>> consume_task_pool_;
   std::vector<T> input_records_;  // only for paddleboxdatafeed
+  bool enable_heterps_ = false;
 };
 
 // use std::vector<MultiSlotType> or Record as data type

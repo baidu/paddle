@@ -40,6 +40,7 @@ static std::unordered_set<std::string> kMultiDeviceOps{
     "c_broadcast",
     "c_comm_init",
     "c_comm_init_all",
+    "c_comm_init_multitrainer",
     "c_gen_nccl_id",
     "c_sync_comm_stream",
     "send",

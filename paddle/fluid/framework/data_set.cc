@@ -18,6 +18,10 @@
 #include "paddle/fluid/framework/io/fs.h"
 #include "paddle/fluid/platform/monitor.h"
 #include "paddle/fluid/platform/timer.h"
+#ifdef PADDLE_WITH_GLOO
+#include <gloo/broadcast.h>
+#include "paddle/fluid/framework/fleet/gloo_wrapper.h"
+#endif
 
 #if defined _WIN32 || defined __APPLE__
 #else
@@ -217,6 +221,175 @@ void DatasetImpl<T>::RegisterClientToClientMsgHandler() {
   VLOG(3) << "RegisterClientToClientMsgHandler done";
 }
 
+static void compute_left_batch_num(const int ins_num, const int thread_num,
+                                   std::vector<std::pair<int, int>>* offset,
+                                   const int start_pos) {
+  int cur_pos = start_pos;
+  int batch_size = ins_num / thread_num;
+  int left_num = ins_num % thread_num;
+  for (int i = 0; i < thread_num; ++i) {
+    int batch_num_size = batch_size;
+    if (i == 0) {
+      batch_num_size = batch_num_size + left_num;
+    }
+    offset->push_back(std::make_pair(cur_pos, batch_num_size));
+    cur_pos += batch_num_size;
+  }
+}
+
+static void compute_batch_num(const int64_t ins_num, const int batch_size,
+                              const int thread_num,
+                              std::vector<std::pair<int, int>>* offset) {
+  int thread_batch_num = batch_size * thread_num;
+  // less data
+  if (static_cast<int64_t>(thread_batch_num) > ins_num) {
+    compute_left_batch_num(ins_num, thread_num, offset, 0);
+    return;
+  }
+
+  int cur_pos = 0;
+  int offset_num = static_cast<int>(ins_num / thread_batch_num) * thread_num;
+  int left_ins_num = static_cast<int>(ins_num % thread_batch_num);
+  if (left_ins_num > 0 && left_ins_num < thread_num) {
+    offset_num = offset_num - thread_num;
+    left_ins_num = left_ins_num + thread_batch_num;
+    for (int i = 0; i < offset_num; ++i) {
+      offset->push_back(std::make_pair(cur_pos, batch_size));
+      cur_pos += batch_size;
+    }
+    // split data to thread avg two rounds
+    compute_left_batch_num(left_ins_num, thread_num * 2, offset, cur_pos);
+  } else {
+    for (int i = 0; i < offset_num; ++i) {
+      offset->push_back(std::make_pair(cur_pos, batch_size));
+      cur_pos += batch_size;
+    }
+    if (left_ins_num > 0) {
+      compute_left_batch_num(left_ins_num, thread_num, offset, cur_pos);
+    }
+  }
+}
+
+static int compute_thread_batch_nccl(
+    const int thr_num, const int64_t total_instance_num,
+    const int minibatch_size, std::vector<std::pair<int, int>>* nccl_offsets) {
+  int thread_avg_batch_num = 0;
+  if (total_instance_num < static_cast<int64_t>(thr_num)) {
+    LOG(WARNING) << "compute_thread_batch_nccl total ins num:["
+                 << total_instance_num << "], less thread num:[" << thr_num
+                 << "]";
+    return thread_avg_batch_num;
+  }
+
+  auto& offset = (*nccl_offsets);
+  // split data avg by thread num
+  compute_batch_num(total_instance_num, minibatch_size, thr_num, &offset);
+  thread_avg_batch_num = static_cast<int>(offset.size() / thr_num);
+#ifdef PADDLE_WITH_GLOO
+  auto gloo_wrapper = paddle::framework::GlooWrapper::GetInstance();
+  if (!gloo_wrapper->IsInitialized()) {
+    VLOG(0) << "GLOO is not inited";
+    gloo_wrapper->Init();
+  }
+
+  if (gloo_wrapper->Size() > 1) {
+    // adjust batch num per thread for NCCL
+    std::vector<int> thread_avg_batch_num_vec(1, thread_avg_batch_num);
+    std::vector<int64_t> total_instance_num_vec(1, total_instance_num);
+    auto thread_max_batch_num_vec =
+        gloo_wrapper->AllReduce(thread_avg_batch_num_vec, "max");
+    auto sum_total_ins_num_vec =
+        gloo_wrapper->AllReduce(total_instance_num_vec, "sum");
+    int thread_max_batch_num = thread_max_batch_num_vec[0];
+    int64_t sum_total_ins_num = sum_total_ins_num_vec[0];
+    int diff_batch_num = thread_max_batch_num - thread_avg_batch_num;
+    VLOG(0) << "##########diff batch num: " << diff_batch_num
+            << " thread max batch num: " << thread_max_batch_num
+            << " thread avg batch num: " << thread_avg_batch_num;
+    if (diff_batch_num == 0) {
+      LOG(WARNING) << "total sum ins " << sum_total_ins_num << ", thread_num "
+                   << thr_num << ", ins num " << total_instance_num
+                   << ", batch num " << offset.size()
+                   << ", thread avg batch num " << thread_avg_batch_num;
+      return thread_avg_batch_num;
+    }
+
+    int need_ins_num = thread_max_batch_num * thr_num;
+    // data is too less
+    if ((int64_t)need_ins_num > total_instance_num) {
+      LOG(FATAL) << "error instance num:[" << total_instance_num
+                 << "] less need ins num:[" << need_ins_num << "]";
+      return thread_avg_batch_num;
+    }
+
+    int need_batch_num = (diff_batch_num + 1) * thr_num;
+    int offset_split_index = static_cast<int>(offset.size() - thr_num);
+    int split_left_num = total_instance_num - offset[offset_split_index].first;
+    while (split_left_num < need_batch_num) {
+      need_batch_num += thr_num;
+      offset_split_index -= thr_num;
+      split_left_num = total_instance_num - offset[offset_split_index].first;
+    }
+    int split_start = offset[offset_split_index].first;
+    offset.resize(offset_split_index);
+    compute_left_batch_num(split_left_num, need_batch_num, &offset,
+                           split_start);
+    LOG(WARNING) << "total sum ins " << sum_total_ins_num << ", thread_num "
+                 << thr_num << ", ins num " << total_instance_num
+                 << ", batch num " << offset.size() << ", thread avg batch num "
+                 << thread_avg_batch_num << ", thread max batch num "
+                 << thread_max_batch_num
+                 << ", need batch num: " << (need_batch_num / thr_num)
+                 << "split begin (" << split_start << ")" << split_start
+                 << ", num " << split_left_num;
+    thread_avg_batch_num = thread_max_batch_num;
+  } else {
+    LOG(WARNING) << "thread_num " << thr_num << ", ins num "
+                 << total_instance_num << ", batch num " << offset.size()
+                 << ", thread avg batch num " << thread_avg_batch_num;
+  }
+#else
+        PADDLE_THROW(
+            platform::errors::Unavailable("dataset compute nccl batch number need compile with GLOO"));
+#endif
+  return thread_avg_batch_num;
+
+}
+
+template <typename T>
+void DatasetImpl<T>::SetHeterPs(bool enable_heterps) {
+  enable_heterps_ = enable_heterps;
+  if (enable_heterps_) {
+    if (input_records_.size() == 0 && input_channel_ != nullptr &&
+        input_channel_->Size() != 0) {
+      input_channel_->ReadAll(input_records_);
+      VLOG(3) << "read from channel to records with records size: "
+              << input_records_.size();
+    }
+    VLOG(3) << "#######input records size: " << input_records_.size();
+    int64_t total_ins_num = input_records_.size();
+    std::vector<std::pair<int, int>> offset;
+    int default_batch_size =
+        reinterpret_cast<MultiSlotInMemoryDataFeed*>(readers_[0].get())
+            ->GetDefaultBatchSize();
+    VLOG(3) << "#12 thread_num: " << thread_num_
+            << " memory size: " << total_ins_num
+            << " default batch_size: " << default_batch_size;
+    compute_thread_batch_nccl(thread_num_, total_ins_num, default_batch_size,
+                              &offset);
+    VLOG(3) << "#13 offset size: " << offset.size();
+    for (int i = 0; i < thread_num_; i++) {
+      reinterpret_cast<MultiSlotInMemoryDataFeed*>(readers_[i].get())
+          ->SetRecord(&input_records_[0]);
+    }
+    for (size_t i = 0; i < offset.size(); i++) {
+      reinterpret_cast<MultiSlotInMemoryDataFeed*>(
+          readers_[i % thread_num_].get())
+          ->AddBatchOffset(offset[i]);
+    }
+  }
+}
+
 // load data into memory, Dataset hold this memory,
 // which will later be fed into readers' channel
 template <typename T>
@@ -318,6 +491,12 @@ void DatasetImpl<T>::ReleaseMemory() {
     }
     multi_pv_consume_[i]->Clear();
     multi_pv_consume_[i] = nullptr;
+  }
+  if (enable_heterps_) {
+    input_records_.clear();
+    std::vector<T>().swap(input_records_);
+    VLOG(3) << "rrrrrrelease heterps input records records size: "
+            << input_records_.size();
   }
   std::vector<paddle::framework::Channel<PvInstance>>().swap(multi_pv_consume_);
 
@@ -654,6 +833,9 @@ void DatasetImpl<T>::CreateReaders() {
       channel_idx = 0;
     }
   }
+  if (enable_heterps_) {
+    SetHeterPs(true);
+  }
   VLOG(3) << "readers size: " << readers_.size();
 }
 
@@ -822,6 +1004,7 @@ void MultiSlotDataset::PreprocessInstance() {
   }
   if (!enable_pv_merge_) {  // means to use Record
     this->LocalShuffle();
+
   } else {  // means to use Pv
     auto fleet_ptr = FleetWrapper::GetInstance();
     input_channel_->Close();

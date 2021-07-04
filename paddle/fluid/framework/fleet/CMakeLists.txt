@@ -12,15 +12,15 @@ endif(WITH_PSLIB)
 if(WITH_HETERPS)
     if(WITH_NCCL)
         nv_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cu ps_gpu_wrapper.cc
-        DEPS heter_ps ${BRPC_DEPS})
+        DEPS heter_ps gloo_wrapper ${BRPC_DEPS})
         add_subdirectory(heter_ps)
     elseif(WITH_RCCL)
         hip_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cu ps_gpu_wrapper.cc
-        DEPS heter_ps ${BRPC_DEPS})
+        DEPS heter_ps gloo_wrapper ${BRPC_DEPS})
         add_subdirectory(heter_ps)
     endif(WITH_NCCL)
 else()
-    cc_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cc)
+    cc_library(ps_gpu_wrapper SRCS ps_gpu_wrapper.cc DEPS gloo_wrapper)
 endif(WITH_HETERPS)
 
 if(WITH_NCCL OR WITH_RCCL)

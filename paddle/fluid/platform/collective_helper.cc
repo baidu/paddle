@@ -140,6 +140,40 @@ void NCCLCommContext::CreateAllNCCLComms(const std::vector<int>& dev_ids,
   });
 }
 
+void NCCLCommContext::CreateNCCLCommMultiTrainer(
+    const std::vector<int>& dev_ids, ncclUniqueId* nccl_id, int ntrainers,
+    int train_id, int ring_id) {
+  PADDLE_ENFORCE_GT(dev_ids.size(), 0);
+  const int kDevices = dev_ids.size();
+  VLOG(0) << "Begin CreateNCCLCommMultiTrainer. device number: " << kDevices
+          << ", ntrainers: " << ntrainers << ", train_id: " << train_id
+          << ", rind_id: " << ring_id;
+  ncclComm_t comms[kDevices];
+  {
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::ncclGroupStart());
+    for (int i = 0; i < kDevices; i++) {
+      PADDLE_ENFORCE_CUDA_SUCCESS(cudaSetDevice(i));
+      platform::dynload::ncclCommInitRank(comms + i, kDevices * ntrainers,
+                                          *nccl_id, train_id * kDevices + i);
+      VLOG(0) << "ncclCommInitRankkkkk82: " << i;
+    }
+    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::ncclGroupEnd());
+    VLOG(0) << "nccl group end seccessss";
+  }
+  PADDLE_ENFORCE_EQ(comm_map_.count(ring_id), 0);
+  for (int i = 0; i < kDevices; ++i) {
+    AssignNCCLComm(comms[i], kDevices * ntrainers, train_id * kDevices + i,
+                   dev_ids[i], ring_id);
+    VLOG(0) << "nccl communicator of train_id " << train_id * kDevices + i
+            << " in ring " << ring_id << " has been created on device "
+            << dev_ids[i];
+  }
+
+  std::call_once(once_flag_, []() {
+    std::atexit([]() { NCCLCommContext::Instance().ReleaseNCCLComms(); });
+  });
+}
+
 NCCLComm* NCCLCommContext::AssignNCCLComm(ncclComm_t comm, int nranks, int rank,
                                           int dev_id, int ring_id) {
   std::unique_ptr<CUDADeviceContext> dev_ctx(
