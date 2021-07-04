@@ -89,7 +89,9 @@ class PSLib(Fleet):
                         str(local_endpoint[0]), int(local_endpoint[1]))
             self._role_maker._barrier_all()
             self.all_ips_ = self._role_maker._all_gather(self._local_ip)
+            print("LLOcal ips: {}".format(self._local_ip))
             # worker_index * 2 is for compatible with older versions of pslib
+            print("ALLLLL ips: {}".format(self.all_ips_))
             self._fleet_ptr.init_worker(self._dist_desc_str, self.all_ips_,
                                         self._role_maker._get_size(),
                                         self._role_maker.worker_index() * 2)
@@ -100,17 +102,19 @@ class PSLib(Fleet):
                     self._heter_ptr.create_client2xpu_connection()
             # barrier_all for init_worker
             self._role_maker._barrier_all()
+            print("22ALLLLL ips: {}".format(self.all_ips_))
             # prepare for client to client communication
-            if not self._opt_info["use_ps_gpu"]:
-                if self._role_maker.is_worker():
-                    info = self._fleet_ptr.get_clients_info()
-                    all_info = self._role_maker._worker_gather(info[0])
-                    self._fleet_ptr.gather_clients(all_info)
-                    self._fleet_ptr.set_client2client_config(
-                        self._client2client_request_timeout_ms,
-                        self._client2client_connect_timeout_ms,
-                        self._client2client_max_retry)
-                    self._fleet_ptr.create_client2client_connection()
+            if self._role_maker.is_worker():
+                info = self._fleet_ptr.get_clients_info()
+                print("IIIIFO: {}".format(info))
+                all_info = self._role_maker._worker_gather(info[0])
+                print("ALL info: {}".format(all_info))
+                self._fleet_ptr.gather_clients(all_info)
+                self._fleet_ptr.set_client2client_config(
+                    self._client2client_request_timeout_ms,
+                    self._client2client_connect_timeout_ms,
+                    self._client2client_max_retry)
+                self._fleet_ptr.create_client2client_connection()
             # barrier for init model
             self._role_maker._barrier_worker()
             if self._role_maker.is_first_worker():
@@ -1120,14 +1124,16 @@ class DownpourOptimizer(DistributedOptimizer):
         fleet._main_programs = programs
         fleet._scopes = scopes
         if opt_info["use_ps_gpu"]:
-            from paddle.fluid.transpiler.collective import SingleProcessMultiThread
+            #from paddle.fluid.transpiler.collective import SingleProcessMultiThread
+            from paddle.fluid.transpiler.collective import MultiThread
             # check start program
 
             env = self.get_dist_env()
             if not isinstance(losses, list):
                 startup_programs = [startup_programs]
             for i in range(0, len(startup_programs)):
-                t = SingleProcessMultiThread()
+                t = MultiThread()
+                #t = SingleProcessMultiThread()
                 start_program = startup_programs[i]
                 main_program = programs[i]
                 t.transpile(

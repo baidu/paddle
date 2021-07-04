@@ -29,7 +29,7 @@ from .. import core, unique_name
 from ..framework import Program, default_main_program, default_startup_program
 from .details import wait_server_ready
 
-__all__ = ['GradAllReduce', 'LocalSGD']
+__all__ = ['GradAllReduce', 'LocalSGD', 'MultiThread']
 
 OpRole = core.op_proto_and_checker_maker.OpRole
 
@@ -97,8 +97,14 @@ class Collective(object):
                                     self.wait_port)
         self._broadcast_params()
 
-    def _init_communicator(self, program, current_endpoint, endpoints, rank,
-                           ring_id, wait_port):
+    def _init_communicator(self,
+                           program,
+                           current_endpoint,
+                           endpoints,
+                           rank,
+                           ring_id,
+                           wait_port,
+                           has_multitrainer=False):
         nranks = len(endpoints)
         other_endpoints = endpoints[:]
         other_endpoints.remove(current_endpoint)
@@ -150,16 +156,28 @@ class Collective(object):
                     'other_endpoints': other_endpoints,
                     self.op_role_key: OpRole.Forward
                 })
-            block.append_op(
-                type='c_comm_init',
-                inputs={'X': nccl_id_var},
-                outputs={},
-                attrs={
-                    'nranks': nranks,
-                    'rank': rank,
-                    'ring_id': ring_id,
-                    self.op_role_key: OpRole.Forward
-                })
+            if not has_multitrainer:
+                block.append_op(
+                    type='c_comm_init',
+                    inputs={'X': nccl_id_var},
+                    outputs={},
+                    attrs={
+                        'nranks': nranks,
+                        'rank': rank,
+                        'ring_id': ring_id,
+                        self.op_role_key: OpRole.Forward
+                    })
+            else:
+                block.append_op(
+                    type='c_comm_init_multitrainer',
+                    inputs={'X': nccl_id_var},
+                    outputs={},
+                    attrs={
+                        'ntrainers': nranks,
+                        'trainer_id': rank,
+                        'ring_id': ring_id,
+                        self.op_role_key: OpRole.Forward
+                    })
 
     def _broadcast_params(self):
         block = self.startup_program.global_block()
@@ -406,26 +424,13 @@ class LocalSGD(Collective):
                 attrs={self.op_role_key: OpRole.Optimize})
 
 
-class SingleProcessMultiThread(GradAllReduce):
-    '''
-    '''
-
-    def __init__(self):
-        GradAllReduce.__init__(self, 1)
-        self.mode = "single_process_multi_thread"
-
-    def _transpile_startup_program(self):
-        block = self.startup_program.global_block()
-        block.append_op(type='c_comm_init_all', attrs={'ring_id': 0})
-
-
 class MultiThread(GradAllReduce):
     '''
     '''
 
     def __init__(self, nrings=1):
         GradAllReduce.__init__(self, nrings)
-        self.mode = "box"
+        self.mode = "single_process_multi_thread"
 
     def _transpile_startup_program(self):
         if len(self.endpoints) > 1:

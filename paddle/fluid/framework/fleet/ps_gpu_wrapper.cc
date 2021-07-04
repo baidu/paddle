@@ -126,7 +126,7 @@ void PSGPUWrapper::BuildTask(std::shared_ptr<HeterContext> gpu_task,
   }
   timeline.Pause();
 
-  VLOG(1) << "GpuPs task unique11111 cost " << timeline.ElapsedSec()
+  VLOG(1) << "GpuPs task add keys cost " << timeline.ElapsedSec()
           << " seconds.";
   timeline.Start();
   gpu_task->UniqueKeys();
@@ -174,9 +174,27 @@ void PSGPUWrapper::BuildTask(std::shared_ptr<HeterContext> gpu_task,
   VLOG(1) << "pull sparse from CpuPS into GpuPS cost " << timeline.ElapsedSec()
           << " seconds.";
 
+  if (multi_node_) {
+    auto gloo_wrapper = paddle::framework::GlooWrapper::GetInstance();
+    if (!gloo_wrapper->IsInitialized()) {
+      VLOG(0) << "GLOO is not inited";
+      gloo_wrapper->Init();
+    }
+    gloo_wrapper->Barrier();
+  }
+
   timeline.Start();
-  auto build_func = [device_num, &local_keys, &local_ptr, &device_keys,
-                     &device_vals, &device_mutex](int i) {
+  std::vector<std::vector<std::pair<uint64_t, char*>>> pass_values;
+  uint16_t pass_id = 0;
+
+  bool record_status = false;
+  if (multi_node_) {
+    record_status = fleet_ptr->pslib_ptr_->_worker_ptr->take_sparse_record(
+        table_id, pass_id, pass_values);
+  }
+  auto build_func = [device_num, record_status, &pass_values, &local_keys,
+                     &local_ptr, &device_keys, &device_vals,
+                     &device_mutex](int i) {
     std::vector<std::vector<FeatureKey>> task_keys(device_num);
 #ifdef PADDLE_WITH_PSLIB
     std::vector<std::vector<paddle::ps::DownpourFixedFeatureValue*>> task_ptrs(
@@ -193,6 +211,21 @@ void PSGPUWrapper::BuildTask(std::shared_ptr<HeterContext> gpu_task,
       task_ptrs[shard].push_back(local_ptr[i][j]);
     }
 
+    if (record_status) {
+      size_t local_keys_size = local_keys.size();
+      size_t pass_values_size = pass_values.size();
+      for (size_t j = 0; j < pass_values_size; j += local_keys_size) {
+        auto& shard_values = pass_values[j];
+        for (size_t pair_idx = 0; pair_idx < pass_values[j].size();
+             pair_idx++) {
+          auto& cur_pair = shard_values[pair_idx];
+          int shard = cur_pair.first % device_num;
+          task_keys[shard].push_back(cur_pair.first);
+          task_ptrs[shard].push_back(
+              (paddle::ps::DownpourFixedFeatureValue*)cur_pair.second);
+        }
+      }
+    }
     for (int dev = 0; dev < device_num; dev++) {
       device_mutex[dev]->lock();
 
@@ -295,7 +328,7 @@ void PSGPUWrapper::BuildGPUPS(uint64_t table_id, int feature_dim) {
   HeterPs_ = HeterPsBase::get_instance(size_max, resource_);
   HeterPs_->set_nccl_comm_and_size(inner_comms_, inter_comms_, node_size_);
   auto build_func = [this, &gpu_task, &feature_keys_count](int i) {
-    std::cout << "building table: " << i << std::endl;
+    VLOG(1) << "building table: " << i;
     this->HeterPs_->build_ps(i, gpu_task->device_keys_[i].data(),
                              gpu_task->device_values_[i].data(),
                              feature_keys_count[i], 500000, 2);
