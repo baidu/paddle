@@ -38,6 +38,11 @@ class HistogramKernel : public framework::OpKernel<T> {
     const T* input_data = input->data<T>();
     auto input_numel = input->numel();
 
+    if (input_data == nullptr) {
+      VLOG(3) << "no input! return";
+      return;
+    }
+
     T output_min = static_cast<T>(minval);
     T output_max = static_cast<T>(maxval);
     if (output_min == output_max) {
