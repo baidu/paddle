@@ -16,6 +16,10 @@ import math
 import numpy as np
 
 import paddle
+from paddle.fluid.log_helper import get_logger
+
+_logger = get_logger(
+    __name__, logging.INFO, fmt='%(asctime)s-%(levelname)s: %(message)s')
 
 from . import quant_nn
 
