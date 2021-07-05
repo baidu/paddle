@@ -433,15 +433,15 @@ class TestBatchNormOpTraining(unittest.TestCase):
                 else:
                     attrs['momentum'] = momentum
 
+                block.create_var(name="reserve_space", dtype='float32')
                 outputs = {
                     "Y": block.var('y'),
                     "MeanOut": block.var('mean'),  # share memory
                     "VarianceOut": block.var('variance'),  # share memory
                     "SavedMean": block.var('saved_mean'),
-                    "SavedVariance": block.var('saved_variance')
+                    "SavedVariance": block.var('saved_variance'),
+                    "ReserveSpace": block.var('reserve_space')
                 }
-                block.create_var(name="reserve_space", dtype='float32')
-                outputs["ReserveSpace"] = block.var('reserve_space')
                 bn_op = block.append_op(
                     type="batch_norm",
                     inputs=inputs,
@@ -501,7 +501,9 @@ class TestBatchNormOpTrainingCase1(TestBatchNormOpTraining):
     def init_test_case(self):
         self.use_global_stats = False
         self.no_grad_set = set(['scale@GRAD', 'bias@GRAD'])
-        self.fetch_list = ['y', 'mean', 'variance', 'x@GRAD']
+        self.fetch_list = [
+            'y', 'mean', 'variance', 'saved_mean', 'saved_variance', 'x@GRAD'
+        ]
 
 
 class TestBatchNormOpTrainingCase2(TestBatchNormOpTraining):
