@@ -29,12 +29,85 @@ from ..fluid.layers import unstack  # noqa: F401
 
 from ..fluid.layers import scatter_nd  # noqa: F401
 from ..fluid.layers import shard_index  # noqa: F401
+from ..fluid.layers.nn import _elementwise_op_in_dygraph
 from ..fluid import layers
 from ..fluid.dygraph.inplace_utils import inplace_apis_in_dygraph_only
 import paddle
 from paddle import _C_ops
 
 __all__ = []
+
+
+@dygraph_only
+def fill_(x, fill_value):
+    """
+    **Notes**:
+        **This API is ONLY available in Dygraph mode**
+
+    This function fill the Tensor with value inplace.
+
+    Args:
+        x(Tensor): ``x`` is the Tensor we want to fill data inplace
+
+    Returns:
+        None: Inplace operator
+
+    Returns type:
+        None: Inplace operator
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+
+            tensor = paddle.to_tensor([0,1,2,3,4])
+
+            tensor.fill_(0)
+            print(tensor.tolist())   #[0, 0, 0, 0, 0]
+
+    """
+    if not (isinstance(fill_value, Variable)):
+        fill_value = paddle.to_tensor(fill_value, dtype=x.dtype)
+    assert (fill_value.size == 1), "var should be size 1"
+    return core.ops.fill_inplace(x, fill_value)
+
+
+setattr(core.VarBase, 'fill_', fill_)
+
+
+@dygraph_only
+def zero_(x):
+    """
+    **Notes**:
+        **This API is ONLY available in Dygraph mode**
+
+    This function fill the Tensor with zero inplace.
+
+    Args:
+        x(Tensor): ``x`` is the Tensor we want to fill zero inplace
+
+    Returns:
+        None: Inplace operator
+
+    Returns type:
+        None: Inplace operator
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+
+            tensor = paddle.to_tensor([0,1,2,3,4])
+
+            tensor.zero_()
+            print(tensor.tolist())   #[0, 0, 0, 0, 0]
+
+    """
+    fill_value = paddle.to_tensor(0, dtype=x.dtype)
+    return core.ops.fill_inplace(x, fill_value)
+
+
+setattr(core.VarBase, 'zero_', zero_)
 
 
 @dygraph_only
