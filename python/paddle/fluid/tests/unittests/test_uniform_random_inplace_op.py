@@ -23,18 +23,24 @@ class TestUniformRandomInplaceOpDtype(unittest.TestCase):
         self.shape = (1000, 784)
 
     def test_uniform_random_inplace_op_dtype(self):
-        def test_fp32():
-            tensor_fp32 = paddle.ones(self.shape, dtype=paddle.float32)
+        def test_fp32(place):
+            data_fp32 = np.ones(self.shape, dtype=np.float32)
+            tensor_fp32 = paddle.to_tensor(data_fp32, place=place)
             tensor_fp32.uniform_()
             self.assertEqual(tensor_fp32.dtype, paddle.float32)
 
-        def test_fp64():
-            tensor_fp64 = paddle.ones(self.shape, dtype=paddle.float64)
+        def test_fp64(place):
+            data_fp64 = np.ones(self.shape, dtype=np.float64)
+            tensor_fp64 = paddle.to_tensor(data_fp64, place=place)
             tensor_fp64.uniform_()
             self.assertEqual(tensor_fp64.dtype, paddle.float64)
 
-        test_fp32()
-        test_fp64()
+        places = [fluid.CPUPlace()]
+        if fluid.core.is_compiled_with_cuda():
+            places.append(places.append(fluid.CUDAPlace(0)))
+        for place in places:
+            test_fp32(place)
+            test_fp64(place)
 
 
 class TestUniformRandomInplaceOpIsInplace(unittest.TestCase):
