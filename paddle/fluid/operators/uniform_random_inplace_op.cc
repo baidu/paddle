@@ -15,8 +15,6 @@ limitations under the License. */
 #include "paddle/fluid/framework/generator.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
-#include "paddle/fluid/operators/uniform_random_op.h"
-#include "paddle/fluid/platform/bfloat16.h"
 
 namespace paddle {
 namespace operators {
@@ -95,27 +93,13 @@ class CPUUniformRandomInplaceKernel : public framework::OpKernel<T> {
     auto *tensor = out_var->GetMutable<framework::LoDTensor>();
     T *data = tensor->mutable_data<T>(ctx.GetPlace());
     int64_t size = tensor->numel();
-
-    UniformRealDistribution<T>(
-        data, size, ctx.Attr<float>("min"), ctx.Attr<float>("max"),
+    std::uniform_real_distribution<T> dist(
+        static_cast<T>(ctx.Attr<float>("min")),
+        static_cast<T>(ctx.Attr<float>("max")));
+    auto engine = paddle::framework::GetCPURandomEngine(
         static_cast<unsigned int>(ctx.Attr<int>("seed")));
-    unsigned int diag_num =
-        static_cast<unsigned int>(ctx.Attr<int>("diag_num"));
-    unsigned int diag_step =
-        static_cast<unsigned int>(ctx.Attr<int>("diag_step"));
-    auto diag_val = static_cast<T>(ctx.Attr<float>("diag_val"));
-    if (diag_num > 0) {
-      PADDLE_ENFORCE_GT(
-          size, (diag_num - 1) * (diag_step + 1),
-          platform::errors::InvalidArgument(
-              "ShapeInvalid: the diagonal's elements is equal (num-1) "
-              "* (step-1) with num %d, step %d,"
-              "It should be smaller than %d, but received %d",
-              diag_num, diag_step, (diag_num - 1) * (diag_step + 1), size));
-      for (int64_t i = 0; i < diag_num; ++i) {
-        int64_t pos = i * diag_step + i;
-        data[pos] = diag_val;
-      }
+    for (int64_t i = 0; i < size; ++i) {
+      data[i] = dist(*engine);
     }
   }
 };
@@ -137,8 +121,7 @@ REGISTER_OPERATOR(
     paddle::framework::EmptyGradOpMaker<paddle::imperative::OpBase>,
     paddle::operators::UniformRandomInplaceOpVarTypeInference,
     UniformRandomInplaceInToOut);
-REGISTER_OP_CPU_KERNEL(uniform_random_inplace,
-                       paddle::operators::CPUUniformRandomInplaceKernel<float>,
-                       paddle::operators::CPUUniformRandomInplaceKernel<double>,
-                       paddle::operators::CPUUniformRandomInplaceKernel<
-                           paddle::platform::bfloat16>);
+REGISTER_OP_CPU_KERNEL(
+    uniform_random_inplace,
+    paddle::operators::CPUUniformRandomInplaceKernel<float>,
+    paddle::operators::CPUUniformRandomInplaceKernel<double>);

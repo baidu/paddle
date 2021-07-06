@@ -32,10 +32,15 @@ class XPUUniformRandomInplaceKernel : public framework::OpKernel<T> {
 
     int64_t size = tensor->numel();
     std::unique_ptr<T[]> data_cpu(new T[size]);
+    std::uniform_real_distribution<T> dist(
+        static_cast<T>(ctx.Attr<float>("min")),
+        static_cast<T>(ctx.Attr<float>("max")));
+    unsigned int seed = static_cast<unsigned int>(ctx.Attr<int>("seed"));
+    auto engine = framework::GetCPURandomEngine(seed);
+    for (int64_t i = 0; i < size; ++i) {
+      data_cpu[i] = dist(*engine);
+    }
 
-    UniformRealDistribution<T>(
-        data_cpu, size, ctx.Attr<float>("min"), ctx.Attr<float>("max"),
-        static_cast<unsigned int>(ctx.Attr<int>("seed")));
     unsigned int diag_num =
         static_cast<unsigned int>(ctx.Attr<int>("diag_num"));
     unsigned int diag_step =
