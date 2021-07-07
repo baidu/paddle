@@ -232,11 +232,23 @@ def _pickle_save(obj, f, protocol):
     list_params = set()
 
     def reduce_varbase(self):
-        data = self.numpy()
-        name = self.name
-        if name in list_params:
-            return self.__reduce__()
 
+        name = self.name
+        if name in list_params and isinstance(self, ParamBase):
+            if self.value().get_tensor()._is_initialized():
+                v = self.numpy()
+                t = ParamBase(self.shape, self.dtype, name=self.name)
+                t.__dict__.update(self.__dict__)
+                return eval, (
+                    "t if t.value().get_tensor().set(v,p()) or True else None",
+                    {
+                        't': t,
+                        'v': v,
+                        'p': _current_expected_place
+                    })
+            else:
+                return ParamBase, (self.shape, self.dtype), self.__dict__
+        data = self.numpy()
         return (tuple, ((name, data), ))
 
     def reduce_LoDTensor(self):
