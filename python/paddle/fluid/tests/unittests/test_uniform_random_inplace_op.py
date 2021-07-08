@@ -137,5 +137,21 @@ class TestUniformRandomInplaceOpError(unittest.TestCase):
         self.assertRaises(TypeError, test_attr_error)
 
 
+class TestUniformRandomInplaceOpEmptyTensor(unittest.TestCase):
+    def test_uniform_random_inplace_op_empty_tensor(self):
+        places = ['cpu']
+        if fluid.core.is_compiled_with_cuda():
+            places.append('gpu')
+        test_shapes = [(200, 0), (0, 200)]
+        for place in places:
+            paddle.set_device(place)
+            for test_shape in test_shapes:
+                tensor = paddle.empty(shape=test_shape)
+                tensor.uniform_()
+                tensor_shape_np = np.array(tensor.shape)
+                origin_shape = np.array(test_shape)
+                self.assertTrue((tensor_shape_np == origin_shape).all())
+
+
 if __name__ == '__main__':
     unittest.main()

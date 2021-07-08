@@ -24,7 +24,7 @@ class UniformRandomInplaceOpMaker : public framework::OpProtoAndCheckerMaker {
   void Make() override {
     AddComment(R"DOC(
 This operator fills self tensor with random values sampled from a
-uniform distribution. The random result is in set [min, max).
+uniform distribution. The random result is in a range of [min, max).
 )DOC");
     AddInput("X", "The input tensor.");
     AddOutput("Out", "The output tensor of uniform random op");
