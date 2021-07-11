@@ -23,6 +23,7 @@ limitations under the License. */
 #include "acl/acl.h"
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/npu_op_runner.h"
+#include "paddle/fluid/operators/npu_utils.h"
 
 namespace paddle {
 namespace operators {

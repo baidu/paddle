@@ -90,6 +90,22 @@ class TestReduceSumNet(unittest.TestCase):
     def set_reduce_sum_function(self, x):
         # keep_dim = False
         return paddle.fluid.layers.reduce_sum(x, dim=-1)
+    
+    """
+    def _get_tensor(self, name, value, place=None):
+        block = fluid.default_main_program().global_block()
+        var = create_var(
+                name="e_1",
+                dtype='float32',
+                type=core.VarDesc.VarType.LOD_TENSOR,
+                persistable=False,
+                stop_gradient=True)
+        return var, tensor
+    """
+
+    def _touch_inf(self, place):
+        zero = fluid.layers.fill_constant(shape=[1], dtype='float32', value=0.0)
+        return fluid.layers.elementwise_div(zero, zero)
 
     def _test(self, run_npu=True):
         main_prog = paddle.static.Program()
@@ -97,6 +113,11 @@ class TestReduceSumNet(unittest.TestCase):
         main_prog.random_seed = SEED
         startup_prog.random_seed = SEED
         np.random.seed(SEED)
+
+        if run_npu:
+            place = paddle.NPUPlace(0)
+        else:
+            place = paddle.CPUPlace()
 
         a_np = np.random.random(size=(2, 3, 4)).astype('float32')
         b_np = np.random.random(size=(2, 3, 4)).astype('float32')
@@ -108,6 +129,7 @@ class TestReduceSumNet(unittest.TestCase):
             label = paddle.static.data(
                 name="label", shape=[2, 1], dtype='int64')
 
+            zero = self._touch_inf(place)
             a_1 = fluid.layers.fc(input=a, size=4, num_flatten_dims=2, act=None)
             b_1 = fluid.layers.fc(input=b, size=4, num_flatten_dims=2, act=None)
             z = paddle.add(a_1, b_1)
@@ -120,10 +142,6 @@ class TestReduceSumNet(unittest.TestCase):
             sgd = fluid.optimizer.SGD(learning_rate=0.01)
             sgd.minimize(loss)
 
-        if run_npu:
-            place = paddle.NPUPlace(0)
-        else:
-            place = paddle.CPUPlace()
 
         exe = paddle.static.Executor(place)
         exe.run(startup_prog)
@@ -131,15 +149,15 @@ class TestReduceSumNet(unittest.TestCase):
         print("Start run on {}".format(place))
         for epoch in range(100):
 
-            pred_res, loss_res = exe.run(
+            pred_res, loss_res, zero_res = exe.run(
                 main_prog,
                 feed={"a": a_np,
                       "b": b_np,
                       "label": label_np},
-                fetch_list=[prediction, loss])
+                fetch_list=[prediction, loss, zero])
             if epoch % 10 == 0:
-                print("Epoch {} | Prediction[0]: {}, Loss: {}".format(
-                    epoch, pred_res[0], loss_res))
+                print("Epoch {} | Prediction[0]: {}, Loss: {}, zero:{}".format(
+                    epoch, pred_res[0], loss_res, zero_res))
 
         return pred_res, loss_res
 

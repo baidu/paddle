@@ -22,9 +22,9 @@ if(WITH_MKLDNN)
     add_subdirectory(mkldnn)
 endif()
 
-
-if(WITH_DISTRIBUTE)
-    add_subdirectory(collective)
+if(WITH_ASCEND_CL)
+  cc_library(npu_op_runner SRCS npu_op_runner.cc DEPS operator npu_info)
+  cc_library(npu_utils SRCS npu_utils.cc DEPS npu_op_runner)
 endif()
 
 if (WITH_PSCORE)
@@ -32,6 +32,10 @@ if (WITH_PSCORE)
 endif()
 
 add_subdirectory(amp)
+
+if(WITH_DISTRIBUTE)
+    add_subdirectory(collective)
+endif()
 
 add_subdirectory(reader)
 
@@ -130,7 +134,6 @@ endif()
 
 if (WITH_ASCEND_CL)
   cc_test(assign_op_npu_test SRCS assign_op_npu_test.cc DEPS assign_op)
-  cc_library(npu_op_runner SRCS npu_op_runner.cc DEPS operator npu_info)
   set(COMMON_OP_DEPS ${COMMON_OP_DEPS} npu_op_runner)
 endif()
 
@@ -145,6 +148,7 @@ endif()
 
 set(OPERATOR_DEPS ${OPERATOR_DEPS} ${COMMON_OP_DEPS})
 set(GLOB_OPERATOR_DEPS ${OPERATOR_DEPS} CACHE INTERNAL "Global Op dependencies")
+
 
 cc_test(test_common_infer_shape_functions SRCS test_common_infer_shape_functions.cc DEPS common_infer_shape_functions ${COMMON_OP_DEPS} activation_op elementwise_add_op softmax_op softmax)
 cc_test(gather_test SRCS gather_test.cc DEPS tensor)

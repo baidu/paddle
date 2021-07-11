@@ -27,11 +27,13 @@ class CRecvOpASCENDKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
 #if defined(PADDLE_WITH_ASCEND_CL)
-    auto out = ctx.Output<framework::LoDTensor>("Out");
-    out->mutable_data<T>(out->dims(), ctx.GetPlace());
-    void* ptr = reinterpret_cast<void*>(const_cast<T*>(out->data<T>()));
-    int numel = out->numel();
-    HcclDataType dtype = platform::ToHCCLDataType(out->type());
+    auto x = ctx.Output<framework::LoDTensor>("Out");
+    auto out_dims = x->dims();
+    x->mutable_data<T>(out_dims, ctx.GetPlace());
+
+    void* ptr = reinterpret_cast<void*>(const_cast<T*>(x->data<T>()));
+    int numel = x->numel();
+    HcclDataType dtype = platform::ToHCCLDataType(x->type());
 
     int ring_id = ctx.Attr<int>("ring_id");
     auto place = ctx.GetPlace();
@@ -55,10 +57,11 @@ class CRecvOpASCENDKernel : public framework::OpKernel<T> {
     int root = peer;
 
     VLOG(3) << "begin hccl recv, parameter is: "
-            << "ring_id:" << ring_id << ", nranks:" << nranks
-            << ", peer:" << peer << ", numel:" << numel << ", ptr:" << ptr
-            << ", dtype:" << dtype << ", root:" << root
-            << ", comm: " << comm->comm() << ", stream: " << stream;
+            << "ring_id:" << ring_id << ", nranks:" << nranks 
+            << ", peer:" << peer << ", numel:" << numel
+            << ", ptr:" << ptr << ", dtype:" << dtype
+            << ", root:" << root << ", comm: " << comm->comm()
+            << ", stream: " << stream;
 
     PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclBroadcast(
         ptr, numel, dtype, (uint32_t)root, comm->comm(), stream));

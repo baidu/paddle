@@ -41,7 +41,7 @@ class TestLookupTableV2(OpTest):
         vocab = 10
         dim = 20
         w = np.ones([vocab, dim]).astype(self.dtype)
-        x = np.random.randint(0, vocab, size=(bsz, seqlen)).astype(np.int32)
+        x = np.random.randint(0, vocab, size=(bsz, seqlen)).astype(np.int64)
         out = np.ones([bsz, seqlen, dim]).astype(self.dtype)
 
         self.inputs = {

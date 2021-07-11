@@ -43,6 +43,7 @@ void NPUStream::Destroy() {
 }
 
 void NPUStream::Wait() const {
+  VLOG(3) << "NPU stream sync" << stream_;
   PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeStream(stream_));
 }
 

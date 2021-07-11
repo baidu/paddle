@@ -31,7 +31,7 @@ class LookupTableV2NPUKernel : public framework::OpKernel<T> {
 
     // It seems cann 20.1 accepts int64, but cann 20.2+ not.
     PADDLE_ENFORCE_EQ(ids_t->type(), framework::proto::VarType::INT32,
-                      platform::errors::Unimplemented(
+                     platform::errors::Unimplemented(
                           "The index of LookupTableV2 should be int32."));
 
     auto *table_var = ctx.InputVar("W");

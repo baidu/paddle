@@ -159,6 +159,13 @@ class TensorParallelOptimizer(MetaOptimizerBase):
             # data parallelism
             dp_degree = self.nranks // self.mp_degree
             self._transpile_main_program(loss, dp_degree)
+
+        with open("details/mp_main_%d" % self.rank, "w") as f:
+            f.writelines(str(self.main_program))
+
+        with open("details/mp_startup_%d" % self.rank, "w") as f:
+            f.writelines(str(self.startup_program))
+
         return optimize_ops, params_grads
 
     def _transpile_main_program(self, loss, dp_degree):

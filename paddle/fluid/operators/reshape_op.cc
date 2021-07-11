@@ -389,6 +389,7 @@ class ReshapeGradKernel {
   void operator()(const framework::ExecutionContext &ctx) const {
     auto *d_out = ctx.Input<framework::Tensor>(framework::GradVarName("Out"));
     auto *d_x = ctx.Output<framework::Tensor>(framework::GradVarName("X"));
+    //auto* x_shape = ctx.Input<framework::Tensor>("XShape");
     auto in_dims = d_x->dims();
 
     d_x->mutable_data(ctx.GetPlace(), d_out->type());
@@ -685,4 +686,17 @@ REGISTER_OP_XPU_KERNEL_FUNCTOR(reshape2_grad, float, ops::ReshapeGradKernel,
                                ops::ReshapeGradKernel, plat::complex<float>,
                                ops::ReshapeGradKernel, plat::complex<double>,
                                ops::ReshapeGradKernel);
+#endif
+
+#ifdef PADDLE_WITH_ASCEND_CL
+REGISTER_OP_NPU_KERNEL_FUNCTOR(reshape2, float, ops::ReshapeKernel, double,
+                               ops::ReshapeKernel, int, ops::ReshapeKernel,
+                               int64_t, ops::ReshapeKernel, plat::float16,
+                               ops::ReshapeKernel, bool, ops::ReshapeKernel);
+REGISTER_OP_NPU_KERNEL_FUNCTOR(reshape2_grad, float, ops::ReshapeGradKernel,
+                               double, ops::ReshapeGradKernel, int,
+                               ops::ReshapeGradKernel, int64_t,
+                               ops::ReshapeGradKernel, plat::float16,
+                               ops::ReshapeGradKernel, bool, ops::ReshapeGradKernel);
+
 #endif

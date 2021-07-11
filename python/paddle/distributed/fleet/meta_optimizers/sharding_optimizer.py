@@ -228,8 +228,8 @@ class ShardingOptimizer(MetaOptimizerBase):
             #main_program = main_program._pipeline_opt['section_program']['program']
             print("pp_rank:", self.pp_rank_)
             main_program = program_list[self.pp_rank_]
-            with open("main_%d" % self.role_maker._worker_index(), 'w') as f:
-                f.writelines(str(main_program))
+            # with open("./details/sharding_pp_0_%d" % self.role_maker._worker_index(), 'w') as f:
+            #     f.writelines(str(main_program))
             main_block = main_program.global_block()
             new_params_grads = []
             for param, grad in params_grads:
@@ -246,14 +246,13 @@ class ShardingOptimizer(MetaOptimizerBase):
 
         if self.pp_degree > 1:
             pp_optimizer._rename_gradient_var_name(main_block)
-            with open("main_%d" % self.role_maker._worker_index(), 'w') as f:
-                f.writelines(str(main_program))
+            # with open("./details/sharding_pp_1_%d" % self.role_maker._worker_index(), 'w') as f:
+            #     f.writelines(str(main_program))
 
         # step0: _init_comm
         self._init_comm()
 
         if self.sharding_degree > 1:
-
             # step1: build shard
             self._build_shard(params_grads)
 
@@ -295,8 +294,9 @@ class ShardingOptimizer(MetaOptimizerBase):
                 main_block)
             # accumulated_grad_names = sorted(accumulated_grad_names)
             if self.pp_allreduce_in_optimize:
-                print("persistable FP32 grad: ")
-                print(accumulated_grad_names)
+                #print("persistable FP32 grad: ")
+                #print(accumulated_grad_names)
+                print("sharding user_defined_strategy:",self.user_defined_strategy.auto, self.user_defined_strategy.amp)
                 first_optimize_op_index = get_first_check_finite_and_unscale_op_idx(
                     main_block, raise_error=self.user_defined_strategy.amp)
                 insert_reduce_ops(
@@ -310,6 +310,7 @@ class ShardingOptimizer(MetaOptimizerBase):
             if self.hybrid_dp and self.hybrid_dp_mode == "pp_hybrid_dp":
                 first_optimize_op_index = get_first_check_finite_and_unscale_op_idx(
                     main_block, raise_error=self.user_defined_strategy.amp)
+
                 if first_optimize_op_index >= 0:
                     insert_allreduce_ops(
                         main_block,
@@ -362,12 +363,12 @@ class ShardingOptimizer(MetaOptimizerBase):
             # init param broadcast should be called after startup pruning             
             self._initialization_broadcast(startup_block)
 
-        with open("start_sharding_%d" % self.role_maker._worker_index(),
-                  'w') as f:
-            f.writelines(str(startup_block.program))
-        with open("main_sharding_%d" % self.role_maker._worker_index(),
-                  'w') as f:
-            f.writelines(str(main_block.program))
+        # with open("./details/start_sharding_%d" % self.role_maker._worker_index(),
+        #           'w') as f:
+        #     f.writelines(str(startup_block.program))
+        # with open("./details/main_sharding_%d" % self.role_maker._worker_index(),
+        #           'w') as f:
+        #     f.writelines(str(main_block.program))
 
         if core.is_compiled_with_cuda():
             self._wait()
