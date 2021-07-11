@@ -5528,6 +5528,18 @@ class ParamBase(core.VarBase):
         new_param.copy_(self, True)
         return new_param
 
+    def __reduce__(self):
+        value = self.numpy()
+        state = (self.name, self.persistable, self.stop_gradient)
+        return ParamBase, (self.shape, self.dtype), (self.__dict__, value,
+                                                     state)
+
+    def __setstate__(self, state):
+        self.__dict__.update(state[0])
+        t = self.value().get_tensor()
+        t.set(state[1], _current_expected_place())
+        self.name, self.persistable, self.stop_gradient = state[2]
+
     __repr__ = __str__
 
 

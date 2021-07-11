@@ -232,9 +232,13 @@ def _pickle_save(obj, f, protocol):
         raise ValueError("Expected 1<'protocol'<5, but received protocol={}".
                          format(protocol))
 
-    def reudce_varbase(self):
+    list_params = set()
+
+    def reduce_varbase(self):
         data = self.numpy()
         name = self.name
+        if name in list_params:
+            return self.__reduce__()
 
         return (tuple, ((name, data), ))
 
@@ -243,16 +247,43 @@ def _pickle_save(obj, f, protocol):
 
         return (eval, ('data', {'data': data}))
 
+    def reduce_Layer(self):
+        is_param_or_layer = lambda v: isinstance(v, ParamBase) or isinstance(v, core.Layer)
+
+        def collect_params(param_or_layer):
+            if isinstance(param_or_layer, ParamBase):
+                list_params.add(param_or_layer.name)
+            else:
+                # param_or_layer is layer
+                _parse_every_object(param_or_layer.__dict__, is_param_or_layer,
+                                    collect_params)
+            return param_or_layer
+
+        _parse_every_object(self.__dict__, is_param_or_layer, collect_params)
+        return self.__reduce_ex__(protocol)
+
+    dispatch_table_layer = dict()
+
+    def create_layer_dispatch_table(layer):
+        dispatch_table_layer[layer.__class__] = reduce_Layer
+        return layer
+
+    _parse_every_object(obj, lambda v: isinstance(v, core.Layer),
+                        create_layer_dispatch_table)
+
     def add_dispatch_table():
         # This is not a good method, because the pickle module has been modified.
-        pickle.dispatch_table[core.VarBase] = reudce_varbase
-        pickle.dispatch_table[ParamBase] = reudce_varbase
+        pickle.dispatch_table[core.VarBase] = reduce_varbase
+        pickle.dispatch_table[ParamBase] = reduce_varbase
         pickle.dispatch_table[core.LoDTensor] = reduce_LoDTensor
+        pickle.dispatch_table.update(dispatch_table_layer)
 
     def pop_dispatch_table():
         pickle.dispatch_table.pop(core.VarBase)
         pickle.dispatch_table.pop(core.LoDTensor)
         pickle.dispatch_table.pop(ParamBase)
+        for k in dispatch_table_layer:
+            pickle.dispatch_table.pop(k)
 
     # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
     if sys.platform == 'darwin' and sys.version_info.major == 3:
@@ -272,10 +303,10 @@ def _pickle_save(obj, f, protocol):
             pickler = pickle.Pickler(f, protocol)
             pickler.dispatch_table = copyreg.dispatch_table.copy()
 
-            pickler.dispatch_table[core.VarBase] = reudce_varbase
+            pickler.dispatch_table[core.VarBase] = reduce_varbase
             pickler.dispatch_table[core.LoDTensor] = reduce_LoDTensor
-            pickler.dispatch_table[ParamBase] = reudce_varbase
-
+            pickler.dispatch_table[ParamBase] = reduce_varbase
+            pickler.dispatch_table.update(dispatch_table_layer)
             pickler.dump(obj)
 
 
