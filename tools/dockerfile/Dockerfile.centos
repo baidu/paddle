@@ -13,7 +13,7 @@ ENV PATH /opt/rh/devtoolset-2/root/usr/bin:$PATH
 ENV LD_LIBRARY_PATH /usr/local/ssl/lib:/opt/rh/devtoolset-2/root/usr/lib64:/opt/rh/devtoolset-2/root/usr/lib:/usr/local/lib64:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
-RUN yum install -y bzip2 gettext-devel sqlite-devel zlib-devel openssl-devel pcre-devel vim tk-devel tkinter libtool xz graphviz wget curl-devel
+RUN yum install -y bzip2 gettext-devel sqlite-devel zlib-devel openssl-devel pcre-devel vim tk-devel tkinter libtool xz graphviz wget curl-devel vim
 COPY build_scripts /build_scripts
 RUN bash build_scripts/build.sh
 RUN bash build_scripts/install_nccl2.sh 
@@ -34,7 +34,7 @@ ENV PATH=/usr/local/ssl:${GOROOT}/bin:${GOPATH}/bin:${PATH}
 ENV LIBRARY_PATH=/usr/local/ssl/lib:$LIBRARY_PATH
 
 # for paddle
-RUN wget --no-check-certificate -qO- https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz | \
+RUN wget --no-check-certificate -qO- https://storage.googleapis.com/golang/go1.15.12.linux-amd64.tar.gz | \
     tar -xz -C /usr/local && \
     mkdir /root/gopath && \
     mkdir /root/gopath/bin && \

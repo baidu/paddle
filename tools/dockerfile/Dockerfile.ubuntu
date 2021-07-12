@@ -19,7 +19,7 @@ COPY paddle/scripts/docker/root/ /root/
 RUN apt-get update && \
     apt-get install -y make build-essential libssl-dev zlib1g-dev libbz2-dev \
     libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev \
-    xz-utils tk-dev libffi-dev liblzma-dev
+    xz-utils tk-dev libffi-dev liblzma-dev vim unzip libcurl4-openssl-dev
 
 RUN apt-get update && \
     apt-get install -y --allow-downgrades --allow-change-held-packages \
@@ -242,5 +242,12 @@ RUN wget https://paddle-ci.gz.bcebos.com/ccache-3.7.9.tar.gz && \
     make -j8 && make install && \
     ln -s /usr/local/ccache-3.7.9/bin/ccache /usr/local/bin/ccache
 
+RUN wget https://paddle-serving.bj.bcebos.com/others/centos_ssl.tar && \
+    tar xf centos_ssl.tar && rm -rf centos_ssl.tar && \
+    mv libcrypto.so.1.0.2k /usr/lib/libcrypto.so.1.0.2k && mv libssl.so.1.0.2k /usr/lib/libssl.so.1.0.2k && \
+    ln -sf /usr/lib/libcrypto.so.1.0.2k /usr/lib/libcrypto.so.10 && \
+    ln -sf /usr/lib/libssl.so.1.0.2k /usr/lib/libssl.so.10 && \
+    ln -sf /usr/lib/libcrypto.so.10 /usr/lib/libcrypto.so && \
+    ln -sf /usr/lib/libssl.so.10 /usr/lib/libssl.so
 
 EXPOSE 22

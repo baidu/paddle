@@ -22,7 +22,8 @@ RUN apt-get update && \
   apt-get update && \
   apt-get install -y curl wget vim git unzip unrar tar xz-utils libssl-dev bzip2 gzip \ 
     coreutils ntp language-pack-zh-hans python-qt4 libsm6 libxext6 libxrender-dev libgl1-mesa-glx \
-    bison graphviz libjpeg-dev zlib1g-dev automake locales swig net-tools libtool module-init-tools
+    bison graphviz libjpeg-dev zlib1g-dev automake locales swig net-tools libtool module-init-tools \
+    vim unzip libcurl4-openssl-dev
 
 # Downgrade gcc&&g++
 WORKDIR /usr/bin 
@@ -88,7 +89,7 @@ RUN wget -q https://ftp.gnu.org/gnu/binutils/binutils-2.33.1.tar.gz && \
 
 
 # Install Go and glide
-RUN wget -qO- https://paddle-ci.cdn.bcebos.com/go1.8.1.linux-amd64.tar.gz | \
+RUN wget -qO- https://paddle-ci.cdn.bcebos.com/go1.15.12.linux-amd64.tar.gz | \
     tar -xz -C /usr/local && \
     mkdir /root/gopath && \
     mkdir /root/gopath/bin && \
@@ -152,5 +153,13 @@ RUN wget https://paddle-ci.gz.bcebos.com/ccache-3.7.9.tar.gz && \
 RUN wget https://paddle-ci.cdn.bcebos.com/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz && \ 
     tar xf clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz && cd clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04 && \
     cp -r * /usr/local && cd .. && rm -rf clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04 && rm -rf clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz 
+
+RUN wget https://paddle-serving.bj.bcebos.com/others/centos_ssl.tar && \
+    tar xf centos_ssl.tar && rm -rf centos_ssl.tar && \
+    mv libcrypto.so.1.0.2k /usr/lib/libcrypto.so.1.0.2k && mv libssl.so.1.0.2k /usr/lib/libssl.so.1.0.2k && \
+    ln -sf /usr/lib/libcrypto.so.1.0.2k /usr/lib/libcrypto.so.10 && \
+    ln -sf /usr/lib/libssl.so.1.0.2k /usr/lib/libssl.so.10 && \
+    ln -sf /usr/lib/libcrypto.so.10 /usr/lib/libcrypto.so && \
+    ln -sf /usr/lib/libssl.so.10 /usr/lib/libssl.so
 
 EXPOSE 22
