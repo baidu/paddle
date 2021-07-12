@@ -13,18 +13,40 @@
 // limitations under the License.
 #pragma once
 
+#include <condition_variable>  // NOLINT
+#include <cstdlib>
 #include <memory>
+#include <mutex>  //NOLINT
 #include <string>
 #include <typeindex>
 #include <typeinfo>
+#include <utility>
 
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/framework/var_type_traits.h"
 namespace paddle {
 namespace framework {
+namespace debug {
+static const char kEnableAsync[] = "FLAGS_enable_async";
+
+static bool IsEnableAsync() { return std::getenv(kEnableAsync) != nullptr; }
+}  // namespace debug
 
 class Variable {
  public:
+  Variable() = default;
+
+  Variable(const Variable& other) {
+    this->holder_ = other.holder_;
+    this->state_ = other.state_;
+  }
+
+  Variable& operator=(const Variable& other) {
+    this->holder_ = other.holder_;
+    this->state_ = other.state_;
+    return *this;
+  }
+
   template <typename T>
   const T& Get() const {
     static_assert(
@@ -37,10 +59,22 @@ class Variable {
         platform::errors::InvalidArgument(
             "The Variable type must be %s, but the type it holds is %s.",
             ToTypeName(VarTypeTrait<T>::kId), ToTypeName(holder_->Type())));
+    if (debug::IsEnableAsync()) {
+      std::unique_lock<std::mutex> lock(mutex_);
+      cv_.wait(lock, [this] { return IsAvailable(); });
+    }
     return *static_cast<const T*>(holder_->Ptr());
   }
 
   bool IsInitialized() const { return holder_ != nullptr; }
+
+  enum AsyncState {
+    kUnknown = 0,
+    kAvailable = 1,
+    kUnavailale = 2,
+  };
+
+  bool IsAvailable() const { return state_ == AsyncState::kAvailable; }
 
   template <typename T>
   T* GetMutable() {
@@ -67,6 +101,12 @@ class Variable {
     PADDLE_ENFORCE_NOT_NULL(
         holder_, platform::errors::NotFound("Variable is not initialized."));
     return holder_->Type();
+  }
+
+  void NotifyAvailable() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    state_ = AsyncState::kAvailable;
+    cv_.notify_all();
   }
 
  private:
@@ -111,6 +151,12 @@ class Variable {
 
   // pointers to a PlaceholderImpl object indeed.
   std::shared_ptr<Placeholder> holder_;
+
+  // Note(Aurelius84): mutext and cv have no copy constructor, we
+  // should rewrite Variable's copy construnctor.
+  mutable AsyncState state_{AsyncState::kUnavailale};
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
 };
 
 inline framework::TensorInplaceVersion* Variable::InplaceVersionCounter() {

@@ -103,6 +103,9 @@ void Executor::CreateVariables(const ProgramDesc& pdesc, Scope* scope,
       if (var->Persistable()) {
         auto* ptr = const_cast<Scope*>(ancestor_scope)->Var(var->Name());
         InitializeVariable(ptr, var->GetType());
+        // TODO(Aurelius84): should consider all persistable var is available
+        // after running start_up.
+        ptr->NotifyAvailable();
         VLOG(3) << "Create Variable " << var->Name()
                 << " global, which pointer is " << ptr;
       } else {
@@ -484,6 +487,9 @@ void Executor::RunPartialPreparedContext(ExecutorPrepareContext* ctx,
 
   for (int64_t i = start_op_index; i < end_op_index; ++i) {
     auto& op = ctx->ops_[i];
+    // TODO(Aurelius84): While running start_up program, will call
+    // uniform_random_op,
+    // we should mark all its outputs as kAvailable for persistable = true.
     op->Run(*local_scope, place_);
     if (gc) {
       DeleteUnusedTensors(*local_scope, op.get(), ctx->unused_vars_, gc.get());

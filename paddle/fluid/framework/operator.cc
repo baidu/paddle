@@ -1620,26 +1620,28 @@ proto::VarType::Type OperatorWithKernel::IndicateVarDataType(
   return data_type;
 }
 
-Tensor* OperatorWithKernel::GetTensorFormInputSafely(
+// TODO(Aurelius84): should consider to make sure only use Get<T> instead of
+// GetMutable<T> to visit const variable.
+const Tensor* OperatorWithKernel::GetTensorFormInputSafely(
     const ExecutionContext& ctx, const std::string& name) const {
   // 1. get variable and check
   // NOTE: only supports signal input var now
   // NOTE: using const_cast is because we don't have method
   // can get single mutable var, and here will not change
   // the var's data, only use some attribute
-  Variable* var = const_cast<Variable*>(ctx.InputVar(name));
+  const Variable* var = ctx.InputVar(name);
   PADDLE_ENFORCE_NOT_NULL(
       var,
       platform::errors::NotFound(
           "The variable %s is not found when promote complex types.", name));
   // 2. get tensor and check
-  Tensor* t = nullptr;
+  const Tensor* t = nullptr;
   if (var->IsType<Tensor>()) {
-    t = var->GetMutable<Tensor>();
+    t = &var->Get<Tensor>();
   } else if (var->IsType<LoDTensor>()) {
-    t = var->GetMutable<LoDTensor>();
+    t = &var->Get<LoDTensor>();
   } else if (var->IsType<SelectedRows>()) {
-    t = var->GetMutable<SelectedRows>()->mutable_value();
+    t = (&var->Get<SelectedRows>())->value();
   } else {
     PADDLE_THROW(platform::errors::Unimplemented(
         "Unsupported input variable type in complex type promotion."));

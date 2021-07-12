@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "paddle/fluid/framework/async_variable.h"
 #include "paddle/fluid/framework/blocking_queue.h"
 #include "paddle/fluid/framework/details/exception_holder.h"
 #include "paddle/fluid/framework/details/execution_strategy.h"
@@ -64,6 +65,14 @@ class FastThreadedSSAGraphExecutor : public SSAGraphExecutor {
   ::ThreadPool prepare_pool_;
 
   std::vector<OpHandleBase *> traced_ops_;
+
+  // TODO(Aurelius84): determine return and params
+  void RunOpWithAsyncVariable(
+      std::unordered_map<OpHandleBase *, std::atomic<int>> *op_deps,
+      const std::vector<OpHandleBase *> &ready_op,
+      const std::shared_ptr<BlockingQueue<size_t>> &complete_q);
+
+  void UpdateAsyncVariableState(const std::vector<VarHandleBase *>);
 
   bool RunOp(OpHandleBase *op,
              const std::shared_ptr<BlockingQueue<size_t>> &complete_q,

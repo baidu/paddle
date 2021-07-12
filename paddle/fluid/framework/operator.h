@@ -563,8 +563,8 @@ class OperatorWithKernel : public OperatorBase {
   void ParseInputDataType(const ExecutionContext& ctx, const std::string& name,
                           proto::VarType::Type* type) const;
   // used for IndicateOrPromoteVarDataTypes
-  Tensor* GetTensorFormInputSafely(const ExecutionContext& ctx,
-                                   const std::string& name) const;
+  const Tensor* GetTensorFormInputSafely(const ExecutionContext& ctx,
+                                         const std::string& name) const;
 
  protected:
   mutable std::unique_ptr<OpKernelType> kernel_type_;
