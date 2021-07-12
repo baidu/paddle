@@ -458,6 +458,12 @@ class TestDygraphReshapeAPI(unittest.TestCase):
         expected_out = np.reshape(input_1, newshape=[5, 10])
         self.assertTrue(np.allclose(expected_out, out_np))
 
+    def test_dynamic_api_type_error(self):
+        paddle.disable_static()
+        input_1 = np.random.random([5, 1, 10]).astype("float32")
+        input = paddle.to_tensor(input_1)
+        self.assertRaises(ValueError, paddle.reshape, input, 1)
+
 
 class TestDygraphReshapeInplaceAPI(TestDygraphReshapeAPI):
     def executed_api(self):
