@@ -48,7 +48,6 @@ class TestTracerMode(unittest.TestCase):
     def test_main(self):
         with fluid.dygraph.guard():
             self.tracer = framework._dygraph_tracer()
-            self.tracer._train_mode = self.init_mode
 
             self.assertEqual(self.no_grad_func(1), 1)
             self.assertEqual(self.no_grad_func.__name__, "no_grad_func")
@@ -60,8 +59,6 @@ class TestTracerMode(unittest.TestCase):
             self.assertTrue(
                 str(inspect.getargspec(decorated_func)) ==
                 str(inspect.getargspec(need_no_grad_func)))
-
-            self.assertEqual(self.tracer._train_mode, self.init_mode)
 
         with fluid.dygraph.guard():
             self.check_not_support_rlt(False)
@@ -79,7 +76,6 @@ class TestTracerMode2(TestTracerMode):
 class TestNoGradClass(unittest.TestCase):
     @paddle.no_grad()
     def no_grad_func(self, a):
-        self.assertEqual(self.tracer._train_mode, True)
         self.assertEqual(self.tracer._has_grad, False)
         return a
 
@@ -87,7 +83,6 @@ class TestNoGradClass(unittest.TestCase):
         paddle.disable_static()
 
         self.tracer = framework._dygraph_tracer()
-        self.tracer._train_mode = True
 
         self.assertEqual(self.no_grad_func(1), 1)
         self.assertEqual(self.no_grad_func.__name__, "no_grad_func")

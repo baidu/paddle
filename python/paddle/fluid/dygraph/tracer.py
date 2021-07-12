@@ -26,10 +26,7 @@ class Tracer(core.Tracer):
     :api_attr: imperative
     
     Tracer is used to execute and record the operators executed, to construct the 
-    computation graph in dygraph model. Tracer has two mode, :code:`train_mode`
-    and :code:`eval_mode`. In :code:`train_mode`, Tracer would add backward network 
-    automatically and perform AutoGrad by method :code:`loss.backward()`. 
-    In :code:`eval_mode`, Tracer would not add backward network.
+    computation graph in dygraph model. 
 
     This is a low level API, users don't need to use it directly.
     """
@@ -37,15 +34,7 @@ class Tracer(core.Tracer):
     def __init__(self):
         super(Tracer, self).__init__()
 
-        self._train_mode = True
-
     def trace_op(self, type, inputs, outputs, attrs, stop_gradient=False):
         self.trace(type, inputs, outputs, attrs,
                    framework._current_expected_place(), self._has_grad and
                    not stop_gradient)
-
-    def train_mode(self):
-        self._train_mode = True
-
-    def eval_mode(self):
-        self._train_mode = False
