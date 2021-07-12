@@ -21,10 +21,11 @@ class GradScaler(AmpScaler):
     """
     GradScaler is used for Auto-Mixed-Precision training in dynamic graph mode. 
     It controls the scaling of loss, helps avoiding numerical overflow.
-    The object of this class has two methods `scale()`, `minimize()`.
+    The object of this class has three methods `scale()`, `step()`, `update()` for Auto-Mixed-Precision in dynamic graph mode.
 
     `scale()` is used to multiply the loss by a scale ratio.
-    `minimize()` is similar as `optimizer.minimize()`, performs parameters updating.
+    `step()` is similar as `optimizer.minimize()`, performs parameters updating.
+    `update()` is used to update the loss scaling ratio.
 
     Commonly, it is used together with `paddle.amp.auto_cast` to achieve Auto-Mixed-Precision in 
     dynamic graph mode.
@@ -61,7 +62,9 @@ class GradScaler(AmpScaler):
                 
             scaled = scaler.scale(loss)  # scale the loss 
             scaled.backward()            # do backward
-            scaler.minimize(optimizer, scaled)  # update parameters     
+            # update parameters  
+            scaler.step(optimizer, scaled)
+            scaler.update()   
             optimizer.clear_grad()
     """
 
@@ -105,10 +108,46 @@ class GradScaler(AmpScaler):
 
                 scaled = scaler.scale(loss)  # scale the loss 
                 scaled.backward()            # do backward
-                scaler.minimize(optimizer, scaled)  # update parameters  
+                scaler.step(optimizer, scaled)
+                scaler.update()  
                 optimizer.clear_grad()
         """
         return super(GradScaler, self).scale(var)
+
+    def step(self, optimizer, *args, **kwargs):
+        """
+        This function is similar as `optimizer.step()`, which performs parameters updating.
+        
+        If the scaled gradients of parameters contains NAN or INF, the parameters updating is skipped.
+        Otherwise, it first unscales the scaled gradients of parameters, then updates the parameters.
+
+        Args:
+            optimizer(Optimizer):  The optimizer used to update parameters.
+            args:  Arguments, which will be forward to `optimizer.step()`.
+            kwargs: Keyword arguments, which will be forward to `optimizer.step()`.
+
+        Examples:
+
+            .. code-block:: python
+
+                import paddle
+
+                model = paddle.nn.Conv2D(3, 2, 3, bias_attr=True)
+                optimizer = paddle.optimizer.SGD(learning_rate=0.01, parameters=model.parameters())
+                scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+                data = paddle.rand([10, 3, 32, 32])
+
+                with paddle.amp.auto_cast():
+                    conv = model(data)
+                    loss = paddle.mean(conv)
+
+                scaled = scaler.scale(loss)  # scale the loss 
+                scaled.backward()            # do backward
+                scaler.step(optimizer, scaled)
+                scaler.update()  
+                optimizer.clear_grad()
+        """
+        return super(GradScaler, self).step(optimizer, *args, **kwargs)
 
     def minimize(self, optimizer, *args, **kwargs):
         """
@@ -116,8 +155,6 @@ class GradScaler(AmpScaler):
         
         If the scaled gradients of parameters contains NAN or INF, the parameters updating is skipped.
         Otherwise, it first unscales the scaled gradients of parameters, then updates the parameters.
-
-        Finally, the loss scaling ratio is updated.
 
         Args:
             optimizer(Optimizer):  The optimizer used to update parameters.
@@ -141,10 +178,69 @@ class GradScaler(AmpScaler):
 
                 scaled = scaler.scale(loss)  # scale the loss 
                 scaled.backward()            # do backward
-                scaler.minimize(optimizer, scaled)  # update parameters  
+                scaler.minimize(optimizer, scaled)
+                scaler.update()  
                 optimizer.clear_grad()
         """
         return super(GradScaler, self).minimize(optimizer, *args, **kwargs)
+
+    def unscale(self, optimizer):
+        """
+        Unscale the gradients of parameters, multiplies the gradients of parameters by 1/(loss scaling ratio).  
+        If this instance of :class:`GradScaler` is not enabled, output are returned unmodified.
+
+        Args:
+            optimizer(Optimizer):  The optimizer used to update parameters.
+        Returns:
+            The unscaled parameters or original parameters.
+        
+        Examples:
+            .. code-block:: python
+            import paddle
+
+            model = paddle.nn.Conv2D(3, 2, 3, bias_attr=True)
+            optimizer = paddle.optimizer.SGD(learning_rate=0.01, parameters=model.parameters())
+            scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+            data = paddle.rand([10, 3, 32, 32])
+
+            with paddle.amp.auto_cast():
+                conv = model(data)
+                loss = paddle.mean(conv)
+
+            scaled = scaler.scale(loss)  # scale the loss 
+            scaled.backward()            # do backward
+            scaler.unscale(optimizer)    # unscale the parameter
+            scaler.step(optimizer, scaled)
+            scaler.update()  
+            optimizer.clear_grad() 
+        """
+        return super(GradScaler, self)._unscale(optimizer)
+
+    def update(self):
+        """
+        Updates the loss_scaling.
+        
+        Examples:
+            .. code-block:: python
+            import paddle
+
+            model = paddle.nn.Conv2D(3, 2, 3, bias_attr=True)
+            optimizer = paddle.optimizer.SGD(learning_rate=0.01, parameters=model.parameters())
+            scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+            data = paddle.rand([10, 3, 32, 32])
+
+            with paddle.amp.auto_cast():
+                conv = model(data)
+                loss = paddle.mean(conv)
+
+            scaled = scaler.scale(loss)  # scale the loss 
+            scaled.backward()            # do backward
+            scaler.unscale(optimizer)    # unscale the parameter
+            scaler.step(optimizer, scaled)
+            scaler.update()              # update the loss scaling ratio
+            optimizer.clear_grad() 
+        """
+        return super(GradScaler, self).update()
 
     def is_enable(self):
         """

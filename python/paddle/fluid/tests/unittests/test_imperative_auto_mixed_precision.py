@@ -156,6 +156,10 @@ class TestAmpScaler(unittest.TestCase):
                     scaled_loss.backward()
                     optimize_ops, params_grads = scaler.minimize(optimizer,
                                                                  scaled_loss)
+                    '''
+                    optimize_ops, params_grads = scaler.minimize(optimizer,
+                                                                 scaled_loss)
+                    '''
                 else:
                     print('use no scaler')
                     loss.backward()
@@ -201,7 +205,8 @@ class TestAmpScaler(unittest.TestCase):
             loss = fluid.layers.mean(out)
             scaled_loss = scaler.scale(loss)
             scaled_loss.backward()
-            optimize_ops, params_grads = scaler.minimize(optimizer, scaled_loss)
+            optimize_ops, params_grads = scaler.step(optimizer, scaled_loss)
+            # optimize_ops, params_grads = scaler.minimize(optimizer, scaled_loss)
             self.assertEqual(scaler._found_inf.numpy() == 1, True)
 
             for param in model.parameters():
@@ -319,7 +324,8 @@ class TestResnet2(unittest.TestCase):
             scaled_loss = scaler.scale(avg_loss)
             scaled_loss.backward()
 
-            scaler.minimize(optimizer, scaled_loss)
+            scaler.step(optimizer, scaled_loss)
+            # scaler.minimize(optimizer, scaled_loss)
 
             dy_grad_value = {}
             for param in resnet.parameters():
@@ -406,7 +412,8 @@ class TestResnet(unittest.TestCase):
                 scaled_loss = scaler.scale(avg_loss)
                 scaled_loss.backward()
 
-                scaler.minimize(optimizer, scaled_loss)
+                scaler.step(optimizer, scaled_loss)
+                #scaler.minimize(optimizer, scaled_loss)
 
                 dy_grad_value = {}
                 for param in resnet.parameters():
