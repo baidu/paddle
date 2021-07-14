@@ -146,7 +146,6 @@ using Tensor = framework::Tensor;
 constexpr int kMaxRank = framework::DDim::kMaxRank;
 
 enum ReduceType {
-  kReduceAll = 0x00,        // when reduce_rank == x_rank
   kReduceLastDim = 0x01,    // when reduce_dim[0] == x_dim.size() - 1;
   kReduceHigherDim = 0x02,  // ReduceFirstDim or reduceSecondDim
   kReduceAny = 0x03,        // when reduce_dim.size() > 1
@@ -213,9 +212,10 @@ struct ReduceConfig {
   void SetOutputData(Ty* y_data, const platform::Place& place,
                      framework::Tensor* tmp) {
     if (should_reduce_again) {
+      using MPType = typename details::MPTypeTrait<Ty>::Type;
       output_data = tmp->mutable_data<Ty>(
-          framework::make_ddim(
-              {static_cast<int64_t>(left_num * grid.z * grid.y * sizeof(Ty))}),
+          framework::make_ddim({static_cast<int64_t>(left_num * grid.z *
+                                                     grid.y * sizeof(MPType))}),
           place);
     } else {
       output_data = y_data;
@@ -742,6 +742,27 @@ __global__ void ReduceKernelFunction(const Tx* x, Ty* y, ReduceOp reducer,
       left_index_calculator);
 }
 
+// reduce the 1d array to one element
+template <typename Tx, typename MPType, typename Ty, typename ReduceOp,
+          typename TransformOp>
+__global__ void ReduceKernel1D(const Tx* x, Ty* y, ReduceOp reducer,
+                               TransformOp transformer, MPType init,
+                               int reduce_num) {
+  int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  MPType reduce_var = init;
+  for (int i = thread_id; i < reduce_num; i += gridDim.x * blockDim.x) {
+    reduce_var = static_cast<MPType>(
+        reducer(reduce_var, static_cast<MPType>(transformer(x[i]))));
+  }
+  __syncthreads();
+
+  reduce_var = BlockXReduce(reduce_var, reducer);
+
+  if (threadIdx.x == 0) {
+    y[blockIdx.x] = static_cast<Ty>(reduce_var);
+  }
+}
+
 template <typename Tx, typename Ty, typename ReduceOp>
 static void LaunchReduceKernel(const Tx* x_data, Ty* y_data,
                                const ReduceOp& reducer, Ty init,
@@ -828,6 +849,36 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
     cub::DeviceReduce::Reduce(temp_storage, temp_storage_bytes, trans_x, y_data,
                               config.reduce_num, reducer, reducer.initial(),
                               stream);
+
+    return;
+  } else if (config.left_num == 1) {
+    using MPType = typename details::MPTypeTrait<Ty>::Type;
+    using TransformOp = typename ReduceOp<Tx, MPType>::Transformer;
+    auto reducer = ReduceOp<Tx, MPType>();
+
+    int block = detail::GetBlockDim(config.reduce_num);
+    int element_per_block = block * 10;
+
+    int block_per_grid =
+        (config.reduce_num + element_per_block - 1) / element_per_block;
+    framework::Tensor tmp;
+    auto* temp_storage = tmp.mutable_data<MPType>(
+        framework::make_ddim(
+            {static_cast<int64_t>(block_per_grid * sizeof(MPType))}),
+        x.place());
+
+    // each block reduce number to interim result
+    ReduceKernel1D<Tx, MPType, MPType, ReduceOp<Tx, MPType>,
+                   TransformOp><<<block_per_grid, block, 0, stream>>>(
+        x_data, temp_storage, reducer, TransformOp(config.reduce_num),
+        reducer.initial(), config.reduce_num);
+    // reduce all number to final result
+    ReduceKernel1D<
+        MPType, MPType, Ty, ReduceOp<MPType, MPType>,
+        detail::IdentityFunctor<MPType, MPType>><<<1, block, 0, stream>>>(
+        temp_storage, y_data, ReduceOp<MPType, MPType>(),
+        detail::IdentityFunctor<MPType, MPType>(1), reducer.initial(),
+        block_per_grid);
 
     return;
   }
