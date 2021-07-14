@@ -342,9 +342,8 @@ struct ReduceConfig {
     bool is_large_enough = (reduce_num > REDUCE_SPLIT_BOUNDARY / 2) ||
                            (left_num > REDUCE_SPLIT_BOUNDARY);
 
-    if (rank == reduce_rank) {
-      reduce_type = static_cast<int>(ReduceType::kReduceAll);
-    } else if (rank == 2 && reduce_rank == 1 && reduce_dim[0] == 1) {
+    if (rank == 2 && reduce_rank == 1 && reduce_dim[0] == 1 ||
+        rank == reduce_rank) {
       reduce_type = static_cast<int>(ReduceType::kReduceLastDim);
     } else if (reduce_rank == 1 &&
                ((rank == 2 && is_large_enough) || rank != 2)) {
@@ -810,9 +809,10 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
   }
 
   config.SetOutputData(y_data, x.place(), &tmp);
-
-  // launch CUB::Reduce
-  if (config.reduce_type == static_cast<int>(ReduceType::kReduceAll)) {
+  bool is_cubReduce = (config.left_num == 1) &&
+                      (!std::is_same<Tx, paddle::platform::float16>::value);
+  if (is_cubReduce) {
+    // launch CUB::Reduce
     using TransformOp = typename ReduceOp<Tx, Ty>::Transformer;
     auto reducer = ReduceOp<Tx, Ty>();
     cub::TransformInputIterator<Ty, TransformOp, const Tx*> trans_x(
