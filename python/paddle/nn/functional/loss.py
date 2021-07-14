@@ -1386,10 +1386,16 @@ def cross_entropy(input,
     if input_dims - 1 == label_dims:
         label = paddle.unsqueeze(label, axis=axis)
     if in_dygraph_mode():
-        _, out = core.ops.softmax_with_cross_entropy(
-            input, label, 'soft_label', soft_label, 'ignore_index',
-            ignore_index, 'numeric_stable_mode', True, 'axis', axis,
-            'use_softmax', use_softmax)
+        if core.is_compiled_with_npu():
+            _, backprop, out = core.ops.softmax_with_cross_entropy(
+                input, label, 'soft_label', soft_label, 'ignore_index',
+                ignore_index, 'numeric_stable_mode', True, 'axis', axis,
+                'use_softmax', use_softmax)
+        else:
+            _, out = core.ops.softmax_with_cross_entropy(
+                input, label, 'soft_label', soft_label, 'ignore_index',
+                ignore_index, 'numeric_stable_mode', True, 'axis', axis,
+                'use_softmax', use_softmax)
 
         if weight is not None:
 

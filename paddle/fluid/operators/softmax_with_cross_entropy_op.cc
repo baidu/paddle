@@ -13,10 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/operators/softmax_with_cross_entropy_op.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
@@ -139,6 +141,12 @@ class SoftmaxWithCrossEntropyOp : public framework::OperatorWithKernel {
     PADDLE_ENFORCE_EQ(
         ctx->HasOutput("Loss"), true,
         platform::errors::InvalidArgument("Output(Loss) should be not null."));
+
+#ifdef PADDLE_WITH_ASCEND_CL
+    PADDLE_ENFORCE_EQ(ctx->HasOutput("Backprop"), true,
+                      platform::errors::InvalidArgument(
+                          "Output(Backprop) should be not null."));
+#endif
 
     auto axis = ctx->Attrs().Get<int>("axis");
     auto logits_dims = ctx->GetInputDim("Logits");
