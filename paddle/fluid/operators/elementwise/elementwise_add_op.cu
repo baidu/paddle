@@ -101,13 +101,19 @@ default_elementwise_add_grad(const framework::ExecutionContext& ctx,
   // dx
   if (dx != nullptr) {
     auto* dx_data = dx->mutable_data<T>(ctx.GetPlace());
-    if (x->dims() == dout->dims()) {
+    if (dx->dims() == dout->dims()) {
       if (dx_data != dout_data) {
         framework::TensorCopy(
             *dout, ctx.GetPlace(),
             ctx.template device_context<platform::DeviceContext>(), dx);
       }
     } else {
+      // For inplace strategy, dx will be stored in addr of dout, which makes
+      // the result of dy wrong.
+      if (dx->IsSharedBufferWith(*dout)) {
+        dx->clear();
+        dx->mutable_data<T>(x->dims(), ctx.GetPlace());
+      }
       std::vector<int> dims =
           GetOriginalReduceDim(x->dims(), out->dims(), axis);
       bool reduce_all = x->numel() == 1 ? true : false;
@@ -120,7 +126,7 @@ default_elementwise_add_grad(const framework::ExecutionContext& ctx,
   // dy
   if (dy != nullptr) {
     auto* dy_data = dy->mutable_data<T>(ctx.GetPlace());
-    if (y->dims() == dout->dims()) {
+    if (dy->dims() == dout->dims()) {
       if (dy_data != dout_data) {
         framework::TensorCopy(
             *dout, ctx.GetPlace(),
