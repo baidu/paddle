@@ -45,6 +45,99 @@ void ParseSafeEagerDeletionSkipVars(
     std::vector<std::string>* skip_eager_delete_vars);
 
 }  // namespace details
+
+class ExecutorInfo {
+ public:
+  struct CacheValue {
+    std::shared_ptr<ParallelExecutor> executor_{NULL};
+    std::shared_ptr<ir::Graph> graph_{NULL};
+
+    std::vector<std::string> skip_eager_delete_vars_;
+  };
+
+  bool IsAvailable(bool is_grad) {
+    auto& executor =
+        is_grad ? backward_info_.executor_ : forward_info_.executor_;
+    return executor != NULL;
+  }
+
+  CacheValue& Get(bool is_grad) {
+    return is_grad ? backward_info_ : forward_info_;
+  }
+
+ private:
+  CacheValue forward_info_;
+  CacheValue backward_info_;
+};
+
+void ParseSafeEagerDeletionSkipVars(
+    const ProgramDesc& program, int64_t forward_op_nums,
+    const std::vector<std::string>& output_var_names,
+    std::vector<std::string>* skip_eager_delete_vars);
+
+}  // namespace details
+class ExecutorInfoCache {
+ public:
+  static ExecutorInfoCache& Instance();
+
+  const BuildStrategy& GetBuildStrategy(int64_t program_id) {
+    // If not found, insert build_strategy with default value.
+    return strategy_map_[program_id];
+  }
+
+  void SetBuildStrategy(int64_t program_id,
+                        const BuildStrategy& build_strategy) {
+    PADDLE_ENFORCE_EQ(
+        strategy_map_.count(program_id), 0,
+        platform::errors::PreconditionNotMet(
+            "program_id: %s already exist in ExecutorInfoCache", program_id));
+    strategy_map_[program_id] = build_strategy;
+  }
+
+  bool Has(int64_t program_id, bool is_grad) {
+    return info_map_.find(program_id) != info_map_.end() &&
+           info_map_[program_id].IsAvailable(is_grad);
+  }
+
+  ExecutorInfo::CacheValue& Get(int64_t program_id, bool is_grad) {
+    PADDLE_ENFORCE_EQ(
+        Has(program_id, is_grad), true,
+        platform::errors::PreconditionNotMet(
+            "program_id: %s, is_grad: %s doesn't exist in ExecutorInfoCache",
+            program_id, is_grad));
+    return info_map_[program_id].Get(is_grad);
+  }
+
+  ExecutorInfo::CacheValue& GetMutable(int64_t program_id, bool is_grad) {
+    return info_map_[program_id].Get(is_grad);
+  }
+
+  void UpdateSkipEagerDeleteVars(int64_t program_id, bool is_grad,
+                                 const std::vector<std::string>& skip_vars) {
+    auto& cached_value = GetMutable(program_id, is_grad);
+    cached_value.skip_eager_delete_vars_ = std::move(skip_vars);
+  }
+
+  std::vector<std::string>& SkipEagerDeleteVars(int64_t program_id,
+                                                bool is_grad) {
+    auto& cached_value = Get(program_id, is_grad);
+    return cached_value.skip_eager_delete_vars_;
+  }
+
+  void Finalize() {
+    // NOTE(Aurelius84): DO NOT perform finalize in destructor
+    // to avoid problems caused by destructor order of static
+    // object.
+    info_map_.clear();
+    strategy_map_.clear();
+  }
+
+ private:
+  std::unordered_map<int64_t, ExecutorInfo> info_map_;
+  std::unordered_map<int64_t, BuildStrategy> strategy_map_;
+};
+
+/*
 class ExecutorInfoCache {
  public:
   struct CacheKey {
@@ -89,14 +182,6 @@ class ExecutorInfoCache {
       size_t seed = 10;
       auto* prog_desc = key.program_desc_;
       /*
-       * Note(Aurelius84): DO NOT use only ProgramDesc* to calculate hash value
-       * because a new program will hold same pointer address after an older
-       * program is destructed with a small probability. Add op size while
-       * hashing because program may contains at least one block.
-       */
-      hash_combine(&seed, prog_desc);
-      for (size_t i = 0; i < prog_desc->Size(); ++i) {
-        hash_combine(&seed, &prog_desc->Block(i));
         hash_combine(&seed, prog_desc->Block(i).OpSize());
       }
       hash_combine(&seed, static_cast<int>(key.device_type_));
@@ -155,12 +240,15 @@ class ExecutorInfoCache {
   KeyHasher key_hash_func_;
   std::unordered_map<KeyType, ValueType> info_map_;
 };
+*/
 
 using CacheInfo =
     std::pair<std::shared_ptr<ParallelExecutor>, bool /*is_new_created*/>;
 
-CacheInfo GetExecutorInfoFromCache(const ExecutorInfoCache::CacheKey& cache_key,
+CacheInfo GetExecutorInfoFromCache(const ProgramDesc* program_desc,
+                                   const platform::Place& place,
+                                   int64_t start_op_index, int64_t end_op_index,
+                                   bool is_grad, int64_t program_id,
                                    framework::Scope* scope);
 
 }  // namespace framework
-}  // namespace paddle

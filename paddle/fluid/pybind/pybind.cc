@@ -32,7 +32,6 @@ limitations under the License. */
 #include "paddle/fluid/framework/data_layout.h"
 #include "paddle/fluid/framework/executor.h"
 #include "paddle/fluid/framework/executor_cache.h"
-#include "paddle/fluid/framework/executor_gc_helper.h"
 #include "paddle/fluid/framework/feed_fetch_method.h"
 #include "paddle/fluid/framework/feed_fetch_type.h"
 #include "paddle/fluid/framework/garbage_collector.h"
@@ -3006,6 +3005,12 @@ All parameter, weight, gradient are variables in Paddle.
            R"DOC(Allow user to customized passes. Normally model-specific
                 optimization passes should be defined in this way. BuildStrategy
                 cannot be updated after being finalized.)DOC");
+
+  m.def("_set_cached_executor_build_strategy",
+        [](int64_t program_id, const BuildStrategy &build_strategy) {
+          auto &cached_exe_info = framework::ExecutorInfoCache::Instance();
+          cached_exe_info.SetBuildStrategy(program_id, build_strategy);
+        });
 
   pe.def(py::init<const std::vector<platform::Place> &,
                   const std::vector<std::string> &, const std::string &,

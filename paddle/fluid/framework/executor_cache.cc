@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/fluid/framework/executor_cache.h"
+#include "paddle/fluid/framework/op_info.h"
 
 namespace paddle {
 namespace framework {
@@ -25,11 +26,11 @@ namespace framework {
 
 namespace details {
 
-static ExecutionStrategy GetExecutionStrategy(
-    const ExecutorInfoCache::CacheKey &cache_key) {
+static ExecutionStrategy GetExecutionStrategy(const platform::Place &place) {
   framework::ExecutionStrategy execution_strategy;
 
-  switch (cache_key.device_type_) {
+  auto device_type = platform::Place2DeviceType(place);
+  switch (device_type) {
     case platform::DeviceType::CPU: {
       execution_strategy.num_threads_ = 2;
       break;
@@ -46,9 +47,9 @@ static ExecutionStrategy GetExecutionStrategy(
     }
     default:
       PADDLE_THROW(platform::errors::Unavailable("Unsupported Device type %d.",
-                                                 cache_key.device_type_));
+                                                 device_type));
   }
-  execution_strategy.use_device_ = cache_key.device_type_;
+  execution_strategy.use_device_ = device_type;
 
   return execution_strategy;
 }
@@ -83,13 +84,32 @@ void ParseSafeEagerDeletionSkipVars(
   size_t backward_op_start_index =
       forward_op_nums + (output_var_names.size() * 2);
 
+  auto &op_info_map = OpInfoMap::Instance();
+
   // step 2: parse the necessary variable of backward op
   std::unordered_set<std::string> op_outputs;
   std::unordered_set<std::string> op_inputs;
+  std::unordered_set<std::string> no_need_buffer_ins;
+
   for (auto i = backward_op_start_index; i < all_ops.size(); ++i) {
     framework::OpDesc *op = all_ops[i];
-    for (const std::string &in_arg_name : op->InputArgumentNames()) {
-      op_inputs.emplace(in_arg_name);
+    // NOTE: skip NoNeedBufferVars of grad_op and GC its memory in advance.
+    auto &op_info = op_info_map.Get(op->Type());
+    auto &inferer = op_info.NoNeedBufferVarsInferer();
+    no_need_buffer_ins.clear();
+    if (inferer) {
+      no_need_buffer_ins =
+          inferer(op->Inputs(), op->Outputs(), op->GetAttrMap());
+    }
+    for (auto &in_names : op->Inputs()) {
+      if (no_need_buffer_ins.count(in_names.first) == 0) {
+        for (auto &in_name : in_names.second) {
+          op_inputs.emplace(in_name);
+        }
+      } else {
+        VLOG(2) << op->Type() << " has no_need_buffer_in: " << in_names.first
+                << " , skip it.";
+      }
     }
     for (const std::string &out_arg_name : op->OutputArgumentNames()) {
       op_outputs.emplace(out_arg_name);
@@ -118,58 +138,36 @@ ExecutorInfoCache &ExecutorInfoCache::Instance() {
   return g_exe_cache_info_map;
 }
 
-void ExecutorInfoCache::Finalize() {
-  // NOTE(Aurelius84): DO NOT perform finalize in destructor
-  // to avoid problems caused by destructor order of static
-  // object.
-  info_map_.clear();
-}
-
-CacheInfo GetExecutorInfoFromCache(const ExecutorInfoCache::CacheKey &cache_key,
+CacheInfo GetExecutorInfoFromCache(const ProgramDesc *program_desc,
+                                   const platform::Place &place,
+                                   int64_t start_op_index, int64_t end_op_index,
+                                   bool is_grad, int64_t program_id,
                                    framework::Scope *scope) {
   auto &cached_exe_info = framework::ExecutorInfoCache::Instance();
 
-  if (!cached_exe_info.Has(cache_key)) {
-    VLOG(1) << "create exe_info for " << cache_key.DebugString();
+  if (!cached_exe_info.Has(program_id, is_grad)) {
+    VLOG(1) << "create exe_info for " << program_id << " is_grad: " << is_grad;
+    auto execution_strategy = details::GetExecutionStrategy(place);
+    auto &build_strategy = cached_exe_info.GetBuildStrategy(program_id);
 
-    // TODO(Aurelius84): Consider to use LRU algorithm to replace this.
-    if (cached_exe_info.Size() > 4u /* max_cached_size*/) {
-      VLOG(2) << "The cached info size has exceeded max_cached_size: 4, clear "
-                 "all cache!";
-      cached_exe_info.Finalize();
-    }
-
-    framework::BuildStrategy build_strategy;
-    auto execution_strategy = details::GetExecutionStrategy(cache_key);
-
+    // 2. Construct Graph and ParallelExecutor.
     auto graph = std::make_shared<framework::ir::Graph>(
-        *cache_key.program_desc_, cache_key.start_op_index_,
-        cache_key.end_op_index_);
+        *program_desc, start_op_index, end_op_index);
     auto parallel_executor = std::make_shared<framework::ParallelExecutor>(
-        cache_key.place_, scope, execution_strategy, build_strategy,
-        graph.get());
+        place, scope, execution_strategy, build_strategy, graph.get());
     parallel_executor->PrepareVariables(scope);
 
-    framework::ExecutorInfoCache::ValueType cache_val = {parallel_executor,
-                                                         graph};
-    cached_exe_info.Insert(cache_key, cache_val);
-
-    bool is_new_created = true;
-    return std::make_pair(parallel_executor, is_new_created);
+    // 3. Insert value into cached map.
+    auto &cached_value = cached_exe_info.GetMutable(program_id, is_grad);
+    cached_value.executor_ = parallel_executor;
+    cached_value.graph_ = std::move(graph);
+    return std::make_pair(parallel_executor, /*is_new_created=*/true);
   } else {
-    VLOG(1) << "get exe_info from cache by: " << cache_key.DebugString();
-    bool is_new_created = false;
-    auto cache_val = cached_exe_info.GetMutable(cache_key);
-    auto parallel_executor = cache_val.first;
+    VLOG(1) << "get exe_info from cache by: " << program_id
+            << " is_grad: " << is_grad;
+    auto &cached_value = cached_exe_info.Get(program_id, is_grad);
 
-    // update op_handle scope_map in pe->executor_->Graph
-    std::unordered_map<Scope *, Scope *> scope_map = {
-        {parallel_executor->GetLocalScopes().front(), scope}};
-    parallel_executor->ResetOpHandleScopeMapOfGraphs(scope_map);
-    // need to recreate tmp variables in new scope
-    parallel_executor->PrepareVariables(scope);
-
-    return std::make_pair(parallel_executor, is_new_created);
+    auto &parallel_executor = cached_value.executor_;
   }
 }
 

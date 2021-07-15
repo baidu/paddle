@@ -103,6 +103,9 @@ class RunProgramOpMaker : public framework::OpProtoAndCheckerMaker {
                   "(bool, default false) Set to true for inference only, false "
                   "for training.")
         .SetDefault(false);
+    AddAttr<int64_t>("program_id",
+                     "(int64_t)"
+                     "The unique hash id used as cache key.");
     AddComment(R"DOC(
 RunProgram operator.
 

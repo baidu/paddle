@@ -24,6 +24,8 @@ from paddle.fluid.dygraph.dygraph_to_static import logging_utils
 from paddle.fluid.dygraph.dygraph_to_static.return_transformer import RETURN_NO_VALUE_MAGIC_NUM
 from paddle.fluid.layers.utils import flatten
 from paddle.fluid.layers.utils import pack_sequence_as
+from paddle.fluid.layers.utils import _hash32_id
+from paddle.fluid.compiler import BuildStrategy
 import paddle.compat as cpt
 from paddle import _C_ops
 
@@ -129,7 +131,12 @@ class PartialProgramLayer:
         Layer: A Layer object that run all ops internally in static mode.
     """
 
-    def __init__(self, main_program, inputs, outputs, parameters=None):
+    def __init__(self,
+                 main_program,
+                 inputs,
+                 outputs,
+                 parameters=None,
+                 build_strategy=None):
         super(PartialProgramLayer, self).__init__()
         self._inputs = NestSequence(inputs)
         self._outputs = NestSequence(outputs, need_check=True)
@@ -142,6 +149,8 @@ class PartialProgramLayer:
         # Set default mode to train
         self._double_grads = self._get_double_grads(self._origin_main_program)
         self.training = True
+
+        # self._set_strategy(build_strategy)
 
     @LazyInitialized
     def _infer_program(self):
@@ -161,6 +170,14 @@ class PartialProgramLayer:
         self._set_grad_type(self._params, train_program)
 
         return train_program
+
+    @LazyInitialized
+    def _infer_program_id(self):
+        return _hash32_id(self._infer_program, self)
+
+    @LazyInitialized
+    def _train_program_id(self):
+        return _hash32_id(self._train_program, self)
 
     def _verify_program(self, main_program):
         """
@@ -228,8 +245,8 @@ class PartialProgramLayer:
 
         attrs = ('global_block', self.program.desc.block(0), 'start_op_index',
                  0, 'end_op_index', self._infer_program.desc.block(0).op_size(),
-                 'is_test', not self.training)
-        _C_ops.run_program(
+                 'is_test', not self.training, 'program_id', self.program_id)
+        core.ops.run_program(
             self._valid_vars(in_vars),
             self._valid_vars(self._params),
             self._valid_vars(out_vars), self._tmp_scope_vec, self._double_grads,
@@ -241,6 +258,10 @@ class PartialProgramLayer:
     @property
     def program(self):
         return self._train_program if self.training else self._infer_program
+
+    @property
+    def program_id(self):
+        return self._train_program_id if self.training else self._infer_program_id
 
     def _prepare(self, inputs):
         """
@@ -298,6 +319,15 @@ class PartialProgramLayer:
         inner_scope = core.Scope()
         tmp_scope_vec.value().set_scope(inner_scope)
         return tmp_scope_vec
+
+    # def _set_strategy(self, build_strategy):
+    #     if build_strategy is None or not isinstance(build_strategy, BuildStrategy):
+    #         build_strategy = BuildStrategy()
+
+    #     build_strategy.fuse_elewise_add_act_ops = True
+    #     build_strategy.enable_addto = True
+    #     core._set_cached_executor_build_strategy(self._train_program_id, build_strategy)
+    #     core._set_cached_executor_build_strategy(self._infer_program_id, build_strategy)
 
     def _restore_out(self, out_vars):
         """
