@@ -36,11 +36,12 @@ class CheckFiniteAndUnscaleNPUKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const {
     const auto xs = ctx.MultiInput<framework::Tensor>("X");
     const auto* scale = ctx.Input<framework::Tensor>("Scale");
-    const auto* float_status = ctx.Input<framework::Tensor>("FloatStatus");
     auto outs = ctx.MultiOutput<framework::Tensor>("Out");
     auto* found_inf = ctx.Output<framework::Tensor>("FoundInfinite");
 
     found_inf->mutable_data<bool>(ctx.GetPlace());
+
+    bool found_inf_data = false;
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
@@ -61,46 +62,54 @@ class CheckFiniteAndUnscaleNPUKernel : public framework::OpKernel<T> {
     runner_inverse.Run(stream);
     tmp_inverse_out = &inverse_out;
 
-    // NOTE(zhiqiu):
-    Tensor tmp;
-    tmp.mutable_data<float>({8}, ctx.GetPlace());
-    // NOTE(zhiqiu): NPUGetFloatStatus updates data on input in-place.
-    // tmp is only placeholder.
-    const auto& runner_float_status =
-        NpuOpRunner("NPUGetFloatStatus", {*float_status}, {tmp},
-                    {{"message", std::string("check_nan_and_inf")}});
-    runner_float_status.Run(stream);
+    size_t x_size = xs.size();
+    for (size_t i = 0; i < x_size; ++i) {
+      const auto* x = xs[i];
 
-    Tensor sum;
-    sum.mutable_data<float>({1}, ctx.GetPlace());
-    const auto& runner_reduce_sum =
-        NpuOpRunner("ReduceSumD", {*float_status}, {sum},
-                    {{"axes", std::vector<int>{0}}, {"keep_dims", true}});
-    runner_reduce_sum.Run(stream);
+      // step2: CheckNumerics
+      // CheckNumerics runs on the Ascend AI CPU, which delivers poor
+      // performance.
+      Tensor check_xout(x->type());
+      check_xout.Resize(x->dims());
+      check_xout.mutable_data<T>(ctx.GetPlace());
+      try {
+        const auto& runner_checknumerics =
+            NpuOpRunner("CheckNumerics", {*x}, {check_xout},
+                        {{"message", std::string("check_nan_and_inf")}});
+        runner_checknumerics.Run(stream);
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .Wait();
+      } catch (platform::EnforceNotMet& exception) {
+        LOG(WARNING) << "[check_nan_and_inf] detected contains NaN or INF!!!";
+        found_inf_data = true;
+      } catch (...) {
+        LOG(WARNING) << "[check_nan_and_inf] detected contains NaN or INF!!!";
+        found_inf_data = true;
+      }
+    }  // end for
 
-    const auto& runner_greater =
-        NpuOpRunner("GreaterEqual", {sum, const_tensor}, {*found_inf}, {});
-    runner_greater.Run(stream);
-
-    // NOTE(zhiqiu): The normal logic is :
-    // out = in, if found_inf = true
-    // out = in/scale, if found_inf = false
-    // However, on NPU, in order to avoid stream sync, we do not copy the
-    // found_inf data to cpu to check whether to unscale or not.
-    // Instead, we do the Mul no matter found_inf or not.
-    // And, a fact is, only few steps contains nan/inf during training.
-    for (size_t i = 0; i < xs.size(); ++i) {
+    for (size_t i = 0; i < x_size; ++i) {
       const auto* x = xs[i];
       auto* out = outs[i];
       out->mutable_data<T>(ctx.GetPlace());
-      const auto& runner_mul =
-          NpuOpRunner("Mul", {*x, *tmp_inverse_out}, {*out}, {});
-      runner_mul.Run(stream);
+
+      if (!found_inf_data) {
+        // MatMul
+        const auto& runner_matmul =
+            NpuOpRunner("Mul", {*x, *tmp_inverse_out}, {*out}, {});
+        runner_matmul.Run(stream);
+      } else {
+        // ZerosLike
+        const auto& runner_zeroslike =
+            NpuOpRunner("ZerosLike", {*x}, {*out}, {});
+        runner_zeroslike.Run(stream);
+      }  // end if
     }
 
-    const auto& runner_clear_status =
-        NpuOpRunner("NPUClearFloatStatus", {*float_status}, {tmp});
-    runner_clear_status.Run(stream);
+    VLOG(0) << "yoki: found_inf in CheckNumerics method: "
+            << static_cast<float>(found_inf_data);
+
+    FillNpuTensorWithConstant<bool>(found_inf, found_inf_data);
   }
 };
 
