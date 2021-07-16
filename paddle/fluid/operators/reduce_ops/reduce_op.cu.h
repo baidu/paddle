@@ -885,10 +885,7 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
         block_per_grid);
 
     return;
-  } else if (config.left_num == 1) {
-    // when reduce_num is small and left_num == 1 use reduceLastDim to reduce
-    config.reduce_type = ReduceType::kReduceLastDim;
-  }
+  }  // when reduce_num is small and left_num == 1 use reduceLastDim to reduce
 
   using MPType = typename details::MPTypeTrait<Ty>::Type;
   auto reducer = ReduceOp<Tx, MPType>();
