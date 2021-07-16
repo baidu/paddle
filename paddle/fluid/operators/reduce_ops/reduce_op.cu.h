@@ -345,7 +345,8 @@ struct ReduceConfig {
     if (rank == 2 && reduce_rank == 1 && reduce_dim[0] == 1 ||
         rank == reduce_rank) {
       reduce_type = static_cast<int>(ReduceType::kReduceLastDim);
-    } else if (reduce_rank == 1 && ((rank == 2) || rank != 2)) {
+    } else if (reduce_rank == 1 &&
+               ((rank == 2 && is_large_enough) || rank != 2)) {
       // ReduceFirstDim and reduceSecondDim
       reduce_type = static_cast<int>(ReduceType::kReduceHigherDim);
     } else {
@@ -831,9 +832,9 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
   }
 
   config.SetOutputData(y_data, x.place(), &tmp);
-  bool is_cubReduce = (config.left_num == 1) &&
-                      (!std::is_same<Tx, paddle::platform::float16>::value);
-  if (is_cubReduce) {
+  bool use_cub_Reduce = (config.left_num == 1) &&
+                        (!std::is_same<Tx, paddle::platform::float16>::value);
+  if (use_cub_Reduce) {
     // launch CUB::Reduce
     using TransformOp = typename ReduceOp<Tx, Ty>::Transformer;
     auto reducer = ReduceOp<Tx, Ty>();
@@ -852,7 +853,9 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
                               stream);
 
     return;
-  } else if (config.left_num == 1) {
+  } else if (config.left_num == 1 &&
+             config.reduce_num > detail::kMaxThread * 16) {
+    // when left_num == 1 and reduce_num is large Launch twice
     using MPType = typename details::MPTypeTrait<Ty>::Type;
     using TransformOp = typename ReduceOp<Tx, MPType>::Transformer;
     auto reducer = ReduceOp<Tx, MPType>();
@@ -882,6 +885,9 @@ void TensorReduceFunctorImpl(const framework::Tensor& x, framework::Tensor* y,
         block_per_grid);
 
     return;
+  } else if (config.left_num == 1) {
+    // when reduce_num is small and left_num == 1 use reduceLastDim to reduce
+    config.reduce_type = ReduceType::kReduceLastDim;
   }
 
   using MPType = typename details::MPTypeTrait<Ty>::Type;
