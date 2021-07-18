@@ -91,6 +91,10 @@ limitations under the License. */
 #include "paddle/fluid/pybind/communicator_py.h"
 #endif
 
+#ifdef PADDLE_WITH_CRYPTO
+#include "paddle/fluid/pybind/crypto.h"
+#endif
+
 #include "pybind11/stl.h"
 
 DECLARE_bool(use_mkldnn);
@@ -2424,6 +2428,9 @@ All parameter, weight, gradient are variables in Paddle.
   BindNode(&m);
   BindInferenceApi(&m);
   BindDataset(&m);
+#ifdef PADDLE_WITH_CRYPTO
+  BindCrypto(&m);
+#endif
 #ifdef PADDLE_WITH_DISTRIBUTE
   BindCommunicator(&m);
 #endif

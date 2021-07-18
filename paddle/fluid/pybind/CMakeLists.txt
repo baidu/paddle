@@ -38,6 +38,11 @@ set(PYBIND_SRCS
   ir.cc
   inference_api.cc)
 
+if (WITH_CRYPTO)
+  set(PYBIND_DEPS ${PYBIND_DEPS} paddle_crypto)
+  set(PYBIND_SRCS ${PYBIND_SRCS} crypto.cc)
+endif (WITH_CRYPTO)
+
 if (WITH_DISTRIBUTE)
   list(APPEND PYBIND_SRCS communicator_py.cc)
 endif()

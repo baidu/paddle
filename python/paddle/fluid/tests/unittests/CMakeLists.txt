@@ -101,6 +101,10 @@ if(WITH_GPU OR NOT WITH_MKLML)
     LIST(REMOVE_ITEM TEST_OPS test_matmul_op_with_head)
 endif()
 
+if(NOT WITH_CRYPTO)
+    LIST(REMOVE_ITEM TEST_OPS test_crypto)
+endif()
+
 function(py_test_modules TARGET_NAME)
   if(WITH_TESTING)
     set(options SERIAL)
