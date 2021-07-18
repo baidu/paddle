@@ -1,5 +1,7 @@
 if(WITH_PSLIB)
     cc_library(fleet_wrapper SRCS fleet_wrapper.cc DEPS framework_proto variable_helper scope pslib_brpc pslib)
+    cc_library(tree_wrapper SRCS tree_wrapper.cc DEPS framework_proto
+    variable_helper scope pslib_brpc pslib boost)
 else()
     cc_library(fleet_wrapper SRCS fleet_wrapper.cc DEPS framework_proto variable_helper scope)
 endif(WITH_PSLIB)

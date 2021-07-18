@@ -44,6 +44,12 @@ class Dataset {
  public:
   Dataset() {}
   virtual ~Dataset() {}
+  virtual void InitTDMTree(
+      const std::vector<std::pair<std::string, std::string>> config) = 0;
+  virtual void TDMSample(const uint16_t sample_slot, const uint64_t type_slot,
+                         const uint64_t start_h) = 0;
+  virtual void TDMDump(std::string name, const uint64_t table_id,
+                       int fea_value_dim, const std::string tree_path) = 0;
   // set file list
   virtual void SetFileList(const std::vector<std::string>& filelist) = 0;
   // set readers' num
@@ -160,7 +166,11 @@ class DatasetImpl : public Dataset {
  public:
   DatasetImpl();
   virtual ~DatasetImpl() {}
-
+  virtual void InitTDMTree(const std::vector<std::pair<std::string, std::string>> config);
+  virtual void TDMSample(const uint16_t sample_slot, const uint64_t type_slot,
+                          const uint64_t start_h);
+  virtual void TDMDump(std::string name, const uint64_t table_id,
+                        int fea_value_dim, const std::string tree_path);
   virtual void SetFileList(const std::vector<std::string>& filelist);
   virtual void SetThreadNum(int thread_num);
   virtual void SetTrainerNum(int trainer_num);

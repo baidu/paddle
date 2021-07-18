@@ -605,6 +605,15 @@ class InMemoryDataset(DatasetBase):
         self.dataset.generate_local_tables_unlock(
             table_id, fea_dim, read_thread_num, consume_thread_num, shard_num)
 
+    def init_tdm_tree(self, configs):
+        self.dataset.init_tdm_tree(configs)
+
+    def tdm_sample(self, sample_slot, type_slot, start_h):
+        self.dataset.tdm_sample(sample_slot, type_slot, start_h)
+
+    def tdm_dump(self, name, table_id, fea_value_dim, tree_path):
+        self.dataset.tdm_dump(name, table_id, fea_value_dim, tree_path)
+
     def load_into_memory(self):
         """
         Load data into memory

@@ -186,6 +186,12 @@ void BindDataset(py::module *m) {
       .def(py::init([](const std::string &name = "MultiSlotDataset") {
         return framework::DatasetFactory::CreateDataset(name);
       }))
+      .def("init_tdm_tree", &framework::Dataset::InitTDMTree,
+           py::call_guard<py::gil_scoped_release>())
+      .def("tdm_sample", &framework::Dataset::TDMSample,
+           py::call_guard<py::gil_scoped_release>())
+      .def("tdm_dump", &framework::Dataset::TDMDump,
+           py::call_guard<py::gil_scoped_release>())
       .def("set_filelist", &framework::Dataset::SetFileList,
            py::call_guard<py::gil_scoped_release>())
       .def("set_thread_num", &framework::Dataset::SetThreadNum,

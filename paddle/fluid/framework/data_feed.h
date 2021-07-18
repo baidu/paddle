@@ -92,6 +92,22 @@ struct Record {
   uint64_t search_id;
   uint32_t rank;
   uint32_t cmatch;
+
+  void Print() {
+    std::stringstream ss;
+    ss << "int64_feasigns: [";
+    for (uint64_t i = 0; i < uint64_feasigns_.size(); i++) {
+      ss << "(" << uint64_feasigns_[i].slot() << ", "
+         << uint64_feasigns_[i].sign().uint64_feasign_ << "); ";
+    }
+    ss << "]\t\tfloat64_feasigns:[";
+    for (uint64_t i = 0; i < float_feasigns_.size(); i++) {
+      ss << "(" << float_feasigns_[i].slot() << ", "
+         << float_feasigns_[i].sign().float_feasign_ << "); ";
+    }
+    ss << "]\n";
+    VLOG(1) << ss.str();
+  }
 };
 
 struct PvInstanceObject {

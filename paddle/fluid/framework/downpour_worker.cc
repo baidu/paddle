@@ -823,6 +823,7 @@ void DownpourWorker::TrainFiles() {
                   s.c_str());
           s = "";
           for (auto& param : all_param_) {
+            break;
             Variable* var = thread_scope_->FindVar(param);
             if (var == nullptr) {
               continue;

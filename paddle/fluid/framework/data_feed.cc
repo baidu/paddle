@@ -430,6 +430,8 @@ void MultiSlotDataFeed::Init(
     all_slots_[i] = slot.name();
     all_slots_type_[i] = slot.type();
     use_slots_index_[i] = slot.is_used() ? use_slots_.size() : -1;
+    
+    std::cout<< "use_slots_index:" << use_slots_index_[i] << std::endl;
     total_dims_without_inductive_[i] = 1;
     inductive_shape_index_[i] = -1;
     if (slot.is_used()) {
@@ -911,6 +913,7 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
     }
     for (size_t i = 0; i < use_slots_index_.size(); ++i) {
       int idx = use_slots_index_[i];
+
       int num = strtol(&str[pos], &endptr, 10);
       PADDLE_ENFORCE_NE(
           num, 0,
@@ -931,6 +934,7 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
             float feasign = strtof(endptr, &endptr);
             // if float feasign is equal to zero, ignore it
             // except when slot is dense
+            // 23456 means tdm trees cate id
             if (fabs(feasign) < 1e-6 && !use_slots_is_dense_[i]) {
               continue;
             }
@@ -943,7 +947,7 @@ bool MultiSlotInMemoryDataFeed::ParseOneInstanceFromPipe(Record* instance) {
             uint64_t feasign = (uint64_t)strtoull(endptr, &endptr, 10);
             // if uint64 feasign is equal to zero, ignore it
             // except when slot is dense
-            if (feasign == 0 && !use_slots_is_dense_[i]) {
+            if (feasign == 0 && !use_slots_is_dense_[i] && all_slots_[i] != "vertical_type") {
               continue;
             }
             FeatureKey f;
