@@ -44,6 +44,11 @@ class TDMSamplerOpMaker : public framework::OpProtoAndCheckerMaker {
         "neg_samples_num_list(python:list[int], C++:vector<int>)"
         "The num of negative samples in each layer")
         .SetDefault({});
+    AddAttr<std::vector<int>>(
+        "neg_samples_radius_list",
+        "neg_samples_radius_list(python:list[int], C++:vector<int>)"
+        "The num of negative samples radius in each layer")
+        .SetDefault({});
     AddAttr<std::vector<int>>("layer_offset_lod",
                               "offset lod information of Layer")
         .SetDefault({});

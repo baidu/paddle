@@ -46,6 +46,15 @@ void TDMSamplerInner(const framework::ExecutionContext &context,
   auto layer_offset_lod = context.Attr<std::vector<int>>("layer_offset_lod");
   auto output_positive_flag = context.Attr<bool>("output_positive");
 
+  // check neg sample radius
+  auto neg_samples_radius_vec =
+      context.Attr<std::vector<int>>("neg_samples_radius_list");
+  bool neg_sample_by_radius_flag = false;
+  if (neg_samples_radius_vec.size() > 0 &&
+      neg_samples_radius_vec.size() == neg_samples_num_vec.size()) {
+    neg_sample_by_radius_flag = true;
+  }
+
   // get dimension
   int input_ids_num = input_tensor.numel();
   VLOG(3) << "TDM: input ids nums: " << input_ids_num;
@@ -179,6 +188,61 @@ void TDMSamplerInner(const framework::ExecutionContext &context,
                 << mask_vec[i * sample_res_length + offset];
         offset += 1;
       }
+
+      int neg_sample_radius_left_bound = node_id_min;
+      int neg_sample_radius_right_bound = node_id_max;
+      if (neg_sample_by_radius_flag) {
+        // Find the radius
+        int neg_sample_radius = neg_samples_radius_vec[layer_idx];
+        if (neg_sample_radius != 0) {
+          PADDLE_ENFORCE_LE(
+              neg_sample_radius, node_nums / 2,
+              platform::errors::InvalidArgument(
+                  "Neg sample nums id of OP(fluid.layers.tdm_sampler) at layer "
+                  "%ld "
+                  "expected <= %ld , but got %ld. Please "
+                  "check neg_samples_num_list.",
+                  layer_idx, node_nums / 2, neg_sample_radius));
+          if (neg_sample_radius != 0) {
+            PADDLE_ENFORCE_LE(
+                sample_num, neg_sample_radius * 2,
+                platform::errors::InvalidArgument(
+                    "Neg sample nums id of OP(fluid.layers.tdm_sampler) at "
+                    "layer "
+                    "%ld "
+                    "expected <= %ld , but got %ld. Please "
+                    "check neg_samples_num_list.",
+                    layer_idx, neg_sample_radius * 2, sample_num));
+          }
+
+          int left = positive_node_id - neg_sample_radius;
+          int right = positive_node_id + neg_sample_radius;
+          int left_offset = node_id_min - left;
+          int right_offset = node_id_max - right;
+
+          VLOG(3) << "TDM: layer - " << layer_idx + 1
+                  << " - neg_sample_radius: " << neg_sample_radius
+                  << " left: " << left << " right: " << right
+                  << " left_offset: " << left_offset
+                  << " right_offset: " << right_offset;
+
+          if (left_offset > 0) {
+            left = node_id_min;
+            right = right + left_offset;
+          } else if (right_offset < 0) {
+            right = node_id_max;
+            left = left + right_offset;
+          }
+
+          neg_sample_radius_left_bound = left;
+          neg_sample_radius_right_bound = right;
+        }
+        VLOG(3) << "TDM: layer - " << layer_idx + 1
+                << " - neg_sample_radius, positive_node_id: "
+                << positive_node_id << " left: " << neg_sample_radius_left_bound
+                << " right: " << neg_sample_radius_right_bound;
+      }
+
       std::vector<int> sample_res_vec{};
       // Sampling at layer, until samples enough
       for (int sample_index = 0; sample_index < sample_num; ++sample_index) {
@@ -186,10 +250,17 @@ void TDMSamplerInner(const framework::ExecutionContext &context,
         int sample_res = 0;
         do {
           sample_res = sampler_vec[layer_idx]->Sample();
+          VLOG(1) << "TDM: sample_res: " << sample_res
+                  << " layer_data[layer_offset_lod[layer_idx] + sample_res] "
+                  << layer_data[layer_offset_lod[layer_idx] + sample_res];
         } while (positive_node_id ==
                      layer_data[layer_offset_lod[layer_idx] + sample_res] ||
                  find(sample_res_vec.begin(), sample_res_vec.end(),
-                      sample_res) != sample_res_vec.end());
+                      sample_res) != sample_res_vec.end() ||
+                 layer_data[layer_offset_lod[layer_idx] + sample_res] <
+                     neg_sample_radius_left_bound ||
+                 layer_data[layer_offset_lod[layer_idx] + sample_res] >
+                     neg_sample_radius_right_bound);
         sample_res_vec.push_back(sample_res);
 
         output_vec[i * sample_res_length + offset] = static_cast<OutT>(

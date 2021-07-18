@@ -287,5 +287,52 @@ class TestTDMSamplerShape(unittest.TestCase):
         exe.run(feed=feed)
 
 
+class TestTDMSamplerRadiusShape(unittest.TestCase):
+    def test_shape(self):
+        x = fluid.layers.data(name='x', shape=[1], dtype='int32', lod_level=1)
+        tdm_tree_travel = create_tdm_travel()
+        tdm_tree_layer = create_tdm_layer()
+        layer_node_num_list = [len(i) for i in tdm_tree_layer]
+
+        tree_layer_flat = []
+        for layer_idx, layer_node in enumerate(layer_node_num_list):
+            tree_layer_flat += tdm_tree_layer[layer_idx]
+
+        travel_array = np.array(tdm_tree_travel).astype('int32')
+        layer_array = np.array(tree_layer_flat).astype('int32')
+
+        neg_samples_num_list = [1, 2, 3, 4]
+        neg_samples_radius_list = [1, 2, 3, 4]
+        leaf_node_num = 13
+
+        sample, label, mask = fluid.contrib.layers.tdm_sampler(
+            x,
+            neg_samples_num_list,
+            layer_node_num_list,
+            leaf_node_num,
+            neg_samples_radius_list=neg_samples_radius_list,
+            tree_travel_attr=fluid.ParamAttr(
+                initializer=fluid.initializer.NumpyArrayInitializer(
+                    travel_array)),
+            tree_layer_attr=fluid.ParamAttr(
+                initializer=fluid.initializer.NumpyArrayInitializer(
+                    layer_array)),
+            output_positive=True,
+            output_list=True,
+            seed=0,
+            tree_dtype='int32',
+            dtype='int32')
+
+        place = fluid.CPUPlace()
+        exe = fluid.Executor(place=place)
+        exe.run(fluid.default_startup_program())
+
+        feed = {
+            'x': np.array([[0], [1], [2], [3], [4], [5], [6], [7], [8], [9],
+                           [10], [11], [12]]).astype('int32')
+        }
+        exe.run(feed=feed)
+
+
 if __name__ == "__main__":
     unittest.main()
