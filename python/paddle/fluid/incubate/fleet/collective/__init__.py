@@ -26,7 +26,7 @@ from paddle.fluid.incubate.fleet.base.fleet_base import Mode
 from paddle.fluid.incubate.fleet.base.fleet_base import DistributedOptimizer
 
 from paddle.fluid import compiler
-from paddle.distributed.fs_wrapper import LocalFS, BDFS
+from paddle.fluid.incubate.checkpoint.checkpoint_saver import PaddleModel, CheckpointSaver
 
 import os
 import sys
@@ -46,21 +46,6 @@ class DistFCConfig(object):
         pass
 
 
-class TrainStatus(object):
-    def __init__(self, epoch_no=-1):
-        # completed epoch
-        self._epoch_no = epoch_no
-
-    def next(self):
-        return self._epoch_no + 1
-
-    def __eq__(self, t):
-        return self._epoch_no == t._epoch_no
-
-    def __ne__(self, t):
-        return not self == t
-
-
 class Collective(Fleet):
     def __init__(self):
         super(Collective, self).__init__(Mode.COLLECTIVE)
@@ -70,7 +55,7 @@ class Collective(Fleet):
         self._origin_program = None
         self._transpiled_program = None
         self.main_program = None
-        self._checkoint_prefix = "__paddle_fleet_checkpoint__"
+        self._checkpoint_prefix = "__paddle_fleet_checkpoint__"
         self._param_file_name = "_paddle_fleet_param__"
 
     def init_worker(self):
@@ -152,180 +137,58 @@ class Collective(Fleet):
 
         io.save_persistables(executor, dirname, main_program, filename=filename)
 
-    def _save_train_status(self, path, train_status):
-        d = {}
-        d["epoch_no"] = train_status._epoch_no
-
-        file_name = "{}/fleet_train_status".format(path)
-        with open(file_name, 'w') as f:
-            json.dump(d, f)
-
-    def _load_train_status(self, path):
-        file_name = "{}/fleet_train_status".format(path)
-
-        r = TrainStatus()
-        if not os.path.isfile(file_name):
-            return r
-
-        d = {}
-        with open(file_name, 'r') as f:
-            d = json.load(f)
-
-        assert "epoch_no" in d, "Can't find epoch_no in dict from train_status file:{}".format(
-            d)
-        r._epoch_no = d["epoch_no"]
-        assert r._epoch_no >= 0, "Data in checkpoint file is not valid:{}".format(
-            d)
-
-        return r
-
-    def _get_last_checkpoint_no(self, root_path, fs):
-        """
-        only get the first depth
-        """
-        max_no = -1
-        d = {}
-        dirs = fs.list_dirs(root_path)
-        for dir in dirs:
-            g = dir.split(".")
-            if len(g) != 2:
-                continue
-
-            if g[0] != "__paddle_fleet_checkpoint__":
-                continue
-
-            try:
-                n = int(g[1])
-                if n > max_no:
-                    max_no = n
-            except:
-                continue
-
-        return max_no
-
-    def clean_redundant_check_points(self,
-                                     root_path,
-                                     fs=LocalFS(),
-                                     checkpoint_num=1):
-        max_no = self._get_last_checkpoint_no(root_path, fs)
-        if max_no < 0:
-            return
-
-        if checkpoint_num < 1:
-            checkpoint_num = 1
-
-        dirs = fs.list_dirs(root_path)
-        for dir in dirs:
-            g = dir.split(".")
-            if len(g) != 2:
-                continue
-
-            if g[0] != self._checkoint_prefix:
-                continue
-
-            try:
-                n = int(g[1])
-                if n <= max_no - checkpoint_num:
-                    path = "{}/{}.{}".format(root_path, self._checkoint_prefix,
-                                             n)
-                    fs.rmr(path)
-            except Exception as e:
-                print(e)
-                continue
-
-    def save_check_point(self,
-                         executor,
-                         path,
-                         train_status,
-                         main_program=None,
-                         fs=LocalFS(),
-                         local_cache_path=".cache",
-                         remain_all_checkpoint=True):
+    def save_checkpoint(self,
+                        executor,
+                        path,
+                        trainer_id,
+                        train_status,
+                        fs,
+                        main_program=None,
+                        local_cache_path=".cache",
+                        remain_all_checkpoint=True):
         """
         This function save persistables and current epoch num to path.
         """
-
         if main_program == None:
             main_program = self._transpiled_program
 
-        if not fs.stat(path):
-            fs.mkdir(path)
-
-        max_no = self._get_last_checkpoint_no(path, fs=fs)
-        if max_no < 0:
-            max_no = -1
-
-        real_path = "{}/{}.{}".format(path, self._checkoint_prefix, max_no + 1)
-        tmp_path = "{}.tmp".format(real_path)
-        saved_path = tmp_path
-
-        local_fs = LocalFS()
-
-        cache_path = None
-        if fs.need_upload_download():
-            cache_path = "{}/{}.{}.saved_cache".format(
-                local_cache_path, self._checkoint_prefix, max_no + 1)
-            if not local_fs.stat(cache_path):
-                local_fs.mkdir(cache_path)
-            saved_path = cache_path
-
-        self.save_persistables(
-            executor=executor,
-            dirname=saved_path,
-            main_program=main_program,
-            filename=self._param_file_name)
-        self._save_train_status(path=saved_path, train_status=train_status)
-
-        if fs.need_upload_download():
-            fs.delete(tmp_path)
-            fs.upload(cache_path, tmp_path)
-        fs.mv(tmp_path, real_path)
+        m = PaddleModel(executor, main_program)
+        t = train_status
+        c = CheckpointSaver(fs)
+        real_path, checkpoint_no = c.save_checkpoint(
+            path=path,
+            slists=[m, t],
+            trainer_id=trainer_id,
+            local_cache_path=local_cache_path)
 
         if not remain_all_checkpoint:
-            self.clean_redundant_check_points(path)
+            c.clean_redundant_checkpoints(path)
 
-    def load_check_point(self,
-                         executor,
-                         path,
-                         trainer_id,
-                         main_program=None,
-                         fs=LocalFS(),
-                         local_cache_path=".cache",
-                         ignore_empty=True):
+        return real_path, checkpoint_no
+
+    def load_checkpoint(self,
+                        executor,
+                        path,
+                        trainer_id,
+                        train_status,
+                        fs,
+                        main_program=None,
+                        local_cache_path=".cache",
+                        ignore_empty=True):
         """
         This function load persistables and current epoch num from path.
         """
-        max_no = self._get_last_checkpoint_no(path, fs)
-
-        if not ignore_empty:
-            assert max_no >= 0, "Can't find checkpoint"
-
-        if max_no < 0:
-            return None
-
-        local_fs = LocalFS()
-        if fs.need_upload_download():
-            cache_path = "{}/{}.{}.load_cache.{}".format(
-                local_cache_path, self._checkoint_prefix, max_no, trainer_id)
-            if local_fs.stat(cache_path):
-                local_fs.delete(cache_path)
-
-        real_path = "{}/{}.{}".format(path, self._checkoint_prefix, max_no)
-        load_path = real_path
-        if fs.need_upload_download():
-            fs.download(real_path, cache_path)
-            load_path = cache_path
 
         if main_program == None:
             main_program = self._transpiled_program
 
-        io.load_persistables(
-            executor=executor,
-            dirname=load_path,
-            main_program=main_program,
-            filename=self._param_file_name)
-
-        return self._load_train_status(load_path)
+        m = PaddleModel(executor, main_program)
+        c = CheckpointSaver(fs)
+        return c.load_checkpoint(
+            path, [m, train_status],
+            trainer_id=trainer_id,
+            ignore_empty=ignore_empty,
+            local_cache_path=local_cache_path)
 
 
 fleet = Collective()

@@ -1508,6 +1508,14 @@ All parameter, weight, gradient are variables in Paddle.
                                                              sleep_inter);
         },
         py::arg("cmd"), py::arg("time_out") = -1, py::arg("sleep_inter") = -1);
+  m.def("shell_execute_cmd",
+        [](const std::string &cmd, int time_out = 0, int sleep_inter = 0,
+           bool redirect_stderr = false) -> std::vector<std::string> {
+          return paddle::framework::shell_execute_cmd(
+              cmd, time_out, sleep_inter, redirect_stderr);
+        },
+        py::arg("cmd"), py::arg("time_out") = 0, py::arg("sleep_inter") = 0,
+        py::arg("redirect_stderr") = false);
 #ifdef PADDLE_WITH_CUDA
   m.def("is_float16_supported", [](const platform::CUDAPlace &place) -> bool {
     // Only GPUs with Compute Capability >= 53 support float16

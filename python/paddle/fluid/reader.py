@@ -29,6 +29,10 @@ from .unique_name import UniqueNameGenerator
 import logging
 from .dataset import DatasetBase, InMemoryDataset
 
+from .incubate.checkpoint import dataloader_auto_checkpoint as dacp
+from .incubate.checkpoint import auto_checkpoint as acp
+from . import unique_name
+
 ### Dygraph DataLoader configs ###
 import os
 import multiprocessing
@@ -977,6 +981,10 @@ class GeneratorLoader(DataLoaderBase):
         if not self._iterable:
             self._init_non_iterable()
 
+        self._auto_checkpoint_name = unique_name.generate(
+            "__auto_checkpoint_dataloader__")
+        self._ignore_epoch = False
+
     def _wait_thread_ends(self):
         # Get self._thread first to prevent data race, because __thread_main__
         # would set self._thread be None at the end
@@ -1092,17 +1100,27 @@ class GeneratorLoader(DataLoaderBase):
         assert self._tensor_reader is not None, \
             "Data source of DataLoader has not set yet"
 
+        self._ignore_epoch = dacp._ignore_epoch(self._auto_checkpoint_name)
+        if self._ignore_epoch:
+            return self
+
         self._init_iterable()
         self._start()
         return self
 
     def __next__(self):
+        if self._ignore_epoch:
+            raise StopIteration
+
         try:
             if self._return_list:
                 return self._reader.read_next_list()
             else:
                 return self._reader.read_next()
         except StopIteration:
+            dacp._end(self._auto_checkpoint_name)
+            self._ignore_epoch = False
+
             self._queue.close()
             self._reset()
             six.reraise(*sys.exc_info())
