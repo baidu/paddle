@@ -21,7 +21,7 @@ namespace framework {
 
 std::shared_ptr<FILE> shell_fopen(const std::string& path,
                                   const std::string& mode) {
-#if defined _WIN32 || defined __APPLE__ || defined PADDLE_ARM
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return nullptr;
 #else
   if (shell_verbose()) {
@@ -29,14 +29,16 @@ std::shared_ptr<FILE> shell_fopen(const std::string& path,
   }
   FILE* fp;
   if (!(fp = fopen(path.c_str(), mode.c_str()))) {
-    LOG(FATAL) << "fopen fail, path[" << path << "], mode[" << mode << "]";
+    PADDLE_THROW(platform::errors::Unavailable(
+        "Failed to open file, path[%s], mode[%s].", path, mode));
   }
   return {fp, [path](FILE* fp) {
             if (shell_verbose()) {
               LOG(INFO) << "Closing file[" << path << "]";
             }
             if (0 != fclose(fp)) {
-              LOG(FATAL) << "fclose fail, path[" << path << "]";
+              PADDLE_THROW(platform::errors::Unavailable(
+                  "Failed to close file, path[%s].", path));
             }
           }};
 #endif
@@ -46,7 +48,7 @@ std::shared_ptr<FILE> shell_fopen(const std::string& path,
 // The implementation is async signal safe
 // Mostly copy from CPython code
 static int close_open_fds_internal() {
-#if defined _WIN32 || defined __APPLE__ || defined PADDLE_ARM
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return 0;
 #else
   struct linux_dirent {
@@ -58,7 +60,7 @@ static int close_open_fds_internal() {
 
   int dir_fd = -1;
   if ((dir_fd = open("/proc/self/fd", O_RDONLY)) < 0) {
-    LOG(FATAL) << "proc/self/fd open fail";
+    PADDLE_THROW(platform::errors::Unavailable("Failed to open proc/self/fd."));
     return -1;
   }
   char buffer[sizeof(linux_dirent)];
@@ -68,7 +70,8 @@ static int close_open_fds_internal() {
     if ((bytes = syscall(SYS_getdents, dir_fd,
                          reinterpret_cast<linux_dirent*>(buffer),
                          sizeof(buffer))) < 0) {
-      LOG(FATAL) << "syscall fail";
+      PADDLE_THROW(platform::errors::Unavailable(
+          "System call failed via syscall function."));
       return -1;
     }
 
@@ -100,8 +103,9 @@ static int close_open_fds_internal() {
 }
 
 static int shell_popen_fork_internal(const char* real_cmd, bool do_read,
-                                     int parent_end, int child_end) {
-#if defined _WIN32 || defined __APPLE__
+                                     int parent_end, int child_end,
+                                     bool redirect_stderr = false) {
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return 0;
 #else
   int child_pid = -1;
@@ -122,18 +126,41 @@ static int shell_popen_fork_internal(const char* real_cmd, bool do_read,
 
   if (child_end != child_std_end) {
     PCHECK(dup2(child_end, child_std_end) == child_std_end);
+    if (redirect_stderr && do_read) {
+      PCHECK(dup2(child_end, 2) == 2);
+    }
     close(child_end);
   }
 
   close_open_fds_internal();
   PCHECK(execl("/bin/bash", "bash", "-c", real_cmd, NULL) >= 0);
-  exit(127);
+  // Note: just for compilation. the child don't run this line.
+  _exit(0);
 #endif
 }
 
+static int read_from_pipe(FILE* fp, std::string* output) {
+  char buf[4096];
+  while (1) {
+    int n = fread(buf, 1, 4096, fp);
+    if (n <= 0) {
+      break;
+    }
+
+    output->append(buf, n);
+  }
+
+  if (!feof(fp)) {
+    return -1;
+  }
+
+  return 0;
+}
+
 std::shared_ptr<FILE> shell_popen(const std::string& cmd,
-                                  const std::string& mode, int* err_no) {
-#if defined _WIN32 || defined __APPLE__
+                                  const std::string& mode, int* err_no,
+                                  int* status, bool redirect_stderr) {
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return nullptr;
 #else
   bool do_read = mode == "r";
@@ -143,9 +170,7 @@ std::shared_ptr<FILE> shell_popen(const std::string& cmd,
     return NULL;
   }
 
-  if (shell_verbose()) {
-    LOG(INFO) << "Opening pipe[" << cmd << "] with mode[" << mode << "]";
-  }
+  VLOG(3) << "Opening pipe[" << cmd << "] with mode[" << mode << "]";
 
   std::string real_cmd = "set -o pipefail; " + cmd;
 
@@ -165,43 +190,54 @@ std::shared_ptr<FILE> shell_popen(const std::string& cmd,
     child_end = pipe_fds[0];
   }
 
-  int child_pid = shell_popen_fork_internal(real_cmd.c_str(), do_read,
-                                            parent_end, child_end);
-  close(child_end);
+  sighandler_t old_handler;
+  old_handler = signal(SIGCHLD, SIG_DFL);
+
   fcntl(parent_end, F_SETFD, FD_CLOEXEC);
-  FILE* fp;
+
+  int child_pid = shell_popen_fork_internal(
+      real_cmd.c_str(), do_read, parent_end, child_end, redirect_stderr);
+
+  close(child_end);
+
+  FILE* fp = NULL;
   if ((fp = fdopen(parent_end, mode.c_str())) == NULL) {
     *err_no = -1;
+    signal(SIGCHLD, old_handler);
     return NULL;
   }
-  return {fp, [child_pid, cmd, err_no](FILE* fp) {
-            if (shell_verbose()) {
-              LOG(INFO) << "Closing pipe[" << cmd << "]";
+
+  return {fp, [cmd, child_pid, old_handler, err_no, status](FILE* fp) {
+            VLOG(3) << "Closing pipe[" << cmd << "]";
+            if (fclose(fp)) {
+              *err_no = -1;
             }
 
-            if (fclose(fp) != 0) {
-              *err_no = -1;
-            }
             int wstatus = -1;
+            // don't do this before parent read data from child pipe
+            // or when get the large data, it will hang!
             waitpid(child_pid, &wstatus, 0);
-            if (wstatus == 0 || wstatus == (128 + SIGPIPE) * 256 ||
-                (wstatus == -1 && errno == ECHILD)) {
+
+            if (status) {
+              *status = wstatus;
+            }
+
+            if (WIFEXITED(wstatus) || wstatus == (128 + SIGPIPE) * 256) {
             } else {
+              PADDLE_ENFORCE_NE(
+                  errno, ECHILD,
+                  platform::errors::Fatal("Must not be ECHILD errno here!"));
               *err_no = -1;
-              LOG(WARNING) << "status[" << wstatus << "], cmd[" << cmd << "]"
-                           << ", err_no[" << *err_no << "]";
             }
-            if (wstatus == -1 && errno == ECHILD) {
-              // temporarily remove this warning
-              // LOG(WARNING) << "errno is ECHILD";
-            }
+
+            signal(SIGCHLD, old_handler);
           }};
 #endif
 }
 
 static int shell_p2open_fork_internal(const char* real_cmd, int pipein_fds[2],
                                       int pipeout_fds[2]) {
-#if defined _WIN32 || defined __APPLE__
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return 0;
 #else
   int child_pid = -1;
@@ -240,7 +276,7 @@ static int shell_p2open_fork_internal(const char* real_cmd, int pipein_fds[2],
 
 std::pair<std::shared_ptr<FILE>, std::shared_ptr<FILE>> shell_p2open(
     const std::string& cmd) {
-#if defined _WIN32 || defined __APPLE__
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   return {};
 #else
   if (shell_verbose()) {
@@ -298,50 +334,101 @@ std::pair<std::shared_ptr<FILE>, std::shared_ptr<FILE>> shell_p2open(
 #endif
 }
 
-std::string shell_get_command_output(const std::string& cmd, int time_out,
-                                     int sleep_inter, bool print_cmd) {
-#if defined _WIN32 || defined __APPLE__
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
+#else
+static int _get_err_no(int err_no, int status) {
+  if (err_no == 0) {
+    if (WIFEXITED(status)) {
+      return WEXITSTATUS(status);
+    }
+    return -1;
+  }
+
+  return err_no;
+}
+#endif
+
+static int _shell_execute_cmd(const std::string& cmd, std::string* output,
+                              int time_out, int sleep_inter,
+                              bool redirect_stderr = false) {
+#if defined(_WIN32) || defined(__APPLE__) || defined(PADDLE_ARM)
   PADDLE_THROW(platform::errors::Unimplemented(
       "This function(shell_get_command_output) is not implemented under _WIN32 "
       "or __APPLE__."));
 #else
   int err_no = 0;
+  int status = 0;
+  int cmd_status = 0;
   platform::Timer timer;
   do {
-    if (print_cmd) {
-      LOG(INFO) << "exec cmd:[" << cmd << "]";
-    }
+    VLOG(3) << "exec cmd:[" << cmd << "]";
+
     err_no = 0;
-    std::shared_ptr<FILE> pipe = shell_popen(cmd, "r", &err_no);
-    string::LineFileReader reader;
+    status = 0;
+    *output = "";
+    auto pipe = shell_popen(cmd, "r", &err_no, &status, redirect_stderr);
 
-    char* buf = reader.getdelim(&*pipe, 0);
     if (err_no == 0) {
-      if (buf) {
-        return reader.get();
+      // read file
+      err_no = read_from_pipe(&*pipe, output);
+      if (err_no) {
+        LOG(WARNING) << "status[" << status << "], cmd[" << cmd << "]"
+                     << ", err_no[" << err_no << "]";
       }
-      return "";
     }
 
-    if (sleep_inter > 0) {
-      usleep(sleep_inter);
+    // close file and etc.
+    pipe = nullptr;
+    if (err_no) {
+      LOG(WARNING) << "status[" << status << "], cmd[" << cmd << "]"
+                   << ", err_no[" << err_no << "]";
     }
 
+    cmd_status = _get_err_no(err_no, status);
+    // cmd run ok!
+    if (cmd_status == 0) {
+      return cmd_status;
+    }
+
+    // time out
     timer.Pause();
-    if (time_out > 0 && timer.ElapsedMS() >= time_out) {
-      PADDLE_THROW(paddle::platform::errors::ExecutionTimeout(
-          "shell_get_command_output execute  error errno:%d and try until "
-          "timeout.",
-          errno));
-      return "";
+    if ((time_out > 0 && timer.ElapsedMS() >= time_out) || time_out == 0) {
+      break;
     }
     timer.Resume();
 
-    pipe = nullptr;
-  } while (err_no);
+    if (sleep_inter > 0) {
+      usleep(sleep_inter * 1000);
+    }
+  } while (cmd_status);
 
-  return "";
+  // log when check timeout!
+  if (time_out != 0) {
+    *output += string::Sprintf(
+        " _shell_execute_cmd execute cmd:%s ElapsedMS:%d, err_no:%d status:%d",
+        cmd, timer.ElapsedMS(), err_no, cmd_status);
+    LOG(WARNING) << *output;
+  }
+
+  return cmd_status;
+
 #endif
+}
+
+std::string shell_get_command_output(const std::string& cmd, int time_out,
+                                     int sleep_inter) {
+  std::string output;
+  _shell_execute_cmd(cmd, &output, time_out, sleep_inter);
+  return output;
+}
+
+std::vector<std::string> shell_execute_cmd(const std::string& cmd, int time_out,
+                                           int sleep_inter,
+                                           bool redirect_stderr) {
+  std::string output;
+  int ret =
+      _shell_execute_cmd(cmd, &output, time_out, sleep_inter, redirect_stderr);
+  return std::vector<std::string>({string::Sprintf("%d", ret), output});
 }
 
 }  // end namespace framework
