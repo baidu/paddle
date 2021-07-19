@@ -130,6 +130,7 @@ struct SimpleOpTypeSetTeller : public Teller {
       "nearest_interp",
       "anchor_generator",
       "reduce_sum",
+      "nearest_interp_v2",
   };
 };
 
