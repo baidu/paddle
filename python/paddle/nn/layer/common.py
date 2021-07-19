@@ -1381,19 +1381,19 @@ class Unfold(layers.Layer):
 
     
     Parameters:
-        kernel_sizes(int|list):   The size of convolution kernel, should be [k_h, k_w]
+        kernel_size(int|list):   The size of convolution kernel, should be [k_h, k_w]
                                   or an integer k treated as [k, k].
-        strides(int|list):        The strides, should be [stride_h, stride_w]
+        stride(int|list):        The strides, should be [stride_h, stride_w]
                                   or an integer stride treated as [sride, stride].
                                   For default, strides will be [1, 1].
-        paddings(int|list):       The paddings of each dimension, should be
+        padding(int|list):       The paddings of each dimension, should be
                                   [padding_top, padding_left, padding_bottom, padding_right]
                                   or [padding_h, padding_w] or an integer padding.
                                   If [padding_h, padding_w] was given, it will expanded to
                                   [padding_h, padding_w, padding_h, padding_w]. If an integer
                                   padding was given, [padding, padding, padding, padding] will
                                   be used. For default, paddings will be [0, 0, 0, 0]
-        dilations(int|list):      the dilations of convolution kernel, should be
+        dilation(int|list):      the dilations of convolution kernel, should be
                                   [dilation_h, dilation_w], or an integer dilation treated as
                                   [dilation, dilation]. For default, it will be [1, 1].
         name(str, optional): The default value is None.
@@ -1408,30 +1408,36 @@ class Unfold(layers.Layer):
             import paddle.nn as nn
 
             x = paddle.randn((100,3,224,224))
-            unfold = nn.Unfold(kernel_sizes=[3, 3])
+            unfold = nn.Unfold(kernel_size=[3, 3])
             result = unfold(x)
             print(result)
    """
 
     def __init__(self,
-                 kernel_sizes,
-                 dilations=1,
-                 paddings=0,
-                 strides=1,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
                  name=None):
         super(Unfold, self).__init__()
 
-        self.kernel_sizes = kernel_sizes
-        self.dilations = dilations
-        self.paddings = paddings
-        self.strides = strides
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+        self.padding = padding
+        self.stride = stride
         self.name = name
 
     def forward(self, input):
-        return F.unfold(input, self.kernel_sizes, self.dilations, self.paddings,
-                        self.strides, self.name)
+        return F.unfold(
+            input, 
+            kernel_size=self.kernel_size, 
+            stride=self.stride, 
+            padding=self.padding, 
+            dilation=self.dilation, 
+            name=self.name
+        )
 
     def extra_repr(self):
         name_str = ', name={}'.format(self.name) if self.name else ''
         return 'kernel_size={}, dilation={}, padding={}, stride={}{}'.\
-                format(self.kernel_sizes, self.dilations, self.paddings, self.strides, name_str)
+                format(self.kernel_size, self.dilation, self.padding, self.stride, name_str)
