@@ -127,6 +127,7 @@ limitations under the License. */
 #include "paddle/fluid/pybind/fleet_py.h"
 #endif
 
+#include "paddle/fluid/pybind/dygraph.h"
 #include "pybind11/stl.h"
 
 DECLARE_bool(use_mkldnn);
@@ -470,7 +471,7 @@ PYBIND11_MODULE(core_avx, m) {
 #else
 PYBIND11_MODULE(core_noavx, m) {
 #endif
-
+  BindDygraph(&m);
   // Not used, just make sure cpu_info.cc is linked.
   paddle::platform::CpuTotalPhysicalMemory();
 

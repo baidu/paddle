@@ -53,6 +53,7 @@ set(PYBIND_SRCS
   box_helper_py.cc
   data_set_py.cc
   imperative.cc
+  dygraph.cc
   ir.cc
   inference_api.cc
   compatible.cc
