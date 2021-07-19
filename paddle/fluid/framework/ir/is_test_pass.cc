@@ -35,7 +35,7 @@ void IsTestPass::ApplyImpl(ir::Graph* graph) const {
                   "hard_shrink", "hard_sigmoid", "relu6",
                   "soft_relu",   "swish",        "thresholded_relu",
                   "log",         "square",       "softplus",
-                  "softsign",    "silu"};
+                  "softsign",    "silu",         "mish"};
   for (const Node* n : graph->Nodes()) {
     if (n->IsOp()) {
       auto* op = n->Op();
