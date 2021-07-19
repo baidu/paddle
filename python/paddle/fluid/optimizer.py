@@ -298,11 +298,13 @@ class Optimizer(object):
         from paddle.optimizer.lr import LRScheduler
         if isinstance(self._learning_rate, LRScheduler):
             lr_var = self._global_learning_rate()
+            helper = (LayerHelper('create_global_lr')
+                      if self.helper is None else self.helper)
             # only create global lr_var once
             if not isinstance(lr_var, framework.Variable):
                 lr_name = unique_name.generate('learning_rate')
                 self._learning_rate._var_name = lr_name
-                lr_var = self.helper.create_global_variable(
+                lr_var = helper.create_global_variable(
                     name=lr_name,
                     shape=[1],
                     persistable=True,
@@ -315,7 +317,7 @@ class Optimizer(object):
                 )] = lr_var
 
             lr_value = float(self._learning_rate())
-            self.helper.set_variable_initializer(
+            helper.set_variable_initializer(
                 lr_var, initializer=Constant(value=lr_value))
             return
 

@@ -399,6 +399,39 @@ class OptimizerWithMixedPrecision(object):
                         self._decr_ratio,
                         name="update_loss_scaling")
 
+            lr_var = None
+            for name, var in self._train_program.global_block().vars.items():
+                if name.find('learning_rate') != -1:
+                    lr_var = var
+                    print("---- Find lr variable: {}. ----".format(lr_var.name))
+            if lr_var is None:
+                from ...optimizer import RecomputeOptimizer as opt_RecomputeOptimizer
+                from ....distributed.fleet.meta_optimizers import RecomputeOptimizer as fleet_RecomputeOptimizer
+                if isinstance(self._optimizer, opt_RecomputeOptimizer):
+                    opt = self._optimizer._optimizer
+                elif isinstance(self._optimizer, fleet_RecomputeOptimizer):
+                    opt = self._optimizer.inner_opt
+                else:
+                    opt = self._optimizer
+                opt._create_global_learning_rate()
+                lr_var = opt._global_learning_rate()
+            assert lr_var is not None, "Not find any learning rate var."
+            with self._train_program._optimized_guard([]):
+                zero_var = layers.fill_constant(
+                    shape=lr_var.shape, dtype=lr_var.dtype, value=0.0)
+                keeped_lr = layers.fill_constant(
+                    shape=lr_var.shape, dtype=lr_var.dtype, value=0.0)
+                with layers.Switch() as switch:
+                    with switch.case(lr_var == zero_var):
+                        pass
+                    with switch.default():
+                        layers.assign(lr_var, keeped_lr)
+
+                with layers.Switch() as switch:
+                    with switch.case(found_inf):
+                        layers.assign(zero_var, lr_var)
+                    with switch.default():
+                        layers.assign(keeped_lr, lr_var)
         optimize_ops = self._optimizer.apply_gradients(params_grads)
         return optimize_ops
 
