@@ -399,7 +399,16 @@ class OptimizerWithMixedPrecision(object):
                         self._decr_ratio,
                         name="update_loss_scaling")
 
-        optimize_ops = self._optimizer.apply_gradients(params_grads)
+        # def apply_fn():
+        #     return self._optimizer.apply_gradients(params_grads)
+
+        # optimize_ops = layers.cond(found_inf, None, apply_fn)
+
+        with layers.Switch() as switch:
+            with switch.case(found_inf):
+                optimize_ops = None
+            with switch.default():
+                optimize_ops = self._optimizer.apply_gradients(params_grads)
         return optimize_ops
 
     def apply_optimize(self, loss, startup_program, params_grads):
