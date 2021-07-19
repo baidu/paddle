@@ -33,10 +33,10 @@ class TestUnfoldOp(OpTest):
         self.input_channels = 3
         self.input_height = 20
         self.input_width = 20
-        self.kernel_sizes = [3, 3]
-        self.strides = [1, 1]
-        self.paddings = [1, 1, 1, 1]
-        self.dilations = [1, 1]
+        self.kernel_size = [3, 3]
+        self.stride = [1, 1]
+        self.padding = [1, 1, 1, 1]
+        self.dilation = [1, 1]
         input_shape = [
             self.batch_size, self.input_channels, self.input_height,
             self.input_width
@@ -46,14 +46,14 @@ class TestUnfoldOp(OpTest):
     def calc_unfold(self):
         output_shape = [0] * 3
         output_shape[0] = self.batch_size
-        output_shape[1] = self.input_channels * self.kernel_sizes[
-            0] * self.kernel_sizes[1]
-        dkernel_h = self.dilations[0] * (self.kernel_sizes[0] - 1) + 1
-        dkernel_w = self.dilations[1] * (self.kernel_sizes[1] - 1) + 1
-        out_height = int((self.input_height + self.paddings[0] +
-                          self.paddings[2] - dkernel_h) / self.strides[0]) + 1
-        out_width = int((self.input_width + self.paddings[1] + self.paddings[3]
-                         - dkernel_w) / self.strides[1]) + 1
+        output_shape[1] = self.input_channels * self.kernel_size[
+            0] * self.kernel_size[1]
+        dkernel_h = self.dilation[0] * (self.kernel_size[0] - 1) + 1
+        dkernel_w = self.dilation[1] * (self.kernel_size[1] - 1) + 1
+        out_height = int((self.input_height + self.padding[0] +
+                          self.padding[2] - dkernel_h) / self.stride[0]) + 1
+        out_width = int((self.input_width + self.padding[1] + self.padding[3]
+                         - dkernel_w) / self.stride[1]) + 1
         output_shape[2] = out_height * out_width
         output = np.zeros(output_shape).astype(np.float64)
         ############ calculate output ##############
@@ -62,15 +62,15 @@ class TestUnfoldOp(OpTest):
                 for k in range(output_shape[2]):
                     h_out = int(k / out_width)
                     w_out = k % out_width
-                    w_offset = j % self.kernel_sizes[1]
+                    w_offset = j % self.kernel_size[1]
                     h_offset = int(j /
-                                   self.kernel_sizes[1]) % self.kernel_sizes[0]
+                                   self.kernel_size[1]) % self.kernel_size[0]
                     c_in = int(j /
-                               (self.kernel_sizes[0] * self.kernel_sizes[1]))
-                    h_in = h_offset * self.dilations[0] + h_out * self.strides[
-                        0] - self.paddings[0]
-                    w_in = w_offset * self.dilations[1] + w_out * self.strides[
-                        1] - self.paddings[1]
+                               (self.kernel_size[0] * self.kernel_size[1]))
+                    h_in = h_offset * self.dilation[0] + h_out * self.stride[
+                        0] - self.padding[0]
+                    w_in = w_offset * self.dilation[1] + w_out * self.stride[
+                        1] - self.padding[1]
                     if (h_in>=0 and h_in<self.input_height) and \
                          (w_in>=0 and w_in<self.input_width):
                         output[i, j, k] = self.x[i, c_in, h_in, w_in]
@@ -83,10 +83,10 @@ class TestUnfoldOp(OpTest):
 
         self.inputs = {'X': self.x}
         self.attrs = {
-            'kernel_sizes': self.kernel_sizes,
-            'paddings': self.paddings,
-            'dilations': self.dilations,
-            'strides': self.strides
+            'kernel_size': self.kernel_size,
+            'padding': self.padding,
+            'dilation': self.dilation,
+            'stride': self.stride
         }
         self.outputs = {'Y': self.outputs}
 
