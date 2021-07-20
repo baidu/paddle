@@ -34,8 +34,8 @@ __all__ = [
     'cluster_files_reader',
 ]
 
-HOME = os.path.expanduser('~')
-DATA_HOME = os.path.join(HOME, '.cache', 'paddle', 'dataset')
+DATA_HOME_DIR = os.environ.get('DATA_HOME_DIR')
+DATA_HOME = os.path.join(DATA_HOME_DIR, '.cache', 'paddle', 'dataset')
 
 
 # When running unit tests, there could be multiple processes that
