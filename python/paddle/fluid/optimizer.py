@@ -2561,6 +2561,261 @@ class AdamOptimizer(Optimizer):
                     stop_gradient=True)
 
 
+class AdamWOptimizer(Optimizer):
+    r"""
+    The AdamW optimizer is implemented based on the AdamW Optimization
+    in paper `DECOUPLED WEIGHT DECAY REGULARIZATION <https://arxiv.org/pdf/1711.05101.pdf>`_.
+    it can resolves the problem of L2 regularization failure in the Adam optimizer.
+
+    .. math::
+
+        t & = t + 1
+
+        moment\_1\_out & = {\\beta}_1 * moment\_1 + (1 - {\\beta}_1) * grad
+
+        moment\_2\_out & = {\\beta}_2 * moment\_2 + (1 - {\\beta}_2) * grad * grad
+
+        learning\_rate\_1 & = 1 - learning\_rate * \lambda
+
+        learning\_rate\_2 & = learning\_rate * \\
+                            \\frac{\sqrt{1 - {\\beta}_2^t}}{1 - {beta}_1^t}
+
+        param\_out & = learning\_rate\_1 * param - learning\_rate\_2 * \\
+                            (\\frac{moment\_1}{\sqrt{moment\_2} + \epsilon * \sqrt{1 - {\\beta}_2^t}})
+    
+    Args:
+        learning_rate (float|Variable, optional): The learning rate used to update ``Parameter``.
+            It can be a float value or a ``Variable`` with a float type. The default value is 0.001.
+        beta1 (float|Variable, optional): The exponential decay rate for the 1st moment estimates.
+            It should be a float number or a Variable with shape [1] and data type as float32.
+            The default value is 0.9.
+        beta2 (float|Variable, optional): The exponential decay rate for the 2nd moment estimates.
+            It should be a float number or a Variable with shape [1] and data type as float32.
+            The default value is 0.999.
+        epsilon (float|Tensor, optional): A small float value for numerical stability.
+            It should be a float number or a Variable with shape [1] and data type as float32.
+            The default value is 1e-08.
+        weight_decay (float|Tensor, optional): The weight decay coefficient, it can be float or Tensor. 
+            The default value is 0.01.
+        parameter_list (Iterable, optional):  Iterable of ``Variable`` names to update to minimize ``loss``. \
+            This parameter is required in dygraph mode. \
+            The default value is None in static mode, at this time all parameters will be updated.
+        grad_clip (GradientClipBase, optional): Gradient cliping strategy, it's an instance of 
+            some derived class of ``GradientClipBase`` . There are three cliping strategies 
+            ( :ref:`api_fluid_clip_GradientClipByGlobalNorm` , :ref:`api_fluid_clip_GradientClipByNorm` , 
+            :ref:`api_fluid_clip_GradientClipByValue` ). Default None, meaning there is no gradient clipping.
+        name (str, optional): Normally there is no need for user to set this property.
+            For more information, please refer to :ref:`api_guide_Name`.
+            The default value is None.
+        lazy_mode (bool, optional): The official Adam algorithm has two moving-average accumulators.
+            The accumulators are updated at every step. Every element of the two moving-average
+            is updated in both dense mode and sparse mode. If the size of parameter is very large,
+            then the update may be very slow. The lazy mode only update the element that has
+            gradient in current mini-batch, so it will be much more faster. But this mode has
+            different semantics with the original Adam algorithm and may lead to different result.
+            The default value is False.
+        use_global_beta_pow (bool, optional): Whether to use global beta_pow. If true, Adam will use global beta_pow 
+            for whole model instead of creating beta_pow for each parameter. Default is false.
+        flatten_param_grads (bool, optional): Whether to flatten all parameters and gradients. Default is false.
+        align_size (int, optional): The alignment size when flatten parameters and gradients. Default is -1, which means
+            use same align_size as allocator.
+    
+    """
+    _moment1_acc_str = "moment1"
+    _moment2_acc_str = "moment2"
+    _beta1_pow_acc_str = "beta1_pow_acc"
+    _beta2_pow_acc_str = "beta2_pow_acc"
+
+    def __init__(self,
+                 learning_rate=0.001,
+                 weight_decay=0.01,
+                 beta1=0.9,
+                 beta2=0.999,
+                 epsilon=1e-8,
+                 parameter_list=None,
+                 grad_clip=None,
+                 name=None,
+                 lazy_mode=False,
+                 use_global_beta_pow=False,
+                 flatten_param_grads=False,
+                 align_size=-1):
+        assert learning_rate is not None
+        assert beta1 is not None
+        assert beta2 is not None
+        assert epsilon is not None
+        assert weight_decay is not None
+        if not 0 <= beta1 < 1:
+            raise ValueError("Invaild value of beta1, expect beta1 in [0,1).")
+        if not 0 <= beta2 < 1:
+            raise ValueError("Invaild value of beta2, expect beta1 in [0,1).")
+        if not 0 <= epsilon:
+            raise ValueError("Invaild value of epsilon, expect epsilon >= 0.")
+        if not 0 <= weight_decay:
+            raise ValueError(
+                "Invaild value of weight_decay, expect weight_decay >= 0.")
+        if not isinstance(weight_decay, float) and \
+                not isinstance(weight_decay, framework.Variable):
+            raise TypeError("weight_decay should be float or Tensor.")
+
+        super(AdamWOptimizer, self).__init__(
+            learning_rate=learning_rate,
+            parameter_list=parameter_list,
+            grad_clip=grad_clip,
+            flatten_param_grads=flatten_param_grads,
+            align_size=align_size,
+            name=name)
+        self.type = "adamw"
+        self._weight_decay = weight_decay
+        self._beta1 = beta1
+        self._beta2 = beta2
+        self._epsilon = epsilon
+        self._lazy_mode = lazy_mode
+        self._use_global_beta_pow = use_global_beta_pow
+
+    def _create_accumulators(self, block, parameters):
+        assert isinstance(block, framework.Block)
+
+        # Create accumulator tensors for moment1 and moment2
+        for p in parameters:
+            self._add_accumulator(self._moment1_acc_str, p)
+            self._add_accumulator(self._moment2_acc_str, p)
+            if not self._use_global_beta_pow:
+                self._add_accumulator(
+                    name=self._beta1_pow_acc_str,
+                    param=p,
+                    fill_value=0.9 if isinstance(self._beta1, Variable) \
+                            else self._beta1,
+                    shape=[1],
+                    type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+                self._add_accumulator(
+                    name=self._beta2_pow_acc_str,
+                    param=p,
+                    fill_value=0.999 if isinstance(self._beta2, Variable) \
+                            else self._beta2,
+                    shape=[1],
+                    type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+
+        if self._use_global_beta_pow:
+            self._add_global_accumulator(
+                name=self._beta1_pow_acc_str,
+                fill_value=0.9 if isinstance(self._beta1, Variable) \
+                        else self._beta1,
+                shape=[1],
+                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+            self._add_global_accumulator(
+                name=self._beta2_pow_acc_str,
+                fill_value=0.999 if isinstance(self._beta2, Variable) \
+                        else self._beta2,
+                shape=[1],
+                type=core.VarDesc.VarType.LOD_TENSOR, device='cpu')
+
+    def _append_optimize_op(self, block, param_and_grad):
+        assert isinstance(block, framework.Block)
+
+        moment1 = self._get_accumulator(self._moment1_acc_str,
+                                        param_and_grad[0])
+        moment2 = self._get_accumulator(self._moment2_acc_str,
+                                        param_and_grad[0])
+        if self._use_global_beta_pow:
+            beta1_pow_acc = self._get_global_accumulator(
+                self._beta1_pow_acc_str)
+            beta2_pow_acc = self._get_global_accumulator(
+                self._beta2_pow_acc_str)
+        else:
+            beta1_pow_acc = self._get_accumulator(self._beta1_pow_acc_str,
+                                                  param_and_grad[0])
+            beta2_pow_acc = self._get_accumulator(self._beta2_pow_acc_str,
+                                                  param_and_grad[0])
+        # create learning rate variable for every parameter
+        lr = self._create_param_lr(param_and_grad)
+
+        # create the adam optimize op
+        inputs = {
+            "Param": [param_and_grad[0]],
+            "Grad": [param_and_grad[1]],
+            "LearningRate": [lr],
+            "Moment1": [moment1],
+            "Moment2": [moment2],
+            "Beta1Pow": [beta1_pow_acc],
+            "Beta2Pow": [beta2_pow_acc]
+        }
+        outputs = {
+            "ParamOut": [param_and_grad[0]],
+            "Moment1Out": [moment1],
+            "Moment2Out": [moment2],
+            "Beta1PowOut": [beta1_pow_acc],
+            "Beta2PowOut": [beta2_pow_acc],
+        }
+        attrs = {
+            "lazy_mode": self._lazy_mode,
+            "min_row_size_to_use_multithread": 1000,
+            'use_global_beta_pow': self._use_global_beta_pow
+        }
+
+        if isinstance(self._beta1, Variable):
+            inputs['Beta1Tensor'] = self._beta1
+        else:
+            attrs['beta1'] = self._beta1
+        if isinstance(self._beta2, Variable):
+            inputs['Beta2Tensor'] = self._beta2
+        else:
+            attrs['beta2'] = self._beta2
+        if isinstance(self._epsilon, Variable):
+            inputs['EpsilonTensor'] = self._epsilon
+        else:
+            attrs['epsilon'] = self._epsilon
+        if isinstance(self._weight_decay, Variable):
+            inputs['WeightDecayTensor'] = self._weight_decay
+        else:
+            attrs['weightdecay'] = self._weight_decay
+
+        adamw_op = block.append_op(
+            type=self.type,
+            inputs=inputs,
+            outputs=outputs,
+            attrs=attrs,
+            stop_gradient=True)
+
+        return adamw_op
+
+    def _finish_update(self, block, parameters_and_grads):
+        r"""Update beta1_pow and beta2_pow accumulator
+        """
+        assert isinstance(block, framework.Block)
+        if self._use_global_beta_pow:
+            beta1_pow_acc = self._get_global_accumulator(
+                self._beta1_pow_acc_str)
+            beta2_pow_acc = self._get_global_accumulator(
+                self._beta2_pow_acc_str)
+
+            with block.program._optimized_guard([]):
+                inputs = {"X": beta1_pow_acc}
+                attrs = {}
+                if isinstance(self._beta1, Variable):
+                    inputs['ScaleTensor'] = self._beta1
+                else:
+                    attrs['scale'] = self._beta1
+                block.append_op(
+                    type="scale",
+                    inputs=inputs,
+                    outputs={"Out": beta1_pow_acc},
+                    attrs=attrs,
+                    stop_gradient=True)
+
+                inputs = {"X": beta2_pow_acc}
+                attrs = {}
+                if isinstance(self._beta2, Variable):
+                    inputs['ScaleTensor'] = self._beta2
+                else:
+                    attrs['scale'] = self._beta2
+                block.append_op(
+                    type="scale",
+                    inputs=inputs,
+                    outputs={"Out": beta2_pow_acc},
+                    attrs=attrs,
+                    stop_gradient=True)
+
+
 class AdamaxOptimizer(Optimizer):
     r"""
     The Adamax optimizer is implemented based on the Adamax Optimization 
