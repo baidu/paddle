@@ -34,7 +34,7 @@ __all__ = [
     'cluster_files_reader',
 ]
 
-HOME = os.path.expanduser('~')
+HOME = os.environ.get('HOME')
 DATA_HOME = os.path.join(HOME, '.cache', 'paddle', 'dataset')
 
 
