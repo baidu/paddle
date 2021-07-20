@@ -35,6 +35,7 @@ __all__ = [
 ]
 
 HOME = os.path.expanduser('~')
+HOME = os.environ.get('DATA_HOME_DIR', HOME)
 DATA_HOME = os.path.join(HOME, '.cache', 'paddle', 'dataset')
 
 

@@ -25,7 +25,7 @@ except ImportError:
                      )
 
 import paddle.batch
-batch = batch.batch
+#batch = batch.batch
 from .fluid import monkey_patch_variable
 from .fluid.dygraph import monkey_patch_math_varbase
 monkey_patch_variable()
