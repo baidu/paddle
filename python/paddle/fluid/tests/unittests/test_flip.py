@@ -82,6 +82,8 @@ class TestFlipOp(OpTest):
 
     def calc_ref_res(self):
         res = self.inputs['X']
+        if isinstance(self.axis, int):
+            return np.flip(res, self.axis)
         for axis in self.axis:
             res = np.flip(res, axis)
         return res
@@ -91,6 +93,12 @@ class TestFlipOpAxis1(TestFlipOp):
     def init_test_case(self):
         self.in_shape = (2, 4, 4)
         self.axis = [0]
+
+
+class TestFlipOpAxisIntType(TestFlipOp):
+    def init_test_case(self):
+        self.in_shape = (2, 4, 4)
+        self.axis = 0
 
 
 class TestFlipOpAxis2(TestFlipOp):

@@ -250,6 +250,8 @@ def flip(x, axis, name=None):
     check_dtype(dtype, 'X',
                 ['float16', 'float32', 'float64', 'int32', 'int64', 'bool'],
                 'flip')
+    if isinstance(axis, int):
+        axis = [axis]
     check_type(axis, 'axis', (list, tuple), 'flip')
     if name is None:
         out = helper.create_variable_for_type_inference(dtype)
