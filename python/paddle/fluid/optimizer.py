@@ -46,9 +46,9 @@ import warnings
 from paddle import _C_ops
 
 __all__ = [
-    'SGD', 'Momentum', 'Adagrad', 'Adam', 'AdamW', 'Adamax', 'Dpsgd',
-    'DecayedAdagrad', 'Ftrl', 'SGDOptimizer', 'MomentumOptimizer',
-    'AdagradOptimizer', 'AdamOptimizer', 'AdamaxOptimizer', 'DpsgdOptimizer',
+    'SGD', 'Momentum', 'Adagrad', 'Adam', 'Adamax', 'Dpsgd', 'DecayedAdagrad',
+    'Ftrl', 'SGDOptimizer', 'MomentumOptimizer', 'AdagradOptimizer',
+    'AdamOptimizer', 'AdamWOptimizer', 'AdamaxOptimizer', 'DpsgdOptimizer',
     'DecayedAdagradOptimizer', 'RMSPropOptimizer', 'FtrlOptimizer', 'Adadelta',
     'AdadeltaOptimizer', 'ModelAverage', 'LarsMomentum',
     'LarsMomentumOptimizer', 'LambOptimizer', 'ExponentialMovingAverage',
