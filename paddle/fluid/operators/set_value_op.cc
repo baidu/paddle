@@ -155,8 +155,8 @@ class SetValueGradMaker : public framework::SingleGradOpMaker<T> {
  protected:
   void Apply(GradOpPtr<T> op) const override {
     if (this->HasInput("ValueTensor")) {
-      op->SetType("slice");
-      op->SetInput("Input", this->OutputGrad("Out"));
+      op->SetType("set_value_grad");
+      op->SetInput(framework::GradVarName("Out"), this->OutputGrad("Out"));
       if (this->HasInput("StartsTensorList")) {
         op->SetInput("StartsTensorList", this->Input("StartsTensorList"));
       }
@@ -187,12 +187,146 @@ class SetValueGradMaker : public framework::SingleGradOpMaker<T> {
       op->SetAttr("decrease_axis", decrease_axes);
       op->SetAttr("infer_flags", std::vector<int>({}));
 
-      op->SetOutput("Out", this->InputGrad("ValueTensor"));
+      op->SetOutput(framework::GradVarName("Input"), this->InputGrad("Input"));
+      op->SetOutput(framework::GradVarName("ValueTensor"), this->InputGrad("ValueTensor"));
     } else {
       op->SetType("assign");
       op->SetInput("X", this->OutputGrad("Out"));
       op->SetOutput("Out", this->InputGrad("Input"));
     }
+  }
+};
+
+class SetValueGrad : public framework::OperatorWithKernel {
+ public:
+  using framework::OperatorWithKernel::OperatorWithKernel;
+
+  void InferShape(framework::InferShapeContext *ctx) const override {
+    OP_INOUT_CHECK(ctx->HasInput(framework::GradVarName("Out")), "Input", framework::GradVarName("Out"), "set_value_grad");
+    OP_INOUT_CHECK(ctx->HasOutput(framework::GradVarName("ValueTensor")), "Output", framework::GradVarName("ValueTensor"), "set_value_grad");
+    OP_INOUT_CHECK(ctx->HasOutput(framework::GradVarName("Input")), "Output", framework::GradVarName("Input"), "set_value_grad");
+
+    // Case 1: Special treatment when input is a tensor array.
+    auto x_var_type = ctx->GetInputsVarType(framework::GradVarName("Out"))[0];
+    auto axes = ctx->Attrs().Get<std::vector<int>>("axes");
+    if (x_var_type == framework::proto::VarType::LOD_TENSOR_ARRAY) {
+      PADDLE_ENFORCE_EQ(axes.size(), 1,
+                        platform::errors::InvalidArgument(
+                            "The size of axes must be 1 when the Input of "
+                            "SliceOp is LoDTensorArray, "
+                            "but received %d.",
+                            axes.size()));
+      if (ctx->IsRuntime()) {
+        // If the var type of input is LOD_TENSOR_ARRAY,
+        // the output shape is determined by SliceKernel:Compute in runtime.
+        return;
+      } else {
+        // NOTE(liym27): A better way is needed to get accurate dims of tensor
+        // array.
+        // The resulted dim of GetInputDim("Input") is the dim of the
+        // last item written into TensorArray "Input". Maybe it's a bug to fix.
+        // ctx->SetOutputDim("Out", ctx->GetInputDim("Input"));
+        return;
+      }
+    }
+
+    // Case 2: input is a tensor.
+    auto in_dims = ctx->GetInputDim(framework::GradVarName("Out"));
+    // auto in_dims_forward = ctx->GetInputDim("ForwardInput");
+    // ctx->SetOutputDim("InputGrad", in_dims_forward);
+ 
+    PADDLE_ENFORCE_LT(in_dims.size(), 7,
+                      platform::errors::InvalidArgument(
+                          "The rank of input should be less than 7."));
+    framework::DDim out_dims(in_dims);
+
+    auto starts = ctx->Attrs().Get<std::vector<int>>("starts");
+    auto ends = ctx->Attrs().Get<std::vector<int>>("ends");
+    auto decrease_axis = ctx->Attrs().Get<std::vector<int>>("decrease_axis");
+    auto infer_flags = ctx->Attrs().Get<std::vector<int>>("infer_flags");
+    if (infer_flags.empty()) {
+      // Initialize infer_flags with 1.
+      // To be compatible with other op tests in which infer_flags is not set.
+      infer_flags = std::vector<int>(axes.size(), 1);
+    }
+
+    // 2.1 Check attrs.
+    auto starts_size = starts.size();
+    auto ends_size = ends.size();
+
+    if (ctx->HasInputs("StartsTensorList")) {
+      starts_size = ctx->Inputs("StartsTensorList").size();
+      PADDLE_ENFORCE_GT(starts_size, 0,
+                        platform::errors::InvalidArgument(
+                            "StartsTensorList size can't be zero"));
+    }
+    if (ctx->HasInputs("EndsTensorList")) {
+      ends_size = ctx->Inputs("EndsTensorList").size();
+      PADDLE_ENFORCE_GT(ends_size, 0, platform::errors::InvalidArgument(
+                                          "EndsTensorList size can't be zero"));
+    }
+
+    if (!ctx->HasInput("StartsTensor")) {
+      PADDLE_ENFORCE_EQ(
+          starts_size, axes.size(),
+          platform::errors::InvalidArgument(
+              "The size of starts must be equal to the size of axes."));
+    }
+    if (!ctx->HasInput("EndsTensor")) {
+      PADDLE_ENFORCE_EQ(
+          ends_size, axes.size(),
+          platform::errors::InvalidArgument(
+              "The size of ends must be equal to the size of axes."));
+    }
+
+    CheckAndUpdateSliceAttrs<int>(in_dims, axes, &starts, &ends, nullptr,
+                                  &infer_flags);
+
+    auto slice_dims =
+        GetSliceDims<int>(in_dims, axes, starts, ends, nullptr, &infer_flags);
+    if (ctx->IsRuntime()) {
+      out_dims = GetDecreasedDims<int>(slice_dims, decrease_axis, &infer_flags);
+    } else {
+      out_dims = GetDecreasedDims<int>(slice_dims, decrease_axis, nullptr);
+    }
+    
+    ctx->SetOutputDim(framework::GradVarName("ValueTensor"), out_dims);
+    if (axes[0] != 0) {
+      ctx->ShareLoD(framework::GradVarName("Out"), /*->*/ framework::GradVarName("ValueTensor"));
+    }
+  }
+
+ protected:
+  framework::OpKernelType GetExpectedKernelType(
+      const framework::ExecutionContext &ctx) const override {
+    auto *in_var = ctx.InputVar(framework::GradVarName("Out"));
+    if (in_var->IsType<framework::LoDTensor>()) {
+      auto &in_tensor = in_var->Get<framework::LoDTensor>();
+      PADDLE_ENFORCE_EQ(
+          in_tensor.IsInitialized(), true,
+          platform::errors::InvalidArgument(
+              "The tensor Input (Input) of Slice op is not initialized."));
+      // NOTE: cuda pinned tensor need to copy its data to target place
+      if (platform::is_cuda_pinned_place(in_tensor.place())) {
+        return framework::OpKernelType(in_tensor.type(), ctx.device_context());
+      }
+      return framework::OpKernelType(in_tensor.type(), in_tensor.place());
+    }
+    return framework::OpKernelType(
+        OperatorWithKernel::IndicateVarDataType(ctx, framework::GradVarName("Out")), ctx.GetPlace());
+  }
+
+  framework::OpKernelType GetKernelTypeForVar(
+      const std::string &var_name, const Tensor &tensor,
+      const framework::OpKernelType &expected_kernel_type) const override {
+    if (var_name == "StartsTensor" || var_name == "EndsTensor") {
+      return expected_kernel_type;
+    }
+    if (var_name == "StartsTensorList" || var_name == "EndsTensorList") {
+      return expected_kernel_type;
+    }
+    return framework::OpKernelType(expected_kernel_type.data_type_,
+                                   tensor.place(), tensor.layout());
   }
 };
 
@@ -215,6 +349,22 @@ REGISTER_OP_CPU_KERNEL(
     ops::SetValueKernel<plat::CPUDeviceContext, float>,
     ops::SetValueKernel<plat::CPUDeviceContext, double>,
     ops::SetValueKernel<plat::CPUDeviceContext, bool>);
+
+
+REGISTER_OPERATOR(set_value_grad, ops::SetValueGrad);
+REGISTER_OP_CPU_KERNEL(
+    set_value_grad, ops::SetValueGradKernel<paddle::platform::CPUDeviceContext, int>,
+    ops::SetValueGradKernel<plat::CPUDeviceContext, int64_t>,
+    ops::SetValueGradKernel<plat::CPUDeviceContext, float>,
+    ops::SetValueGradKernel<plat::CPUDeviceContext, double>);
+
+
+REGISTER_OP_CUDA_KERNEL(
+    set_value_grad, ops::SetValueGradKernel<paddle::platform::CUDADeviceContext, int>, 
+    ops::SetValueGradKernel<paddle::platform::CUDADeviceContext, int64_t>,
+    ops::SetValueGradKernel<paddle::platform::CUDADeviceContext, float>,
+    ops::SetValueGradKernel<paddle::platform::CUDADeviceContext, double>);
+
 
 REGISTER_OP_VERSION(set_value)
     .AddCheckpoint(
