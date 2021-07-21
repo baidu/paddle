@@ -94,9 +94,9 @@ __global__ void AdamWKernelMEM(MT beta1, MT beta2, MT epsilon, MT weight_decay,
   }
 }
 template <typename T>
-__global__ void UpdateBetaPow(T beta1, T beta2, const T* beta1_pow_,
-                              const T* beta2_pow_, T* beta1_pow_out,
-                              T* beta2_pow_out) {
+__global__ void AdamWUpdateBetaPow(T beta1, T beta2, const T* beta1_pow_,
+                                   const T* beta2_pow_, T* beta1_pow_out,
+                                   T* beta2_pow_out) {
   *beta1_pow_out = beta1 * beta1_pow_[0];
   *beta2_pow_out = beta2 * beta2_pow_[0];
 }
@@ -296,7 +296,7 @@ class AdamWOpCUDAKernel : public framework::OpKernel<T> {
             master_out_data, param->numel());
         if (!use_global_beta_pow) {
           // Update with gpu
-          UpdateBetaPow<MPDType><<<1, 32, 0, dev_ctx.stream()>>>(
+          AdamWUpdateBetaPow<MPDType><<<1, 32, 0, dev_ctx.stream()>>>(
               beta1, beta2, beta1_pow->data<MPDType>(),
               beta2_pow->data<MPDType>(),
               beta1_pow_out->mutable_data<MPDType>(ctx.GetPlace()),
@@ -381,7 +381,7 @@ class AdamWOpCUDAKernel : public framework::OpKernel<T> {
         for_range(functor);
         if (!use_global_beta_pow) {
           // update beta1 and beta2
-          UpdateBetaPow<MPDType><<<1, 32, 0, dev_ctx.stream()>>>(
+          AdamWUpdateBetaPow<MPDType><<<1, 32, 0, dev_ctx.stream()>>>(
               beta1, beta2, beta1_pow->data<MPDType>(),
               beta2_pow->data<MPDType>(),
               beta1_pow_out->mutable_data<MPDType>(ctx.GetPlace()),
