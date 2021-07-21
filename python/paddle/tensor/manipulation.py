@@ -39,7 +39,7 @@ __all__ = []
 
 
 @dygraph_only
-def fill_(x, fill_value):
+def fill_(x, value):
     """
     **Notes**:
         **This API is ONLY available in Dygraph mode**
@@ -66,10 +66,10 @@ def fill_(x, fill_value):
             print(tensor.tolist())   #[0, 0, 0, 0, 0]
 
     """
-    if not (isinstance(fill_value, Variable)):
-        fill_value = paddle.to_tensor(fill_value, dtype=x.dtype)
-    assert (fill_value.size == 1), "var should be size 1"
-    return core.ops.fill_inplace(x, fill_value)
+    if not (isinstance(value, Variable)):
+        value = paddle.to_tensor(value, dtype=x.dtype)
+    assert (value.size == 1), "var should be size 1"
+    return core.ops.fill_inplace_(x, value)
 
 
 setattr(core.VarBase, 'fill_', fill_)
@@ -103,8 +103,8 @@ def zero_(x):
             print(tensor.tolist())   #[0, 0, 0, 0, 0]
 
     """
-    fill_value = paddle.to_tensor(0, dtype=x.dtype)
-    return core.ops.fill_inplace(x, fill_value)
+    value = paddle.to_tensor(0, dtype=x.dtype)
+    return core.ops.fill_inplace_(x, value)
 
 
 setattr(core.VarBase, 'zero_', zero_)

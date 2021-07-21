@@ -60,6 +60,31 @@ class TensorFill_Test(unittest.TestCase):
                 self.assertEqual(
                     (tensor.numpy() == newtensor.numpy()).all().item(), True)
 
+    def test_tensor_fill_backward(self):
+        typelist = ['float32']
+        places = [fluid.CPUPlace()]
+        if fluid.core.is_compiled_with_cuda():
+            places.append(fluid.CUDAPlace(0))
+            places.append(fluid.CUDAPinnedPlace())
+
+        for idx, p in enumerate(places):
+            if idx == 0:
+                paddle.set_device('cpu')
+            else:
+                paddle.set_device('gpu')
+            np_arr = np.reshape(
+                np.array(six.moves.range(np.prod(self.shape))), self.shape)
+            for dtype in typelist:
+                var = (np.random.random() + 1)
+                tensor = paddle.to_tensor(np_arr, place=p, dtype=dtype)
+                tensor.stop_gradient = False
+                y = tensor * 2
+                y.fill_(var)
+                loss = y.sum()
+                loss.backward()
+
+                self.assertEqual((y.grad.numpy() == 0).all().item(), True)
+
 
 if __name__ == '__main__':
     unittest.main()
