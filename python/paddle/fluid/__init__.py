@@ -247,7 +247,13 @@ def __bootstrap__():
         ]
 
     core.init_gflags(["--tryfromenv=" + ",".join(read_env_flags)])
-    core.init_glog(sys.argv[0])
+    # Note(zhouwei25): sys may not have argv in some cases, 
+    # Such as: use Python/C API to call Python from C++
+    try:
+        core.init_glog(sys.argv[0])
+    except Exception:
+        sys.argv = [""]
+        core.init_glog(sys.argv[0])
     # don't init_p2p when in unittest to save time.
     core.init_devices()
 

@@ -26,5 +26,9 @@ class TestInstallCheck(unittest.TestCase):
         paddle.utils.run_check()
 
 
+def TestFunc():
+    return 100
+
+
 if __name__ == '__main__':
     unittest.main()
