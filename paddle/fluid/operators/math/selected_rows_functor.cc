@@ -305,7 +305,7 @@ typename std::enable_if<std::is_same<T, platform::bfloat16>::value>::type
 elementwise_add_to(BlasT<platform::CPUDeviceContext, T>* blas, size_t data_len,
                    const T* in, T* out) {
 #ifdef PADDLE_WITH_MKLDNN
-  onednn_handler_axpy(data_len, T(1.f), in, out);
+  onednn_handler_axpy(data_len, 1.f, in, out);
 #else
   blas->AXPY(data_len, T(1.f), in, out);
 #endif

@@ -14,6 +14,7 @@ limitations under the License. */
 
 #pragma once
 
+#include "paddle/fluid/platform/bfloat16.h"
 #include "paddle/fluid/platform/float16.h"
 
 namespace paddle {
@@ -28,6 +29,12 @@ class MPTypeTrait {
 
 template <>
 class MPTypeTrait<platform::float16> {
+ public:
+  using Type = float;
+};
+
+template <>
+class MPTypeTrait<platform::bfloat16> {
  public:
   using Type = float;
 };

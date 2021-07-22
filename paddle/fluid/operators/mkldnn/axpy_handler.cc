@@ -106,7 +106,7 @@ template class AXPYMKLDNNHandler<plat::bfloat16>;
 }  // anonnymouse namespace
 
 template <typename T>
-static void naive_axpy(int n, T alpha, const T *x, T *y) {
+static void naive_axpy(int n, float alpha, const T *x, T *y) {
   while (n-- > 0) {
     *y += alpha * *x;
     ++y;
@@ -115,7 +115,7 @@ static void naive_axpy(int n, T alpha, const T *x, T *y) {
 }
 
 template <typename T>
-void onednn_handler_axpy(int n, T alpha, const T *x, T *y) {
+void onednn_handler_axpy(int n, float alpha, const T *x, T *y) {
   // fallback to naive version
   if (n < 100) {
     naive_axpy(n, alpha, x, y);
@@ -128,8 +128,7 @@ void onednn_handler_axpy(int n, T alpha, const T *x, T *y) {
       dynamic_cast<plat::MKLDNNDeviceContext *>(pool.Get(cpu_place));
   auto &cpu_engine = dev_ctx->GetEngine();
 
-  AXPYMKLDNNHandler<T> handler(*dev_ctx, cpu_engine, cpu_place, n,
-                               static_cast<float>(alpha));
+  AXPYMKLDNNHandler<T> handler(*dev_ctx, cpu_engine, cpu_place, n, alpha);
 
   auto reorder_src_memory_p = handler.AcquireSrcMemory(x);
   auto reorder_dst_memory_p = handler.AcquireDstMemory(y);
@@ -144,7 +143,7 @@ void onednn_handler_axpy(int n, T alpha, const T *x, T *y) {
 }
 
 template void onednn_handler_axpy<float>(int, float, const float *, float *);
-template void onednn_handler_axpy<plat::bfloat16>(int, plat::bfloat16,
+template void onednn_handler_axpy<plat::bfloat16>(int, float,
                                                   const plat::bfloat16 *,
                                                   plat::bfloat16 *);
 

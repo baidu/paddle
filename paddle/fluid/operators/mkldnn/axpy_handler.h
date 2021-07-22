@@ -27,7 +27,7 @@ namespace operators {
 /// @tparam     T      Data type.
 ///
 template <typename T>
-void onednn_handler_axpy(int n, T alpha, const T *x, T *y);
+void onednn_handler_axpy(int n, float alpha, const T *x, T *y);
 
 }  // namespace operators
 }  // namespace paddle

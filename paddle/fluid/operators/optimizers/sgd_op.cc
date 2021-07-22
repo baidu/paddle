@@ -73,7 +73,8 @@ class SGDOp : public framework::OperatorWithKernel {
   framework::OpKernelType GetKernelTypeForVar(
       const std::string &var_name, const framework::Tensor &tensor,
       const framework::OpKernelType &expected_kernel_type) const {
-    if (var_name == "LearningRate") {
+    if (var_name == "LearningRate" &&
+        expected_kernel_type.data_type_ != framework::proto::VarType::BF16) {
       return framework::OpKernelType(tensor.type(), tensor.place(),
                                      tensor.layout());
     }

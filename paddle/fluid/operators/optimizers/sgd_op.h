@@ -18,6 +18,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/framework/var_type_traits.h"
+#include "paddle/fluid/operators/amp/fp16_type_traits.h"
 #include "paddle/fluid/operators/jit/kernels.h"
 #ifdef PADDLE_WITH_MKLDNN
 #include "paddle/fluid/operators/mkldnn/axpy_handler.h"
@@ -105,12 +106,11 @@ struct sgd_dense_param_kernel<
     const auto *grad = ctx.Input<framework::Tensor>("Grad");
     param_out->mutable_data<platform::bfloat16>(ctx.GetPlace());
 
+    const auto *lr = learning_rate->data<float>();
     auto p = framework::EigenVector<platform::bfloat16>::Flatten(*param);
     auto g = framework::EigenVector<platform::bfloat16>::Flatten(*grad);
     auto o = framework::EigenVector<platform::bfloat16>::Flatten(*param_out);
-    const auto *lr = learning_rate->data<platform::bfloat16>();
-
-    o = p - lr[0] * g;
+    o = p - static_cast<platform::bfloat16>(lr[0]) * g;
   }
 };
 
@@ -132,7 +132,7 @@ struct sgd_dense_param_kernel<
 
     const auto *grad_data = grad_value.data<platform::bfloat16>();
     auto *out_data = param_out->data<platform::bfloat16>();
-    const auto *lr = learning_rate->data<platform::bfloat16>();
+    const auto *lr = learning_rate->data<float>();
 
     for (size_t i = 0; i < grad_rows.size(); ++i) {
       PADDLE_ENFORCE_LT(
@@ -245,6 +245,8 @@ class SGDOpKernel : public framework::OpKernel<T> {
 template <typename T>
 class SGDOpKernel<platform::CPUDeviceContext, T>
     : public framework::OpKernel<T> {
+  using MPDType = typename details::MPTypeTrait<T>::Type;
+
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     const auto *learning_rate = ctx.Input<framework::Tensor>("LearningRate");
@@ -279,7 +281,7 @@ class SGDOpKernel<platform::CPUDeviceContext, T>
               "[%s]",
               param_row_width, grad_row_width));
 
-      const auto *lr = learning_rate->data<T>();
+      const auto *lr = learning_rate->data<MPDType>();
       const auto *grad_data = grad.value().data<T>();
       auto *out_data = param_out->mutable_value()->data<T>();
       for (size_t i = 0; i < grad.rows().size(); i++) {

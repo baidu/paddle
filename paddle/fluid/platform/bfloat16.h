@@ -82,7 +82,7 @@ struct PADDLE_ALIGN(2) bfloat16 {
 
 #if defined(PADDLE_CUDA_BF16)
   HOSTDEVICE inline explicit bfloat16(const __nv_bfloat16& val) {
-    x = *reinterpret_cast<const unsigned short*>(&val);
+    x = *reinterpret_cast<const uint16_t*>(&val);
   }
 #endif
 
@@ -93,7 +93,7 @@ struct PADDLE_ALIGN(2) bfloat16 {
 // Assignment operators
 #if defined(PADDLE_CUDA_BF16)
   HOSTDEVICE inline bfloat16& operator=(const __nv_bfloat16& val) {
-    x = *reinterpret_cast<const unsigned short*>(&val);
+    x = *reinterpret_cast<const uint16_t*>(&val);
     return *this;
   }
 #endif
@@ -224,6 +224,54 @@ HOSTDEVICE inline bfloat16 operator*(const bfloat16& a, const bfloat16& b) {
 }
 
 HOSTDEVICE inline bfloat16 operator/(const bfloat16& a, const bfloat16& b) {
+  return bfloat16(static_cast<float>(a) / static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator+(const T& a, const bfloat16& b) {
+  return bfloat16(static_cast<float>(a) + static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator-(const T& a, const bfloat16& b) {
+  return bfloat16(static_cast<float>(a) - static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator*(const T& a, const bfloat16& b) {
+  return bfloat16(static_cast<float>(a) * static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator/(const T& a, const bfloat16& b) {
+  return bfloat16(static_cast<float>(a) / static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator+(const bfloat16& a, const T& b) {
+  return bfloat16(static_cast<float>(a) + static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator-(const bfloat16& a, const T& b) {
+  return bfloat16(static_cast<float>(a) - static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator*(const bfloat16& a, const T& b) {
+  return bfloat16(static_cast<float>(a) * static_cast<float>(b));
+}
+
+template <typename T>
+HOSTDEVICE inline typename std::enable_if<std::is_pod<T>::value, bfloat16>::type
+operator/(const bfloat16& a, const T& b) {
   return bfloat16(static_cast<float>(a) / static_cast<float>(b));
 }
 

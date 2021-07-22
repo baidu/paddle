@@ -392,21 +392,24 @@ class OpTest(unittest.TestCase):
                             and is_np_data(sub_val_value[1][0]): # case 4
                             dtype_set.add(sub_val_value[1][0].dtype)
 
-        # infer dtype from inputs, and dtype means the precision of the test
-        # collect dtype of all inputs
-        dtype_set = set()
-        infer_dtype(inputs, dtype_set)
-        dtype_list = [
-            np.dtype(np.float64), np.dtype(np.float32), np.dtype(np.float16),
-            np.dtype(np.int64), np.dtype(np.int32), np.dtype(np.uint16),
-            np.dtype(np.int16), np.dtype(np.int8), np.dtype(np.uint8),
-            np.dtype(np.bool)
-        ]
-        # check the dtype in dtype_list in order, select the first dtype that in dtype_set
-        for dtype in dtype_list:
-            if dtype in dtype_set:
-                self.dtype = dtype
-                break
+        # (arogowie-intel) Do nothing if the user explicitly set dtype.
+        if self.dtype is None:
+            # infer dtype from inputs, and dtype means the precision of the test
+            # collect dtype of all inputs
+            dtype_set = set()
+            infer_dtype(inputs, dtype_set)
+            dtype_list = [
+                np.dtype(np.float64), np.dtype(np.float32),
+                np.dtype(np.float16), np.dtype(np.int64), np.dtype(np.int32),
+                np.dtype(np.uint16), np.dtype(np.int16), np.dtype(np.int8),
+                np.dtype(np.uint8), np.dtype(np.bool)
+            ]
+            # check the dtype in dtype_list in order, select the first dtype that in dtype_set
+            for dtype in dtype_list:
+                if dtype in dtype_set:
+                    self.dtype = dtype
+                    break
+
         # save dtype in class attr
         self.__class__.dtype = self.dtype
 
