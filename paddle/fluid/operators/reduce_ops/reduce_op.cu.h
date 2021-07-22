@@ -158,12 +158,13 @@ struct IndexCalculator {
       : dim(dim) {
     dims = detail::VectorToArray<int, kMaxRank>(cal_dims);
     strides = detail::VectorToArray<int, kMaxRank>(full_strides);
-    std::vector<FastDivMod> cal_divmoders;
+    std::vector<platform::FastDivMod> cal_divmoders;
     // fast divmod
     for (auto i : cal_strides) {
-      cal_divmoders.push_back(FastDivMod(i));
+      cal_divmoders.push_back(platform::FastDivMod(i));
     }
-    divmoders = detail::VectorToArray<FastDivMod, kMaxRank>(cal_divmoders);
+    divmoders =
+        detail::VectorToArray<platform::FastDivMod, kMaxRank>(cal_divmoders);
   }
 
   __device__ inline int Get(int offset) const {
@@ -183,7 +184,7 @@ struct IndexCalculator {
   int dim;
   framework::Array<int, kMaxRank> dims;
   framework::Array<int, kMaxRank> strides;
-  framework::Array<FastDivMod, kMaxRank> divmoders;
+  framework::Array<platform::FastDivMod, kMaxRank> divmoders;
 };
 
 // reduce config
