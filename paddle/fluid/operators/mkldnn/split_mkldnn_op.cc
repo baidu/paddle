@@ -105,7 +105,7 @@ class SplitMKLDNNKernel : public framework::OpKernel<T> {
 
     for (size_t i = 0; i < outs_number; ++i) {
       auto out_vec_dims = framework::vectorize(outs[i]->dims());
-      auto slice_mem_p = reorder_handler.AcquireSrcSubmemory(
+      auto slice_mem_p = reorder_handler.AcquireSubmemory(
           out_vec_dims, offset, reorder_src_memory_p, i);
 
       auto reorder_dst_memory_p = reorder_handler.AcquireDstMemory(

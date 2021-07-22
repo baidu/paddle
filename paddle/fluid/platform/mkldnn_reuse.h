@@ -1020,9 +1020,9 @@ class ReorderMKLDNNHandler : public MKLDNNHandler {
     return this->AcquireMemory(dims_, dtype_, fmt, ptr, "@user_src_mem_p");
   }
 
-  std::shared_ptr<mkldnn::memory> AcquireSrcSubmemory(
+  std::shared_ptr<mkldnn::memory> AcquireSubmemory(
       const std::vector<int64_t>& dims, const std::vector<int64_t>& offset,
-      const std::shared_ptr<mkldnn::memory>& mem_p, int submemory_number) {
+      const std::shared_ptr<mkldnn::memory>& mem_p, int submemory_number = 0) {
     std::string local_key = key_;
     local_key.append("@submem")
         .append(std::to_string(submemory_number))
