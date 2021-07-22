@@ -698,9 +698,9 @@ def l1_loss(input, label, reduction='mean', name=None):
             return unreduced
 
     fluid.data_feeder.check_variable_and_dtype(
-        input, 'input', ['float32', 'float64', 'int32', 'int64'], 'l1_loss')
+        input, 'input', ['bfloat16', 'float32', 'float64', 'int32', 'int64'], 'l1_loss')
     fluid.data_feeder.check_variable_and_dtype(
-        label, 'label', ['float32', 'float64', 'int32', 'int64'], 'l1_loss')
+        label, 'label', ['bfloat16', 'float32', 'float64', 'int32', 'int64'], 'l1_loss')
 
     if reduction == 'sum':
         unreduced = paddle.fluid.layers.elementwise_sub(input, label, act='abs')
