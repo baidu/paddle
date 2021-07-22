@@ -17,7 +17,9 @@ from __future__ import print_function
 import op_test
 import unittest
 import numpy as np
+import struct
 
+from op_test import convert_uint16_to_float, convert_float_to_uint16
 import paddle
 import paddle.fluid.core as core
 import paddle.fluid as fluid
@@ -70,6 +72,49 @@ class TestCastOp3(op_test.OpTest):
 
     def test_check_output(self):
         self.check_output(atol=1e-3)
+
+
+# bf16->fp32
+class TestCastOp4(op_test.OpTest):
+    def setUp(self):
+        ipt = np.array(np.random.randint(10, size=(1, 10))).astype('uint16')
+        self.inputs = {'X': ipt}
+        self.outputs = {'Out': convert_uint16_to_float(ipt)}
+        self.attrs = {
+            'in_dtype': int(core.VarDesc.VarType.BF16),
+            'out_dtype': int(core.VarDesc.VarType.FP32)
+        }
+        self.op_type = 'cast'
+
+    def test_check_output(self):
+        places = [core.CPUPlace()]
+        if core.is_compiled_with_cuda():
+            places.append(core.CUDAPlace(0))
+        for place in places:
+            self.check_output_with_place(place, atol=1e-6)
+
+
+# fp32->bf16
+class TestCastOp5(op_test.OpTest):
+    def setUp(self):
+        ipt = np.random.random(size=[2, 10]).astype('float32')
+        self.inputs = {'X': ipt}
+        self.outputs = {'Out': convert_float_to_uint16(ipt)}
+        self.attrs = {
+            'in_dtype': int(core.VarDesc.VarType.FP32),
+            'out_dtype': int(core.VarDesc.VarType.BF16)
+        }
+        self.op_type = 'cast'
+
+    def test_check_output(self):
+        places = [core.CPUPlace()]
+        if core.is_compiled_with_cuda():
+            places.append(core.CUDAPlace(0))
+        # bf16 results are represented as float32 in OpTest
+        # besides, like TestCastOp4, this test is_bfloat16_op, 
+        # therefore set check_dygraph as False.
+        for place in places:
+            self.check_output_with_place(place, atol=1e-6, check_dygraph=False)
 
 
 class TestCastOpError(unittest.TestCase):
