@@ -40,6 +40,7 @@ from ...fluid.framework import in_dygraph_mode
 from ...fluid.initializer import Constant
 from ...fluid.param_attr import ParamAttr
 from ...fluid.data_feeder import check_variable_and_dtype, check_type
+from ...fluid.layer_helper import LayerHelper
 from ...fluid import core, dygraph_utils
 
 from ..functional import batch_norm, layer_norm, instance_norm
@@ -544,6 +545,88 @@ class LayerNorm(layers.Layer):
                                                         self._epsilon)
 
 
+def _batch_norm(x,
+                running_mean,
+                running_var,
+                weight,
+                bias,
+                training=False,
+                momentum=0.9,
+                epsilon=1e-05,
+                data_format="NCHW",
+                use_global_stats=None,
+                name=None):
+
+    # input ad out must share the memory
+    mean_out = running_mean
+    variance_out = running_var
+
+    if use_global_stats == None:
+        use_global_stats = not training
+        trainable_statistics = False
+    else:
+        trainable_statistics = not use_global_stats
+
+    if in_dygraph_mode():
+        # for dygraph need tuple
+        attrs = ("momentum", momentum, "epsilon", epsilon, "data_layout",
+                 data_format, "use_mkldnn", False, "fuse_with_relu", False,
+                 "use_global_stats", use_global_stats, "trainable_statistics",
+                 trainable_statistics)
+        batch_norm_out, _, _, _, _, _ = core.ops.batch_norm(
+            x, weight, bias, running_mean, running_var, mean_out, variance_out,
+            *attrs)
+        return dygraph_utils._append_activation_in_dygraph(
+            batch_norm_out, act=None)
+
+    check_variable_and_dtype(x, 'input', ['float16', 'float32', 'float64'],
+                             'BatchNorm')
+
+    # for static need dict
+    attrs = {
+        "momentum": momentum,
+        "epsilon": epsilon,
+        "data_layout": data_format,
+        "use_mkldnn": False,
+        "fuse_with_relu": False,
+        "use_global_stats": use_global_stats,
+        "trainable_statistics": trainable_statistics,
+    }
+
+    inputs = {
+        "X": [x],
+        "Scale": [weight],
+        "Bias": [bias],
+        "Mean": [running_mean],
+        "Variance": [running_var]
+    }
+
+    helper = LayerHelper('batch_norm', **locals())
+
+    dtype = x.dtype if x.dtype is not 'float16' else 'float32'
+    saved_mean = helper.create_variable_for_type_inference(
+        dtype=dtype, stop_gradient=True)
+    saved_variance = helper.create_variable_for_type_inference(
+        dtype=dtype, stop_gradient=True)
+    batch_norm_out = helper.create_variable_for_type_inference(dtype)
+    reserve_space = helper.create_variable_for_type_inference(
+        dtype=x.dtype, stop_gradient=True)
+
+    outputs = {
+        "Y": [batch_norm_out],
+        "MeanOut": [running_mean],
+        "VarianceOut": [running_var],
+        "SavedMean": [saved_mean],
+        "SavedVariance": [saved_variance],
+        "ReserveSpace": [reserve_space]
+    }
+
+    helper.append_op(
+        type="batch_norm", inputs=inputs, outputs=outputs, attrs=attrs)
+
+    return helper.append_activation(batch_norm_out)
+
+
 class _BatchNormBase(layers.Layer):
     """
     BatchNorm base .
@@ -641,7 +724,7 @@ class _BatchNormBase(layers.Layer):
             warnings.warn(
                 "When training, we now always track global mean and variance.")
 
-        return batch_norm(
+        return _batch_norm(
             input,
             self._mean,
             self._variance,
