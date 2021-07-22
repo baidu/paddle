@@ -347,6 +347,84 @@ class SigmoidGradNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename DeviceContext, typename T>
+class LeakyReluNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+    auto* out = ctx.Output<Tensor>("Out");
+    auto alpha = ctx.Attr<float>("alpha");
+
+    out->mutable_data<T>(ctx.GetPlace());
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    const auto& runner =
+        NpuOpRunner("LeakyRelu", {*x}, {*out}, {{"negative_slope", alpha}});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class LeakyReluGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+    auto alpha = ctx.Attr<float>("alpha");
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    dx->mutable_data<T>(ctx.GetPlace());
+    const auto& runner = NpuOpRunner("LeakyReluGrad", {*dout, *x}, {*dx},
+                                     {{"negative_slope", alpha}});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class ExpNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<Tensor>("X");
+    auto* out = ctx.Output<Tensor>("Out");
+
+    out->mutable_data<T>(ctx.GetPlace());
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    const auto& runner = NpuOpRunner("Exp", {*x}, {*out}, {});
+    runner.Run(stream);
+  }
+};
+
+template <typename DeviceContext, typename T>
+class ExpGradNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* out = ctx.Input<Tensor>("Out");
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    dx->mutable_data<T>(ctx.GetPlace());
+
+    //  dx = dout * out
+    const auto& runner = NpuOpRunner("Mul", {*dout, *out}, {*dx}, {});
+    runner.Run(stream);
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
@@ -421,3 +499,25 @@ REGISTER_OP_NPU_KERNEL(
     ops::SigmoidGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
     ops::SigmoidGradNPUKernel<paddle::platform::NPUDeviceContext,
                               paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    leaky_relu,
+    ops::LeakyReluNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LeakyReluNPUKernel<paddle::platform::NPUDeviceContext,
+                            paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    leaky_relu_grad,
+    ops::LeakyReluGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::LeakyReluGradNPUKernel<paddle::platform::NPUDeviceContext,
+                                paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    exp, ops::ExpNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::ExpNPUKernel<paddle::platform::NPUDeviceContext,
+                      paddle::platform::float16>);
+
+REGISTER_OP_NPU_KERNEL(
+    exp_grad, ops::ExpGradNPUKernel<paddle::platform::NPUDeviceContext, float>,
+    ops::ExpGradNPUKernel<paddle::platform::NPUDeviceContext,
+                          paddle::platform::float16>);
