@@ -94,4 +94,5 @@ We provide [English](https://www.paddlepaddle.org.cn/documentation/docs/en/guide
 - [Edge Deployments](https://aistudio.baidu.com/aistudio/course/introduce/22690): Courses intorducing edge deployments from mobile, IoT to web and applets.   
 
 ## Copyright and License
+
 PaddlePaddle is provided under the [Apache-2.0 license](LICENSE).
