@@ -695,8 +695,8 @@ class BroadcastDataMKLDNNHandler
   BroadcastDataMKLDNNHandler(const dnnl::algorithm algo,
                              const MKLDNNDeviceContext& dev_ctx,
                              const mkldnn::engine engine,
-                             platform::Place cpu_place, const Tensor* x,
-                             const Tensor* y, float scale_x, float scale_y,
+                             platform::Place cpu_place, const Tensor* out,
+                             const Tensor* x, float scale_x, float scale_y,
                              const std::string& uniq_name,
                              const std::vector<int64_t>& input_dims)
       : platform::MKLDNNHandlerT<T, dnnl::binary>(
@@ -711,19 +711,12 @@ class BroadcastDataMKLDNNHandler
           x->format(), MKLDNNMemoryFormat::undef,
           platform::errors::InvalidArgument("Wrong format set for X tensor."));
 
-      PADDLE_ENFORCE_EQ(
-          y->layout(), DataLayout::kMKLDNN,
-          platform::errors::InvalidArgument("Wrong layout set for Y tensor."));
-      PADDLE_ENFORCE_NE(
-          y->format(), MKLDNNMemoryFormat::undef,
-          platform::errors::InvalidArgument("Wrong format set for Y tensor."));
-
-      const auto src0_tz = framework::vectorize(x->dims());
+      const auto src0_tz = framework::vectorize(out->dims());
 
       const auto src0_md = dnnl::memory::desc(
-          src0_tz, platform::MKLDNNGetDataType<T>(), x->format());
+          src0_tz, platform::MKLDNNGetDataType<T>(), out->format());
       const auto src1_md = dnnl::memory::desc(
-          input_dims, platform::MKLDNNGetDataType<T>(), x->format());
+          input_dims, platform::MKLDNNGetDataType<T>(), out->format());
 
       dnnl::primitive_attr attributes;
       attributes.set_scales(DNNL_ARG_SRC_0, 0, {scale_x});
@@ -734,18 +727,14 @@ class BroadcastDataMKLDNNHandler
     }
   }
 
-  std::shared_ptr<mkldnn::memory> AcquireSrcMemory(framework::Tensor* input) {
-    T* input_data = input->data<T>();
-    memset(input_data, 0, this->fwd_pd_->src_desc().get_size());
-    return this->AcquireMemoryFromPrimitive(
-        this->fwd_pd_->src_desc(), to_void_cast<T>(input_data), "@src0_mem_p");
-  }
-
-  std::shared_ptr<mkldnn::memory> AcquireSecondSrcMemory(
-      const framework::Tensor* input) {
-    const T* input_data = input->data<T>();
-    return this->AcquireMemoryFromPrimitive(
-        this->fwd_pd_->src1_desc(), to_void_cast<T>(input_data), "@src1_mem_p");
+  template <typename T_out = T>
+  std::shared_ptr<mkldnn::memory> AcquireDstMemory(framework::Tensor* output) {
+    T_out* ptr = output->mutable_data<T_out>(
+        this->place_, this->fwd_pd_->dst_desc().get_size());
+    ;
+    memset(ptr, 0, this->fwd_pd_->dst_desc().get_size());
+    return this->AcquireMemoryFromPrimitive(this->fwd_pd_->dst_desc(), ptr,
+                                            "@dst_mem_p");
   }
 };
 

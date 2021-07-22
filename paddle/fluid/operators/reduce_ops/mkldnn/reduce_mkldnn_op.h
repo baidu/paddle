@@ -165,23 +165,21 @@ class ReduceGradMKLDNNKernel : public framework::OpKernel<T> {
       x_format_tag = getPlainFormatTag(output_dx);
     }
 
-    output_dx->mutable_data<T>(ctx.GetPlace());
     output_dx->set_format(x_format_tag);
-    output_dx->set_layout(input_dy->layout());
 
     platform::BroadcastDataMKLDNNHandler<T> handler(
         binary_type, dev_ctx, onednn_engine, ctx.GetPlace(), output_dx,
         input_dy, scale_x, scale_y,
         ctx.InputName(framework::GradVarName("Out")), input_dims);
 
-    const auto src_dx_memory = handler.AcquireSrcMemory(output_dx);
-    const auto src_dy_memory = handler.AcquireSecondSrcMemory(input_dy);
+    const auto src_memory_p = handler.AcquireSrcMemory(input_dy);
+    const auto dst_memory_p = handler.AcquireDstMemory(output_dx);
     const auto binary_prim = handler.AcquireForwardPrimitive();
 
     const std::unordered_map<int, dnnl::memory> args = {
-        {DNNL_ARG_SRC_0, *src_dx_memory},
-        {DNNL_ARG_SRC_1, *src_dy_memory},
-        {DNNL_ARG_DST, *src_dx_memory}};
+        {DNNL_ARG_SRC_0, *dst_memory_p},
+        {DNNL_ARG_SRC_1, *src_memory_p},
+        {DNNL_ARG_DST, *dst_memory_p}};
 
     auto& astream = platform::MKLDNNDeviceContext::tls().get_stream();
     binary_prim->execute(astream, args);
