@@ -23,8 +23,8 @@ set(BOOST_PROJECT       "extern_boost")
 # checked that the devtools package of CentOS 6 installs boost 1.41.0.
 # So we use 1.41.0 here.
 set(BOOST_VER   "1.41.0")
-set(BOOST_TAR   "boost_1_41_0" CACHE STRING "" FORCE)
-set(BOOST_URL   "http://paddlepaddledeps.bj.bcebos.com/${BOOST_TAR}.tar.gz" CACHE STRING "" FORCE)
+set(BOOST_TAR   "boost_1_41_0_small" CACHE STRING "" FORCE)
+set(BOOST_URL   "https://paddle-ci.gz.bcebos.com/${BOOST_TAR}.tar.gz" CACHE STRING "" FORCE)
 
 MESSAGE(STATUS "BOOST_VERSION: ${BOOST_VER}, BOOST_URL: ${BOOST_URL}")
 
@@ -46,7 +46,7 @@ ExternalProject_Add(
     ${BOOST_PROJECT}
     ${EXTERNAL_PROJECT_LOG_ARGS}
     "${BOOST_DOWNLOAD_CMD}"
-    URL_MD5               f891e8c2c9424f0565f0129ad9ab4aff
+    URL_MD5               68fa4956ec8b568e11e412781cb6a4fc
     PREFIX                ${BOOST_PREFIX_DIR}
     DOWNLOAD_DIR          ${BOOST_SOURCE_DIR}
     SOURCE_DIR            ${BOOST_SOURCE_DIR}
