@@ -447,6 +447,8 @@ class ClipGradByGlobalNorm(ClipGradBase):
     def _static_clip(self, params_grads):
         params_and_grads = []
         sum_square_list = []
+        sum_square_list_fp16 = []
+        sum_square_list_fp32 = []
         with framework.name_scope('gradient_clip'):
             for p, g in params_grads:
                 if g is None:
@@ -462,6 +464,10 @@ class ClipGradByGlobalNorm(ClipGradBase):
 
                     square = layers.square(merge_grad)
                     sum_square = layers.reduce_sum(input=square)
+                    if sum_square.dtype == core.VarDesc.VarType.FP16:
+                        sum_square_list_fp16.append(sum_square)
+                    elif sum_square.dtype == core.VarDesc.VarType.FP32:
+                        sum_square_list_fp32.append(sum_square)
                     sum_square_list.append(sum_square)
 
             # all parameters have been filterd out
@@ -469,7 +475,15 @@ class ClipGradByGlobalNorm(ClipGradBase):
                 return params_grads
 
             with p.block.program._optimized_guard([p, g]):
-                global_norm_var = layers.sums(sum_square_list)
+                global_norm_var = []
+                if len(sum_square_list_fp16) > 0:
+                    global_norm_var_fp16 = layers.sums(sum_square_list_fp16)
+                    global_norm_var.append(
+                        global_norm_var_fp16.astype("float32"))
+                if len(sum_square_list_fp32) > 0:
+                    global_norm_var_fp32 = layers.sums(sum_square_list_fp32)
+                    global_norm_var.append(global_norm_var_fp32)
+                global_norm_var = layers.sums(global_norm_var)
                 global_norm_var = layers.sqrt(x=global_norm_var)
                 max_global_norm = layers.fill_constant(
                     shape=[1],
@@ -489,10 +503,13 @@ class ClipGradByGlobalNorm(ClipGradBase):
                     continue
 
                 with p.block.program._optimized_guard([p, g]):
-                    new_grad = layers.elementwise_mul(x=g, y=scale_var)
+                    scale_var_fp16 = scale_var.astype('float16')
+                    if g.dtype == core.VarDesc.VarType.FP16:
+                        new_grad = layers.elementwise_mul(x=g, y=scale_var_fp16)
+                    else:
+                        new_grad = layers.elementwise_mul(x=g, y=scale_var)
                 param_new_grad_name_dict[p.name] = new_grad.name
                 params_and_grads.append((p, new_grad))
-
         _correct_clip_op_role_var(params_and_grads, param_new_grad_name_dict)
         return params_and_grads
 

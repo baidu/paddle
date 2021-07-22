@@ -530,10 +530,10 @@ def sums(input, out=None):
     if isinstance(input, list) or isinstance(input, tuple):
         for input_section in input:
             check_variable_and_dtype(input_section, "input", \
-                    ['float32', 'float64', 'int32', 'int64'], 'sums')
+                    ['float16', 'float32', 'float64', 'int32', 'int64'], 'sums')
     else:
         check_variable_and_dtype(input, "input", \
-                ['float32', 'float64', 'int32', 'int64'], 'sums')
+                ['float16', 'float32', 'float64', 'int32', 'int64'], 'sums')
 
     helper = LayerHelper('sum', **locals())
     if out is None:
