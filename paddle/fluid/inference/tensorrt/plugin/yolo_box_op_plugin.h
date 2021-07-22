@@ -31,6 +31,7 @@ class YoloBoxPlugin : public nvinfer1::IPluginV2Ext {
                          const std::vector<int>& anchors, const int class_num,
                          const float conf_thresh, const int downsample_ratio,
                          const bool clip_bbox, const float scale_x_y,
+                         const bool iou_aware, const float iou_aware_factor,
                          const int input_h, const int input_w);
   YoloBoxPlugin(const void* data, size_t length);
   ~YoloBoxPlugin() override;
@@ -89,6 +90,8 @@ class YoloBoxPlugin : public nvinfer1::IPluginV2Ext {
   float scale_x_y_;
   int input_h_;
   int input_w_;
+  bool iou_aware_;
+  float iou_aware_factor_;
   std::string namespace_;
 };
 

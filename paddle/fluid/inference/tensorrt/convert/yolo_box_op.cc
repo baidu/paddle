@@ -48,13 +48,20 @@ class YoloBoxOpConverter : public OpConverter {
     float conf_thresh = BOOST_GET_CONST(float, op_desc.GetAttr("conf_thresh"));
     bool clip_bbox = BOOST_GET_CONST(bool, op_desc.GetAttr("clip_bbox"));
     float scale_x_y = BOOST_GET_CONST(float, op_desc.GetAttr("scale_x_y"));
+    bool iou_aware = op_desc.HasAttr("iou_aware")
+                         ? BOOST_GET_CONST(bool, op_desc.GetAttr("iou_aware"))
+                         : false;
+    float iou_aware_factor =
+        op_desc.HasAttr("iou_aware_factor")
+            ? BOOST_GET_CONST(float, op_desc.GetAttr("iou_aware_factor"))
+            : 0.5;
 
     int type_id = static_cast<int>(engine_->WithFp16());
     auto input_dim = X_tensor->getDimensions();
     auto* yolo_box_plugin = new plugin::YoloBoxPlugin(
         type_id ? nvinfer1::DataType::kHALF : nvinfer1::DataType::kFLOAT,
         anchors, class_num, conf_thresh, downsample_ratio, clip_bbox, scale_x_y,
-        input_dim.d[1], input_dim.d[2]);
+        iou_aware, iou_aware_factor, input_dim.d[1], input_dim.d[2]);
 
     std::vector<nvinfer1::ITensor*> yolo_box_inputs;
     yolo_box_inputs.push_back(X_tensor);
