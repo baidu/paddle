@@ -59,13 +59,47 @@ const std::shared_ptr<Generator>& DefaultCPUGenerator() {
   static auto default_cpu_generator =
       std::make_shared<Generator>(GetRandomSeed());
   VLOG(4) << "initial seed: " << default_cpu_generator->GetCurrentSeed()
-          << ", cpu engine: " << default_cpu_generator->GetCPUEngine().get();
+          << ", cpu engine: " << default_cpu_generator->GetCPUEngine().get()
+          << ", cpu engine 32: "
+          << default_cpu_generator->GetCPUEngine_32().get();
   return default_cpu_generator;
 }
 
 std::shared_ptr<std::mt19937_64> OpDefaultCPUEngine() {
   static auto op_default_cpu_engine = std::make_shared<std::mt19937_64>();
   return op_default_cpu_engine;
+}
+
+// std::shared_ptr<std::mt19937> OpDefaultCPUEngine_32() {
+//   static auto op_default_cpu_engine = std::make_shared<std::mt19937>();
+//   return op_default_cpu_engine;
+// }
+
+std::shared_ptr<std::mt19937> GetCPURandomEngine_32(uint64_t seed) {
+  if (DefaultCPUGenerator()->GetIsInitPy() && seed == 0) {
+    VLOG(4) << "Use random engine 32 from generator";
+    return DefaultCPUGenerator()->GetCPUEngine_32();
+  } else {
+    // NOTE(zhiqiu): creating an engine instance everytime instead of using
+    // OpDefaultCPUEngine(), this is the legacy behavior of random operators.
+    // The benefit is that when runing PE with fixed-seed in multiple thrads,
+    // each thread has their own engine, and doesn't affect each other.
+    //
+    // And we need to measure the determinacy of Generator in PE.
+    auto engine_32 = std::make_shared<std::mt19937>();
+    if (seed == 0) {
+      seed = GetRandomSeed();
+      VLOG(4) << "Use default random engine with random seed = " << seed;
+    } else {
+      VLOG(4) << "Use default random engine with fixed random seed = " << seed;
+    }
+    static std::mutex mu_;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      engine_32->seed(seed);
+    }
+    return engine_32;
+  }
 }
 
 // NOTE(zhiqiu): there are 3 conditions:
@@ -126,7 +160,7 @@ uint64_t Generator::Seed() {
   this->state_.current_seed = seed;
   std::seed_seq seq({seed});
   this->engine_->seed(seq);
-
+  this->engine_32->seed(seed);
   return this->state_.current_seed;
 }
 
@@ -136,11 +170,17 @@ void Generator::SetCurrentSeed(uint64_t seed) {
   this->state_.thread_offset = 0;
   std::seed_seq seq({seed});
   this->engine_->seed(seq);
+  this->engine_32->seed(seed);
 }
 
 std::shared_ptr<std::mt19937_64> Generator::GetCPUEngine() {
   std::lock_guard<std::mutex> lock(this->mu_);
   return this->engine_;
+}
+
+std::shared_ptr<std::mt19937> Generator::GetCPUEngine_32() {
+  std::lock_guard<std::mutex> lock(this->mu_);
+  return this->engine_32;
 }
 
 void Generator::SetCPUEngine(std::shared_ptr<std::mt19937_64> engine) {

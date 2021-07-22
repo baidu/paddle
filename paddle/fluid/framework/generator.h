@@ -36,9 +36,10 @@ static uint64_t GetRandomSeed() {
 
 struct GeneratorState {
   int64_t device = -1;
-  uint64_t current_seed = 34342423252;
+  uint64_t current_seed = 111111111;
   uint64_t thread_offset = 0;
   std::mt19937_64 cpu_engine;
+  std::mt19937 cpu_engine_32;
 };
 
 struct Generator {
@@ -46,36 +47,50 @@ struct Generator {
     auto seed = GetRandomSeed();
     std::seed_seq seq({seed});
     auto engine = std::make_shared<std::mt19937_64>(seq);
+    auto engine_32 = std::make_shared<std::mt19937>(seq);
     this->state_.cpu_engine = *engine;
+    this->state_.cpu_engine_32 = *engine_32;
     this->state_.device = -1;
     this->state_.current_seed = seed;
     this->state_.thread_offset = 0;
     this->engine_ = engine;
+    this->engine_32 = engine_32;
     VLOG(4) << "initial seed: " << this->state_.current_seed
-            << ", cpu engine: " << &this->state_.cpu_engine;
+            << ", cpu engine: " << &this->state_.cpu_engine
+            << ", cpu engine 32: " << &this->state_.cpu_engine_32;
   }
+
   explicit Generator(uint64_t seed) {
     std::seed_seq seq({seed});
     auto engine = std::make_shared<std::mt19937_64>(seq);
+    auto engine_32 = std::make_shared<std::mt19937>(seq);
     this->state_.cpu_engine = *engine;
+    this->state_.cpu_engine_32 = *engine_32;
     this->state_.device = -1;
     this->state_.current_seed = seed;
     this->state_.thread_offset = 0;
     this->engine_ = engine;
-    VLOG(4) << "initial seed: " << this->state_.current_seed
-            << ", cpu engine: " << &this->state_.cpu_engine;
+    this->engine_32 = engine_32;
+    VLOG(4) << "initial seed " << this->state_.current_seed
+            << ", cpu engine: " << &this->state_.cpu_engine
+            << ", cpu engine 32: " << &this->engine_32;
     this->is_init_py_ = true;  // TODO(zhiqiu): remove it in future
   }
+
   Generator(uint64_t seed, uint64_t device_id) {
     std::seed_seq seq({seed});
     auto engine = std::make_shared<std::mt19937_64>(seq);
+    auto engine_32 = std::make_shared<std::mt19937>(seq);
     this->state_.cpu_engine = *engine;
+    this->state_.cpu_engine_32 = *engine_32;
     this->state_.device = device_id;
     this->state_.current_seed = seed;
     this->state_.thread_offset = 0;
     this->engine_ = engine;
+    this->engine_32 = engine_32;
     VLOG(4) << "initial seed: " << this->state_.current_seed
-            << ", cpu engine: " << &this->state_.cpu_engine;
+            << ", cpu engine: " << &this->state_.cpu_engine
+            << ", cpu engine 32: " << &this->state_.cpu_engine_32;
     this->is_init_py_ = false;  // TODO(zhiqiu): remove it in future
   }
 
@@ -83,6 +98,7 @@ struct Generator {
 
   // get random state
   GeneratorState GetState();
+
   // set random state
   void SetState(const GeneratorState&);
   // get current seed
@@ -93,8 +109,12 @@ struct Generator {
   void SetCurrentSeed(uint64_t seed);
   // get cpu engine
   std::shared_ptr<std::mt19937_64> GetCPUEngine();
+  std::shared_ptr<std::mt19937> GetCPUEngine_32();
+
   // set cpu engine
   void SetCPUEngine(std::shared_ptr<std::mt19937_64>);
+
+  void SetCPUEngine_32(std::shared_ptr<std::mt19937>);
 
   uint64_t Random64();
 
@@ -107,6 +127,7 @@ struct Generator {
  private:
   GeneratorState state_;
   std::shared_ptr<std::mt19937_64> engine_;
+  std::shared_ptr<std::mt19937> engine_32;
   mutable std::mutex mu_;
 
   // NOTE(zhiqiu): is_init_py_ is used to make generator be compatible with
@@ -118,13 +139,18 @@ struct Generator {
 // The DefaultCPUGenerator is used in manual_seed()
 const std::shared_ptr<Generator>& DefaultCPUGenerator();
 
+const std::shared_ptr<Generator>& DefaultCPUGenerator_32();
+
 // If op seed is set or global is not set, the OpDefaultCPUEngine is used.
 std::shared_ptr<std::mt19937_64> OpDefaultCPUEngine();
 
+// std::shared_ptr<std::mt19937> OpDefaultCPUEngine_32();
+
 std::shared_ptr<std::mt19937_64> GetCPURandomEngine(uint64_t);
+
+std::shared_ptr<std::mt19937> GetCPURandomEngine_32(uint64_t);
 
 const std::shared_ptr<Generator>& GetDefaultCUDAGenerator(
     int64_t device_id = -1);
-
 }  // namespace framework
 }  // namespace paddle
