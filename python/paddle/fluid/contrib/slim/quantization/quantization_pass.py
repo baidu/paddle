@@ -266,7 +266,8 @@ class QuantizationTransformPass(object):
     the quantized ops's inputs.
     """
     _supported_quantizable_op_type = [
-        'conv2d', 'depthwise_conv2d', 'conv2d_transpose', 'mul', 'matmul'
+        'conv2d', 'depthwise_conv2d', 'conv2d_transpose', 'mul', 'matmul',
+        'elementwise_add'
     ]
 
     def __init__(self,
@@ -1079,8 +1080,7 @@ class QuantizationTransformPass(object):
             is_skip = True
         # if the inputs of mul and matmul are not all persistable, use
         # AddQuantDequantPass to quantize them.
-        if op_node.name() in ["mul", "matmul"] and \
-            _is_input_all_not_persistable(graph, op_node):
+        if _is_input_all_not_persistable(graph, op_node):
             is_skip = True
         if op_node.op().has_attr("quantization_type") and \
             op_node.op().attr("quantization_type") == "qat_without_weight":
