@@ -224,6 +224,12 @@ class Fleet(object):
                     raise ValueError(
                         "CUDA_VISIBLE_DEVICES shoule be set only 1 card if you use `python` to launch fleet program."
                     )
+            elif paddle.fluid.core.is_compiled_with_xpu():
+                xpus_num = paddle.fluid.core.get_xpu_device_count()
+                if xpus_num != 1:
+                    raise ValueError(
+                        "XPU_VISIBLE_DEVICES shoule be set only 1 card if you use `python` to launch fleet program."
+                    )
 
         if paddle.fluid.framework.in_dygraph_mode():
             if self.worker_num() == 1:
