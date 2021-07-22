@@ -60,9 +60,45 @@ struct TensorCheckerVisitor {
 };
 
 template <typename DeviceContext>
+struct NPUTensorCheckerVisitor {
+  NPUTensorCheckerVisitor(const std::string& op_type,
+                          const std::string& var_name,
+                          const framework::Tensor& tensor,
+                          const platform::Place& place)
+      : op_type_(op_type),
+        var_name_(var_name),
+        tensor_(tensor),
+        place_(place) {}
+
+  template <typename T>
+  void apply(
+      typename std::enable_if<std::is_integral<T>::value>::type* = 0) const {
+    VLOG(10) << var_name_ << " need not to check, it's type is not float point";
+  }
+
+  template <typename T>
+  void apply(
+      typename std::enable_if<
+          std::is_floating_point<T>::value ||
+          std::is_same<T, ::paddle::platform::complex<float>>::value ||
+          std::is_same<T, ::paddle::platform::complex<double>>::value>::type* =
+          0) const;
+
+  std::string op_type_;
+  std::string var_name_;
+  const framework::Tensor& tensor_;
+  const platform::Place& place_;
+};
+
+template <typename DeviceContext>
 void tensor_check(const std::string& op_type, const std::string& var_name,
                   const framework::Tensor& tensor,
                   const platform::Place& place);
+
+template <typename DeviceContext>
+void npu_tensor_check(const std::string& op_type, const std::string& var_name,
+                      const framework::Tensor& tensor,
+                      const platform::Place& place);
 
 }  // namespace details
 }  // namespace framework

@@ -151,7 +151,7 @@ class LazyZerosNPU {
     }
     auto place = dev_ctx.GetPlace();
     auto stream = dev_ctx.stream();
-    Tensor* zero_tensor;
+    Tensor* zero_tensor = nullptr;
     void* zero_ptr;
     if (found_inf_vec[0]) {
       int max_num = -1;
