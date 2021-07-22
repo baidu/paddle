@@ -59,6 +59,54 @@ class LessThanNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename T>
+class LessEqualNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<framework::LoDTensor>("X");
+    auto* y = ctx.Input<framework::LoDTensor>("Y");
+    auto* z = ctx.Output<framework::LoDTensor>("Out");
+    z->mutable_data<bool>(ctx.GetPlace());  // allocate
+    const auto& runner = NpuOpRunner("LessEqual", {*x, *y}, {*z});
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    runner.Run(stream);
+  }
+};
+
+template <typename T>
+class GreaterThanNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<framework::LoDTensor>("X");
+    auto* y = ctx.Input<framework::LoDTensor>("Y");
+    auto* z = ctx.Output<framework::LoDTensor>("Out");
+    z->mutable_data<bool>(ctx.GetPlace());  // allocate
+    const auto& runner = NpuOpRunner("Greater", {*x, *y}, {*z});
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    runner.Run(stream);
+  }
+};
+
+template <typename T>
+class NotEqualNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<framework::LoDTensor>("X");
+    auto* y = ctx.Input<framework::LoDTensor>("Y");
+    auto* z = ctx.Output<framework::LoDTensor>("Out");
+    z->mutable_data<bool>(ctx.GetPlace());  // allocate
+    const auto& runner = NpuOpRunner("NotEqual", {*x, *y}, {*z});
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+    runner.Run(stream);
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
@@ -75,4 +123,15 @@ REGISTER_OP_NPU_KERNEL(
     ops::LessThanNPUKernel<paddle::platform::NPUDeviceContext,
                            paddle::platform::float16>);
 
+REGISTER_OP_NPU_KERNEL(less_equal, ops::LessEqualNPUKernel<float>,
+                       ops::LessEqualNPUKernel<plat::float16>,
+                       ops::LessEqualNPUKernel<int>);
+
+REGISTER_OP_NPU_KERNEL(greater_than, ops::GreaterThanNPUKernel<float>,
+                       ops::GreaterThanNPUKernel<plat::float16>,
+                       ops::GreaterThanNPUKernel<int>);
+
+REGISTER_OP_NPU_KERNEL(not_equal, ops::NotEqualNPUKernel<float>,
+                       ops::NotEqualNPUKernel<plat::float16>,
+                       ops::NotEqualNPUKernel<int>);
 #endif
