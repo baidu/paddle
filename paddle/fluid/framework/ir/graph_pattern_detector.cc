@@ -1014,6 +1014,113 @@ PDNode *patterns::FC::operator()(paddle::framework::ir::PDNode *x,
   }
 }
 
+PDNode *patterns::MulElementwiseBnRelu::operator()(
+    paddle::framework::ir::PDNode *x) {
+  // Create shared nodes.
+  x->assert_is_op_input("mul", "X");
+  auto *mul = pattern->NewNode(mul_repr())->assert_is_op("mul");
+
+  auto *mul_w_var = pattern->NewNode(w_repr())
+                        ->AsInput()
+                        ->assert_is_persistable_var()
+                        ->assert_is_op_input("mul", "Y");
+
+  auto *mul_out_var =
+      pattern->NewNode(mul_out_repr())->assert_is_op_output("mul");
+
+  // Add links.
+  mul->LinksFrom({x, mul_w_var}).LinksTo({mul_out_var});
+  // with bias
+  mul_out_var->AsIntermediate()->assert_is_op_input("elementwise_add");
+  // Create operators.
+  auto *elementwise_add =
+      pattern->NewNode(elementwise_add_repr())->assert_is_op("elementwise_add");
+  // Create variables.
+  auto *bias = pattern->NewNode(bias_repr())
+                   ->assert_is_op_input("elementwise_add")
+                   ->assert_is_persistable_var()
+                   ->AsInput();
+
+  auto *elementwise_add_out_var = pattern->NewNode(elementwise_add_out_repr())
+                                      ->AsOutput()
+                                      ->assert_is_op_output("elementwise_add");
+
+  elementwise_add->LinksFrom({mul_out_var, bias})
+      .LinksTo({elementwise_add_out_var});
+
+  elementwise_add_out_var->AsIntermediate()->assert_is_op_input("batch_norm",
+                                                                "X");
+
+  // with bn
+  auto *batch_norm_op =
+      pattern->NewNode(batch_norm_repr())->assert_is_op("batch_norm");
+  // BN Scale
+  auto *bn_scale_var = pattern->NewNode(bn_scale_repr())
+                           ->AsInput()
+                           ->assert_is_persistable_var()
+                           ->assert_is_op_input("batch_norm", "Scale")
+                           ->assert_has_n_outputs(1);
+  // BN Bias
+  auto *bn_bias_var = pattern->NewNode(bn_bias_repr())
+                          ->AsInput()
+                          ->assert_is_persistable_var()
+                          ->assert_is_op_input("batch_norm", "Bias")
+                          ->assert_has_n_outputs(1);
+  // BN Mean
+  auto *bn_mean_var = pattern->NewNode(bn_mean_repr())
+                          ->AsInput()
+                          ->assert_is_persistable_var()
+                          ->assert_is_op_input("batch_norm", "Mean")
+                          ->assert_has_n_outputs(1);
+  // BN Variance
+  auto *bn_variance_var = pattern->NewNode(bn_variance_repr())
+                              ->AsInput()
+                              ->assert_is_persistable_var()
+                              ->assert_is_op_input("batch_norm", "Variance")
+                              ->assert_has_n_outputs(1);
+
+  // BN output
+  auto *bn_out_var = pattern->NewNode(bn_out_repr())
+                         ->AsOutput()
+                         ->assert_is_op_output("batch_norm", "Y");
+
+  auto *bn_mean_out_var = pattern->NewNode(bn_mean_out_repr())
+                              ->AsOutput()
+                              ->assert_is_op_output("batch_norm", "MeanOut")
+                              ->assert_has_n_outputs(0);
+
+  auto *bn_variance_out_var =
+      pattern->NewNode(bn_variance_out_repr())
+          ->AsOutput()
+          ->assert_is_op_output("batch_norm", "VarianceOut")
+          ->assert_has_n_outputs(0);
+
+  auto *bn_saved_mean_var = pattern->NewNode(bn_saved_mean_repr())
+                                ->AsOutput()
+                                ->assert_is_op_output("batch_norm", "SavedMean")
+                                ->assert_has_n_outputs(0);
+
+  auto *bn_saved_variance_var =
+      pattern->NewNode(bn_saved_variance_repr())
+          ->AsOutput()
+          ->assert_is_op_output("batch_norm", "SavedVariance")
+          ->assert_has_n_outputs(0);
+  batch_norm_op
+      ->LinksFrom({elementwise_add_out_var, bn_scale_var, bn_bias_var,
+                   bn_mean_var, bn_variance_var})
+      .LinksTo({bn_out_var, bn_mean_out_var, bn_variance_out_var,
+                bn_saved_mean_var, bn_saved_variance_var});
+
+  // Create operators.
+  auto *relu = pattern->NewNode(relu_repr())->assert_is_op("relu");
+  auto *relu_out_var = pattern->NewNode(relu_out_repr())
+                           ->AsOutput()
+                           ->assert_is_op_output("relu");
+
+  relu->LinksFrom({bn_out_var}).LinksTo({relu_out_var});
+  return relu_out_var;
+}
+
 PDNode *patterns::FCMKLDNN::operator()(paddle::framework::ir::PDNode *x,
                                        bool with_bias) {
   // Create shared nodes.

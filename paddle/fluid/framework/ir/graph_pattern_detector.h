@@ -556,6 +556,35 @@ struct FCMKLDNN : public PatternBase {
   PATTERN_DECL_NODE(output);
 };
 
+// mul + elementwise_add + bn + relu
+struct MulElementwiseBnRelu : public PatternBase {
+  MulElementwiseBnRelu(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "mul_elementwise_bn_relu") {}
+
+  PDNode* operator()(PDNode* x);
+
+  // declare operator node's name
+  PATTERN_DECL_NODE(mul);
+  PATTERN_DECL_NODE(elementwise_add);
+  PATTERN_DECL_NODE(batch_norm);
+  PATTERN_DECL_NODE(relu);
+  // declare variable node's name
+  PATTERN_DECL_NODE(w);
+  PATTERN_DECL_NODE(mul_out);  // (x,w) -> mul_out
+  PATTERN_DECL_NODE(bias);
+  PATTERN_DECL_NODE(elementwise_add_out);
+  PATTERN_DECL_NODE(bn_scale);
+  PATTERN_DECL_NODE(bn_bias);
+  PATTERN_DECL_NODE(bn_mean);
+  PATTERN_DECL_NODE(bn_variance);
+  PATTERN_DECL_NODE(bn_out);
+  PATTERN_DECL_NODE(bn_mean_out);
+  PATTERN_DECL_NODE(bn_variance_out);
+  PATTERN_DECL_NODE(bn_saved_mean);
+  PATTERN_DECL_NODE(bn_saved_variance);
+  PATTERN_DECL_NODE(relu_out);
+};
+
 //
 // \brief   Pattern looking for fc and a directly following activation
 // operator.

@@ -141,6 +141,7 @@ GpuPassStrategy::GpuPassStrategy() : PassStrategy({}) {
         "reshape2_matmul_fuse_pass",                 //
         "flatten2_matmul_fuse_pass",                 //
         "map_matmul_to_mul_pass",                    //
+        "mul_elementwise_bn_relu_fuse_pass",         //
         "fc_fuse_pass",                              //
         "fc_elementwise_layernorm_fuse_pass",        //
 #if CUDNN_VERSION >= 7100  // To run conv_fusion, the version of cudnn must be
@@ -201,6 +202,7 @@ CpuPassStrategy::CpuPassStrategy() : PassStrategy({}) {
                   "reshape2_matmul_fuse_pass",               //
                   "flatten2_matmul_fuse_pass",               //
                   "map_matmul_to_mul_pass",                  //
+                  "mul_elementwise_bn_relu_fuse_pass",       //
                   "fc_fuse_pass",                            //
                   "repeated_fc_relu_fuse_pass",              //
                   "squared_mat_sub_fuse_pass",               //
