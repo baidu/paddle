@@ -1295,24 +1295,34 @@ class BatchNorm(layers.Layer):
             is_bias=True)
         self.bias.stop_gradient = use_global_stats and self._param_attr.learning_rate == 0.
 
-        self._mean = self.create_parameter(
-            attr=ParamAttr(
+        mean_kwargs = {
+            'attr': ParamAttr(
                 name=moving_mean_name,
                 initializer=Constant(0.0),
                 trainable=False,
                 do_model_average=do_model_average_for_mean_and_var),
-            shape=param_shape,
-            dtype=self._dtype)
-        self._mean.stop_gradient = True
+            'shape': param_shape,
+            'dtype': self._dtype,
+        }
 
-        self._variance = self.create_parameter(
-            attr=ParamAttr(
+        variance_kwargs = {
+            'attr': ParamAttr(
                 name=moving_variance_name,
                 initializer=Constant(1.0),
                 trainable=False,
                 do_model_average=do_model_average_for_mean_and_var),
-            shape=param_shape,
-            dtype=self._dtype)
+            'shape': param_shape,
+            'dtype': self._dtype,
+        }
+
+        if in_dygraph_mode():
+            self.register_buffer('_mean', self._create_buffer(**mean_kwargs))
+            self.register_buffer('_variance',
+                                 self._create_buffer(**variance_kwargs))
+        else:
+            self._mean = self.create_parameter(**mean_kwargs)
+            self._variance = self.create_parameter(**variance_kwargs)
+        self._mean.stop_gradient = True
         self._variance.stop_gradient = True
 
         self._in_place = in_place

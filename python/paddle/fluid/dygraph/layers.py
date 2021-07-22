@@ -368,6 +368,23 @@ class Layer(core.Layer):
         self._forward_pre_hooks[hook_remove_helper._hook_id] = hook
         return hook_remove_helper
 
+    def _create_buffer(self,
+                       shape,
+                       attr=None,
+                       dtype=None,
+                       is_bias=False,
+                       default_initializer=None):
+        temp_attr = copy.deepcopy(attr)
+        if isinstance(temp_attr, six.string_types) and temp_attr == "":
+            temp_attr = None
+        return self._helper._create_buffer(
+            attr=temp_attr,
+            shape=shape,
+            dtype=dtype,
+            is_bias=is_bias,
+            default_initializer=default_initializer,
+            stop_gradient=True)
+
     def create_parameter(self,
                          shape,
                          attr=None,

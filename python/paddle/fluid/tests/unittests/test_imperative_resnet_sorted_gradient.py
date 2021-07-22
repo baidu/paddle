@@ -92,7 +92,7 @@ class TestDygraphResnetSortGradient(unittest.TestCase):
                 batch_size=batch_size)
 
             dy_param_init_value = {}
-            for param in resnet.parameters():
+            for param in resnet.parameters() + resnet.buffers():
                 dy_param_init_value[param.name] = param.numpy()
 
             for batch_id, data in enumerate(train_reader()):
@@ -115,7 +115,7 @@ class TestDygraphResnetSortGradient(unittest.TestCase):
                 dy_out = avg_loss.numpy()
 
                 if batch_id == 0:
-                    for param in resnet.parameters():
+                    for param in resnet.parameters() + resnet.buffers():
                         if param.name not in dy_param_init_value:
                             dy_param_init_value[param.name] = param.numpy()
 
@@ -133,7 +133,7 @@ class TestDygraphResnetSortGradient(unittest.TestCase):
                 resnet.clear_gradients()
 
                 dy_param_value = {}
-                for param in resnet.parameters():
+                for param in resnet.parameters() + resnet.buffers():
                     dy_param_value[param.name] = param.numpy()
 
         with new_program_scope():

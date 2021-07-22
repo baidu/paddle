@@ -17,7 +17,7 @@ from __future__ import print_function
 import copy
 import numpy as np
 
-from .framework import Variable, default_main_program, default_startup_program, in_dygraph_mode, _current_expected_place
+from .framework import Variable, default_main_program, default_startup_program, in_dygraph_mode, _current_expected_place, dygraph_only
 from . import unique_name
 from .param_attr import ParamAttr, WeightNormParamAttr
 from . import core
@@ -286,7 +286,6 @@ class LayerHelperBase(object):
         w_param = __weight_normalize(g_param, v_param, dim=attr.dim)
         return w_param
 
-    # TODO: hide the func after we move the layers to Layers
     def create_parameter(self,
                          attr,
                          shape,
@@ -295,6 +294,54 @@ class LayerHelperBase(object):
                          default_initializer=None,
                          stop_gradient=False,
                          type=core.VarDesc.VarType.LOD_TENSOR):
+        """Create parameters for this layers.
+
+           Args:
+               attr: [ParamAttr] should be the parameter attribute for this parameter
+               shape: shape of the parameter
+               dtype: data type of this parameter
+               is_bias: if this is a bias parameter
+               default_initializer: set the default initializer for this parameter
+
+        Returns created parameter Variable.
+        """
+        return self._create_parameter_or_buffer(
+            attr=attr,
+            shape=shape,
+            dtype=dtype,
+            is_bias=is_bias,
+            default_initializer=default_initializer,
+            stop_gradient=stop_gradient,
+            type=type,
+            is_parameter=True)
+
+    @dygraph_only
+    def _create_buffer(self,
+                       attr,
+                       shape,
+                       dtype=None,
+                       is_bias=False,
+                       default_initializer=None,
+                       stop_gradient=False):
+        return self._create_parameter_or_buffer(
+            attr=attr,
+            shape=shape,
+            dtype=dtype,
+            is_bias=is_bias,
+            default_initializer=default_initializer,
+            stop_gradient=stop_gradient,
+            is_parameter=False)
+
+    # TODO: hide the func after we move the layers to Layers
+    def _create_parameter_or_buffer(self,
+                                    attr,
+                                    shape,
+                                    dtype=None,
+                                    is_bias=False,
+                                    default_initializer=None,
+                                    stop_gradient=False,
+                                    type=core.VarDesc.VarType.LOD_TENSOR,
+                                    is_parameter=True):
         """Create parameters for this layers.
 
            Args:
@@ -356,6 +403,7 @@ class LayerHelperBase(object):
         # If weight normalization is set, insert extra parameters and ops.
         # Refer to https://arxiv.org/pdf/1602.07868.pdf
         if isinstance(attr, WeightNormParamAttr):
+            assert is_parameter, "cannot create buffer with WeightNormParamAttr"
             param = self._create_weight_normalize(attr, shape, dtype)
             WeightNormParamAttr.params_with_weight_norm.append(param)
             return param
@@ -370,20 +418,26 @@ class LayerHelperBase(object):
                     "In dygraph mode, the name of parameter can't be same."
                     "Please check the parameter attr value passed to self.create_parameter or "
                     "constructor of dygraph Layers".format(attr.name))
-            return self.main_program.global_block().create_parameter(
+            return self.main_program.global_block()._create_parameter_or_buffer(
                 dtype=dtype,
                 shape=shape,
                 type=type,
                 stop_gradient=stop_gradient,
+                is_parameter=is_parameter,
                 **attr._to_kwargs(with_initializer=True))
         else:
-            self.startup_program.global_block().create_parameter(
+            self.startup_program.global_block()._create_parameter_or_buffer(
                 dtype=dtype,
                 shape=shape,
                 type=type,
+                is_parameter=is_parameter,
                 **attr._to_kwargs(with_initializer=True))
-            return self.main_program.global_block().create_parameter(
-                dtype=dtype, shape=shape, type=type, **attr._to_kwargs())
+            return self.main_program.global_block()._create_parameter_or_buffer(
+                dtype=dtype,
+                shape=shape,
+                type=type,
+                is_parameter=is_parameter,
+                **attr._to_kwargs())
 
     def create_variable_for_type_inference(self,
                                            dtype,

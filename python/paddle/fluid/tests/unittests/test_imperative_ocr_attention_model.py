@@ -22,6 +22,7 @@ from paddle.fluid import core
 from paddle.fluid.dygraph.nn import Conv2D, Pool2D, Linear, BatchNorm, Embedding, GRUUnit
 from paddle.fluid.dygraph.base import to_variable
 from test_imperative_base import new_program_scope
+import paddle
 
 
 class Config(object):
@@ -414,7 +415,7 @@ class TestDygraphOCRAttention(unittest.TestCase):
             optimizer = fluid.optimizer.SGD(
                 learning_rate=0.001, parameter_list=ocr_attention.parameters())
             dy_param_init_value = {}
-            for param in ocr_attention.parameters():
+            for param in ocr_attention.parameters() + ocr_attention.buffers():
                 dy_param_init_value[param.name] = param.numpy()
             for epoch in range(epoch_num):
                 for batch_id in range(batch_num):
@@ -434,7 +435,8 @@ class TestDygraphOCRAttention(unittest.TestCase):
                     dy_out = avg_loss.numpy()
 
                     if epoch == 0 and batch_id == 0:
-                        for param in ocr_attention.parameters():
+                        for param in ocr_attention.parameters(
+                        ) + ocr_attention.buffers():
                             if param.name not in dy_param_init_value:
                                 dy_param_init_value[param.name] = param.numpy()
                     avg_loss.backward()
@@ -449,7 +451,8 @@ class TestDygraphOCRAttention(unittest.TestCase):
                     optimizer.minimize(avg_loss)
                     ocr_attention.clear_gradients()
                     dy_param_value = {}
-                    for param in ocr_attention.parameters():
+                    for param in ocr_attention.parameters(
+                    ) + ocr_attention.buffers():
                         dy_param_value[param.name] = param.numpy()
 
         with new_program_scope():

@@ -2857,10 +2857,26 @@ class Block(object):
         del self.vars[name]
 
     def create_parameter(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs['is_parameter'] = True
+        return self._create_parameter_or_buffer(*args, **kwargs)
+
+    def _create_parameter_or_buffer(self, *args, **kwargs):
         global_block = self.program.global_block()
         param = None
+        is_parameter = kwargs.get("is_parameter", True)
+        if not is_parameter:  # buffer case
+            assert in_dygraph_mode(), "cannot create buffer on static mode"
+            # buffer should be persistable by default
+            if 'persistable' not in kwargs:
+                kwargs = dict(kwargs)
+                kwargs['persistable'] = True
+
         if in_dygraph_mode():
-            param = ParamBase(*args, **kwargs)
+            if is_parameter:
+                param = ParamBase(*args, **kwargs)
+            else:
+                param = _varbase_creator(*args, **kwargs)
         else:
             param = Parameter(global_block, *args, **kwargs)
             # NOTE: Why only set stop_gradient=False in static mode

@@ -600,22 +600,31 @@ class _BatchNormBase(layers.Layer):
             moving_mean_name = name + "_mean"
             moving_variance_name = name + "_variance"
 
-        self._mean = self.create_parameter(
-            attr=ParamAttr(
+        mean_kwargs = {
+            'attr': ParamAttr(
                 name=moving_mean_name,
                 initializer=Constant(0.0),
                 trainable=False,
                 do_model_average=True),
-            shape=param_shape)
-        self._mean.stop_gradient = True
+            'shape': param_shape,
+        }
 
-        self._variance = self.create_parameter(
-            attr=ParamAttr(
+        variance_kwargs = {
+            'attr': ParamAttr(
                 name=moving_variance_name,
                 initializer=Constant(1.0),
                 trainable=False,
                 do_model_average=True),
-            shape=param_shape)
+            'shape': param_shape,
+        }
+        if in_dygraph_mode():
+            self.register_buffer('_mean', self._create_buffer(**mean_kwargs))
+            self.register_buffer('_variance',
+                                 self._create_buffer(**variance_kwargs))
+        else:
+            self._mean = self.create_parameter(**mean_kwargs)
+            self._variance = self.create_parameter(**variance_kwargs)
+        self._mean.stop_gradient = True
         self._variance.stop_gradient = True
 
         self._data_format = data_format

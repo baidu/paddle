@@ -269,7 +269,7 @@ class TestDygraphResnet(unittest.TestCase):
                 places=fluid.CPUPlace())
 
             dy_param_init_value = {}
-            for param in resnet.parameters():
+            for param in resnet.parameters() + resnet.buffers():
                 dy_param_init_value[param.name] = param.numpy()
 
             helper = DyGraphProgramDescTracerTestHelper(self)
@@ -330,7 +330,7 @@ class TestDygraphResnet(unittest.TestCase):
                 resnet.clear_gradients()
 
                 dy_param_value = {}
-                for param in resnet.parameters():
+                for param in resnet.parameters() + resnet.buffers():
                     dy_param_value[param.name] = param.numpy()
 
         with new_program_scope():
@@ -362,7 +362,7 @@ class TestDygraphResnet(unittest.TestCase):
             static_grad_name_list = []
             for param in resnet.parameters():
                 static_param_name_list.append(param.name)
-            for param in resnet.parameters():
+            for param in resnet.parameters() + resnet.buffers():
                 if param.trainable:
                     static_grad_name_list.append(param.name +
                                                  core.grad_var_suffix())
