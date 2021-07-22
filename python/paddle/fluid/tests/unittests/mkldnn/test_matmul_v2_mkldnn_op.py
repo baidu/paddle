@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import unittest
+from functools import reduce
 import numpy as np
 
 from paddle.fluid.tests.unittests.op_test import OpTest, OpTestTool, convert_float_to_uint16
@@ -23,14 +24,12 @@ import paddle
 import paddle.fluid as fluid
 import paddle.fluid.framework as framework
 
-paddle.enable_static()
 
-
-def reference_matmul(X, Y, transpose_X=False, transpose_Y=False):
+def reference_matmul(X, Y, trans_x=False, trans_y=False):
     """Reference forward implementation using np.matmul."""
     # np.matmul does not support the transpose flags, so we manually
     # transpose X and Y appropriately.
-    if transpose_X:
+    if trans_x:
         if X.ndim == 1:
             X = X.reshape((X.size, ))
         elif X.ndim == 2:
@@ -39,7 +38,7 @@ def reference_matmul(X, Y, transpose_X=False, transpose_Y=False):
             dim = [i for i in range(len(X.shape))]
             dim[-1], dim[len(X.shape) - 2] = dim[len(X.shape) - 2], dim[-1]
             X = np.transpose(X, tuple(dim))
-    if transpose_Y:
+    if trans_y:
         if Y.ndim == 1:
             Y = Y.reshape((Y.size, ))
         else:
@@ -144,8 +143,8 @@ class TestMatMulV2MatrixXMatrixTransposeYOneDNNOp(
 
 class TestMatMulV2MatrixXMatrix2OneDNNOp(TestMatMulV2VectorXVectorOneDNNOp):
     def config(self):
-        self.x_shape = (1, 1, 12, 4)
-        self.y_shape = (1, 2, 4, 12)
+        self.x_shape = (2, 1, 12, 9)
+        self.y_shape = (1, 3, 9, 12)
         self.trans_x = False
         self.trans_y = False
 
@@ -170,8 +169,8 @@ class TestMatMulV2MatrixXMatrixTranposeXOneDNNOp2(
 class TestMatMulV2MatrixXMatrixTranposeX2OneDNNOp3(
         TestMatMulV2VectorXVectorOneDNNOp):
     def config(self):
-        self.x_shape = (2, 2, 5, 4)
-        self.y_shape = (2, 2, 5, 3)
+        self.x_shape = (2, 2, 7, 4)
+        self.y_shape = (2, 2, 7, 5)
         self.trans_x = True
         self.trans_y = False
 
@@ -179,7 +178,7 @@ class TestMatMulV2MatrixXMatrixTranposeX2OneDNNOp3(
 class TestMatMulV2MatrixXMatrixTransposeX3OneDNNOp(
         TestMatMulV2VectorXVectorOneDNNOp):
     def config(self):
-        self.x_shape = (3, 1, 6, 5)
+        self.x_shape = (3, 1, 6, 7)
         self.y_shape = (1, 2, 6, 9)
         self.trans_x = True
         self.trans_y = False
@@ -203,8 +202,8 @@ class TestMatMulV2VectorXMatrix5DOneDNNOp(TestMatMulV2VectorXVectorOneDNNOp):
 
 class TestMatMulV2Matrix3DXVectorOneDNNOp(TestMatMulV2VectorXVectorOneDNNOp):
     def config(self):
-        self.x_shape = (2, 1, 40)
-        self.y_shape = (40)
+        self.x_shape = (2, 1, 100)
+        self.y_shape = (100)
         self.trans_x = False
         self.trans_y = False
 
@@ -245,6 +244,8 @@ def create_bf16_test_class(parent):
                 'X': convert_float_to_uint16(x),
                 'Y': convert_float_to_uint16(y)
             }
+            self.x_fp32 = x
+            self.y_fp32 = y
 
         def set_dtype_attr(self):
             self.attrs['mkldnn_data_type'] = "bfloat16"
@@ -253,7 +254,99 @@ def create_bf16_test_class(parent):
             self.check_output_with_place(core.CPUPlace())
 
         def test_check_grad(self):
-            pass
+            self.calculate_grads()
+            self.check_grad_with_place(
+                core.CPUPlace(), ["X", "Y"],
+                "Out",
+                user_defined_grads=[self.dx, self.dy],
+                user_defined_grad_outputs=[convert_float_to_uint16(self.dout)])
+
+        def matmul_grad(self, x, transpose_x, y, transpose_y):
+            x = np.transpose(
+                x, self.shape_transpose_axes[x.ndim]) if transpose_x else x
+            y = np.transpose(
+                y, self.shape_transpose_axes[y.ndim]) if transpose_y else y
+
+            return np.matmul(x, y)
+
+        def calculate_grads(self):
+            self.shape_transpose_axes = {
+                2: [1, 0],
+                3: [0, 2, 1],
+                4: [0, 1, 3, 2],
+                5: [0, 1, 2, 4, 3]
+            }
+
+            # expand vector so it will be a valid matrix for multiplication
+            if self.x_fp32.ndim == 1:
+                self.x_fp32 = np.expand_dims(self.x_fp32, axis=0)
+            if self.y_fp32.ndim == 1:
+                self.y_fp32 = np.expand_dims(self.y_fp32, axis=1)
+
+            x_transpose_axes = self.shape_transpose_axes[self.x_fp32.ndim]
+            y_transpose_axes = self.shape_transpose_axes[self.y_fp32.ndim]
+
+            x = np.transpose(self.x_fp32, x_transpose_axes) if self.attrs[
+                'trans_x'] is True else self.x_fp32
+            y = np.transpose(self.y_fp32, y_transpose_axes) if self.attrs[
+                'trans_y'] is True else self.y_fp32
+
+            dout = np.matmul(x, y)
+
+            x_shape = x.shape
+            y_shape = y.shape
+
+            if x.ndim <= 2 or y.ndim <= 2:
+                is_broadcast = False
+            elif x.ndim != y.ndim:
+                is_broadcast = True
+            else:
+                is_broadcast = x.shape[0:-2] != y.shape[0:-2]
+
+            if self.attrs['trans_x'] is True and self.attrs['trans_y'] is True:
+                self.dx = self.matmul_grad(self.y_fp32, True, dout, True)
+                self.dy = self.matmul_grad(dout, True, self.x_fp32, True)
+            elif self.attrs['trans_x'] is True and self.attrs[
+                    'trans_y'] is False:
+                self.dx = self.matmul_grad(self.y_fp32, False, dout, True)
+                self.dy = self.matmul_grad(self.x_fp32, False, dout, False)
+            elif self.attrs['trans_x'] is False and self.attrs[
+                    'trans_y'] is True:
+                self.dx = self.matmul_grad(dout, False, self.y_fp32, False)
+                self.dy = self.matmul_grad(dout, True, self.x_fp32, False)
+            else:
+                self.dx = self.matmul_grad(dout, False, self.y_fp32, True)
+                self.dy = self.matmul_grad(self.x_fp32, True, dout, False)
+
+            if is_broadcast:
+                x_reduce_axis = []
+                y_reduce_axis = []
+                for index, (
+                        first, second
+                ) in enumerate(zip(x_shape[0:-2], self.dx.shape[0:-2])):
+                    if first != second:
+                        x_reduce_axis.append(index)
+
+                for index, (
+                        first, second
+                ) in enumerate(zip(y_shape[0:-2], self.dy.shape[0:-2])):
+                    if first != second:
+                        y_reduce_axis.append(index)
+
+                if x_reduce_axis:
+                    self.dx = self.dx.sum(axis=tuple(x_reduce_axis),
+                                          keepdims=True)
+                if y_reduce_axis:
+                    self.dy = self.dy.sum(axis=tuple(y_reduce_axis),
+                                          keepdims=True)
+
+            # after multiplying with vector one dimension is deleted from tensor
+            if len(x_shape) == 2 and x_shape[0] == 1:
+                dout = dout.sum(axis=-2)
+            if len(y_shape) == 2 and y_shape[1] == 1:
+                dout = dout.sum(axis=-1)
+
+            self.dout = dout
 
     cls_name = "{0}_{1}".format(parent.__name__, "BF16")
     TestMatMulV2Bf16OneDNNOp.__name__ = cls_name

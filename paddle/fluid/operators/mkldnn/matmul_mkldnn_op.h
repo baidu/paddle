@@ -582,11 +582,12 @@ class MatMulGradMKLDNNKernel : public framework::OpKernel<T> {
                                        : FoldFirstAndLastDims<T>(dev_ctx, y);
     }
 
+    float alpha = ctx.HasAttr("alpha") ? ctx.Attr<float>("alpha") : 1.0f;
+
     MatMulMKLDNNHandler<T> handler(
         dev_ctx, engine, ctx.GetPlace(), &x_combined, trans_x, &y_combined,
-        trans_y, out, ctx.Attr<float>("alpha"),
-        ctx.InputName(framework::GradVarName("Out")) +
-            std::to_string(execution_number));
+        trans_y, out, alpha, ctx.InputName(framework::GradVarName("Out")) +
+                                 std::to_string(execution_number));
 
     const auto src_memory_p = handler.AcquireSrcMemory(&x_combined);
     const auto weights_memory_p = handler.AcquireWeightsMemory(&y_combined);
@@ -620,10 +621,15 @@ class MatMulGradMKLDNNKernel : public framework::OpKernel<T> {
     auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
     auto* dy = ctx.Output<Tensor>(framework::GradVarName("Y"));
 
-    bool transpose_x = ctx.Attr<bool>("transpose_X");
-    bool transpose_y = ctx.Attr<bool>("transpose_Y");
+    bool transpose_x = ctx.HasAttr("transpose_X")
+                           ? ctx.Attr<bool>("transpose_X")
+                           : ctx.Attr<bool>("trans_x");
+    bool transpose_y = ctx.HasAttr("transpose_Y")
+                           ? ctx.Attr<bool>("transpose_Y")
+                           : ctx.Attr<bool>("trans_y");
 
     ReshapeXYOutToMatrixSequence(&x, &y, &dout, transpose_x, transpose_y);
+
     framework::DDim dx_dims;
     if (dx) {
       dx_dims = dx->dims();
@@ -665,11 +671,13 @@ class MatMulGradMKLDNNKernel : public framework::OpKernel<T> {
     if (dx) {
       if (dx_dims != x.dims()) {
         dx->Resize(dx_dims);
+        dx->set_format(x.format());
       }
     }
     if (dy) {
       if (dy_dims != y.dims()) {
         dy->Resize(dy_dims);
+        dy->set_format(y.format());
       }
     }
   }
