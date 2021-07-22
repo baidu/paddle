@@ -1,11 +1,8 @@
 /* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,15 +23,16 @@ class BinaryLogicalOpProtoMaker : public framework::OpProtoAndCheckerMaker {
   void Make() override {
     OpComment comment;
     AddInput("X", string::Sprintf("Left hand operand of %s operator. Must be "
-                                  "a Variable of type bool.",
+                                  "a Variable of type being one of bool, int8, "
+                                  "int16, int32, int64, float32, float64.",
                                   comment.type));
     AddInput("Y", string::Sprintf("Right hand operand of %s operator. Must be "
-                                  "a Variable of type bool.",
+                                  "a Variable of type being one of bool, int8, "
+                                  "int16, int32, int64, float32, float64.",
                                   comment.type));
     AddOutput("Out", string::Sprintf("n-dim bool Variable"));
     AddComment(string::Sprintf(R"DOC(%s Operator
-
-It operates element-wise on X and Y, and returns the Out. X, Y and Out are N-dim boolean LoDTensor or Tensor.
+It operates element-wise on X and Y, and returns the Out. X, Y and Out are N-dim LoDTensor or Tensor.
 Each element of Out is calculated by %s
 )DOC",
                                comment.type, comment.equation));
@@ -46,13 +44,14 @@ class UnaryLogicalOpProtoMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {
     OpComment comment;
-    AddInput("X", string::Sprintf("Operand of %s operator. Must be "
-                                  "a LoDTensor or Tensor of type bool.",
-                                  comment.type));
+    AddInput("X",
+             string::Sprintf("Operand of %s operator. Must be "
+                             "a LoDTensor or Tensor of type being one of bool, "
+                             "int8, int16, int32, int64, float32, float64.",
+                             comment.type));
     AddOutput("Out", string::Sprintf("n-dim bool LoDTensor or Tensor."));
     AddComment(string::Sprintf(R"DOC(%s Operator
-
-It operates element-wise on X, and returns the Out. X and Out are N-dim boolean LoDTensor or Tensor.
+It operates element-wise on X, and returns the Out. X and Out are N-dim LoDTensor or Tensor.
 Each element of Out is calculated by %s
 )DOC",
                                comment.type, comment.equation));

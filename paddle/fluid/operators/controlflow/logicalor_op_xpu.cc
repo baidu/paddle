@@ -18,5 +18,11 @@ limitations under the License. */
 namespace ops = paddle::operators;
 REGISTER_OP_XPU_KERNEL(
     logical_or,
-    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, bool>);
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, bool>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, int8_t>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, int16_t>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, int>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, int64_t>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, float>,
+    ops::BinaryLogicalOpXPUKernel<ops::XpuLogicalType::XPU_OR, double>);
 #endif

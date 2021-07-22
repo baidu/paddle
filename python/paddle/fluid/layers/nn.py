@@ -12147,17 +12147,22 @@ def _logical_op(op_name, x, y, out=None, name=None, binary_op=True):
             return op(x, y)
         else:
             return op(x)
-
-    check_variable_and_dtype(x, "x", ["bool"], op_name)
+    check_variable_and_dtype(x, "x", [
+        "bool", "int8", "int16", "int32", "int64", "float32", "float64"
+    ], op_name)
     if y is not None:
-        check_variable_and_dtype(y, "y", ["bool"], op_name)
+        check_variable_and_dtype(y, "y", [
+            "bool", "int8", "int16", "int32", "int64", "float32", "float64"
+        ], op_name)
     if out is not None:
         check_type(out, "out", Variable, op_name)
 
     helper = LayerHelper(op_name, **locals())
 
-    if binary_op:
-        assert x.dtype == y.dtype
+    if binary_op and x.dtype != y.dtype:
+        raise ValueError(
+            "(InvalidArgument) The DataType of %s Op's Variable must be consistent, but received %s and %s."
+            % (op_name, x.dtype, y.dtype))
 
     if out is None:
         out = helper.create_variable_for_type_inference(dtype=x.dtype)
@@ -12175,7 +12180,7 @@ def _logical_op(op_name, x, y, out=None, name=None, binary_op=True):
 def logical_and(x, y, out=None, name=None):
     r"""
 
-    ``logical_and`` operator computes element-wise logical AND on ``x`` and ``y``, and returns ``out``. ``x``, ``y`` and ``out`` are N-dim boolean ``Tensor``.
+    ``logical_and`` operator computes element-wise logical AND on ``x`` and ``y``, and returns ``out``. ``out`` is N-dim boolean ``Tensor``.
     Each element of ``out`` is calculated by
 
     .. math::
@@ -12186,8 +12191,8 @@ def logical_and(x, y, out=None, name=None):
         ``paddle.logical_and`` supports broadcasting. If you want know more about broadcasting, please refer to :ref:`user_guide_broadcasting`.
 
     Args:
-        x (Tensor): the input tensor, it's data type should be bool.
-        y (Tensor): the input tensor, it's data type should be bool.
+        x (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
+        y (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
         out(Tensor): The ``Tensor`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor`` will be created to save the output.
         name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`.
 
@@ -12211,7 +12216,7 @@ def logical_and(x, y, out=None, name=None):
 def logical_or(x, y, out=None, name=None):
     """
 
-    ``logical_or`` operator computes element-wise logical OR on ``x`` and ``y``, and returns ``out``. ``x``, ``y`` and ``out`` are N-dim boolean ``Tensor``.
+    ``logical_or`` operator computes element-wise logical OR on ``x`` and ``y``, and returns ``out``. ``out`` is N-dim boolean ``Tensor``.
     Each element of ``out`` is calculated by
 
     .. math::
@@ -12222,8 +12227,8 @@ def logical_or(x, y, out=None, name=None):
         ``paddle.logical_or`` supports broadcasting. If you want know more about broadcasting, please refer to :ref:`user_guide_broadcasting`.
     
     Args:
-        x (Tensor): the input tensor, it's data type should be bool.
-        y (Tensor): the input tensor, it's data type should be bool.
+        x (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
+        y (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
         out(Tensor): The ``Variable`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor`` will be created to save the output.
         name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`.
 
@@ -12250,7 +12255,7 @@ def logical_or(x, y, out=None, name=None):
 def logical_xor(x, y, out=None, name=None):
     r"""
 
-    ``logical_xor`` operator computes element-wise logical XOR on ``x`` and ``y``, and returns ``out``. ``x``, ``y`` and ``out`` are N-dim boolean ``Tensor``.
+    ``logical_xor`` operator computes element-wise logical XOR on ``x`` and ``y``, and returns ``out``. ``out`` is N-dim boolean ``Tensor``.
     Each element of ``out`` is calculated by
 
     .. math::
@@ -12261,8 +12266,8 @@ def logical_xor(x, y, out=None, name=None):
         ``paddle.logical_xor`` supports broadcasting. If you want know more about broadcasting, please refer to :ref:`user_guide_broadcasting`.
 
     Args:
-        x (Tensor): the input tensor, it's data type should be bool.
-        y (Tensor): the input tensor, it's data type should be bool.
+        x (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
+        y (Tensor): the input tensor, it's data type should be one of bool, int8, int16, in32, in64, float32, float64.
         out(Tensor): The ``Tensor`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor`` will be created to save the output.
         name (str, optional): Name for the operation (optional, default is None). For more information, please refer to :ref:`api_guide_Name`.
 
@@ -12290,7 +12295,7 @@ def logical_xor(x, y, out=None, name=None):
 def logical_not(x, out=None, name=None):
     """
 
-    ``logical_not`` operator computes element-wise logical NOT on ``x``, and returns ``out``. ``x`` and ``out`` are N-dim boolean ``Variable``.
+    ``logical_not`` operator computes element-wise logical NOT on ``x``, and returns ``out``. ``out`` is N-dim boolean ``Variable``.
     Each element of ``out`` is calculated by
 
     .. math::
@@ -12298,7 +12303,7 @@ def logical_not(x, out=None, name=None):
         out = !x
 
     Args:
-        x(Tensor):  Operand of logical_not operator. Must be a Tensor of type bool.
+        x(Tensor):  Operand of logical_not operator. Must be a Tensor of type bool, int8, int16, in32, in64, float32, or float64.
         out(Tensor): The ``Tensor`` that specifies the output of the operator, which can be any ``Tensor`` that has been created in the program. The default value is None, and a new ``Tensor` will be created to save the output.
         name(str|None): The default value is None. Normally there is no need for users to set this property. For more information, please refer to :ref:`api_guide_Name`.
 

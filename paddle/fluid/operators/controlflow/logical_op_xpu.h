@@ -45,7 +45,7 @@ class BinaryLogicalOpXPUKernel : public framework::OpKernel<T> {
     auto* x = context.Input<framework::Tensor>("X");
     auto* y = context.Input<framework::Tensor>("Y");
     auto* out = context.Output<framework::Tensor>("Out");
-    T* out_ptr = out->mutable_data<T>(context.GetPlace());
+    bool* out_ptr = out->mutable_data<bool>(context.GetPlace());
     const T* x_ptr = x->data<T>();
     const T* y_ptr = y->data<T>();
     auto& dev_ctx =
@@ -153,7 +153,7 @@ class UnaryLogicalOpXPUKernel : public framework::OpKernel<T> {
     if (x->numel() == 0) {
       return;
     }
-    out->mutable_data<T>(context.GetPlace());
+    out->mutable_data<bool>(context.GetPlace());
     auto& dev_ctx =
         context.template device_context<paddle::platform::XPUDeviceContext>();
     int ret = xpu::logical_not<bool>(dev_ctx.x_context(), x->data<T>(),

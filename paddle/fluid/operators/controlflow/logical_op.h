@@ -1,11 +1,8 @@
 /* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -82,12 +79,36 @@ class UnaryLogicalOpKernel
 }  // namespace operators
 }  // namespace paddle
 
-#define REGISTER_BINARY_LOGICAL_KERNEL(op_type, dev, functor) \
-  REGISTER_OP_##dev##_KERNEL(                                 \
-      op_type, ::paddle::operators::BinaryLogicalOpKernel<    \
-                   ::paddle::platform::dev##DeviceContext, functor<bool>>);
+#define REGISTER_BINARY_LOGICAL_KERNEL(op_type, dev, functor)              \
+  REGISTER_OP_##dev##_KERNEL(                                              \
+      op_type, ::paddle::operators::BinaryLogicalOpKernel<                 \
+                   ::paddle::platform::dev##DeviceContext, functor<bool>>, \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<int8_t>>,        \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<int16_t>>,       \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<int>>,           \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<int64_t>>,       \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<float>>,         \
+      ::paddle::operators::BinaryLogicalOpKernel<                          \
+          ::paddle::platform::dev##DeviceContext, functor<double>>);
 
-#define REGISTER_UNARY_LOGICAL_KERNEL(op_type, dev, functor) \
-  REGISTER_OP_##dev##_KERNEL(                                \
-      op_type, ::paddle::operators::UnaryLogicalOpKernel<    \
-                   ::paddle::platform::dev##DeviceContext, functor<bool>>);
+#define REGISTER_UNARY_LOGICAL_KERNEL(op_type, dev, functor)               \
+  REGISTER_OP_##dev##_KERNEL(                                              \
+      op_type, ::paddle::operators::UnaryLogicalOpKernel<                  \
+                   ::paddle::platform::dev##DeviceContext, functor<bool>>, \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<int8_t>>,        \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<int16_t>>,       \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<int>>,           \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<int64_t>>,       \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<float>>,         \
+      ::paddle::operators::UnaryLogicalOpKernel<                           \
+          ::paddle::platform::dev##DeviceContext, functor<double>>);

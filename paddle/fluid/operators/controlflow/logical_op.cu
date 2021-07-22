@@ -1,11 +1,8 @@
 /* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,13 +18,13 @@ namespace plat = paddle::platform;
 namespace paddle {
 namespace operators {
 
-#define LOGICAL_BINARY_FUNCTOR(func_name, op)         \
-  template <typename T>                               \
-  struct func_name {                                  \
-    using ELEMENT_TYPE = T;                           \
-    HOSTDEVICE bool operator()(const T* args) const { \
-      return args[0] op args[1];                      \
-    }                                                 \
+#define LOGICAL_BINARY_FUNCTOR(func_name, op)                          \
+  template <typename T>                                                \
+  struct func_name {                                                   \
+    using ELEMENT_TYPE = T;                                            \
+    HOSTDEVICE bool operator()(const T* args) const {                  \
+      return static_cast<bool>(args[0]) op static_cast<bool>(args[1]); \
+    }                                                                  \
   };
 
 LOGICAL_BINARY_FUNCTOR(CudaOrFunctor, ||)
@@ -68,10 +65,16 @@ class BinaryLogicalOpKernel<platform::CUDADeviceContext, Functor>
 }  // namespace operators
 }  // namespace paddle
 
-#define REGISTER_LOGICAL_CUDA_KERNEL(op_name, func) \
-  REGISTER_OP_CUDA_KERNEL(                          \
-      op_name,                                      \
-      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<bool>>);
+#define REGISTER_LOGICAL_CUDA_KERNEL(op_name, func)                            \
+  REGISTER_OP_CUDA_KERNEL(                                                     \
+      op_name,                                                                 \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<bool>>,    \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<int8_t>>,  \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<int16_t>>, \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<int>>,     \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<int64_t>>, \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<float>>,   \
+      ops::BinaryLogicalOpKernel<plat::CUDADeviceContext, ops::func<double>>);
 
 REGISTER_LOGICAL_CUDA_KERNEL(logical_or, CudaOrFunctor)
 REGISTER_LOGICAL_CUDA_KERNEL(logical_and, CudaAndFunctor)
