@@ -31,7 +31,7 @@ namespace operators {
 using Tensor = framework::Tensor;
 using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
 using ScopedPoolingDescriptor = platform::ScopedPoolingDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 using PoolingMode = platform::PoolingMode;
 template <typename T>
 using ScalingParamType = typename platform::CudnnDataType<T>::ScalingParamType;

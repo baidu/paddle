@@ -29,7 +29,7 @@ namespace operators {
 
 using framework::Tensor;
 using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 using ScopedSpatialTransformerDescriptor =
     platform::ScopedSpatialTransformerDescriptor;
 template <typename T>

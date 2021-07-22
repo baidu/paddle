@@ -35,7 +35,7 @@ namespace paddle {
 namespace operators {
 
 using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 using Tensor = framework::Tensor;
 
 // Vectorization trait 4 * sizeof(T)

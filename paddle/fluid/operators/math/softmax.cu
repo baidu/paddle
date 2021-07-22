@@ -28,7 +28,7 @@ namespace math {
 
 using Tensor = framework::Tensor;
 using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 template <typename T>
 using CudnnDataType = platform::CudnnDataType<T>;
 

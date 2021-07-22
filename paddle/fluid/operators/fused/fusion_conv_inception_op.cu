@@ -27,7 +27,7 @@ using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
 using ScopedFilterDescriptor = platform::ScopedFilterDescriptor;
 using ScopedConvolutionDescriptor = platform::ScopedConvolutionDescriptor;
 using ScopedActivationDescriptor = platform::ScopedActivationDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 
 using ScopedPoolingDescriptor = platform::ScopedPoolingDescriptor;
 using PoolingMode = platform::PoolingMode;

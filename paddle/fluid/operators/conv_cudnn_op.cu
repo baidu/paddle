@@ -41,7 +41,7 @@ using Tensor = framework::Tensor;
 using ScopedTensorDescriptor = platform::ScopedTensorDescriptor;
 using ScopedFilterDescriptor = platform::ScopedFilterDescriptor;
 using ScopedConvolutionDescriptor = platform::ScopedConvolutionDescriptor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 
 static inline bool IsVoltaOrLater(const platform::CUDADeviceContext& dev_ctx) {
   return dev_ctx.GetComputeCapability() >= 70;

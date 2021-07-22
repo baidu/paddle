@@ -29,7 +29,7 @@ namespace paddle {
 namespace operators {
 
 using Tensor = framework::Tensor;
-using DataLayout = platform::DataLayout;
+using DataLayout = platform::CudnnDataLayout;
 template <typename T>
 using ScalingParamType = typename platform::CudnnDataType<T>::ScalingParamType;
 using framework::AlgorithmsCache;

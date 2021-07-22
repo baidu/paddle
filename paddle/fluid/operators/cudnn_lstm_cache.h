@@ -108,7 +108,7 @@ class ScopedRNNBase {
         platform::errors::InvalidArgument(
             "The cudnn lstm and setting weight size should be same."));
     // ------------------- cudnn weight descriptors ---------------------
-    platform::DataLayout layout = platform::DataLayout::kNCHW;
+    platform::CudnnDataLayout layout = platform::CudnnDataLayout::kNCHW;
     int dim_tmp = weights_size_ / sizeof(T);
     std::vector<int> dim_w = {dim_tmp, 1, 1};
     weight_desc_.descriptor<T>(layout, dim_w);

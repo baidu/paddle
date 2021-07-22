@@ -37,7 +37,7 @@ namespace platform {
 #define CUDNN_VERSION_MIN(major, minor, patch) \
   (CUDNN_VERSION >= ((major)*1000 + (minor)*100 + (patch)))
 
-enum class DataLayout {  // Not use
+enum class CudnnDataLayout {  // Not use
   kNHWC,
   kNCHW,
   kNCDHW,
@@ -171,15 +171,15 @@ class CudnnDataType<double> {
 };
 
 inline cudnnTensorFormat_t GetCudnnTensorFormat(
-    const DataLayout& order) {  // Not use
+    const CudnnDataLayout& order) {  // Not use
   switch (order) {
-    case DataLayout::kNHWC:
+    case CudnnDataLayout::kNHWC:
       return CUDNN_TENSOR_NHWC;
-    case DataLayout::kNCHW:
+    case CudnnDataLayout::kNCHW:
       return CUDNN_TENSOR_NCHW;
-    case DataLayout::kNCDHW:
+    case CudnnDataLayout::kNCDHW:
       return CUDNN_TENSOR_NCHW;  // NOTE: cudnn treat NdTensor as the same
-    case DataLayout::kNDHWC:
+    case CudnnDataLayout::kNDHWC:
       return CUDNN_TENSOR_NHWC;  // add, liyamei
     default:
       PADDLE_THROW(platform::errors::Unimplemented(
@@ -237,7 +237,7 @@ class ScopedTensorDescriptor {
   }
 
   template <typename T>
-  inline cudnnTensorDescriptor_t descriptor(const DataLayout& order,
+  inline cudnnTensorDescriptor_t descriptor(const CudnnDataLayout& order,
                                             const std::vector<int>& dims,
                                             const int groups = 1) {
     return descriptor(GetCudnnTensorFormat(order), CudnnDataType<T>::type, dims,
@@ -396,7 +396,7 @@ class ScopedFilterDescriptor {
   }
 
   template <typename T>
-  inline cudnnFilterDescriptor_t descriptor(const DataLayout& order,
+  inline cudnnFilterDescriptor_t descriptor(const CudnnDataLayout& order,
                                             const std::vector<int>& kernel,
                                             const int groups = 1) {
     return descriptor(GetCudnnTensorFormat(order), CudnnDataType<T>::type,
