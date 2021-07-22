@@ -97,6 +97,7 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromBlock(
     all_vars.emplace(var->Name(), var);
   }
 
+  int desc_order = 0;
   auto not_visited_vars = all_vars;
   auto all_ops = block.AllOps();
   PADDLE_ENFORCE_LE(
@@ -109,6 +110,8 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromBlock(
     auto *op = all_ops[i];
     VLOG(3) << "create OpNode by " << op->Type();
     ir::Node *node = CreateOpNode(op);
+    node->SetDescOrder(desc_order);
+    ++desc_order;
     // For input args, reuse the same var name if it was created before.
     // Otherwise, create a new one.
     for (auto &each_var_name : op->InputArgumentNames()) {
