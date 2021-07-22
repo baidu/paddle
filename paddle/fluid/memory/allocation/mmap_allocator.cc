@@ -16,6 +16,7 @@
 
 #include "paddle/fluid/memory/allocation/mmap_allocator.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -46,7 +47,7 @@ MemoryMapReaderAllocation::~MemoryMapReaderAllocation() {
      MemoryMapFdSet::Clear() */
   shm_unlink(this->ipc_name().c_str());
   MemoryMapFdSet::Instance().Remove(this->ipc_name());
-  VLOG(3) << "~MemoryMapReaderAllocation: " << this->ipc_name();
+  LOG(ERROR) << "~MemoryMapReaderAllocation: " << this->ipc_name();
 }
 
 std::string GetIPCName() {
@@ -107,25 +108,28 @@ MemoryMapFdSet &MemoryMapFdSet::Instance() {  // NOLINT
 void MemoryMapFdSet::Insert(const std::string &ipc_name) {
   std::lock_guard<std::mutex> guard(mtx_);
   fd_set_.emplace(ipc_name);
-  VLOG(3) << "PID: " << getpid() << ", MemoryMapFdSet: insert " << ipc_name
-          << ", set size: " << fd_set_.size();
+  LOG(ERROR) << "PID: " << getpid() << ", MemoryMapFdSet: insert " << ipc_name
+             << ", set size: " << fd_set_.size();
 }
 
 void MemoryMapFdSet::Remove(const std::string &ipc_name) {
   std::lock_guard<std::mutex> guard(mtx_);
   fd_set_.erase(ipc_name);
-  VLOG(3) << "PID: " << getpid() << ", MemoryMapFdSet: erase " << ipc_name
-          << ", set size: " << fd_set_.size();
+  LOG(ERROR) << "PID: " << getpid() << ", MemoryMapFdSet: erase " << ipc_name
+             << ", set size: " << fd_set_.size();
 }
 
 void MemoryMapFdSet::Clear() {
-  VLOG(3) << "PID: " << getpid() << ", MemoryMapFdSet: set size - "
-          << fd_set_.size();
+  LOG(ERROR) << "PID: " << getpid() << ", MemoryMapFdSet: set size - "
+             << fd_set_.size();
   std::lock_guard<std::mutex> guard(mtx_);
   for (auto fd : fd_set_) {
     int rlt = shm_unlink(fd.c_str());
     if (rlt == 0) {
-      VLOG(3) << "PID: " << getpid() << ", MemoryMapFdSet: clear " << fd;
+      LOG(ERROR) << "PID: " << getpid() << ", MemoryMapFdSet: clear " << fd;
+    } else {
+      LOG(ERROR) << "PID: " << getpid() << ", shm_unlink failed: " << errno
+                 << ", " << strerror(errno);
     }
   }
   fd_set_.clear();
