@@ -78,6 +78,23 @@ class ReshapeOp : public framework::OperatorWithKernel {
                       platform::errors::InvalidArgument(
                           "Output(Out) of ReshapeOp should not be null."));
 
+    // NOTE (JZ-LIANG) since in reshape, we use "0" as the semantic for
+    // dimension copy,
+    // we DO NOT allow a empty tensor as the input of reshape where a empty
+    // tensor is a
+    // tensor whose shape contains at least one "0" dim (e.g.
+    // paddle.ones([4,0,8])).
+    auto dims_ = ctx->GetInputDim("X");
+    auto dims_vec = framework::vectorize(dims_);
+    bool no_zero_dim = std::all_of(dims_vec.cbegin(), dims_vec.cend(),
+                                   [](int64_t i) { return i != 0; });
+    if (!no_zero_dim) {
+      PADDLE_THROW(platform::errors::PreconditionNotMet(
+          "Input(X) with 0 dim in its shape is NOT allowed by Reshape op. The "
+          "shape of X is [%s].",
+          dims_));
+    }
+
     if (ctx->HasInputs("ShapeTensor")) {
       // top prority shape
       auto ShapeTensor = ctx->Inputs("ShapeTensor");
@@ -147,6 +164,7 @@ class ReshapeOp : public framework::OperatorWithKernel {
                                        const framework::DDim &in_dims) {
     const int64_t in_size = framework::product(in_dims);
     auto in_dims_vec = framework::vectorize(in_dims);
+
     bool all_positive = std::all_of(in_dims_vec.cbegin(), in_dims_vec.cend(),
                                     [](int64_t i) { return i > 0; });
     // only one dimension can be set to -1, whose size will be automatically

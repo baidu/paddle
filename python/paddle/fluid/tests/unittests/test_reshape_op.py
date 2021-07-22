@@ -415,6 +415,14 @@ class TestReshapeOpError(unittest.TestCase):
 
             self.assertRaises(AssertionError, test_shape_3)
 
+            # Reshape NOT allow empty tensor
+            def test_empty_tensor():
+                empty_tensor = self.data(
+                    name="empty_tensor", shape=[2, 0, 25], dtype="float32")
+                self.reshape(empty_tensor, [-1, 5, 5])
+
+            self.assertRaises(RuntimeError, test_empty_tensor)
+
     def test_paddle_api_error(self):
         self._set_paddle_api()
         self._test_errors()
