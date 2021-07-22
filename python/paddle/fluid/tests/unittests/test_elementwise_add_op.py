@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from __future__ import print_function
+import os
+import re
 import unittest
 import numpy as np
 import paddle
 import paddle.fluid.core as core
-from op_test import OpTest, skip_check_grad_ci
+from paddle.fluid.tests.unittests.op_test import OpTest, skip_check_grad_ci, convert_float_to_uint16
 import paddle.fluid as fluid
 from paddle.fluid import compiler, Program, program_guard
 
@@ -601,6 +603,73 @@ class TestBoolAddFloatElementwiseAddop(unittest.TestCase):
         b = paddle.full([4, 5, 6], True, dtype='bool')
         c = a + b
         self.assertTrue(c.dtype == core.VarDesc.VarType.FP32)
+
+
+# Get cuda version from command line
+def get_cuda_runtime_version():
+    command = os.popen("nvcc --version").read()
+    command = re.split(' ', command)
+    tag = 0
+    for _ in command:
+        tag += 1
+        if _ == 'release':
+            break
+    return int(float(command[tag].replace(',', '')) * 1000)
+
+
+@unittest.skipIf(
+    not core.is_compiled_with_cuda() or get_cuda_runtime_version() < 11000,
+    "run test when gpu is availble and the minimum cuda version is 11.")
+class TestElementwiseAddBfloat16Dtype2(TestElementwiseAddOp):
+    def init_dtype(self):
+        self.dtype = np.uint16
+
+    def setUp(self):
+        self.op_type = "elementwise_add"
+        self.init_dtype()
+        self.init_input_output()
+        self.init_kernel_type()
+        self.init_axis()
+
+        # self.inputs is the input of this op to get the actual results
+        self.inputs = {
+            'X': OpTest.np_dtype_to_fluid_dtype(self.x),
+            'Y': OpTest.np_dtype_to_fluid_dtype(self.y)
+        }
+        self.attrs = {
+            'axis': self.axis,
+            'use_mkldnn': self.use_mkldnn,
+        }
+
+        # convert to bf16 to get the expected results,
+        self.outputs = {'Out': convert_float_to_uint16(self.out)}
+
+    def init_input_output(self):
+        ipt_x = np.random.random(size=[5, 20]).astype('float32')
+        ipt_y = np.random.random(size=[5, 20]).astype('float32')
+
+        self.x = convert_float_to_uint16(ipt_x)
+        self.y = convert_float_to_uint16(ipt_y)
+        self.out = np.add(ipt_x, ipt_y)  # fp32
+
+    def test_check_output(self):
+        place = core.CUDAPlace(0)
+        self.check_output_with_place(place, atol=1)
+
+    # The same reason as when self.dtype = np.float16. no grad check here
+    # as this op is not in NO_FP64_CHECK_GRAD_OP_LIST, and this op's grad
+    # is not computed with fp64.
+    # But we can still get grad compute results from local executions. And
+    # the results proves the correctness of the bf16 elementwise_add backward executions.
+    # For more information see PR Description.
+    def test_check_grad_normal(self):
+        pass
+
+    def test_check_grad_ingore_x(self):
+        pass
+
+    def test_check_grad_ingore_y(self):
+        pass
 
 
 if __name__ == '__main__':

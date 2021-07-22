@@ -128,42 +128,36 @@ elementwise_add_grad(const framework::ExecutionContext& ctx,
 
 }  // namespace operators
 }  // namespace paddle
-REGISTER_OP_CUDA_KERNEL(
-    elementwise_add, ops::ElementwiseAddKernel<plat::CUDADeviceContext, float>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, double>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, int>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, int64_t>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::float16>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::complex<float>>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::complex<double>>);
-REGISTER_OP_CUDA_KERNEL(
-    elementwise_add_grad,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, float>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, double>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, int>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, int64_t>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext, plat::float16>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext,
-                                  plat::complex<float>>,
-    ops::ElementwiseAddGradKernel<plat::CUDADeviceContext,
-                                  plat::complex<double>>);
-REGISTER_OP_CUDA_KERNEL(
-    elementwise_add_grad_grad,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, float>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, double>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, int>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, int64_t>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext, plat::float16>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext,
-                                        plat::complex<float>>,
-    ops::ElementwiseAddDoubleGradKernel<plat::CUDADeviceContext,
-                                        plat::complex<double>>);
 
-REGISTER_OP_CUDA_KERNEL(
-    grad_add, ops::ElementwiseAddKernel<plat::CUDADeviceContext, float>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, double>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, int>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, int64_t>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::float16>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::complex<float>>,
-    ops::ElementwiseAddKernel<plat::CUDADeviceContext, plat::complex<double>>);
+// this op calls cuda built-in functions __shfl_xor_sync & __shfl_down_sync
+// with nv_bfloat16 datatype, which were supported when cuda version >= 11.
+// If no cuda version restriction here, code will not pass compilation.
+#define REGISTER_ELEMENTWISEADD_BASE(op_name, grad, ...)                       \
+  REGISTER_OP_CUDA_KERNEL(                                                     \
+      op_name, ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, float>, \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, double>,         \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, int>,            \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, int64_t>,        \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, plat::float16>,  \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext,                  \
+                                     plat::complex<float>>,                    \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext,                  \
+                                     plat::complex<double>>,                   \
+      ##__VA_ARGS__);
+
+#define REGISTER_ELEMENTWISEADD_EX(op_name, grad) \
+  REGISTER_ELEMENTWISEADD_BASE(                   \
+      op_name, grad,                              \
+      ops::Elementwise##grad##Kernel<plat::CUDADeviceContext, plat::bfloat16>)
+
+#if !defined(PADDLE_WITH_HIP) && CUDA_VERSION >= 11000
+REGISTER_ELEMENTWISEADD_EX(elementwise_add, Add)
+REGISTER_ELEMENTWISEADD_EX(elementwise_add_grad, AddGrad)
+REGISTER_ELEMENTWISEADD_EX(elementwise_add_grad_grad, AddDoubleGrad)
+REGISTER_ELEMENTWISEADD_EX(grad_add, Add)
+#else
+REGISTER_ELEMENTWISEADD_BASE(elementwise_add, Add)
+REGISTER_ELEMENTWISEADD_BASE(elementwise_add_grad, AddGrad)
+REGISTER_ELEMENTWISEADD_BASE(elementwise_add_grad_grad, AddDoubleGrad)
+REGISTER_ELEMENTWISEADD_BASE(grad_add, Add)
+#endif
