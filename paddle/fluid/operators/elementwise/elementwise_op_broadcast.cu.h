@@ -14,11 +14,10 @@
 
 #pragma once
 
-#include "paddle/fluid/operators/elementwise/elementwise_op_impl.cu.h"
-#include "paddle/fluid/framework/array.h"
+#include "paddle/fluid/operators/elementwise/elementwise_op.cu.h"
 #include "paddle/fluid/operators/module/GlobalFunctor.h"
-#include "paddle/fluid/platform/fast_divmod.h"
 #define MAX_DIM 5
+
 namespace paddle {
 namespace operators {
 
@@ -165,8 +164,8 @@ struct DimensionsTransform {
 };
 
 struct StridesCalculation {
-  std::vector<std::vector<uint32_t>> strides;
-  std::vector<FastDivMod> divmoders;
+  framework::Array<FastDivMod, MAX_DIM> divmoders;
+  framework::Array<framework::Array<uint32_t, MAX_DIM>, MAX_DIM> strides;
 
  private:
   // To calculate the strides of each input_tensor.
@@ -180,6 +179,7 @@ struct StridesCalculation {
                 ? std::accumulate(in_dims[j].begin(), in_dims[j].begin() + i, 1,
                                   std::multiplies<int64_t>())
                 : strides[j][i];
+		printf("\n\n%d %d %d strides\n\n", strides[j][i], j, i);
       }
     }
   }
@@ -189,9 +189,9 @@ struct StridesCalculation {
                               const std::vector<std::vector<int64_t>> &in_dims,
                               const std::vector<int64_t> &out_dims) {
     const auto N = in_dims.size();
-    divmoders.resize(dim_size);
-    strides.resize(N, std::vector<uint32_t>(dim_size, 1));
-
+   // divmoders.resize(dim_size);
+   // strides.resize(N, std::vector<uint32_t>(dim_size, 1));
+    printf("this is shape_size in_dims.size() %d\n", N);
     for (int i = 0; i < dim_size; ++i) {
       divmoders[i] = FastDivMod(out_dims[i]);
     }
@@ -220,17 +220,17 @@ struct BroadcastArgsWarpper {
       int scalar_cal_offset, Functor func,
       const StridesCalculation &offset_calculator)
       : scalar_cal_offset(scalar_cal_offset), func(func) {
-    for (int j = 0; j < ET; ++j) {
-      in_data[j] = ins[j]->data<InT>();
-      vec_in_data[j] = reinterpret_cast<const InVecType *>(in_data[j]);
-      no_broadcast[j] = ins[j]->dims() == out->dims() ? true : false;
-      memcpy(strides[j], offset_calculator.strides[j].data(),
-             kDims * sizeof(uint32_t));
-    }
-    out_data = out->data<OutT>();
-    vec_out_data = reinterpret_cast<OutVecType *>(out_data);
-    memcpy(divmoders, offset_calculator.divmoders.data(),
-           kDims * sizeof(FastDivMod));
+   // for (int j = 0; j < ET; ++j) {
+   //   in_data[j] = ins[j]->data<InT>();
+   //   vec_in_data[j] = reinterpret_cast<const InVecType *>(in_data[j]);
+   //   no_broadcast[j] = ins[j]->dims() == out->dims() ? true : false;
+   //   memcpy(strides[j], offset_calculator.strides[j].data(),
+   //          kDims * sizeof(uint32_t));
+   // }
+   // out_data = out->data<OutT>();
+   // vec_out_data = reinterpret_cast<OutVecType *>(out_data);
+   // memcpy(divmoders, offset_calculator.divmoders.data(),
+   //        kDims * sizeof(FastDivMod));
   }
 
   __device__ __forceinline__ uint32_t GetOffsetByDivmod(int idx, int in_idx) {
@@ -341,122 +341,61 @@ __device__ inline void VectorizedBroadcastKernelImpl(
   broadcast_warpper.StoreVectorizedData(args_out, tid);
 }
 
-struct FastDivMod_T {
-  // 1st value represents the result of input number divides by recorded divisor
-  // 2nd value represents the result of input number modulo by recorded divisor
-  using DivModT = CudaAlignedVector<uint32_t, 2>;
-
-  FastDivMod_T() {}
-  HOSTDEVICE FastDivMod_T(uint32_t d) : divisor(d) {
-    static_assert(sizeof(unsigned int) == 4,
-                  "Only Support 32-bit unsigned int.");
-
-    for (shift_val = 0; shift_val < INT_BITS; ++shift_val) {
-      auto shift_limit = 1 << shift_val;
-      if (shift_limit >= divisor) break;
-    }
-    uint64_t long_one = 1;
-    uint64_t temp_div =
-        ((long_one << INT_BITS) * ((long_one << shift_val) - divisor)) /
-            divisor + 1;
-    multiplier = temp_div;
+template <typename InT, typename OutT, typename BroadcastArgsWarpper,
+          ElementwiseType ET, int VecSize>
+__global__ void ElementwiseBroadcastKernel(
+    BroadcastArgsWarpper broadcast_warpper, int main_tid, int tail_tid) {
+  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  // Vectorized calculation of major data whose length is the max multipler of
+  // VecSize,
+  // eg: Calcualting the front 1024-length data in total 1027 data once VecSize
+  // is 4.
+  if (tid < main_tid) {
+    VectorizedBroadcastKernelImpl<InT, OutT, BroadcastArgsWarpper, ET, VecSize>(
+        broadcast_warpper, tid);
   }
-
-  __device__ __forceinline__ uint32_t Div(uint32_t n) const {
-    uint32_t t = __umulhi(n, multiplier);
-    return (t + n) >> shift_val;
-  }
-
-  __device__ __forceinline__ DivModT Divmod(uint32_t n) const {
-    uint32_t q = Div(n);
-    DivModT result = {q, n - q * divisor};
-    return result;
-  }
-
-  int32_t divisor;
-  int32_t shift_val;
-  uint32_t multiplier;
-};
-
-template <typename T, int Shape_Size, int VecSize>
-__device__ __forceinline__ void Load(const T* __restrict__ in, T* out, uint32_t offset,
-                    framework::Array<uint32_t, 5>shape_in,
-                    framework::Array<uint32_t, 5>shape_out) {
-  uint32_t stride_in[Shape_Size];
-  uint32_t stride_out[Shape_Size];
-  uint32_t shape[Shape_Size];
-
-  //shape[Shape_Size - 1] = shape_in[Shape_Size - 1];
-  stride_in[Shape_Size - 1] = 1;
-  stride_out[Shape_Size - 1] = 1;
-
-#pragma unroll Shape_Size - 1
-  for (int i = Shape_Size - 2; i >= 0; i--) {
-    stride_in[i] =  stride_in[i + 1] *  shape_in[i + 1];
-    stride_out[i] = stride_out[i + 1] * shape_out[i + 1];
-//	shape[i] = shape_in[i];
-  }
-
-#pragma unroll 
-  for(uint32_t i = 0; i < VecSize; i++) {
-    uint32_t index = 0;
-	uint32_t idx = offset + i;
-#pragma unroll 
-    for(uint32_t j = 0; j < Shape_Size; j++) {
-	  uint32_t tmp = idx / stride_out[j];
-      idx = idx - tmp * stride_out[j];
-      index += (tmp % shape_in[j]) * stride_in[j];
-    }
-    out[i] = in[index];
+  // Scalarzed calculation of rest data whose lenght cannot fulfill VecSize.
+  // eg: Calcualting the rest 3-length data in total 1027 data once VecSize is
+  // 4.
+  if (tid < tail_tid) {
+    ScalarizedBroadcastKernelImpl<InT, OutT, BroadcastArgsWarpper, ET>(
+        broadcast_warpper, tid);
   }
 }
 
 template <typename T, int Shape_Size, int VecSize>
-__device__ __forceinline__ void Load(const T* in, T* out, uint32_t idx,
-                     paddle::framework::Array<int,Shape_Size>shape_in,
-                     paddle::framework::Array<int,Shape_Size>shape_out,
-                     int num_in_t, int num_out_t) {
-  int num_in = shape_in[Shape_Size - 1];
-  int num_out = shape_out[Shape_Size - 1];
+__device__ __forceinline__ void Load(const T* __restrict__ in,
+		                             T* out,
+									 uint32_t fix,
+                                     framework::Array<FastDivMod, 5>divmoders,
+									 framework::Array<uint32_t, 5> strides) {
 
-  int stride_in[Shape_Size];
-  int stride_out[Shape_Size];
+  for (int j = 0; j < VecSize; ++j) {
+	int idx = fix + j;
+    uint32_t offset = 0;
+#pragma unroll
+    for (int i = 0; i < Shape_Size; ++i) {
+      auto fast_divmoder = divmoders[i].Divmod(idx);
+      idx = fast_divmoder.val[0];
+      offset += fast_divmoder.val[1] * strides[i];
+    }
 
-  stride_in[Shape_Size - 1] = 1;
-  stride_out[Shape_Size - 1] = 1;
-
-#pragma unroll Shape_Size - 1
-  for (int i = Shape_Size - 2; i >= 0; i--) {
-    stride_in[i] =  stride_in[i + 1] *  shape_in[i + 1];
-    stride_out[i] = stride_out[i + 1] * shape_out[i + 1];
-    num_in *= shape_in[i];
-    num_out *= shape_out[i];
+	if (offset < 32 * 128) {
+      out[j] = in[offset];
+	} else {
+	
+	}
   }
-
-  int div_nm = num_in;
-  int div = num_out;
-  uint32_t index = 0;
-#pragma unroll 
-  for(int j = 0; j < Shape_Size; j++) {
-    uint32_t tmp = idx / stride_out[j]; 
-    idx = idx - tmp * stride_out[j];
-    index +=  (tmp % shape_in[j]) * stride_in[j];
-  }
-
-  out[0] = in[index];
-
 }
 
 template <typename T, typename OutT, typename Functor, int Shape_Size, int VecSize, ElementwiseType ET>
-__global__ void broadcastLoad(framework::Array<const T * __restrict__, ET> in_data,
-		                      OutT* out,
-							  framework::Array<bool, ET> use_broadcast,
-							  uint32_t out_num,
-							  framework::Array<framework::Array<uint32_t, MAX_DIM>, ET> shape_in,
-							  framework::Array<uint32_t, 5> shape_out,
-							  Functor func) {
-
-  uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ void compute(framework::Array<const T * __restrict__, ET> in_data,
+		                OutT* out,
+						framework::Array<bool, ET> use_broadcast,
+						uint32_t out_num,
+						StridesCalculation config,
+						Functor func,
+						int fix) {
 
   using InVecType = CudaAlignedVector<T, VecSize>;
   using OutVecType = CudaAlignedVector<OutT, VecSize>;
@@ -466,26 +405,30 @@ __global__ void broadcastLoad(framework::Array<const T * __restrict__, ET> in_da
   T arg[ET][VecSize];
   T args[ET];
   const InVecType * in[ET];
+
 #pragma unroll 
   for (int i = 0; i < ET; i++) {
     in[i] = reinterpret_cast<const InVecType *>(in_data[i]); 
   }
-  
-#pragma unroll 
-  for(uint32_t fix = idx; fix * VecSize < out_num; fix += blockDim.x * gridDim.x) {
- // load
+
 #pragma unroll 
   for (int i = 0; i < ET; i++) {
     // broadcast load
 	if (use_broadcast[i]) {
-   	  Load<T, Shape_Size, VecSize>(in_data[i], &arg[i][0], fix * VecSize, shape_in[i], shape_out);
+   	  Load<T, Shape_Size, VecSize>(in_data[i], &arg[i][0], fix * VecSize, config.divmoders, config.strides[i]);
 	} else {
 	  modules::load<InVecType, 1, 1, 1>(in[i] + fix, &data[i], 0);	
 	  modules::VecToT<T, InVecType, VecSize>(data[i], &arg[i][0]);
 	}
   }
 
-  // compute
+  if (fix == 0) {
+    printf("use %d, %d\n", use_broadcast[0], use_broadcast[1]); 
+    for(int i = 0; i < Shape_Size; i++) {
+      printf("stride[%d] = %d %d \n", i, config.strides[0][i], config.strides[1][i]); 
+    }
+  }
+
 #pragma unroll 
   for(int i = 0; i < VecSize; i++) {
 #pragma unroll 
@@ -498,36 +441,34 @@ __global__ void broadcastLoad(framework::Array<const T * __restrict__, ET> in_da
   // store
   dst[fix] = result;
 
-  } 
 }
-//__global__ void ElementwiseBroadcastKernel(
-//    BroadcastArgsWarpper broadcast_warpper, int main_tid, int tail_tid) {
-//  int tid = threadIdx.x + blockIdx.x * blockDim.x;
-//  // Vectorized calculation of major data whose length is the max multipler of
-//  // VecSize,
-//  // eg: Calcualting the front 1024-length data in total 1027 data once VecSize
-//  // is 4.
-//  if (tid < main_tid) {
-//    VectorizedBroadcastKernelImpl<InT, OutT, BroadcastArgsWarpper, ET, VecSize>(
-//        broadcast_warpper, tid);
-//  }
-//  // Scalarzed calculation of rest data whose lenght cannot fulfill VecSize.
-//  // eg: Calcualting the rest 3-length data in total 1027 data once VecSize is
-//  // 4.
-//  if (tid < tail_tid) {
-//    ScalarizedBroadcastKernelImpl<InT, OutT, BroadcastArgsWarpper, ET>(
-//        broadcast_warpper, tid);
-//  }
-//}
 
+
+template <typename T, typename OutT, typename Functor, int Shape_Size, int VecSize, ElementwiseType ET>
+__global__ void broadcastLoad(framework::Array<const T * __restrict__, ET> in_data,
+		                      OutT* out,
+							  framework::Array<bool, ET> use_broadcast,
+							  uint32_t out_num,
+							  StridesCalculation broadcastconfig,
+							  int main_tid,
+							  int tail_tid,
+							  Functor func) {
+
+  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tid < main_tid) {
+	compute<T, OutT, Functor, Shape_Size, VecSize, ET>(in_data, out, use_broadcast, out_num, broadcastconfig, func, tid);
+  }
+
+ // if (tid < tail_tid) {
+ //   compute<T, OutT, Functor, Shape_Size, 1, ET>(in_data, out, use_broadcast, out_num, broadcastconfig, func, tid + main_tid * VecSize);
+ // }
+}
 template <typename InT, typename OutT, ElementwiseType ET, int VecSize,
           typename Functor>
 void LaunchBroadcastKernelForDifferentDimSize(
     const platform::CUDADeviceContext &ctx,
     const std::vector<const framework::Tensor *> &ins, framework::Tensor *out,
     int axis, Functor func) {
-  int num_in1 = ins[0]->numel();
-  int num_in2 = ins[1]->numel();
   int numel = out->numel();
   const int threads = 256;
   int blocks = ((numel + VecSize - 1) / VecSize + threads - 1) / threads;
@@ -537,75 +478,30 @@ void LaunchBroadcastKernelForDifferentDimSize(
   auto stream = ctx.stream();
 
   const auto merge_dims = DimensionsTransform(ins, out->dims(), axis);
+  printf("++++++++++++++++\n");
   const auto offset_calculator = StridesCalculation(
-      merge_dims.dim_size, merge_dims.in_dims, merge_dims.out_dims); 
+      merge_dims.dim_size, merge_dims.in_dims, merge_dims.out_dims);
+  printf("!++++++++++++++++!i\n");
 
-  for (int i = 0; i < merge_dims.in_dims[0].size(); i++) {
-     printf(" 0 elementwise add idx %d , shape %d \n", i, merge_dims.in_dims[0][i]);  
-  }
+  auto out_data = out->data<InT>();
 
-  for (int i = 0; i < merge_dims.in_dims[1].size(); i++) {
-     printf(" 1 elementwise add idx %d , shape %d dim_size %d\n", i, merge_dims.in_dims[1][i], merge_dims.dim_size);  
-  }
-
-  for (int i = 0; i < merge_dims.out_dims.size(); i++) {
-     printf(" out elementwise add idx %d , shape %d dim_size %d\n", i, merge_dims.out_dims[i], merge_dims.dim_size);  
-  }
-
-  framework::Array<uint32_t, 5> shape_in1;
-  framework::Array<uint32_t, 5> shape_in2;
-  framework::Array<uint32_t, 5> shape_out;
-  int j = 0;
-  int i = 0;
-  for( i = merge_dims.in_dims[0].size() -1 ; i >= 0; --i) {
-    shape_in1[j++] = merge_dims.in_dims[0][i];
-  } 
-
-  j = 0;
-  for( i = merge_dims.in_dims[1].size() -1 ; i >= 0; --i) {
-    shape_in2[j++] = merge_dims.in_dims[1][i];
-  } 
-
-  j = 0;
-  for( i = merge_dims.out_dims.size() -1 ; i >= 0; --i) {
-    shape_out[j++] = merge_dims.out_dims[i];
-  } 
-
-  framework::Array<uint32_t, 5> stride_out;
-
-  stride_out[merge_dims.out_dims.size() - 1] = 1;
-
-#pragma unroll Shape_Size - 1
-  for (int i = merge_dims.out_dims.size() - 2; i >= 0; i--) {
-    stride_out[i] = stride_out[i + 1] * shape_out[i + 1];
-  }
-      auto in_data_0 = ins[0]->data<InT>();
-      auto in_data_1 = ins[1]->data<InT>();
-
-      auto out_data = out->data<InT>();
-
-// in_data, in_shape, in_nums
-  framework::Array<framework::Array<uint32_t, MAX_DIM>, ET> in_shape;
   framework::Array<const InT * __restrict__, ET> in_data;
   framework::Array<bool, ET> use_broadcast;
-
-  for (int m = 0; m < ET; m++) {
-    j = 0;
-    for(int k = merge_dims.out_dims.size() - 1 ; k >= 0; --k) {
-      in_shape[m][j++] = merge_dims.in_dims[m][k];
-	}
-  }
-
   for(int i =0 ; i < ET; i++) {
    in_data[i] = ins[i]->data<InT>(); 
    use_broadcast[i] = (ins[i]->numel() != numel);
-   printf("out %d in %d  %d i block %d %d thread %d\n", numel, use_broadcast[i], i, blocks / 4, blocks, threads);
+   printf("out %d in %d  %d i block %d %d thread %d\n", numel, use_broadcast[i], i, blocks, blocks, threads);
   }
+
+  std::vector<std::vector<uint32_t>> strides;
+  std::vector<FastDivMod> divmoders;
+  
+    printf("this is shape_size in_dims.size() %d\n", merge_dims.dim_size);
 
 #define DIM_SIZE(size) \
     case size: {        \
-broadcastLoad<InT, OutT, Functor, size, VecSize, ET><<<blocks / 4, threads, 0, stream>>>\
-             (in_data, out_data, use_broadcast, numel, in_shape, shape_out, func); \
+broadcastLoad<InT, OutT, Functor, size, VecSize, ET><<<blocks, threads, 0, stream>>>\
+             (in_data, out_data, use_broadcast, numel, offset_calculator, main_tid, tail_tid, func); \
     } break;
 
   switch (merge_dims.dim_size) {
