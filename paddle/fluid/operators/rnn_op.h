@@ -85,8 +85,9 @@ void create_mask_matrix(const framework::ExecutionContext& context,
   trans_vec.emplace_back(1);
   trans_vec.emplace_back(0);
   auto& dev_ctx = context.template device_context<platform::CPUDeviceContext>();
-  TransCompute<platform::CPUDeviceContext, T>(2, dev_ctx, temp, mask_matrix,
-                                              trans_vec);
+  paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext, T>
+      transpose;
+  transpose(dev_ctx, temp, mask_matrix, trans_vec);
 }
 
 template <typename T>

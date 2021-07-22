@@ -18,7 +18,7 @@ limitations under the License. */
 #include <vector>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
-#include "paddle/fluid/operators/transpose_op.h"
+#include "paddle/fluid/operators/math/transpose.h"
 
 namespace paddle {
 namespace operators {
@@ -135,11 +135,11 @@ class ArgsortKernel : public framework::OpKernel<T> {
 
       Tensor trans_inp;
       trans_inp.mutable_data<T>(trans_dims, ctx.GetPlace());
-      int ndims = trans.size();
       auto& dev_ctx = ctx.template device_context<platform::CPUDeviceContext>();
       // Do transpose
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, *input,
-                                                  &trans_inp, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext, T>
+          transpose;
+      transpose(dev_ctx, *input, &trans_inp, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -158,11 +158,12 @@ class ArgsortKernel : public framework::OpKernel<T> {
                            &trans_inp, t_out, t_ind, descending);
 
       indices->mutable_data<int64_t>(ctx.GetPlace());
-      TransCompute<platform::CPUDeviceContext, int64_t>(
-          ndims, dev_ctx, tmp_indices, indices, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext,
+                                                int64_t>
+          transpose_indices;
+      transpose_indices(dev_ctx, tmp_indices, indices, trans);
       // transpose back
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, tmp_out,
-                                                  output, trans);
+      transpose(dev_ctx, tmp_out, output, trans);
     }
   }
 };
@@ -214,13 +215,15 @@ class ArgsortGradientKernel : public framework::OpKernel<T> {
       trans_dO.mutable_data<T>(trans_dims, ctx.GetPlace());
       Tensor trans_ind;
       trans_ind.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
-      int ndims = trans.size();
       auto& dev_ctx = ctx.template device_context<platform::CPUDeviceContext>();
       // Do transpose
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, *dO,
-                                                  &trans_dO, trans);
-      TransCompute<platform::CPUDeviceContext, int64_t>(
-          ndims, dev_ctx, *indices, &trans_ind, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext, T>
+          transpose;
+      transpose(dev_ctx, *dO, &trans_dO, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext,
+                                                int64_t>
+          transpose_indices;
+      transpose_indices(dev_ctx, *indices, &trans_ind, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -233,8 +236,7 @@ class ArgsortGradientKernel : public framework::OpKernel<T> {
                              &trans_dO, &trans_ind, t_out);
 
       // transpose back
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_ctx, tmp_out, dX,
-                                                  trans);
+      transpose(dev_ctx, tmp_out, dX, trans);
     }
   }
 };

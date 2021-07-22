@@ -307,12 +307,12 @@ class CholeskyGradKernel : public framework::OpKernel<T> {
     std::iota(axis.begin(), axis.end(), 0);
     axis.insert(axis.end(), {dims.size() - 1, dims.size() - 2});
     Tensor l, l_grad;
+    paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
     if (upper) {
       l.mutable_data<T>(dims, context.GetPlace());
       l_grad.mutable_data<T>(dims, context.GetPlace());
-      TransCompute<DeviceContext, T>(dims.size(), dev_ctx, *out, &l, axis);
-      TransCompute<DeviceContext, T>(dims.size(), dev_ctx, *out_grad, &l_grad,
-                                     axis);
+      transpose(dev_ctx, *out, &l, axis);
+      transpose(dev_ctx, *out_grad, &l_grad, axis);
     } else {
       l = *out;
       l_grad = *out_grad;
@@ -362,8 +362,7 @@ class CholeskyGradKernel : public framework::OpKernel<T> {
     Tensor x_grad_trans;
     auto* x_grad_trans_data =
         x_grad_trans.mutable_data<T>(dims, context.GetPlace());
-    TransCompute<DeviceContext, T>(dims.size(), dev_ctx, *x_grad, &x_grad_trans,
-                                   axis);
+    transpose(dev_ctx, *x_grad, &x_grad_trans, axis);
     AddtoScaleFunctor<T> addto_scale_functor(0.5, x_grad_trans_data,
                                              x_grad_data);
     for_range(addto_scale_functor);

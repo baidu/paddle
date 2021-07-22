@@ -25,7 +25,6 @@ namespace cub = hipcub;
 #endif
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/argsort_op.h"
-#include "paddle/fluid/operators/transpose_op.h"
 #include "paddle/fluid/platform/cuda_device_function.h"
 #include "paddle/fluid/platform/cuda_primitives.h"
 
@@ -296,11 +295,10 @@ class ArgsortOpCUDAKernel : public framework::OpKernel<T> {
 
       Tensor trans_inp;
       T* trans_inp_data = trans_inp.mutable_data<T>(trans_dims, ctx.GetPlace());
-      int ndims = trans.size();
       const auto& dev_ctx = ctx.cuda_device_context();
       // Do transpose
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, *input,
-                                                   &trans_inp, trans);
+      paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
+      transpose(dev_ctx, *input, &trans_inp, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -317,12 +315,11 @@ class ArgsortOpCUDAKernel : public framework::OpKernel<T> {
 
       ArgFullSort<T, int64_t>(dev_ctx, &trans_inp, &tmp_out, &tmp_indices,
                               input_height, input_width, descending);
-
-      TransCompute<platform::CUDADeviceContext, int64_t>(
-          ndims, dev_ctx, tmp_indices, indices, trans);
+      paddle::operators::math::TransposeFunctor<DeviceContext, int64_t>
+          transpose_indices;
+      transpose_indices(dev_ctx, tmp_indices, indices, trans);
       // transpose back
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, tmp_out,
-                                                   output, trans);
+      transpose(dev_ctx, tmp_out, output, trans);
       return;
     }
   }
@@ -382,12 +379,14 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
       trans_dO.mutable_data<T>(trans_dims, ctx.GetPlace());
       Tensor trans_ind;
       trans_ind.mutable_data<int64_t>(trans_dims, ctx.GetPlace());
-      int ndims = trans.size();
       // Do transpose
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, *dO,
-                                                   &trans_dO, trans);
-      TransCompute<platform::CUDADeviceContext, int64_t>(
-          ndims, dev_ctx, *indices, &trans_ind, trans);
+      paddle::operators::math::TransposeFunctor<platform::CUDADeviceContext, T>
+          transpose;
+      transpose(dev_ctx, *dO, &trans_dO, trans);
+      paddle::operators::math::TransposeFunctor<platform::CUDADeviceContext,
+                                                int64_t>
+          transpose_indices;
+      transpose_indices(dev_ctx, *indices, &trans_ind, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -400,8 +399,7 @@ class ArgsortGradOpCUDAKernel : public framework::OpKernel<T> {
                                 input_height, input_width);
 
       // transpose back
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, tmp_out, dX,
-                                                   trans);
+      transpose(dev_ctx, tmp_out, dX, trans);
       return;
     }
   }

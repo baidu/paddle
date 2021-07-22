@@ -135,8 +135,10 @@ class TopkV2OpCUDAKernel : public framework::OpKernel<T> {
       trans_input.mutable_data<T>(trans_dims, ctx.GetPlace());
       int ndims = trans.size();
       const auto& dev_ctx = ctx.cuda_device_context();
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, *input,
-                                                   &trans_input, trans);
+      paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
+      paddle::operators::math::TransposeFunctor<DeviceContext, int64_t>
+          transpose_indices;
+      transpose(dev_ctx, *input, &trans_input, trans);
       // third step, calcluate the topk
       // allocate the tmp cuda memory for the tmp result
       Tensor trans_ind;
@@ -155,10 +157,8 @@ class TopkV2OpCUDAKernel : public framework::OpKernel<T> {
         if (SortTopk<T>(dev_ctx, &trans_input, input_width, input_height, k,
                         &trans_out, &trans_ind, largest)) {
           // last step, tranpose back the indices and output
-          TransCompute<platform::CUDADeviceContext, int64_t>(
-              ndims, dev_ctx, trans_ind, indices, trans);
-          TransCompute<platform::CUDADeviceContext, T>(
-              ndims, dev_ctx, trans_out, output, trans);
+          transpose_indices(dev_ctx, trans_ind, indices, trans);
+          transpose(dev_ctx, trans_out, output, trans);
           return;
         } else {
           LOG(INFO) << "TopKOP: Some errors happened when use cub sorting, use "
@@ -181,10 +181,8 @@ class TopkV2OpCUDAKernel : public framework::OpKernel<T> {
       }
 
       // last step, tranpose back the indices and output
-      TransCompute<platform::CUDADeviceContext, int64_t>(
-          ndims, dev_ctx, trans_ind, indices, trans);
-      TransCompute<platform::CUDADeviceContext, T>(ndims, dev_ctx, trans_out,
-                                                   output, trans);
+      transpose_indices(dev_ctx, trans_ind, indices, trans);
+      transpose(dev_ctx, trans_out, output, trans);
     }
   }
 };

@@ -16,48 +16,12 @@ limitations under the License. */
 
 #include <vector>
 #include "paddle/fluid/framework/op_registry.h"
-#include "paddle/fluid/operators/math/math_function.h"
+#include "paddle/fluid/operators/math/transpose.h"
 
 namespace paddle {
 namespace operators {
 
 enum { kTransposeMKLDNNFP32 = 1, kTransposeMKLDNNINT8 = 2 };
-
-template <typename DeviceContext, typename T>
-inline void TransCompute(const int dim, const DeviceContext& dev_ctx,
-                         const framework::Tensor& in, framework::Tensor* out,
-                         const std::vector<int>& axis) {
-  switch (dim) {
-    case 1:
-      math::Transpose<DeviceContext, T, 1> trans1;
-      trans1(dev_ctx, in, out, axis);
-      break;
-    case 2:
-      math::Transpose<DeviceContext, T, 2> trans2;
-      trans2(dev_ctx, in, out, axis);
-      break;
-    case 3:
-      math::Transpose<DeviceContext, T, 3> trans3;
-      trans3(dev_ctx, in, out, axis);
-      break;
-    case 4:
-      math::Transpose<DeviceContext, T, 4> trans4;
-      trans4(dev_ctx, in, out, axis);
-      break;
-    case 5:
-      math::Transpose<DeviceContext, T, 5> trans5;
-      trans5(dev_ctx, in, out, axis);
-      break;
-    case 6:
-      math::Transpose<DeviceContext, T, 6> trans6;
-      trans6(dev_ctx, in, out, axis);
-      break;
-    default:
-      // for dim >= 7 situation
-      math::TransposeNormal<DeviceContext, T> trans_normal;
-      trans_normal(dev_ctx, in, out, axis);
-  }
-}
 
 template <typename DeviceContext, typename T>
 class TransposeKernel : public framework::OpKernel<T> {
@@ -77,9 +41,9 @@ class TransposeKernel : public framework::OpKernel<T> {
     }
 
     std::vector<int> axis = context.Attr<std::vector<int>>("axis");
-    int ndims = axis.size();
+    paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
     auto& dev_ctx = context.template device_context<DeviceContext>();
-    TransCompute<DeviceContext, T>(ndims, dev_ctx, *x_tensor, out_tensor, axis);
+    transpose(dev_ctx, *x_tensor, out_tensor, axis);
   }
 };
 
@@ -110,10 +74,9 @@ class TransposeGradKernel : public framework::OpKernel<T> {
       reversed_axis[axis[i]] = i;
     }
 
-    int ndims = axis.size();
+    paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
     auto& dev_ctx = context.template device_context<DeviceContext>();
-    TransCompute<DeviceContext, T>(ndims, dev_ctx, *out_grad_tensor,
-                                   x_grad_tensor, reversed_axis);
+    transpose(dev_ctx, *out_grad_tensor, x_grad_tensor, reversed_axis);
   }
 };
 

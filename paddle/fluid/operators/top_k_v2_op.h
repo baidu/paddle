@@ -27,8 +27,8 @@ limitations under the License. */
 #include <vector>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/math/transpose.h"
 #include "paddle/fluid/operators/top_k_op.h"
-#include "paddle/fluid/operators/transpose_op.h"
 
 namespace paddle {
 namespace operators {
@@ -219,13 +219,16 @@ class TopkV2Kernel : public framework::OpKernel<T> {
 
       Tensor trans_inp;
       trans_inp.mutable_data<T>(trans_dims, context.GetPlace());
-      int ndims = trans.size();
       auto& dev_context =
           context.template device_context<platform::CPUDeviceContext>();
 
       // transpose the input value
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, *input,
-                                                  &trans_inp, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext, T>
+          transpose;
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext,
+                                                int64_t>
+          transpose_indices;
+      transpose(dev_context, *input, &trans_inp, trans);
 
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_dims, 0, trans_dims.size() - 1));
@@ -242,10 +245,8 @@ class TopkV2Kernel : public framework::OpKernel<T> {
       FullTopK<T, int64_t>(input_height, input_width, in_dims.size(),
                            &trans_inp, t_out, t_ind, k, largest, sorted);
       // transpose back
-      TransCompute<platform::CPUDeviceContext, int64_t>(
-          ndims, dev_context, tmp_indices, indices, trans);
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, tmp_out,
-                                                  output, trans);
+      transpose_indices(dev_context, tmp_indices, indices, trans);
+      transpose(dev_context, tmp_out, output, trans);
     }
   }
 };
@@ -303,15 +304,17 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
       trans_dO.mutable_data<T>(trans_dims, context.GetPlace());
       Tensor trans_ind;
       trans_ind.mutable_data<int64_t>(trans_dims, context.GetPlace());
-      int ndims = trans.size();
       auto& dev_context =
           context.template device_context<platform::CPUDeviceContext>();
 
       // Do transpose
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, *out_grad,
-                                                  &trans_dO, trans);
-      TransCompute<platform::CPUDeviceContext, int64_t>(
-          ndims, dev_context, *indices, &trans_ind, trans);
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext, T>
+          transpose;
+      paddle::operators::math::TransposeFunctor<platform::CPUDeviceContext,
+                                                int64_t>
+          transpose_indices;
+      transpose(dev_context, *out_grad, &trans_dO, trans);
+      transpose_indices(dev_context, *indices, &trans_ind, trans);
       const int64_t input_height = framework::product(
           framework::slice_ddim(trans_in_dims, 0, trans_in_dims.size() - 1));
       const int64_t input_width = trans_in_dims[trans_in_dims.size() - 1];
@@ -325,8 +328,7 @@ class TopkV2GradKernel : public framework::OpKernel<T> {
                                  &trans_dO, &trans_ind, t_out, k);
 
       // Transpose back
-      TransCompute<platform::CPUDeviceContext, T>(ndims, dev_context, tmp_out,
-                                                  x_grad, trans);
+      transpose(dev_context, tmp_out, x_grad, trans);
     }
   }
 };

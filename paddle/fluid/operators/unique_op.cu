@@ -310,11 +310,12 @@ static void UniqueDimsCUDATensor(const framework::ExecutionContext& context,
   in_trans.Resize(in_trans_dims);
   in_trans.mutable_data<InT>(context.GetPlace());
   auto& dev_ctx = context.cuda_device_context();
-  TransCompute<DeviceContext, InT>(in.dims().size(),  // num of dims
-                                   dev_ctx,           // device
-                                   in,                // original Tensor
-                                   &in_trans,         // Tensor after reshape
-                                   permute);          // index of axis
+  paddle::operators::math::TransposeFunctor<platform::CUDADeviceContext, InT>
+      transpose;
+  transpose(dev_ctx,    // device
+            in,         // original Tensor
+            &in_trans,  // Tensor after reshape
+            permute);   // index of axis
 
   // Reshape tensor: eg. [dim1, dim0, dim2] -> [dim1, dim0*dim2]
   framework::DDim in_trans_flat_dims =
@@ -357,8 +358,7 @@ static void UniqueDimsCUDATensor(const framework::ExecutionContext& context,
   std::vector<framework::Tensor> out_trans_unbind = Unbind(out_trans);
   math::ConcatFunctor<DeviceContext, InT> concat_functor;
   concat_functor(dev_ctx, out_trans_unbind, 0, &out_trans);
-  TransCompute<DeviceContext, InT>(out_trans.dims().size(), dev_ctx, out_trans,
-                                   out, permute);
+  transpose(dev_ctx, out_trans, out, permute);
 }
 
 // functor for processing a flattend Tensor

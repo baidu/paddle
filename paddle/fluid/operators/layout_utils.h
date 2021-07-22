@@ -20,7 +20,7 @@
 #include <vector>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
-#include "paddle/fluid/operators/math/math_function.h"
+#include "paddle/fluid/operators/math/transpose.h"
 
 namespace paddle {
 namespace operators {
@@ -109,46 +109,34 @@ inline void TransToChannelFirst(const framework::ExecutionContext& context,
                                 Tensor* transformed_input) {
   VLOG(5) << "Why am I called?";
   int dim = input->dims().size() - 2;
+  std::vector<int> axis;
   if (dim == 3) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 4, 1, 2, 3};
-    math::Transpose<DeviceContext, T, 5> trans5;
-    trans5(dev_ctx, *input, transformed_input, axis);
-
+    axis = {0, 4, 1, 2, 3};
   } else if (dim == 2) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 3, 1, 2};
-    math::Transpose<DeviceContext, T, 4> trans4;
-    trans4(dev_ctx, *input, transformed_input, axis);
+    axis = {0, 3, 1, 2};
   } else if (dim == 1) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 1};
-    math::Transpose<DeviceContext, T, 3> trans3;
-    trans3(dev_ctx, *input, transformed_input, axis);
+    axis = {0, 2, 1};
   }
+  auto& dev_ctx = context.template device_context<DeviceContext>();
+  paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
+  transpose(dev_ctx, *input, transformed_input, axis);
 }
 
 template <typename DeviceContext, typename T>
 inline void TransToChannelLast(const framework::ExecutionContext& context,
                                const Tensor* input, Tensor* transformed_input) {
   int dim = input->dims().size() - 2;
+  std::vector<int> axis;
   if (dim == 3) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 3, 4, 1};
-    math::Transpose<DeviceContext, T, 5> trans5;
-    trans5(dev_ctx, *input, transformed_input, axis);
-
+    axis = {0, 2, 3, 4, 1};
   } else if (dim == 2) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 3, 1};
-    math::Transpose<DeviceContext, T, 4> trans4;
-    trans4(dev_ctx, *input, transformed_input, axis);
+    axis = {0, 2, 3, 1};
   } else if (dim == 1) {
-    auto& dev_ctx = context.template device_context<DeviceContext>();
-    std::vector<int> axis{0, 2, 1};
-    math::Transpose<DeviceContext, T, 3> trans3;
-    trans3(dev_ctx, *input, transformed_input, axis);
+    axis = {0, 2, 1};
   }
+  auto& dev_ctx = context.template device_context<DeviceContext>();
+  paddle::operators::math::TransposeFunctor<DeviceContext, T> transpose;
+  transpose(dev_ctx, *input, transformed_input, axis);
 }
 
 }  // namespace operators

@@ -112,7 +112,7 @@ set(COMMON_OP_DEPS ${COMMON_OP_DEPS} selected_rows_functor selected_rows
 lod_tensor maxouting unpooling pooling lod_rank_table context_project
 sequence_pooling segment_pooling executor device_memory_aligment generator)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} dynload_warpctc)
-set(COMMON_OP_DEPS ${COMMON_OP_DEPS} sequence_padding sequence_scale cos_sim_functor memory jit_kernel_helper concat_and_split cross_entropy softmax vol2col im2col sampler sample_prob tree2col)
+set(COMMON_OP_DEPS ${COMMON_OP_DEPS} sequence_padding sequence_scale cos_sim_functor memory jit_kernel_helper concat_and_split cross_entropy softmax vol2col im2col sampler sample_prob tree2col transpose)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} sequence2batch lstm_compute matrix_bit_code gru_compute activation_functions beam_search fc matrix_inverse)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} box_wrapper boost ps_gpu_wrapper)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} common_infer_shape_functions)

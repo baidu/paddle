@@ -23,7 +23,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/math/concat_and_split.h"
 #include "paddle/fluid/operators/math/math_function.h"
-#include "paddle/fluid/operators/transpose_op.h"
+#include "paddle/fluid/operators/math/transpose.h"
 
 namespace paddle {
 namespace operators {
@@ -241,8 +241,8 @@ static void UniqueDim(const framework::ExecutionContext& context,
   in_trans.Resize(in_trans_dims);
   in_trans.mutable_data<InT>(context.GetPlace());
   auto& dev_ctx = context.template device_context<DeviceContext>();
-  TransCompute<DeviceContext, InT>(in.dims().size(), dev_ctx, in, &in_trans,
-                                   permute);
+  paddle::operators::math::TransposeFunctor<DeviceContext, InT> transpose;
+  transpose(dev_ctx, in, &in_trans, permute);
   // reshape tensor: eg. [dim1, dim0, dim2] -> [dim1, dim0*dim2]
   framework::DDim in_trans_flat_dims =
       framework::flatten_to_2d(in_trans_dims, 1);
@@ -300,8 +300,7 @@ static void UniqueDim(const framework::ExecutionContext& context,
   out->Resize(framework::make_ddim(out_trans_dims_vec));
   out->mutable_data<InT>(context.GetPlace());
   concat_functor(dev_ctx, input_unbind, 0, &out_trans);
-  TransCompute<DeviceContext, InT>(out_trans.dims().size(), dev_ctx, out_trans,
-                                   out, permute);
+  transpose(dev_ctx, out_trans, out, permute);
 
   if (return_inverse) {
     auto* inverse = context.Output<framework::Tensor>("Index");
