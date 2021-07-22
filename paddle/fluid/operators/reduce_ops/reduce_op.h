@@ -63,6 +63,27 @@ inline void GetShuffledDim(const DDim& src_dims, DDim* dst_dims,
   }
 }
 
+// for broadcast backwards
+static inline std::vector<int> GetOriginalReduceDim(const framework::DDim& in,
+                                                    const framework::DDim& out,
+                                                    int axis) {
+  axis =
+      (axis == -1 ? std::abs(static_cast<int>(out.size() - in.size())) : axis);
+  std::vector<int> res;
+  for (int i = 0; i < axis; ++i) {
+    res.push_back(i);
+  }
+  for (int i = 0; i < in.size(); ++i) {
+    if (out[i + axis] != in[i]) {
+      res.push_back(i + axis);
+    }
+  }
+  for (int i = axis + in.size(); i < out.size(); ++i) {
+    res.push_back(i);
+  }
+  return res;
+}
+
 static inline std::vector<int> GetReduceDim(const std::vector<int>& dims,
                                             int dim_size, bool reduce_all) {
   std::vector<int> reduce_dims;

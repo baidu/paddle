@@ -13,6 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 #include "paddle/fluid/operators/elementwise/elementwise_add_op.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_broadcast.cu.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_functor_op.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_op.cu.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_op.h"
 #include "paddle/fluid/platform/complex.h"
 #include "paddle/fluid/platform/float16.h"
 
@@ -79,6 +82,64 @@ static __global__ void SimpleElemwiseAddGradCUDAKernel(
       tmp_rem = dout[idx];
       dx[idx] = tmp_rem;
       dy[idx] = tmp_rem;
+    }
+  }
+}
+
+template <typename DeviceContext, typename T>
+typename std::enable_if<
+    std::is_same<DeviceContext, platform::CUDADeviceContext>::value>::type
+default_elementwise_add_grad(const framework::ExecutionContext& ctx,
+                             const framework::Tensor* x,
+                             const framework::Tensor* y,
+                             const framework::Tensor* out,
+                             const framework::Tensor* dout,
+                             framework::Tensor* dx, framework::Tensor* dy) {
+  int axis = ctx.Attr<int>("axis");
+  auto* dout_data = dout->data<T>();
+
+  // dx
+  if (dx != nullptr) {
+    auto* dx_data = dx->mutable_data<T>(ctx.GetPlace());
+    if (dx->dims() == dout->dims()) {
+      if (dx_data != dout_data) {
+        framework::TensorCopy(
+            *dout, ctx.GetPlace(),
+            ctx.template device_context<platform::DeviceContext>(), dx);
+      }
+    } else {
+      // For inplace strategy, dx will be stored in addr of dout, which makes
+      // the result of dy wrong.
+      if (dx->IsSharedBufferWith(*dout)) {
+        dx->clear();
+        dx->mutable_data<T>(x->dims(), ctx.GetPlace());
+      }
+      std::vector<int> dims =
+          GetOriginalReduceDim(x->dims(), out->dims(), axis);
+      bool reduce_all = x->numel() == 1 ? true : false;
+      std::vector<int> reduce_dims =
+          GetReduceDim(dims, dout->dims().size(), reduce_all);
+      gpuStream_t stream = ctx.cuda_device_context().stream();
+      TensorReduceFunctorImpl<T, T, CustomSum>(*dout, dx, reduce_dims, stream);
+    }
+  }
+  // dy
+  if (dy != nullptr) {
+    auto* dy_data = dy->mutable_data<T>(ctx.GetPlace());
+    if (dy->dims() == dout->dims()) {
+      if (dy_data != dout_data) {
+        framework::TensorCopy(
+            *dout, ctx.GetPlace(),
+            ctx.template device_context<platform::DeviceContext>(), dy);
+      }
+    } else {
+      std::vector<int> dims =
+          GetOriginalReduceDim(y->dims(), out->dims(), axis);
+      bool reduce_all = y->numel() == 1 ? true : false;
+      std::vector<int> reduce_dims =
+          GetReduceDim(dims, dout->dims().size(), reduce_all);
+      gpuStream_t stream = ctx.cuda_device_context().stream();
+      TensorReduceFunctorImpl<T, T, CustomSum>(*dout, dy, reduce_dims, stream);
     }
   }
 }

@@ -86,13 +86,14 @@ struct IdentityGrad {
 };
 
 template <typename DeviceContext, typename T>
-void default_elementwise_add_grad(const framework::ExecutionContext &ctx,
-                                  const framework::Tensor *x,
-                                  const framework::Tensor *y,
-                                  const framework::Tensor *out,
-                                  const framework::Tensor *dout,
-                                  framework::Tensor *dx,
-                                  framework::Tensor *dy) {
+typename std::enable_if<
+    std::is_same<DeviceContext, platform::CPUDeviceContext>::value>::type
+default_elementwise_add_grad(const framework::ExecutionContext &ctx,
+                             const framework::Tensor *x,
+                             const framework::Tensor *y,
+                             const framework::Tensor *out,
+                             const framework::Tensor *dout,
+                             framework::Tensor *dx, framework::Tensor *dy) {
   int axis = ctx.Attr<int>("axis");
 
   ElemwiseExplicitGradCompute<DeviceContext, T, IdentityGrad<T>,
@@ -305,6 +306,16 @@ elementwise_add_grad(const framework::ExecutionContext &ctx,
                      const framework::Tensor *out,
                      const framework::Tensor *dout, framework::Tensor *dx,
                      framework::Tensor *dy);
+
+template <typename DeviceContext, typename T>
+typename std::enable_if<
+    std::is_same<DeviceContext, platform::CUDADeviceContext>::value>::type
+default_elementwise_add_grad(const framework::ExecutionContext &ctx,
+                             const framework::Tensor *x,
+                             const framework::Tensor *y,
+                             const framework::Tensor *out,
+                             const framework::Tensor *dout,
+                             framework::Tensor *dx, framework::Tensor *dy);
 #endif
 
 template <typename DeviceContext, typename T>
@@ -323,102 +334,6 @@ class ElementwiseAddGradKernel : public ElemwiseGradKernel<T> {
     // skip out
     auto *out = dout;
 
-// TODO(@wangchaochaohu, zhouwei35): Fix conv_transpose2d API(dataformat NHWC)
-// error in Windows
-#if defined(PADDLE_WITH_CUDA) && !defined(_WIN32)
-#ifdef __NVCC__
-
-    int axis = ctx.Attr<int>("axis");
-    if (ctx.GetPlace() == platform::CUDAPlace() && dx != nullptr &&
-        dy != nullptr && dout != nullptr && dx->numel() != dy->numel() &&
-        RunSpecialDims(dx->dims(), dy->dims(), dout->dims(), axis)) {
-      auto *dx_data = dx->mutable_data<T>(ctx.GetPlace());
-      auto *dy_data = dy->mutable_data<T>(ctx.GetPlace());
-      auto *dout_data = dout->data<T>();
-      auto stream = ctx.cuda_device_context().stream();
-      auto *out_data = dx_data;
-      int width = dx->numel();
-      int height = dout->numel() / width;
-      if (dx->dims() == dout->dims()) {
-        width = dy->numel();
-        height = dout->numel() / width;
-        out_data = dy_data;
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dx);
-      } else {
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dy);
-      }
-      // special optimization using cub
-      if (width == 1) {
-        int nums = height;
-        size_t temp_storage_bytes = 0;
-        auto err = cub::DeviceReduce::Sum(nullptr, temp_storage_bytes,
-                                          dout_data, out_data, nums, stream);
-        PADDLE_ENFORCE_CUDA_SUCCESS(err);
-        framework::Tensor tmp;
-        auto *temp_storage = tmp.mutable_data<uint8_t>(
-            framework::make_ddim({static_cast<int64_t>(temp_storage_bytes)}),
-            ctx.GetPlace());
-        err = cub::DeviceReduce::Sum(temp_storage, temp_storage_bytes,
-                                     dout_data, out_data, nums, stream);
-        PADDLE_ENFORCE_CUDA_SUCCESS(err);
-        return;
-      }
-
-      constexpr int block_x = 32;
-      constexpr int block_y = 32;
-      dim3 blocks(block_x, block_y);
-
-      int max_physical_threads =
-          ctx.cuda_device_context().GetMaxPhysicalThreadCount();
-      int max_blocks = std::max(max_physical_threads / (block_x * block_y), 1);
-      int theory_block = (width + blocks.x - 1) / blocks.x;
-      dim3 grids(std::min(theory_block, max_blocks));
-#if CUDA_VERSION >= 10000
-      if (std::is_same<T, paddle::platform::float16>::value && width < 2048 &&
-          width % 2 == 0 && height % 64 == 0) {
-        auto &dev_ctx =
-            ctx.template device_context<platform::CUDADeviceContext>();
-        math::SetConstant<platform::CUDADeviceContext, T> functor;
-        if (dout->dims() == dx->dims())
-          functor(dev_ctx, dy, static_cast<T>(0));
-        else
-          functor(dev_ctx, dx, static_cast<T>(0));
-        const __half2 *ptr1 = reinterpret_cast<const __half2 *>(dout_data);
-        __half2 *ptr2 = reinterpret_cast<__half2 *>(out_data);
-        const int threads = 128;
-        dim3 grid(1, (height + 64 - 1) / 64);
-        VecFP16MatrixColReduce<64><<<grid, threads, 0, stream>>>(ptr1, ptr2,
-                                                                 width, height);
-        return;
-      }
-#endif
-
-      if (width / height < 32) {
-        MatrixColReduce<T, block_x, block_y><<<grids, blocks, 0, stream>>>(
-            dout_data, out_data, width, height);
-      } else {
-        size_t thread_nums = 1024;
-        size_t block_nums = (width + thread_nums - 1) / thread_nums;
-        int vec_size = VectorizedSize<T>(dout_data);
-        if (vec_size == 4 && width % 4 == 0) {
-          block_nums = (width / vec_size + thread_nums - 1) / thread_nums;
-          VecMatrixReduceLongWidth<T,
-                                   4><<<block_nums, thread_nums, 0, stream>>>(
-              dout_data, out_data, width, height);
-        } else {
-          MatrixReduceLongWidth<T><<<block_nums, thread_nums, 0, stream>>>(
-              dout_data, out_data, width, height);
-        }
-      }
-      return;
-    }
-
-#endif
-#endif
     // Special case when dy is not needed and dx doesn't reduce
     if (dx != nullptr && dy == nullptr && dx->dims() == dout->dims()) {
       VLOG(4) << "Special case when dy is not needed and dx doesn't "
