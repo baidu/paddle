@@ -15,6 +15,8 @@
 import paddle
 import paddle.fluid as fluid
 import unittest
+import paddle.static.amp as amp
+from paddle.fluid import core
 
 
 class TestFuseBatchNormActPass(unittest.TestCase):
@@ -115,6 +117,63 @@ class TestFuseBatchNormActPass(unittest.TestCase):
         if fluid.core.is_compiled_with_cuda():
             place = fluid.CUDAPlace(0)
             self.check(place, use_cuda=True)
+
+
+@unittest.skipIf(
+    not core.is_compiled_with_cuda() or core.cudnn_version() < 8100,
+    "core is not compiled with CUDA and cudnn version need larger than 8.1.0")
+class TestFuseBatchNormActPassWithBF16(unittest.TestCase):
+    def build_program(self, main_program, startup_program, seed=1):
+        with fluid.program_guard(main_program, startup_program):
+            x = fluid.layers.data(name='x', shape=[1, 28, 28], dtype='float32')
+            y = fluid.layers.data(name="y", shape=[1], dtype='int64')
+            hidden1 = fluid.layers.conv2d(
+                input=x,
+                filter_size=3,
+                num_filters=16,
+                stride=1,
+                padding=1,
+                act=None,
+                bias_attr=False,
+                data_format='NHWC')
+            hidden2 = fluid.layers.batch_norm(
+                input=hidden1, act='relu', data_layout='NHWC')
+            prediction = fluid.layers.fc(input=hidden2, size=10, act='softmax')
+            loss = fluid.layers.cross_entropy(input=prediction, label=y)
+            loss = fluid.layers.mean(loss)
+            sgd = fluid.optimizer.SGD(learning_rate=0.001)
+            # AMP_bf16 training. This process modifies Program by inserting cast_op.
+            # The input of fused_bn_add_act op will be casted to bf16
+            # remember to add this op to custom_bf16_list
+            sgd = amp.bf16.decorate_bf16(
+                sgd,
+                amp_lists=amp.bf16.AutoMixedPrecisionListsBF16(
+                    custom_bf16_list={'fused_batch_norm_act'}),
+                use_bf16_guard=False,
+                use_pure_bf16=False)
+            sgd.minimize(loss)
+        return x, y, loss
+
+    def test_fuse_bn_act_pass_cuda(self):
+        place = fluid.CUDAPlace(0)
+        paddle.seed(1)
+        paddle.framework.random._manual_program_seed(1)
+        main_program = fluid.Program()
+        startup_program = fluid.Program()
+        x, y, loss = self.build_program(main_program, startup_program)
+        exe = fluid.Executor(place)
+        iters = 8
+        batch_size = 16
+        feeder = fluid.DataFeeder(feed_list=[x, y], place=place)
+
+        train_reader = paddle.batch(
+            paddle.dataset.mnist.train(), batch_size=batch_size)
+        scope = fluid.Scope()
+        with fluid.scope_guard(scope):
+            exe.run(startup_program)
+            for _ in range(iters):
+                data = next(train_reader())
+                exe.run(main_program, feed=feeder.feed(data), fetch_list=[loss])
 
 
 if __name__ == '__main__':

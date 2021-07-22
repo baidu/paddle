@@ -22,6 +22,7 @@
 #include "paddle/fluid/operators/fused/fused_bn_activation_op.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/operators/norm_utils.h"
+#include "paddle/fluid/platform/bfloat16.h"
 #include "paddle/fluid/platform/cudnn_helper.h"
 #include "paddle/fluid/platform/float16.h"
 
@@ -371,6 +372,20 @@ class FusedBatchNormActGradKernel<platform::CUDADeviceContext, T>
 #if CUDNN_VERSION >= 7401
 namespace ops = paddle::operators;
 namespace plat = paddle::platform;
+#if CUDNN_VERSION >= 8100
+REGISTER_OP_CUDA_KERNEL(
+    fused_batch_norm_act,
+    ops::FusedBatchNormActKernel<plat::CUDADeviceContext, float>,
+    ops::FusedBatchNormActKernel<plat::CUDADeviceContext, double>,
+    ops::FusedBatchNormActKernel<plat::CUDADeviceContext, plat::float16>,
+    ops::FusedBatchNormActKernel<plat::CUDADeviceContext, plat::bfloat16>);
+REGISTER_OP_CUDA_KERNEL(
+    fused_batch_norm_act_grad,
+    ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, float>,
+    ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, double>,
+    ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, plat::float16>,
+    ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, plat::bfloat16>);
+#else
 REGISTER_OP_CUDA_KERNEL(
     fused_batch_norm_act,
     ops::FusedBatchNormActKernel<plat::CUDADeviceContext, float>,
@@ -381,4 +396,5 @@ REGISTER_OP_CUDA_KERNEL(
     ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, float>,
     ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, double>,
     ops::FusedBatchNormActGradKernel<plat::CUDADeviceContext, plat::float16>);
+#endif
 #endif
