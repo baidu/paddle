@@ -55,6 +55,15 @@ void BatchNormOp::InferShape(framework::InferShapeContext *ctx) const {
           "Variance and VarianceOut should share the same memory"));
 
   const auto x_dims = ctx->GetInputDim("X");
+
+  PADDLE_ENFORCE_NE(framework::product(x_dims), 0,
+                    platform::errors::PreconditionNotMet(
+                        "The Input variable X(%s) has not "
+                        "been initialized. You may need to confirm "
+                        "if you put exe.run(startup_program) "
+                        "after optimizer.minimize function.",
+                        ctx->Inputs("X").front()));
+
   const DataLayout data_layout = framework::StringToDataLayout(
       ctx->Attrs().Get<std::string>("data_layout"));
 
