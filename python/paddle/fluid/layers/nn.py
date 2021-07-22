@@ -11276,32 +11276,27 @@ def shape(input):
                 input.shape = [3, 2]
 
     Args:
-        input (Variable): The input can be N-D Tensor or SelectedRows with data type bool, float16, float32, float64, int32, int64.
-                          If input variable is type of SelectedRows, returns the shape of it's inner tensor.
+        input (Tensor): The input can be N-D Tensor or SelectedRows with data type bool, float16, float32, float64, int32, int64.
+                          If input Tensor is type of SelectedRows, returns the shape of it's inner tensor.
 
     Returns:
-        Variable (Tensor): The shape of the input variable.
+        Tensor: The shape of the input Tensor.
 
     Examples:
         .. code-block:: python
 
-            import paddle.fluid as fluid
-            import numpy as np
+            import paddle
+            x = paddle.randn((2,3))
+            print(paddle.shape(x)) # [2, 3]
 
-            inputs = fluid.data(name="x", shape=[3, 100, 100], dtype="float32")
-            output = fluid.layers.shape(inputs)
-
-            exe = fluid.Executor(fluid.CPUPlace())
-            exe.run(fluid.default_startup_program())
-
-            img = np.ones((3, 100, 100)).astype(np.float32)
-
-            res = exe.run(fluid.default_main_program(), feed={'x':img}, fetch_list=[output])
-            print(res) # [array([  3, 100, 100], dtype=int32)]
     """
+    if in_dygraph_mode():
+        return core.ops.shape(input)
+
     check_variable_and_dtype(
         input, 'input',
         ['bool', 'float16', 'float32', 'float64', 'int32', 'int64'], 'shape')
+
     helper = LayerHelper('shape', **locals())
     out = helper.create_variable_for_type_inference(dtype='int32')
     helper.append_op(
