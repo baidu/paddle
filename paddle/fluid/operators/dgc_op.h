@@ -13,14 +13,33 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #pragma once
+
 #include <vector>
 #include "dgc/dgc.h"
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/memory/malloc.h"
 #include "paddle/fluid/operators/elementwise/elementwise_add_op.h"
 
+#if defined(__NVCC__) || defined(__HIPCC__)
+#include "paddle/fluid/operators/elementwise/elementwise_op_broadcast.cu.h"
+#endif
+
 namespace paddle {
 namespace operators {
+
+template <typename T, typename Enable = void>
+struct CudaTwiceAddFunctor {
+  inline HOSTDEVICE T operator()(const T* args) const {
+    return args[0] + args[1] + args[2];
+  }
+};
+
+template <typename T, typename Enable = void>
+struct CudaAddFunctor {
+  inline HOSTDEVICE T operator()(const T* args) const {
+    return args[0] + args[1];
+  }
+};
 
 inline float get_period_sparcity(const std::vector<float>& sparsity,
                                  float cur_step, float rampup_steps) {
@@ -147,24 +166,48 @@ class DGCOpKernel : public framework::OpKernel<T> {
     //     static_cast<int>(rampup_begin_step)) {
     //   u_out_e.device(eigen_ctx) = (1.0 / nranks) * u_e;
     // }
+    if (platform::is_gpu_place(ctx.GetPlace())) {
+#if defined(__NVCC__) || defined(__HIPCC__)
+      std::vector<const framework::Tensor*> ins = {u, v};
+      std::vector<framework::Tensor*> outs = {v_out};
+      const auto& cuda_ctx =
+          ctx.template device_context<platform::CUDADeviceContext>();
+      if (use_nesterov) {
+        // u = m * (u + g)
+        u_out_e.device(eigen_ctx) = m * (u_e + grad_out_e);
 
-    if (use_nesterov) {
-      // u = m * (u + g)
-      u_out_e.device(eigen_ctx) = m * (u_e + grad_out_e);
+        // v = u + v + g
+        ins.emplace_back(g);
+        LaunchElementwiseCudaKernel<ElementwiseType::kTernary, T, T>(
+            cuda_ctx, ins, &outs, 0, CudaTwiceAddFunctor<T>());
+      } else {
+        // u = m * u + g
+        u_out_e.device(eigen_ctx) = m * u_e + grad_out_e;
 
-      // v = u + v + g
-      ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
-          ctx, u, v, 0, AddFunctor<T>(), v_out);
-
-      ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
-          ctx, g, v, 0, AddFunctor<T>(), v_out);
+        // v = u + v
+        LaunchElementwiseCudaKernel<ElementwiseType::kBinary, T, T>(
+            cuda_ctx, ins, &outs, 0, CudaAddFunctor<T>());
+      }
+#endif
     } else {
-      // u = m * u + g
-      u_out_e.device(eigen_ctx) = m * u_e + grad_out_e;
+      if (use_nesterov) {
+        // u = m * (u + g)
+        u_out_e.device(eigen_ctx) = m * (u_e + grad_out_e);
 
-      // v = u + v
-      ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
-          ctx, u, v, 0, AddFunctor<T>(), v_out);
+        // v = u + v + g
+        ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
+            ctx, u, v, 0, AddFunctor<T>(), v_out);
+
+        ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
+            ctx, g, v_out, 0, AddFunctor<T>(), v_out);
+      } else {
+        // u = m * u + g
+        u_out_e.device(eigen_ctx) = m * u_e + grad_out_e;
+
+        // v = u + v
+        ElementwiseComputeEx<AddFunctor<T>, DeviceContext, T>(
+            ctx, u, v, 0, AddFunctor<T>(), v_out);
+      }
     }
 
     T* v_out_data = v_out->mutable_data<T>(ctx.GetPlace());

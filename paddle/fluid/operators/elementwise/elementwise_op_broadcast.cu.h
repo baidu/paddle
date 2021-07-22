@@ -43,9 +43,8 @@ struct DimensionsTransform {
           } else {
             PADDLE_THROW(platform::errors::InvalidArgument(
                 "The %dth dimension of input tensor is expected to be equal "
-                "with"
-                "the %dth dimension of output tensor %d or 1, but recieved "
-                "%d.\n",
+                "with the %dth dimension of output tensor %d or 1, but "
+                "recieved %d.\n",
                 in_idx + 1, axis + 1, out_dims[axis], in_dim[in_idx]));
           }
         } while (in_idx < in_dim.size());
@@ -310,10 +309,9 @@ __device__ inline void ScalarizedBroadcastKernelImpl(
   OutT args_out;
   broadcast_warpper.LoadScalarizedData(args, tid);
 
-#pragma unroll(ET)
-  for (int j = 1; j < ET; ++j) {
-    args_out = broadcast_warpper.func(args);
-  }
+  // Calcualtion of the in_tensor data.
+  args_out = broadcast_warpper.func(args);
+
   broadcast_warpper.StoreScalarizedData(args_out, tid);
 }
 

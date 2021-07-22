@@ -23,6 +23,9 @@
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/assign_value_op.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.h"
+#if defined(__NVCC__) || defined(__HIPCC__)
+#include "paddle/fluid/operators/elementwise/elementwise_op_broadcast.cu.h"
+#endif
 #include "paddle/fluid/operators/slice_utils.h"
 #include "paddle/fluid/operators/utils.h"
 #include "paddle/fluid/platform/enforce.h"
@@ -59,6 +62,13 @@ inline std::string GetValueName(framework::proto::VarType::Type data_type) {
   }
   return value_name;
 }
+
+template <typename T, typename Enable = void>
+struct CudaSubstractFunctor {
+  inline HOSTDEVICE T operator()(const T* args) const {
+    return args[0] - args[1];
+  }
+};
 
 template <typename DeviceContext, typename T>
 class SetValueKernel : public framework::OpKernel<T> {
@@ -193,21 +203,47 @@ class SetValueKernel : public framework::OpKernel<T> {
     // shape is [3, 3], which cross the border;
     // If do broadcasting on Tensor with shape [3] and [3], the result's shape
     // is [3], which is right.
-
     slice_tensor.Resize(decrease_slice_dims);
-    if (value_tensor != nullptr) {
-      // ElementwiseComputeEx can do broadcasting
-      ElementwiseComputeEx<SubFunctor<T>, DeviceContext, T>(
-          ctx, &slice_tensor, value_tensor, -1, SubFunctor<T>(), &slice_tensor);
+    if (platform::is_gpu_place(ctx.GetPlace())) {
+#if defined(__NVCC__) || defined(__HIPCC__)
+      std::vector<const framework::Tensor*> ins = {&slice_tensor};
+      std::vector<framework::Tensor*> outs = {&slice_tensor};
+      const auto& cuda_ctx =
+          ctx.template device_context<platform::CUDADeviceContext>();
+
+      if (value_tensor) {
+        ins.emplace_back(value_tensor);
+        LaunchElementwiseCudaKernel<ElementwiseType::kBinary, T, T>(
+            cuda_ctx, ins, &outs, -1, CudaSubstractFunctor<T>());
+      } else {
+        Tensor value_t(dtype);
+        auto value_dims = framework::make_ddim(shape);
+        value_t.mutable_data<T>(value_dims, place);
+        auto value_name = GetValueName(dtype);
+        CopyVecotorToTensor<T>(value_name.c_str(), &value_t, ctx);
+        value_t.Resize(value_dims);
+
+        ins.emplace_back(&value_t);
+        LaunchElementwiseCudaKernel<ElementwiseType::kBinary, T, T>(
+            cuda_ctx, ins, &outs, -1, CudaSubstractFunctor<T>());
+      }
+#endif
     } else {
-      Tensor value_t(dtype);
-      auto value_dims = framework::make_ddim(shape);
-      value_t.mutable_data<T>(value_dims, place);
-      auto value_name = GetValueName(dtype);
-      CopyVecotorToTensor<T>(value_name.c_str(), &value_t, ctx);
-      value_t.Resize(value_dims);
-      ElementwiseComputeEx<SubFunctor<T>, DeviceContext, T>(
-          ctx, &slice_tensor, &value_t, -1, SubFunctor<T>(), &slice_tensor);
+      if (value_tensor != nullptr) {
+        // ElementwiseComputeEx can do broadcasting
+        ElementwiseComputeEx<SubFunctor<T>, DeviceContext, T>(
+            ctx, &slice_tensor, value_tensor, -1, SubFunctor<T>(),
+            &slice_tensor);
+      } else {
+        Tensor value_t(dtype);
+        auto value_dims = framework::make_ddim(shape);
+        value_t.mutable_data<T>(value_dims, place);
+        auto value_name = GetValueName(dtype);
+        CopyVecotorToTensor<T>(value_name.c_str(), &value_t, ctx);
+        value_t.Resize(value_dims);
+        ElementwiseComputeEx<SubFunctor<T>, DeviceContext, T>(
+            ctx, &slice_tensor, &value_t, -1, SubFunctor<T>(), &slice_tensor);
+      }
     }
     slice_tensor.Resize(slice_dims);
 

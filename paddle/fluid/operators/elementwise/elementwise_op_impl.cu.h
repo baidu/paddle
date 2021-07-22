@@ -26,7 +26,7 @@ limitations under the License. */
 namespace paddle {
 namespace operators {
 
-enum ElementwiseType { kUnary = 1, kBinary = 2 };
+enum ElementwiseType { kUnary = 1, kBinary = 2, kTernary = 3 };
 
 /*
 * According to NVIDIA, if number of threads per block is 64/128/256/512,
