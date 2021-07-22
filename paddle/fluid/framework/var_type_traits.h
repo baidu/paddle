@@ -177,7 +177,7 @@ using VarTypeRegistry = detail::VarTypeRegistryImpl<
 #if defined(PADDLE_WITH_XPU_BKCL)
     BKCLUniqueId, platform::BKCLCommunicator,
 #endif
-    int, float>;
+    int, float, std::vector<std::string>>;
 
 template <typename T>
 struct VarTypeTrait {
@@ -211,6 +211,7 @@ REG_PROTO_VAR_TYPE_TRAIT(ReaderHolder, proto::VarType::READER);
 REG_PROTO_VAR_TYPE_TRAIT(FetchList, proto::VarType::FETCH_LIST);
 REG_PROTO_VAR_TYPE_TRAIT(int, proto::VarType::INT32);
 REG_PROTO_VAR_TYPE_TRAIT(float, proto::VarType::FP32);
+REG_PROTO_VAR_TYPE_TRAIT(std::vector<std::string>, proto::VarType::STRINGS);
 
 /** End of variable type registration */
 
