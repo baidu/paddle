@@ -1,0 +1,76 @@
+name: C package Release Paddle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-cpu:
+    runs-on: windows-2016
+    steps:
+      - uses: actions/checkout@v2
+      - run: git submodule update --init --recursive
+      - name: Set up Python3
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.6'
+      - name: Build Paddle inference
+        shell: cmd
+        run: |
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
+          mkdir build & cd build
+          cmake .. -G "Visual Studio 15" -A x64 -DWITH_CONTRIB=OFF -DWITH_GPU=OFF -DWITH_MKL=OFF -DWITH_MKLDNN=OFF -DWITH_AVX=OFF -DWITH_TESTING=OFF -DWITH_INFERENCE_API_TEST=OFF -DANAKIN_X86=ON -DWITH_CRYPTO=OFF  -DON_INFER=ON  -DWITH_PYTHON=OFF -DCMAKE_BUILD_TYPE=Release
+          msbuild /m /property:Configuration=Release .\third_party.vcxproj
+          msbuild /m /property:Configuration=Release .\inference_lib_dist.vcxproj
+      - name: Upload compiled native library
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: Paddle_Windows_CPU
+          path: build/paddle_inference_c_install_dir
+
+  mac-cpu:
+    runs-on: macos-10.15
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python3
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.6'
+      # - name: Install dependencies
+      #   run: brew install openblas
+      - name: Build Paddle
+        run: |
+          mkdir build && cd build
+          cmake .. -DWITH_CONTRIB=OFF -DWITH_GPU=OFF -DWITH_MKL=OFF -DWITH_MKLDNN=OFF -DWITH_AVX=OFF -DWITH_TESTING=OFF -DWITH_INFERENCE_API_TEST=OFF -DANAKIN_X86=ON -DWITH_CRYPTO=OFF  -DON_INFER=ON  -DWITH_PYTHON=OFF -DCMAKE_BUILD_TYPE=Release
+          make -j2 inference_lib_dist
+      - name: Upload compiled native library
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: Paddle_Mac_CPU
+          path: build/paddle_inference_c_install_dir
+
+  linux-cpu:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python3
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.6'
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y patchelf
+          pip3 install cmake
+      - name: Build Paddle
+        run: |
+          mkdir build && cd build
+          ulimit -n 2048
+          cmake .. -DWITH_CONTRIB=OFF -DWITH_GPU=OFF -DWITH_MKL=OFF -DWITH_MKLDNN=OFF -DWITH_AVX=OFF -DWITH_TESTING=OFF -DWITH_INFERENCE_API_TEST=OFF -DANAKIN_X86=ON -DWITH_CRYPTO=OFF  -DON_INFER=ON  -DWITH_PYTHON=OFF -DCMAKE_BUILD_TYPE=Release
+          make -j2 inference_lib_dist
+      - name: Upload compiled native library
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: Paddle_Linux_CPU
+          path: build/paddle_inference_c_install_dir

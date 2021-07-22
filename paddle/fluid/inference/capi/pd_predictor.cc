@@ -89,11 +89,15 @@ bool PD_PredictorRun(const PD_AnalysisConfig* config, PD_Tensor* inputs,
   VLOG(3) << "Predoctor: PD_PredictorRun. ";
   static std::map<std::string, std::unique_ptr<paddle::PaddlePredictor>>
       predictors;
-  if (!predictors.count(config->config.model_dir())) {
-    predictors[config->config.model_dir()] =
-        paddle::CreatePaddlePredictor(config->config);
+  std::string val = config->config.model_dir();
+  // fallback to prog_file_
+  if (val.empty()) {
+    val = config->config.prog_file();
   }
-  auto& predictor = predictors[config->config.model_dir()];
+  if (!predictors.count(val)) {
+    predictors[val] = paddle::CreatePaddlePredictor(config->config);
+  }
+  auto& predictor = predictors[val];
   std::vector<paddle::PaddleTensor> in;
   for (int i = 0; i < in_size; ++i) {
     in.emplace_back(inputs->tensor);
