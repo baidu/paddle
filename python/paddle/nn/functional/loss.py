@@ -1098,6 +1098,258 @@ def ctc_loss(log_probs,
     return loss_out
 
 
+def margin_softmax_with_cross_entropy(logits,
+                                      label,
+                                      margin1=1.0,
+                                      margin2=0.5,
+                                      margin3=0.0,
+                                      scale=64.0,
+                                      group=None,
+                                      return_softmax=False,
+                                      reduction='mean'):
+    """
+    .. math::
+
+        L=-\frac{1}{N}\sum^N_{i=1}\log\frac{e^{s(cos(m_{1}\theta_{y_i}+m_{2})-m_{3})}}{e^{s(cos(m_{1}\theta_{y_i}+m_{2})-m_{3})}+\sum^n_{j=1,j\neq y_i} e^{scos\theta_{y_i}}}
+
+    where the :math: `\theta_{y_i}` is the angle between the feature :math: `x` and
+    the representation of class :math: `i`. The details of ArcFace loss
+    could be referred to https://arxiv.org/abs/1801.07698.
+
+    Note that the API supports model parallel and single GPU. And logits.shape[-1] can be different each rank.
+
+    Args:
+    	logits (Tensor): shape[N, local_num_classes], the output of the normalized X multiply the normalized W.
+                The logits is shard_logits when using model parallel.
+    	label (Tensor): shape[N] or shape[N, 1], the groud truth label.
+    	margin1 (float): (1.0), m1 of margin loss.
+    	margin2 (float): (0.5), m2 of margin loss.
+    	margin3 (float): (0.0), m3 of margin loss.
+    	scale (float): (64.0), s of margin loss.
+        group (Group): The abstract representation of group, see paddle.distributed.collective.Group
+        return_softmax (bool): (False), whether return softmax probability.
+        reduction (str): ('mean'), The candicates are ``'none'`` | ``'mean'`` | ``'sum'``.
+                    If :attr:`reduction` is ``'mean'``, return the average of loss;
+                    If :attr:`reduction` is ``'sum'``, return the sum of loss;
+                    If :attr:`reduction` is ``'none'``, no reduction will be applied.
+
+    Return:
+    	loss (Tensor or Scalar): if reduction==None, shape[N, 1], else shape[1], the cross entropy loss.
+    	softmax (Tensor): softmax probability. The softmax is shard_softmax when using model parallel.
+
+    Examples:
+    .. code-block:: python
+        # for single GPU
+        import paddle
+        import numpy as np
+        m1 = 1.0
+        m2 = 0.5
+        m3 = 0.0
+        s = 64.0
+        batch_size = 2
+        feature_length = 4
+        num_classes = 4
+
+        np_label = np.random.randint(0, num_classes, (batch_size,))
+        label = paddle.to_tensor(np_label, dtype="int64")
+
+        X = paddle.randn(
+            shape=[batch_size, feature_length],
+            dtype='float64')
+        X_l2 = paddle.sqrt(paddle.sum(paddle.square(X), axis=1, keepdim=True))
+        X = paddle.divide(X, X_l2)
+
+        W = paddle.randn(
+            shape=[feature_length, num_classes],
+            dtype='float64')
+        W_l2 = paddle.sqrt(paddle.sum(paddle.square(W), axis=0, keepdim=True))
+        W = paddle.divide(W, W_l2)
+
+        logits = paddle.matmul(X, W)
+        loss, softmax = paddle.nn.functional.margin_softmax_with_cross_entropy(
+            logits, label, margin1=m1, margin2=m2, margin3=m3, scale=s, return_softmax=True, reduction=None)
+
+        print(logits)
+        print(label)
+        print(loss)
+        print(softmax)
+        
+        #Tensor(shape=[2, 4], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[ 0.85204151, -0.55557678,  0.04994566,  0.71986042],
+        #        [-0.20198586, -0.35270476, -0.55182702,  0.09749021]])
+        #Tensor(shape=[2], dtype=int64, place=CUDAPlace(0), stop_gradient=True,
+        #       [2, 3])
+        #Tensor(shape=[2, 1], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[82.37059586],
+        #        [12.13448420]])
+        #Tensor(shape=[2, 4], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[0.99978819, 0.00000000, 0.00000000, 0.00021181],
+        #        [0.99992995, 0.00006468, 0.00000000, 0.00000537]])
+
+        ## for multi GPU, test_margin_softmax_with_cross_entropy.py
+        #import paddle
+        #import paddle.distributed as dist
+        #import numpy as np
+        #strategy = dist.fleet.DistributedStrategy()
+        #dist.fleet.init(is_collective=True, strategy=strategy)
+        #rank_id = dist.get_rank()
+        #m1 = 1.0
+        #m2 = 0.5
+        #m3 = 0.0
+        #s = 64.0
+        #batch_size = 2
+        #feature_length = 4
+        #num_class_per_card = [4, 8]
+        #num_classes = np.sum(num_class_per_card)
+
+        #np_label = np.random.randint(0, num_classes, (batch_size,))
+        #label = paddle.to_tensor(np_label, dtype="int64")
+        #label_list = []
+        #dist.all_gather(label_list, label)
+        #label = paddle.concat(label_list, axis=0)
+
+        #X = paddle.randn(
+        #    shape=[batch_size, feature_length],
+        #    dtype='float64')
+        #X_list = []
+        #dist.all_gather(X_list, X)
+        #X = paddle.concat(X_list, axis=0)
+        #X_l2 = paddle.sqrt(paddle.sum(paddle.square(X), axis=1, keepdim=True))
+        #X = paddle.divide(X, X_l2)
+
+        #W = paddle.randn(
+        #    shape=[feature_length, num_class_per_card[rank_id]],
+        #    dtype='float64')
+        #W_l2 = paddle.sqrt(paddle.sum(paddle.square(W), axis=0, keepdim=True))
+        #W = paddle.divide(W, W_l2)
+
+        #logits = paddle.matmul(X, W)
+        #loss, softmax = paddle.nn.functional.margin_softmax_with_cross_entropy(
+        #    logits, label, margin1=m1, margin2=m2, margin3=m3, scale=s, return_softmax=True, reduction=None)
+
+        #print(logits)
+        #print(label)
+        #print(loss)
+        #print(softmax)
+
+        #python -m paddle.distributed.launch --gpus=0,1 test_margin_softmax_with_cross_entropy.py 
+        ## for rank0 input
+        #Tensor(shape=[4, 4], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[ 0.32888934,  0.02408748, -0.02763289,  0.18173063],
+        #        [-0.52893978, -0.10623845, -0.21596515, -0.06432517],
+        #        [-0.00536345, -0.03924667,  0.66735314, -0.28640926],
+        #        [-0.09907366, -0.48534973, -0.10365338, -0.39472322]])
+        #Tensor(shape=[4], dtype=int64, place=CUDAPlace(0), stop_gradient=True,
+        #       [11, 1 , 10, 11])
+
+        ## for rank1 input
+        #Tensor(shape=[4, 8], dtype=float64, place=CUDAPlace(1), stop_gradient=True,
+        #       [[ 0.68654754,  0.28137170,  0.69694954, -0.60923933, -0.57077653,  0.54576703, -0.38709028,  0.56028204],
+        #        [-0.80360371, -0.03042448, -0.45107338,  0.49559349,  0.69998950, -0.45411693,  0.61927630, -0.82808600],
+        #        [ 0.11457570, -0.34785879, -0.68819499, -0.26189226, -0.48241491, -0.67685711,  0.06510185,  0.49660849],
+        #        [ 0.31604851,  0.52087884,  0.53124749, -0.86176582, -0.43426329,  0.34786144, -0.10850784,  0.51566383]])
+        #Tensor(shape=[4], dtype=int64, place=CUDAPlace(1), stop_gradient=True,
+        #       [11, 1 , 10, 11])
+
+        ## for rank0 output
+        #Tensor(shape=[4, 1], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[38.96608230],
+        #        [81.28152394],
+        #        [69.67229865],
+        #        [31.74197251]])
+        #Tensor(shape=[4, 4], dtype=float64, place=CUDAPlace(0), stop_gradient=True,
+        #       [[0.00000000, 0.00000000, 0.00000000, 0.00000000],
+        #        [0.00000000, 0.00000000, 0.00000000, 0.00000000],
+        #        [0.00000000, 0.00000000, 0.99998205, 0.00000000],
+        #        [0.00000000, 0.00000000, 0.00000000, 0.00000000]])
+        ## for rank1 output
+        #Tensor(shape=[4, 1], dtype=float64, place=CUDAPlace(1), stop_gradient=True,
+        #       [[38.96608230],
+        #        [81.28152394],
+        #        [69.67229865],
+        #        [31.74197251]])
+        #Tensor(shape=[4, 8], dtype=float64, place=CUDAPlace(1), stop_gradient=True,
+        #       [[0.33943993, 0.00000000, 0.66051859, 0.00000000, 0.00000000, 0.00004148, 0.00000000, 0.00000000],
+        #        [0.00000000, 0.00000000, 0.00000000, 0.00000207, 0.99432097, 0.00000000, 0.00567696, 0.00000000],
+        #        [0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00001795],
+        #        [0.00000069, 0.33993085, 0.66006319, 0.00000000, 0.00000000, 0.00000528, 0.00000000, 0.00000000]])
+    """
+
+    assert reduction in ['mean', 'sum', 'none', None]
+    if group is not None and not group.is_member():
+        return
+
+    ring_id = 0 if group is None else group.id
+    rank = 0
+    nranks = 1
+    if core.is_compiled_with_dist():
+        parallel_env = paddle.distributed.ParallelEnv()
+        global_rank = parallel_env.rank
+        rank = global_rank if group is None else group.get_group_rank(
+            global_rank)
+        nranks = parallel_env.world_size if group is None else group.nranks
+
+    input_dims = len(list(logits.shape))
+    label_dims = len(list(label.shape))
+    if input_dims - 1 != label_dims and input_dims != label_dims:
+        raise ValueError(
+            'Expected nput_dims - 1 = label_dims or input_dims == label_dims\
+             (got nput_dims{}, label_dims{})'.format(input_dims, label_dims))
+    if input_dims - 1 == label_dims:
+        label = paddle.unsqueeze(label, axis=-1)
+
+    if in_dygraph_mode():
+        softmax, loss = core.ops.margin_softmax_with_cross_entropy(
+            logits, label, 'ring_id', ring_id, 'rank', rank, 'nranks', nranks,
+            'margin1', margin1, 'margin2', margin2, 'margin3', margin3, 'scale',
+            scale)
+        if reduction == 'mean':
+            loss = paddle.mean(loss)
+        elif reduction == 'sum':
+            loss = paddle.sum(loss)
+        if not return_softmax:
+            return loss
+        else:
+            return loss, softmax
+
+    op_type = 'margin_softmax_with_cross_entropy'
+    helper = LayerHelper(op_type, **locals())
+    softmax = helper.create_variable_for_type_inference(dtype=logits.dtype)
+    loss = helper.create_variable_for_type_inference(dtype=logits.dtype)
+
+    check_variable_and_dtype(logits, 'logits',
+                             ['float16', 'float32', 'float64'],
+                             'margin_softmax_with_cross_entropy')
+    check_variable_and_dtype(label, 'label', ['int32', 'int64'],
+                             'margin_softmax_with_cross_entropy')
+
+    helper.append_op(
+        type=op_type,
+        inputs={'Logits': logits,
+                'Label': label},
+        outputs={'Softmax': softmax,
+                 'Loss': loss},
+        attrs={
+            'ring_id': ring_id,
+            'rank': rank,
+            'nranks': nranks,
+            'margin1': margin1,
+            'margin2': margin2,
+            'margin3': margin3,
+            'scale': scale,
+        })
+
+    if reduction == 'mean':
+        loss = paddle.mean(loss)
+    elif reduction == 'sum':
+        loss = paddle.sum(loss)
+
+    if not return_softmax:
+        return loss
+    else:
+        return loss, softmax
+
+
 @deprecated(
     since="2.0.0",
     update_to="paddle.nn.functional.cross_entropy",

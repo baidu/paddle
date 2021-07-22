@@ -79,6 +79,7 @@ from .loss import npair_loss  # noqa: F401
 from .loss import sigmoid_focal_loss  # noqa: F401
 from .loss import smooth_l1_loss  # noqa: F401
 from .loss import softmax_with_cross_entropy  # noqa: F401
+from .loss import margin_softmax_with_cross_entropy  # noqa: F401
 from .loss import square_error_cost  # noqa: F401
 from .loss import ctc_loss  # noqa: F401
 from .norm import batch_norm  # noqa: F401
@@ -185,6 +186,7 @@ __all__ = [     #noqa
            'sigmoid_focal_loss',
            'smooth_l1_loss',
            'softmax_with_cross_entropy',
+           'margin_softmax_with_cross_entropy',
            'square_error_cost',
            'ctc_loss',
            'affine_grid',
