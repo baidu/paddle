@@ -73,6 +73,8 @@ DEFINE_int32(warmup_iters, 1, "Number of batches to process during warmup.");
 
 DEFINE_bool(enable_profile, false, "Turn on profiler for fluid");
 DEFINE_int32(cpu_num_threads, 1, "Number of threads for each paddle instance.");
+DEFINE_bool(fuse_multi_gru, false,
+            "Running the inference program with multi_gru_fuse_pass");
 
 namespace paddle {
 namespace inference {

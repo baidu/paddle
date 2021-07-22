@@ -52,7 +52,7 @@ class AnalysisPredictor::MkldnnQuantizer {
   // Execute full quantization procedure.
   bool Quantize();
 
-#if PADDLE_WITH_TESTING
+#ifdef PADDLE_WITH_TESTING
   friend class MkldnnQuantizerTest;
 #endif
 
@@ -67,6 +67,11 @@ class AnalysisPredictor::MkldnnQuantizer {
                             const std::string& var_name,
                             const framework::LoDTensor& var_tensor,
                             bool is_unsigned);
+  void CalculateSingleGRUWeightsScale(const std::string& var_name,
+                                      const framework::LoDTensor& var_tensor);
+  void CalculateScalesForGRUWeights(const paddle::framework::OpDesc* op);
+  void CalculateScalesForOpOutputs(const paddle::framework::OpDesc* op);
+  void CalculateScalesForOpInputs(const paddle::framework::OpDesc* op);
   void PrepareArgument() const;
   void ClearDeviceContext() const;
   bool RunQuantizePasses() const;
@@ -81,6 +86,10 @@ class AnalysisPredictor::MkldnnQuantizer {
   std::pair<bool, framework::LoDTensor> GetMaxChScalingFactor(
       const framework::LoDTensor& var_tensor, bool is_unsigned,
       bool is_transposed) const;
+
+  std::pair<bool, framework::LoDTensor> GetMaxChGRUScalingFactor(
+      const framework::LoDTensor& wx_tensor,
+      const framework::LoDTensor& wh_tensor) const;
 
   std::pair<bool, framework::LoDTensor> GetMaxScalingFactor(
       const framework::LoDTensor& var_tensor, bool is_unsigned) const;

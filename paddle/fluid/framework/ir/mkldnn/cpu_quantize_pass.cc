@@ -835,7 +835,7 @@ void CPUQuantizePass::QuantizeFusionGru(Graph* graph) const {
     GET_IR_NODE_FROM_SUBGRAPH(weight_x, weight_x, pattern);
     GET_IR_NODE_FROM_SUBGRAPH(out, out, pattern);
 
-    if (!AreScalesPresentForNodes({x, weight_h, weight_x})) {
+    if (!AreScalesPresentForNodes({x, weight_x})) {
       LogCannotQuantizeOp(op);
       return;
     }
