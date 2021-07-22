@@ -104,8 +104,8 @@ class CTCAlignOpCUDAKernel : public framework::OpKernel<T> {
       const size_t num_seq = input_lod[level].size() - 1;
 
       // prepare a lod to record lod information while merging elements
-      thrust::device_vector<size_t> dev_out_lod0(input_lod[level].size());
-      size_t* dev_out_lod0_ptr = thrust::raw_pointer_cast(dev_out_lod0.data());
+      size_t* dev_out_lod0_ptr{nullptr};
+      cudaMalloc(&dev_out_lod0_ptr, sizeof(size_t) * input_lod[level].size());
 
       // merge elements and delete blank
       T* output_data = output->mutable_data<T>({num_tokens, 1}, ctx.GetPlace());
@@ -116,8 +116,11 @@ class CTCAlignOpCUDAKernel : public framework::OpKernel<T> {
           merge_repeated, dev_out_lod0_ptr, output_data);
 
       // set output lod
-      std::vector<size_t> host_out_lod0(dev_out_lod0.begin(),
-                                        dev_out_lod0.end());
+      std::vector<size_t> host_out_lod0(input_lod[level].size());
+      cudaMemcpy(host_out_lod0.data(), dev_out_lod0_ptr,
+                 input_lod[level].size() * sizeof(size_t),
+                 cudaMemcpyDeviceToHost);
+
       framework::LoD out_lod;
       out_lod.push_back(host_out_lod0);
       output->set_lod(out_lod);
