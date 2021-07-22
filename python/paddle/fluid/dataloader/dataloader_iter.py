@@ -125,13 +125,6 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
 
         self._init_thread()
 
-        # if user exit python program when dataloader is still
-        # iterating, resource may no release safely, so we
-        # add __del__ function to to CleanupFuncRegistrar
-        # to make sure __del__ is always called when program
-        # exit for resoure releasing safely
-        CleanupFuncRegistrar.register(self.__del__)
-
     def _init_thread(self):
         self._var_names = [v.name for v in self._feed_list]
         self._shapes = [v.shape for v in self._feed_list]
@@ -229,9 +222,7 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
     def _shutdown_thread(self):
         if self._thread:
             self._thread_done_event.set()
-            if self._thread is not threading.current_thread():
-                self._thread.join()
-                self._thread = None
+            self._thread = None
 
     # python2 compatibility
     def next(self):
@@ -286,17 +277,6 @@ class _DataLoaderIterMultiProcess(_DataLoaderIterBase):
 
         self._init_thread()
         self._shutdown = False
-
-        # if user exit python program when dataloader is still
-        # iterating, resource may no release safely, so we
-        # add _shutdown_on_exit function to to CleanupFuncRegistrar
-        # to make sure _try_shutdown_all is always called when program
-        # exit for resoure releasing safely
-        # worker join may hang for in _try_shutdown_all call in atexit
-        # for main process is in atexit state in some OS, so we add
-        # timeout=1 for shutdown function call in atexit, for shutdown
-        # function call in __del__, we keep it as it is
-        CleanupFuncRegistrar.register(self._shutdown_on_exit)
 
     def _init_workers(self):
         # multiprocess worker and indice queue list initial as empty
