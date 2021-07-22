@@ -1057,6 +1057,19 @@ PYBIND11_MODULE(core_noavx, m) {
              ostr << self;
              return ostr.str();
            })
+      // .def("_pin_memory",
+      //      [](const LoDTensor &self) {
+      //        LoDTensor dst;
+      //        if (self.IsInitialized() && self.numel() > 0) {
+      //          TensorCopySync(self, platform::CUDAPinnedPlace(), &dst);
+      //        } else {
+      //          // Not copy, if the src tensor is empty.
+      //          dst.clear();
+      //          dst.Resize({0});
+      //        }
+      //        dst.set_lod(self.lod());
+      //        return dst;
+      //      })
       .def("_copy", [](const LoDTensor &self, const platform::Place &place) {
         // follow fetch_op's inplementation
         LoDTensor dst;

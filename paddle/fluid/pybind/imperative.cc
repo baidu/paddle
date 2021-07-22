@@ -279,6 +279,27 @@ static void InitVarBaseFromTensorWithArgDefault(
   }
 }
 
+template <typename P>
+static void InitVarBaseFromTensorWithArg(imperative::VarBase *self,
+                                         const framework::LoDTensor &tensor,
+                                         const P &place) {
+  VLOG(4) << "Init VarBase";
+  new (self) imperative::VarBase(
+      imperative::GetCurrentTracer()->GenerateUniqueName("generated_tensor"));
+  self->SetPersistable(false);
+  self->SetType(framework::proto::VarType::LOD_TENSOR);
+  self->SetDataType(tensor.type());
+  auto *new_tensor = self->MutableVar()->GetMutable<framework::LoDTensor>();
+  // Same place，share data directly
+  if (typeid(place) == typeid(tensor.place())) {
+    new_tensor->ShareDataWith(tensor);
+    VLOG(4) << "Same place, do ShareDataWith";
+  } else {
+    framework::TensorCopy(tensor, place, new_tensor);
+    VLOG(4) << "Different place, do TensorCopy";
+  }
+}
+
 static std::string GetTypeName(const imperative::VarBase &var) {
   if (var.Type() == framework::proto::VarType::RAW) {
     return "RAW";
@@ -755,6 +776,14 @@ void BindImperative(py::module *m_ptr) {
            py::arg("stop_gradient") = -1)
       .def("__init__", &InitVarBaseFromNumpyWithArgDefault, py::arg("value"))
       .def("__init__", &InitVarBaseFromTensorWithArgDefault, py::arg("tensor"))
+      .def("__init__", &InitVarBaseFromTensorWithArg<platform::CPUPlace>,
+           py::arg("tensor"), py::arg("place"))
+      .def("__init__", &InitVarBaseFromTensorWithArg<platform::XPUPlace>,
+           py::arg("tensor"), py::arg("place"))
+      .def("__init__", &InitVarBaseFromTensorWithArg<platform::CUDAPlace>,
+           py::arg("tensor"), py::arg("place"))
+      .def("__init__", &InitVarBaseFromTensorWithArg<platform::CUDAPinnedPlace>,
+           py::arg("tensor"), py::arg("place"))
       .def("__init__", &InitVarBaseFromNumpyWithKwargs)
       .def("__setitem__",
            [](std::shared_ptr<imperative::VarBase> &self, py::handle _index,
