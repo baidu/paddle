@@ -1229,15 +1229,15 @@ set +x
                 testcase=''
         done <<< "$test_cases";
 
-        card_test "$single_card_tests_high_parallel" 1 6        # run cases the most each time with single GPU
-        card_test "$single_card_tests_two_parallel" 1 2         # run cases 2 job each time with single GPU
-        card_test "$single_card_tests_non_parallel" 1           # run cases 1 job each time with single GPU
+        card_test "$single_card_tests_high_parallel" 1 24        # run cases the most each time with single GPU
+        card_test "$single_card_tests_two_parallel" 1 24         # run cases 2 job each time with single GPU
+        card_test "$single_card_tests_non_parallel" 1 16          # run cases 1 job each time with single GPU
         
-        card_test "$multiple_card_tests_two_parallel" 2 2       # run cases 2 job each time with two GPUs
-        card_test "$multiple_card_tests_non_parallel" 2         # run cases 1 job each time with two GPUs
+        card_test "$multiple_card_tests_two_parallel" 2 20       # run cases 2 job each time with two GPUs
+        card_test "$multiple_card_tests_non_parallel" 2 16        # run cases 1 job each time with two GPUs
         
-        card_test "$exclusive_tests_two_parallel" -1 2          # run cases exclusively, in this cases would be run with 2/4/8 GPUs
-        card_test "$exclusive_tests_non_parallel" -1            # run cases exclusively, in this cases would be run with 2/4/8 GPUs
+        card_test "$exclusive_tests_two_parallel" -1 20          # run cases exclusively, in this cases would be run with 2/4/8 GPUs
+        card_test "$exclusive_tests_non_parallel" -1 16         # run cases exclusively, in this cases would be run with 2/4/8 GPUs
         collect_failed_tests
         rm -f $tmp_dir/*
         exec_times=0
