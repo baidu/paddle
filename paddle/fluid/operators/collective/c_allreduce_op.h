@@ -171,9 +171,14 @@ class CAllReduceOpASCENDKernel : public framework::OpKernel<T> {
             "Invalid reduce type: %d", red_type));
     }
 
-    VLOG(3) << "begin hccl allreduce, parameter is: "
+    // NOTE(gongwb): It's useful to debug.
+    VLOG(3) << "after hccl allreduce, parameter is: "
             << "input num: " << numel << "dtype: " << dtype
-            << "hccl_red_type: " << hccl_red_type << ", group is: " << group;
+            << "hccl_red_type: " << hccl_red_type << ", group is: " << group
+            << ", sendbuff:" << sendbuff << ", recvbuff:" << recvbuff
+            << ", out_size:" << out->memory_size()
+            << ", use_calc_stream:" << ctx.Attr<bool>("use_calc_stream")
+            << ", stream:" << stream;
 
     PADDLE_ENFORCE_NPU_SUCCESS(platform::dynload::HcclAllReduce(
         sendbuff, recvbuff, numel, dtype, hccl_red_type, comm->comm(),
@@ -198,7 +203,7 @@ class CAllReduceOpXPUKernel : public framework::OpKernel<T> {
     auto place = ctx.GetPlace();
     BKCLDataType dtype = platform::ToBKCLDataType(in->type());
     int64_t numel = in->numel();
-    const void* sendbuff = in->data<void>();
+    const void* sendbuff = in->data<T>();
     out->Resize(in->dims());
     void* recvbuff = out->mutable_data<T>(place);
 
@@ -260,7 +265,7 @@ class CAllReduceOpCUDAKernel : public framework::OpKernel<T> {
     auto place = ctx.GetPlace();
     ncclDataType_t dtype = platform::ToNCCLDataType(in->type());
     int64_t numel = in->numel();
-    const void* sendbuff = in->data<void>();
+    const void* sendbuff = in->data<T>();
     out->Resize(in->dims());
     void* recvbuff = out->mutable_data<T>(place);
 

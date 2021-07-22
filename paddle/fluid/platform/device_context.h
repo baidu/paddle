@@ -111,7 +111,10 @@ class DeviceContext {
   virtual ~DeviceContext() PADDLE_MAY_THROW {}
   virtual Place GetPlace() const = 0;
 
-  virtual void Wait() const {}
+  virtual void Wait() const {
+    PADDLE_THROW(platform::errors::Unimplemented(
+        "DeviceContext does not implement Wait method."));
+  }
 };
 
 class CPUDeviceContext : public DeviceContext {
