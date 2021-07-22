@@ -56,10 +56,11 @@ class TestFuseOptimizationOps(TestParallelExecutorBase):
             fuse_all_optimizer_ops=True,
             optimizer=optimizer)
 
+        delta = 1e-4 if core.is_compiled_with_rocm() else 1e-6
         for loss in zip(not_fuse_op_first_loss, fuse_op_first_loss):
-            self.assertAlmostEquals(loss[0], loss[1], delta=1e-6)
+            self.assertAlmostEquals(loss[0], loss[1], delta=delta)
         for loss in zip(not_fuse_op_last_loss, fuse_op_last_loss):
-            self.assertAlmostEquals(loss[0], loss[1], delta=1e-6)
+            self.assertAlmostEquals(loss[0], loss[1], delta=delta)
 
     def _decorate_compare_fused_optimizer_ops(self, model, use_device,
                                               optimizer):

@@ -113,6 +113,8 @@ class TestFuseBatchNormActPass(unittest.TestCase):
 
     def test_fuse_bn_act_pass_cuda(self):
         if fluid.core.is_compiled_with_cuda():
+            if fluid.core.is_compiled_with_rocm():
+                return
             place = fluid.CUDAPlace(0)
             self.check(place, use_cuda=True)
 
