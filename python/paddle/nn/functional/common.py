@@ -265,19 +265,6 @@ def interpolate(x,
         'BICUBIC',
         'AREA',
     ]
-    if resample not in resample_methods:
-        raise ValueError(
-            "The 'resample' of image_resize can only be 'area', 'linear', 'bilinear', 'trilinear', "
-            " 'bicubic' or 'nearest' currently.")
-
-    if resample in ['LINEAR'] and len(x.shape) != 3:
-        raise ValueError("'linear' only support 3-D tensor.")
-
-    if resample in ['BILINEAR', 'NEAREST', 'BICUBIC'] and len(x.shape) != 4:
-        raise ValueError(
-            "'bilinear', 'bicubic' and 'nearest' only support 4-D tensor.")
-    if resample == 'TRILINEAR' and len(x.shape) != 5:
-        raise ValueError("'trilinear'only support 5-D tensor.")
 
     if size is None and scale_factor is None:
         raise ValueError("One of size and scale_factor must not be None.")
@@ -292,13 +279,13 @@ def interpolate(x,
             "align_corners option can only be set with the interpolating modes: linear | bilinear | bicubic | trilinear"
         )
 
-    if resample == 'AREA' and len(x.shape) == 3:
-        return paddle.nn.functional.adaptive_avg_pool1d(x, size)
-
-    if resample == 'AREA' and len(x.shape) == 4:
-        return paddle.nn.functional.adaptive_avg_pool2d(x, size)
-    if resample == 'AREA' and len(x.shape) == 5:
-        return paddle.nn.functional.adaptive_avg_pool3d(x, size)
+    if resample == 'AREA':
+        if len(x.shape) == 3:
+            return paddle.nn.functional.adaptive_avg_pool1d(x, size)
+        elif len(x.shape) == 4:
+            return paddle.nn.functional.adaptive_avg_pool2d(x, size)
+        elif len(x.shape) == 5:
+            return paddle.nn.functional.adaptive_avg_pool3d(x, size)
 
     helper = LayerHelper('{}_interp_v2'.format(resample_type), **locals())
     dtype = helper.input_dtype(input_param_name='x')
@@ -318,10 +305,7 @@ def interpolate(x,
     def _is_list_or_turple_(data):
         return (isinstance(data, list) or isinstance(data, tuple))
 
-    if data_format == 'NCHW' or data_format == 'NCDHW' or data_format == 'NCW':
-        data_layout = 'NCHW'
-    if data_format == 'NHWC' or data_format == 'NDHWC' or data_format == 'NWC':
-        data_layout = 'NHWC'
+    data_layout = 'NCHW' if data_format[1] == 'C' else 'NHWC'
 
     if resample == 'NEAREST':
         align_corners = False
@@ -339,9 +323,10 @@ def interpolate(x,
 
     out_shape = size
     scale = scale_factor
-    if out_shape is not None and scale is not None:
-        raise ValueError("Only one of size or scale_factor should be defined.")
     if out_shape is not None:
+        if scale is not None:
+            raise ValueError(
+                "Only one of size or scale_factor should be defined.")
 
         if isinstance(out_shape, Variable) and not in_dygraph_mode():
             out_shape.stop_gradient = True
@@ -463,6 +448,21 @@ def interpolate(x,
         elif resample_type == "bicubic":
             out = _C_ops.bicubic_interp_v2(x, *dy_attr)
         return out
+
+    if resample not in resample_methods:
+        raise ValueError(
+            "The 'resample' of image_resize can only be 'area', 'linear', 'bilinear', 'trilinear', "
+            " 'bicubic' or 'nearest' currently.")
+
+    if resample in ['LINEAR'] and len(x.shape) != 3:
+        raise ValueError("'linear' only support 3-D tensor.")
+
+    if resample in ['BILINEAR', 'NEAREST', 'BICUBIC'] and len(x.shape) != 4:
+        raise ValueError(
+            "'bilinear', 'bicubic' and 'nearest' only support 4-D tensor.")
+    if resample == 'TRILINEAR' and len(x.shape) != 5:
+        raise ValueError("'trilinear'only support 5-D tensor.")
+
     out = helper.create_variable_for_type_inference(dtype)
     helper.append_op(
         type='{}_interp_v2'.format(resample_type),

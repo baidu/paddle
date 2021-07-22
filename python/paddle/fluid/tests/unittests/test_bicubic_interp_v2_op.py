@@ -375,7 +375,7 @@ class TestBicubicOpError(unittest.TestCase):
             # the input of interpoalte must be Variable.
             x1 = fluid.create_lod_tensor(
                 np.array([-1, 3, 5, 5]), [[1, 1, 1, 1]], fluid.CPUPlace())
-            self.assertRaises(TypeError, interpolate, x1)
+            self.assertRaises(ValueError, interpolate, x1)
 
             def test_mode_type():
                 # mode must be "BILINEAR" "TRILINEAR" "NEAREST" "BICUBIC"
