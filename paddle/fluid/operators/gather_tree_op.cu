@@ -50,6 +50,14 @@ class GatherTreeOpCUDAKernel : public framework::OpKernel<T> {
     const auto *parents_data = parents->data<T>();
     auto *out_data = out->mutable_data<T>(ctx.GetPlace());
 
+    PADDLE_ENFORCE_NOT_NULL(
+        ids_data, platform::errors::InvalidArgument(
+                      "Input(Ids) of gather_tree should not be null."));
+
+    PADDLE_ENFORCE_NOT_NULL(
+        parents_data, platform::errors::InvalidArgument(
+                          "Input(Parents) of gather_tree should not be null."));
+
     auto &ids_dims = ids->dims();
     int64_t max_length = ids_dims[0];
     int64_t batch_size = ids_dims[1];

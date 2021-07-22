@@ -38,6 +38,14 @@ class GatherTreeOpKernel : public framework::OpKernel<T> {
     auto batch_size = ids_dims[1];
     auto beam_size = ids_dims[2];
 
+    PADDLE_ENFORCE_NOT_NULL(
+        ids_data, platform::errors::InvalidArgument(
+                      "Input(Ids) of gather_tree should not be null."));
+
+    PADDLE_ENFORCE_NOT_NULL(
+        parents_data, platform::errors::InvalidArgument(
+                          "Input(Parents) of gather_tree should not be null."));
+
     for (int batch = 0; batch < batch_size; batch++) {
       for (int beam = 0; beam < beam_size; beam++) {
         auto idx = (max_length - 1) * batch_size * beam_size +
