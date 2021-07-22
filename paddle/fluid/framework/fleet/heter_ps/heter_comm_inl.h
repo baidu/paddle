@@ -525,12 +525,15 @@ void HeterComm<KeyType, ValType, GradType>::pull_sparse(int num,
     auto& node = path_[num][i].nodes_.back();
     cudaStreamSynchronize(node.in_stream);
     platform::CUDADeviceGuard guard(resource_->dev_id(i));
+    tables_[i]->rwlock_->RDLock();
     tables_[i]->get(reinterpret_cast<KeyType*>(node.key_storage),
                     reinterpret_cast<ValType*>(node.val_storage),
-                    h_right[i] - h_left[i] + 1, resource_->remote_stream(i));
+                    h_right[i] - h_left[i] + 1,
+                    resource_->remote_stream(i, num));
   }
   for (int i = 0; i < total_gpu; ++i) {
-    cudaStreamSynchronize(resource_->remote_stream(i));
+    cudaStreamSynchronize(resource_->remote_stream(i, num));
+    tables_[i]->rwlock_->UNLock();
   }
 
   walk_to_src(num, total_gpu, h_left, h_right, d_shard_vals_ptr);
@@ -621,13 +624,15 @@ void HeterComm<KeyType, ValType, GradType>::push_sparse(int gpu_num,
     cudaStreamSynchronize(node.in_stream);
 
     platform::CUDADeviceGuard guard(resource_->dev_id(i));
+    tables_[i]->rwlock_->WRLock();
     tables_[i]->update(reinterpret_cast<KeyType*>(node.key_storage),
                        reinterpret_cast<GradType*>(node.val_storage),
                        h_right[i] - h_left[i] + 1, sgd,
-                       resource_->remote_stream(i));
+                       resource_->remote_stream(i, gpu_num));
   }
   for (int i = 0; i < total_gpu; ++i) {
-    cudaStreamSynchronize(resource_->remote_stream(i));
+    cudaStreamSynchronize(resource_->remote_stream(i, gpu_num));
+    tables_[i]->rwlock_->UNLock();
   }
 }
 
@@ -641,9 +646,11 @@ void HeterComm<KeyType, ValType, GradType>::update_one_table(
 
   int dev_id = resource_->dev_id(gpu_num);
   platform::CUDADeviceGuard guard(dev_id);
+  tables_[gpu_num]->rwlock_->WRLock();
   tables_[gpu_num]->update(d_keys, d_grads, len, sgd,
-                           resource_->remote_stream(gpu_num));
-  cudaStreamSynchronize(resource_->remote_stream(gpu_num));
+                           resource_->remote_stream(gpu_num, gpu_num));
+  tables_[gpu_num]->rwlock_->UNLock();
+  cudaStreamSynchronize(resource_->remote_stream(gpu_num, gpu_num));
 }
 
 template <typename KeyType, typename ValType, typename GradType>

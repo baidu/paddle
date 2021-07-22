@@ -35,13 +35,13 @@ class GPUResource {
   int dev_id() const { return dev_id_; }
   int index() const { return index_; }
   gpuStream_t local_stream(int num) { return local_streams_[num]; }
-  gpuStream_t remote_stream() { return remote_stream_; }
+  gpuStream_t remote_stream(int num) { return remote_streams_[num]; }
   gpuStream_t comm_stream(int num) { return comm_streams_[num]; }
 
   int dev_id_;
   int index_;
   std::vector<int> dev_ids_;
-  gpuStream_t remote_stream_;
+  std::vector<gpuStream_t> remote_streams_;
   std::vector<gpuStream_t> local_streams_;
   std::vector<gpuStream_t> comm_streams_;
 };
@@ -57,7 +57,7 @@ class HeterPsResource {
   int get_index_by_devid(int devid);
   int dev_id(int num);
   gpuStream_t local_stream(int gpu_num, int stream_num);
-  gpuStream_t remote_stream(int gpu_num);
+  gpuStream_t remote_stream(int gpu_num, int stream_num);
   gpuStream_t comm_stream(int gpu_num, int stream_num);
 
   std::vector<std::shared_ptr<GPUResource>> resources_;

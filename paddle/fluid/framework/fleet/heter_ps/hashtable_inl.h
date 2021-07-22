@@ -73,6 +73,7 @@ __global__ void update_kernel(Table* table,
 template <typename KeyType, typename ValType>
 HashTable<KeyType, ValType>::HashTable(size_t capacity) {
   container_ = new TableContainer<KeyType, ValType>(capacity);
+  rwlock_.reset(new RWLock);
 }
 
 template <typename KeyType, typename ValType>
