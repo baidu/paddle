@@ -117,6 +117,8 @@ std::map<std::string, std::set<std::string>> op_passing_outs_map = {
     {"sgd", {"ParamOut"}},
     {"adam",
      {"ParamOut", "Moment1Out", "Moment2Out", "Beta1PowOut", "Beta2PowOut"}},
+    {"adamw",
+     {"ParamOut", "Moment1Out", "Moment2Out", "Beta1PowOut", "Beta2PowOut"}},
     {"average_accumulates",
      {"out_sum_1", "out_sum_2", "out_sum_3", "out_num_accumulates",
       "out_old_num_accumulates", "out_num_updates"}},
