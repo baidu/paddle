@@ -205,7 +205,7 @@ class ReshapeOp : public framework::OperatorWithKernel {
                 "capacity of 'shape'. "
                 "But received X's shape = [%s], X's size = %d, "
                 "'shape' is [%s], known capacity of 'shape' is %d.",
-                in_dims, in_size, framework::make_ddim(shape), capacity));
+                in_dims, in_size, framework::make_ddim(shape), -capacity));
       } else {
         output_shape[unk_dim_idx] = -1;
       }
