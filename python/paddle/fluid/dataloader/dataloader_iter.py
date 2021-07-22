@@ -88,7 +88,7 @@ class _DataLoaderIterBase(object):
         self._thread_done_event = threading.Event()
 
     def __iter__(self):
-        return self
+        return self._sampler_iter
 
     def __len__(self):
         return len(self._batch_sampler)
