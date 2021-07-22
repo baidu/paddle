@@ -182,7 +182,7 @@ class PyLayerBackward(PyLayerContext):
 
 
 class LayerMeta(type):
-    def __init__(cls, name, bases, attrs):
+    def __new__(cls, name, bases, attrs):
         cls._backward_function = type(name + '_backward', (PyLayerBackward, ),
                                       {"_forward_cls": cls})
 
