@@ -2457,7 +2457,7 @@ def lstm(input,
     **Note**:
         This OP only supports running on GPU devices.
 
-    This OP implements LSTM operation - `Hochreiter, S., & Schmidhuber, J. (1997) <http://deeplearning.cs.cmu.edu/pdfs/Hochreiter97_lstm.pdf>`_ .
+    This OP implements LSTM operation - `Hochreiter, S., & Schmidhuber, J. (1997) <https://www.bioinf.jku.at/publications/older/2604.pdf>`_ .
 
     The implementation of this OP does not include diagonal/peephole connections.
     Please refer to `Gers, F. A., & Schmidhuber, J. (2000) <ftp://ftp.idsia.ch/pub/juergen/TimeCount-IJCNN2000.pdf>`_ .
@@ -2538,17 +2538,17 @@ def lstm(input,
             emb = fluid.embedding(input=data, size=[vocab_size, emb_dim], is_sparse=True)
             batch_size = 20
             dropout_prob = 0.2
-            input_size = 100
             hidden_size = 150
             num_layers = 1
             init_h = layers.fill_constant( [num_layers, batch_size, hidden_size], 'float32', 0.0 )
             init_c = layers.fill_constant( [num_layers, batch_size, hidden_size], 'float32', 0.0 )
-            rnn_out, last_h, last_c = layers.lstm( emb, init_h, init_c, \
-                    max_len, hidden_size, num_layers, \
+            rnn_out, last_h, last_c = layers.lstm( emb, init_h, init_c,
+                    max_len, hidden_size, num_layers,
                     dropout_prob=dropout_prob)
             rnn_out.shape  # (-1, 100, 150)
             last_h.shape  # (1, 20, 150)
             last_c.shape  # (1, 20, 150)
+
     """
 
     helper = LayerHelper('cudnn_lstm', **locals())
