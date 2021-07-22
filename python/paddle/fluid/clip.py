@@ -489,9 +489,14 @@ class ClipGradByGlobalNorm(ClipGradBase):
                     continue
 
                 with p.block.program._optimized_guard([p, g]):
-                    new_grad = layers.elementwise_mul(x=g, y=scale_var)
-                param_new_grad_name_dict[p.name] = new_grad.name
-                params_and_grads.append((p, new_grad))
+                    p.block.append_op(
+                        type='elementwise_mul',
+                        inputs={'X': g,
+                                'Y': scale_var},
+                        outputs={'Out': g})
+
+                param_new_grad_name_dict[p.name] = g.name
+                params_and_grads.append((p, g))
 
         _correct_clip_op_role_var(params_and_grads, param_new_grad_name_dict)
         return params_and_grads
