@@ -18,7 +18,8 @@ from .checkpoint import auto_checkpoint  # noqa: F401
 from ..fluid.layer_helper import LayerHelper  # noqa: F401
 from .operators import softmax_mask_fuse_upper_triangle  # noqa: F401
 from .operators import softmax_mask_fuse  # noqa: F401
+from .operators import dropout_bias_fuse  # noqa: F401
 
 __all__ = [  # noqa
-    'LookAhead', 'ModelAverage', 'softmax_mask_fuse_upper_triangle', 'softmax_mask_fuse'
+    'LookAhead', 'ModelAverage', 'softmax_mask_fuse_upper_triangle', 'softmax_mask_fuse', 'dropout_bias_fuse'
 ]
