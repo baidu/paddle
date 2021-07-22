@@ -15,6 +15,7 @@ limitations under the License. */
 #include "paddle/fluid/operators/fill_constant_op.h"
 #include <string>
 #include "paddle/fluid/framework/op_version_registry.h"
+#include <iostream>
 namespace paddle {
 namespace operators {
 
@@ -23,9 +24,11 @@ class FillConstantOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext* ctx) const override {
+    
     OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "FillConstant");
 
     auto& shape = ctx->Attrs().Get<std::vector<int64_t>>("shape");
+    
     if (!ctx->HasInput("ShapeTensor") && !ctx->HasInputs("ShapeTensorList")) {
       for (size_t i = 0; i < shape.size(); ++i) {
         PADDLE_ENFORCE_GE(
@@ -36,7 +39,7 @@ class FillConstantOp : public framework::OperatorWithKernel {
                 i, shape[i], framework::make_ddim(shape)));
       }
     }
-
+    
     if (shape.empty() && ctx->HasInput("ShapeTensor")) {
       auto shape_dims = ctx->GetInputDim("ShapeTensor");
       int num_ele = 1;
@@ -48,7 +51,9 @@ class FillConstantOp : public framework::OperatorWithKernel {
 
       return;
     }
+    
     ctx->SetOutputDim("Out", framework::make_ddim(shape));
+    
   }
 
  protected:

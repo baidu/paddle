@@ -76,7 +76,6 @@ class ElementwiseOp : public framework::OperatorWithKernel {
           "its type to LOD_TENSOR.",
           ctx->GetInputsVarType("X").front()));
     }
-
     if (ctx->GetInputDim("X") == ctx->GetInputDim("Y")) {
       ctx->ShareDim("X", /*->*/ "Out");
       ctx->ShareLoD("X", /*->*/ "Out");

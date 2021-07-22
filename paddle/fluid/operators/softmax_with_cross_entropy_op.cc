@@ -285,9 +285,12 @@ class SoftmaxWithCrossEntropyOpGrad : public framework::OperatorWithKernel {
  protected:
   framework::OpKernelType GetExpectedKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::OpKernelType(OperatorWithKernel::IndicateVarDataType(
+    //std::cerr << "softmax here" << std::endl;
+    auto res =  framework::OpKernelType(OperatorWithKernel::IndicateVarDataType(
                                        ctx, framework::GradVarName("Loss")),
                                    ctx.device_context());
+    //std::cerr << "softmax end" << std::endl;
+    return res;                    
   }
 };
 

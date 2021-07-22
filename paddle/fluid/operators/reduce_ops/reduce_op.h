@@ -584,12 +584,16 @@ class ReduceGradOp : public framework::OperatorWithKernel {
  protected:
   framework::OpKernelType GetExpectedKernelType(
       const framework::ExecutionContext& ctx) const override {
+    //std::cerr <<  "core here" << std::endl;
+
+
     int in_dtype = ctx.Attr<int>("in_dtype");
     auto input_data_type =
         (in_dtype >= 0) ? static_cast<framework::proto::VarType::Type>(in_dtype)
                         : OperatorWithKernel::IndicateVarDataType(
                               ctx, framework::GradVarName("Out"));
-
+    //std::cerr <<  "sum 1" << std::endl;
+    /*
 #ifdef PADDLE_WITH_MKLDNN
     auto CanMKLDNNReduceGradBeUsed = [&]() {
       auto dx_dims = ctx.Input<Tensor>("X")->dims();
@@ -605,7 +609,8 @@ class ReduceGradOp : public framework::OperatorWithKernel {
                                      framework::LibraryType::kMKLDNN);
     }
 #endif
-
+    */
+    //std::cerr <<  "sum 2" << std::endl;
     return framework::OpKernelType(input_data_type, ctx.GetPlace());
   }
 };

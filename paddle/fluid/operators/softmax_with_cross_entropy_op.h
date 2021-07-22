@@ -28,6 +28,7 @@ template <typename T>
 class SoftmaxWithCrossEntropyKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
+   
     PADDLE_ENFORCE_EQ(
         platform::is_cpu_place(context.GetPlace()), true,
         platform::errors::Unimplemented("This kernel only runs on CPU."));
@@ -106,20 +107,23 @@ template <typename T>
 class SoftmaxWithCrossEntropyGradKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
+    
     const Tensor* out_grad =
         context.Input<Tensor>(framework::GradVarName("Loss"));
+    
     const Tensor* labels = context.Input<Tensor>("Label");
     Tensor* logit_grad =
         context.Output<Tensor>(framework::GradVarName("Logits"));
-
+    
     const Tensor* softmax = context.Input<Tensor>("Softmax");
+    
     const bool use_softmax = context.Attr<bool>("use_softmax");
-
+    
     if (logit_grad != softmax || !use_softmax) {
       framework::TensorCopy(*softmax, context.GetPlace(),
                             context.device_context(), logit_grad);
     }
-
+    
     const bool soft_label = context.Attr<bool>("soft_label");
     auto ignore_index = context.Attr<int>("ignore_index");
 
@@ -133,7 +137,7 @@ class SoftmaxWithCrossEntropyGradKernel : public framework::OpKernel<T> {
     logit_grad_2d.ShareDataWith(*logit_grad).Resize({n, d});
     labels_2d.ShareDataWith(*labels).Resize({n, labels->numel() / n});
     out_grad_2d.ShareDataWith(*out_grad).Resize({n, d / axis_dim});
-
+    
     auto out_grad_mat = framework::EigenMatrix<T>::From(out_grad_2d);
     auto logit_grad_mat = framework::EigenMatrix<T>::From(logit_grad_2d);
     auto& place = *context.template device_context<platform::CPUDeviceContext>()
@@ -180,7 +184,7 @@ class SoftmaxWithCrossEntropyGradKernel : public framework::OpKernel<T> {
       }
       return;
     }
-
+    
     // for use_softmax=False, continue
 
     if (soft_label) {

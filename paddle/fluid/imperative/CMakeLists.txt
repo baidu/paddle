@@ -28,4 +28,6 @@ endif(NOT WIN32)
 
 cc_library(gradient_accumulator SRCS gradient_accumulator.cc DEPS blas operator lod_tensor selected_rows selected_rows_functor var_type_traits layer math_function)
 
+#cc_binary(tracer_test SRCS tracer_test.cc DEPS tracer layer op_registry python pybind ${GLOB_OP_LIB} ${GLOB_OPERATOR_DEPS} profiler )
+
 add_subdirectory(tests)
