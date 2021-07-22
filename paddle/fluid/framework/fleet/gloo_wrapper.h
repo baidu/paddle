@@ -218,6 +218,21 @@ class GlooWrapper {
     return std::move(ret);
   }
 
+  template <typename T>
+  std::vector<T> AllGatherList(std::vector<T>& input) {  // NOLINT
+    CHECK_EQ(is_initialized_, true);
+    std::vector<T> ret(size_ * input.size(), T());
+#ifdef PADDLE_WITH_GLOO
+    gloo::AllgatherOptions opts(context_);
+    opts.setInput(input.data(), input.size());
+    opts.setOutput(ret.data(), ret.size());
+    gloo::allgather(opts);
+#else
+    LOG(WARNING) << "AllGather does nothing when WITH_GLOO=OFF";
+#endif
+    return std::move(ret);
+  }
+
  protected:
   bool is_initialized_ = false;
 #ifdef PADDLE_WITH_GLOO

@@ -30,3 +30,14 @@ message KVItem {
   required bytes key = 1;
   required bytes value = 2;
 }
+
+message GraphItem {
+  required uint64 item_id = 1; // item_id;
+  repeated int32 path_id = 2;  // path_id
+}
+
+message GraphMeta {
+  required uint32 width = 1;          // D
+  required uint32 height = 2;         // K
+  required uint32 item_path_nums = 3; // J
+}

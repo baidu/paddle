@@ -245,12 +245,6 @@ if(WITH_PYTHON)
   endif(NOT WIN32)
 endif()
 
-if (WITH_PSCORE)
-  add_custom_target(index_dataset_proto_init ALL DEPENDS fleet_proto_init index_dataset_py_proto
-    COMMAND cp ${PADDLE_BINARY_DIR}/paddle/fluid/distributed/index_dataset/index_dataset_*.py ${PADDLE_BINARY_DIR}/python/paddle/distributed/fleet/proto
-    COMMENT "Copy generated python proto into directory paddle/distributed/fleet/proto.")
-endif(WITH_PSCORE)
-
 cc_library(lod_rank_table SRCS lod_rank_table.cc DEPS lod_tensor)
 
 cc_library(feed_fetch_method SRCS feed_fetch_method.cc DEPS lod_tensor scope glog)

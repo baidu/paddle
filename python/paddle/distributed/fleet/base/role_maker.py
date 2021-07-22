@@ -355,6 +355,28 @@ class Gloo(object):
 
         return output
 
+    def all_gather_list(self, input, comm_world="worker"):
+        """
+        dummy all gather, do nothing
+        Args:
+            obj(any): obj to do all gather
+        """
+        if not self._is_initialized:
+            warnings.warn(self._err_init)
+            return input
+
+        if comm_world not in self._comm_world:
+            raise ValueError(self._err_world)
+
+        if comm_world == "worker":
+            output = self._worker_comm.all_gather_list(input)
+        elif comm_world == "server":
+            output = self._server_comm.all_gather_list(input)
+        else:
+            output = self._nodes_comm.all_gather_list(input)
+
+        return output
+
 
 class RoleMakerBase(object):
     """
@@ -471,6 +493,10 @@ class RoleMakerBase(object):
         print("warning: RoleMakerBase does not have all gather worker.")
         return None
 
+    def _all_gather_list(self, input, comm_world="worker"):
+        print("warning: RoleMakerBase does not have all gather list worker.")
+        return None
+
     def _all_reduce(self, input, mode="sum", comm_world="worker"):
         """
         Args:
@@ -547,6 +573,18 @@ class PaddleCloudRoleMaker(RoleMakerBase):
 
     def _all_gather(self, input, comm_world="worker"):
         return self._gloo.all_gather(input, comm_world)
+
+    def _all_gather_list(self, input, comm_world="worker"):
+        length = len(input)
+        length_arr = self._gloo.all_gather(length, comm_world)
+        max_len = max(length_arr)
+        gathered_list = self._gloo.all_gather_list(
+            input + [0] * (max_len - length), comm_world)
+        output = []
+        for i in range(len(length_arr)):
+            output = output + gathered_list[i * max_len:i * max_len +
+                                            length_arr[i]]
+        return output
 
     def _all_reduce(self, input, mode="sum", comm_world="worker"):
         return self._gloo.all_reduce(input, mode, comm_world)

@@ -3100,6 +3100,8 @@ All parameter, weight, gradient are variables in Paddle.
   BindTreeIndex(&m);
   BindIndexWrapper(&m);
   BindIndexSampler(&m);
+  BindGraphItem(&m);
+  BindGraphIndex(&m);
   BindSparseShardingTools(&m);
 #endif
 }

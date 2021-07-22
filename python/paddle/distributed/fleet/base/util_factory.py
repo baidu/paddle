@@ -198,6 +198,9 @@ class UtilBase(object):
 
         return self.role_maker._all_gather(input, comm_world)
 
+    def all_gather_list(self, input, comm_world="worker"):
+        return self.role_maker._all_gather_list(input, comm_world)
+
     def _broadcast(self):
         pass
 

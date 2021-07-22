@@ -9,7 +9,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <math.h>
 #include <memory>
+#include <string>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -190,6 +192,258 @@ std::vector<IndexNode> TreeIndex::GetAllLeafs() {
     res.push_back(data_.at(code));
   }
   return res;
+}
+
+int GraphIndex::save(std::string filename) {
+  std::function<int(FILE*, KVItem&, std::string&)> writeToFile = [](
+      FILE* fp, KVItem& item, std::string& result) {
+    std::string output;
+    item.SerializeToString(&output);
+    int len = output.size();
+    if (fwrite(&len, sizeof(int), 1, fp) != 1) {
+      VLOG(0) << "write len failed";
+      return -1;
+    }
+    if (fwrite(output.data(), 1, len, fp) != (size_t)len) {
+      VLOG(0) << "write data failed";
+      return -1;
+    }
+    result = output;
+    return 0;
+  };
+  VLOG(0) << " in save height = " << height() << " width = " << width();
+  FILE* fp = fopen(filename.c_str(), "wb");
+  if (fp == NULL) {
+    fprintf(stderr, "Can not open file: %s\n", filename.c_str());
+    return -1;
+  }
+  KVItem item, copy_item;
+  item.set_key(".graph_meta");
+  std::string output, result;
+  meta_.SerializeToString(&output);
+  GraphMeta test;
+  test.ParseFromString(output);
+  VLOG(0) << "test height = " << test.height() << " " << test.width();
+  item.set_value(output);
+  if (writeToFile(fp, item, result) != 0) {
+    fprintf(stderr, "fail to write file: %s\n", filename.c_str());
+    fclose(fp);
+    return -1;
+  }
+  for (auto p : item_path_dict_) {
+    item.set_key(std::to_string(p.first));
+    GraphItem graph_item, copy_graph_item;
+    graph_item.set_item_id(p.first);
+    for (auto path_id : p.second) graph_item.add_path_id(path_id);
+    std::string graph_serialized;
+    graph_item.SerializeToString(&graph_serialized);
+
+    item.set_value(graph_serialized);
+    if (writeToFile(fp, item, result) != 0) {
+      fprintf(stderr, "fail to write file: %s\n", filename.c_str());
+      fclose(fp);
+      return -1;
+    }
+    copy_item.ParseFromString(result);
+    copy_graph_item.ParseFromString(copy_item.value());
+    for (size_t i = 0; i < p.second.size(); i++) {
+      if (p.second[i] != (uint32_t)copy_graph_item.path_id(i)) {
+        VLOG(0) << "parse error:serialized item can't be deserialized";
+        fclose(fp);
+        return -1;
+      }
+    }
+  }
+  fclose(fp);
+  return 0;
+}
+
+int GraphIndex::load(std::string filename) {
+  FILE* fp = fopen(filename.c_str(), "rb");
+  if (fp == NULL) {
+    fprintf(stderr, "Can not open file: %s\n", filename.c_str());
+    return -1;
+  }
+
+  int num = 0;
+  item_path_dict_.clear();
+  path_item_set_dict_.clear();
+  size_t ret = fread(&num, sizeof(num), 1, fp);
+  while (ret == 1 && num > 0) {
+    std::string content(num, '\0');
+    if (fread((char*)content.data(), 1, num, fp) != static_cast<size_t>(num)) {
+      fprintf(stderr, "Read from file: %s failed, invalid format.\n",
+              filename.c_str());
+      break;
+    }
+    KVItem item;
+    if (!item.ParseFromString(content)) {
+      fprintf(stderr, "Parse from file: %s failed.\n", filename.c_str());
+      break;
+    }
+    if (item.key() == ".graph_meta") {
+      meta_.ParseFromString(item.value());
+      path_item_set_dict_.reserve(std::pow(meta_.height(), meta_.width()));
+    } else {
+      GraphItem graph_item;
+      graph_item.ParseFromString(item.value());
+
+      uint64_t item_id = graph_item.item_id();
+
+      if (item_path_dict_.find(item_id) == item_path_dict_.end()) {
+        std::vector<uint32_t> path_ids;
+        for (int i = 0; i < graph_item.path_id_size(); i++) {
+          path_ids.push_back(graph_item.path_id(i));
+          // VLOG(0) << "Graph insert item: " << item_id
+          //         << " path: " << graph_item.path_id(i);
+        }
+        item_path_dict_[item_id] = path_ids;
+
+        for (auto& path_id : path_ids) {
+          if (path_item_set_dict_.find(path_id) == path_item_set_dict_.end()) {
+            std::unordered_set<uint64_t> path_set;
+            path_item_set_dict_[path_id] = path_set;
+          }
+          path_item_set_dict_[path_id].insert(item_id);
+        }
+      }
+    }
+    ret = fread(&num, sizeof(num), 1, fp);
+  }
+  fclose(fp);
+  VLOG(0) << "Graph Load Success.";
+  return 0;
+}
+
+std::vector<uint32_t> GraphIndex::create_path(uint64_t item_id) {
+  if (item_path_dict_.find(item_id) == item_path_dict_.end()) {
+    item_path_dict_[item_id] = generate_random_path();
+    for (auto path : item_path_dict_[item_id]) {
+      path_item_set_dict_[path].insert(item_id);
+    }
+  }
+  return item_path_dict_[item_id];
+}
+
+std::vector<uint32_t> GraphIndex::generate_random_path() {
+  int h = height(), w = width(), path_nums = item_path_nums();
+  uint32_t total_num = pow(h, w) + 0.2;
+  std::vector<uint32_t> vec(path_nums, 0);
+  std::unordered_set<uint32_t> path_set;
+  for (int i = 0; i < path_nums; i++) {
+    uint32_t path_id;
+    do {
+      path_id = rand() % total_num;
+    } while (path_set.find(path_id) != path_set.end());
+    vec[i] = path_id;
+    path_set.insert(path_id);
+  }
+  return vec;
+}
+
+void GraphIndex::add_item(uint64_t item_id, std::vector<uint32_t> vec) {
+  if (item_path_dict_.find(item_id) != item_path_dict_.end()) {
+    auto path_vec = item_path_dict_[item_id];
+    for (auto path : path_vec) {
+      auto iter = path_item_set_dict_.find(path);
+      if (iter != path_item_set_dict_.end()) {
+        iter->second.erase(item_id);
+      }
+    }
+    item_path_dict_[item_id].clear();
+  }
+  for (auto p : vec) {
+    item_path_dict_[item_id].push_back(p);
+    path_item_set_dict_[p].insert(item_id);
+  }
+}
+
+std::vector<std::vector<uint32_t>> GraphIndex::get_path_of_item(
+    std::vector<uint64_t>& items) {
+  std::vector<std::vector<uint32_t>> result;
+  for (auto& item : items) {
+    // result.push_back(item_path_dict_[item]);
+
+    result.push_back(create_path(item));
+  }
+  return result;
+}
+
+std::vector<std::vector<uint64_t>> GraphIndex::get_item_of_path(
+    std::vector<uint32_t>& paths) {
+  std::vector<std::vector<uint64_t>> result;
+  for (auto& path : paths) {
+    result.push_back(std::vector<uint64_t>(path_item_set_dict_[path].begin(),
+                                           path_item_set_dict_[path].end()));
+  }
+  return result;
+}
+
+std::vector<uint64_t> GraphIndex::gather_unique_items_of_paths(
+    std::vector<uint32_t>& paths) {
+  std::unordered_set<uint64_t> items;
+  for (auto& path : paths) {
+    for (auto item : path_item_set_dict_[path]) items.insert(item);
+  }
+  return std::vector<uint64_t>(items.begin(), items.end());
+}
+
+int GraphIndex::update_Jpath_of_item(
+    std::unordered_map<uint64_t, std::vector<uint32_t>>& candidate_list,
+    std::unordered_map<uint64_t, std::vector<double>>& candidate_score,
+    const int T, double lamb, const int polynomial_order) {
+  int J = item_path_nums();
+  std::function<double(double)> f = [&polynomial_order](double a) {
+    double res = a / polynomial_order;
+    for (int i = 1; i < polynomial_order; i++) res *= a;
+    return res;
+  };
+  std::vector<uint64_t> key_list;
+  for (auto p : candidate_list) {
+    key_list.push_back(p.first);
+  }
+  std::unordered_map<uint32_t, int> path_count;
+  std::unordered_map<uint64_t, std::vector<uint32_t>> path_map[2];
+  for (int t = 0; t < T; t++) {
+    int ind = t % 2;
+    path_map[ind].clear();
+    for (auto item : key_list) {
+      double sum = 0;
+      std::unordered_set<uint32_t> path_set;
+      for (int j = 0; j < J; j++) {
+        if (t > 0) {
+          path_count[path_map[1 - ind][item][j]]--;
+        }
+        std::vector<int> used_index;
+        std::vector<double> new_score;
+        auto list = candidate_list[item];
+        auto score = candidate_score[item];
+        int choosen = -1;
+        for (size_t i = 0; i < list.size(); i++) {
+          if (path_set.find(list[i]) != path_set.end()) continue;
+          if (choosen == -1) choosen = i;
+          auto count = path_count[list[i]];
+          new_score.push_back(log(score[i] + sum) -
+                              lamb * (f(count + 1) - f(count)));
+          used_index.push_back(i);
+          if (new_score.back() > new_score[choosen])
+            choosen = used_index.back();
+        }
+        path_map[ind][item].push_back(list[choosen]);
+        path_set.insert(list[choosen]);
+        sum = sum + score[choosen];
+        path_count[list[choosen]] = path_count[list[choosen]] + 1;
+      }
+    }
+  }
+  item_path_dict_ = path_map[(T - 1) % 2];
+  path_item_set_dict_.clear();
+  for (auto& p : item_path_dict_) {
+    for (auto& path : p.second) {
+      path_item_set_dict_[path].insert(p.first);
+    }
+  }
+  return 0;
 }
 
 }  // end namespace distributed

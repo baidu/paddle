@@ -51,7 +51,11 @@ void BindGlooWrapper(py::module* m) {
       .def("all_gather", &framework::GlooWrapper::AllGather<uint64_t>)
       .def("all_gather", &framework::GlooWrapper::AllGather<int64_t>)
       .def("all_gather", &framework::GlooWrapper::AllGather<float>)
-      .def("all_gather", &framework::GlooWrapper::AllGather<double>);
+      .def("all_gather", &framework::GlooWrapper::AllGather<double>)
+      .def("all_gather_list", &framework::GlooWrapper::AllGatherList<uint64_t>)
+      .def("all_gather_list", &framework::GlooWrapper::AllGatherList<int64_t>)
+      .def("all_gather_list", &framework::GlooWrapper::AllGatherList<float>)
+      .def("all_gather_list", &framework::GlooWrapper::AllGatherList<double>);
 }  // end BindGlooWrapper
 }  // end namespace pybind
 }  // end namespace paddle
