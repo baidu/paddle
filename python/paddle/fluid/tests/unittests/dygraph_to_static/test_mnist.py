@@ -238,7 +238,9 @@ class TestMNISTWithToStatic(TestMNIST):
             # load in Paddle-Inference
             predictor_infer_out = self.predictor_load_and_run_inference_analysis(
                 model_save_dir, model_filename, params_filename, inputs)
-            self.assertTrue(np.allclose(gt_out.numpy(), predictor_infer_out))
+            self.assertTrue(
+                np.allclose(
+                    gt_out.numpy(), predictor_infer_out, atol=1e-3))
 
     @switch_to_static_graph
     def jit_load_and_run_inference_static(self, model_path, model_filename,
