@@ -939,7 +939,10 @@ class PostTrainingQuantization(object):
 
 
 class WeightQuantization(object):
-    _supported_quantizable_op_type = ['conv2d', 'depthwise_conv2d', 'mul']
+    _supported_quantizable_op_type = [
+        'conv2d', 'depthwise_conv2d', 'mul', 'lookup_table'
+    ]
+    _supported_channel_wise_op_type = ['conv2d', 'depthwise_conv2d']
     _supported_weight_quantize_type = ['channel_wise_abs_max', 'abs_max']
 
     def __init__(self, model_dir, model_filename=None, params_filename=None):
@@ -987,8 +990,8 @@ class WeightQuantization(object):
                 parameters were saved in a single binary file.
             quantizable_op_type(list[str], optional): The list of ops 
                 that will be quantized, and the quantized ops should be
-                contained in ["conv2d", "depthwise_conv2d", "mul"]. 
-                Default is ["conv2d","mul"].
+                contained in ["conv2d", "depthwise_conv2d", "mul",
+                "lookup_table"]. Default is ["conv2d","mul"].
             weight_bits(int, optional): The bits for the quantized weight, 
                 and it should be 8 or 16. Default is 8.
             weight_quantize_type(str, optional): quantization type for weights,
@@ -1133,13 +1136,20 @@ class WeightQuantization(object):
         for op in quantized_ops:
             for var_name in op.input_arg_names:
                 if var_name in persistable_var_names:
-                    if weight_quantize_type == "abs_max":
+                    tensor_data = _load_variable_data(scope, var_name)
+                    if tensor_data.dtype != np.float32:
+                        _logger.info(
+                            "For %s, the dtype of %s isn't fp32, so skip "
+                            "quantizing it." % (op.type, var_name))
+
+                    if weight_quantize_type == "channel_wise_abs_max" and \
+                        op.type in self._supported_channel_wise_op_type:
+                        self._weight_channel_wise_abs_max_quantization(
+                            scope, place, weight_bits, op, var_name, for_test)
+                    else:
                         self._weight_abs_max_quantization(
                             scope, place, weight_bits, threshold_rate, op,
                             var_name, for_test)
-                    elif weight_quantize_type == "channel_wise_abs_max":
-                        self._weight_channel_wise_abs_max_quantization(
-                            scope, place, weight_bits, op, var_name, for_test)
 
         io.save_inference_model(
             dirname=save_model_dir,
@@ -1163,10 +1173,10 @@ class WeightQuantization(object):
         if abs(threshold_rate) < 1e-10:
             threshold_value = np.max(np.abs(weight_data))
         else:
-            threshold_value = self._calculate_threshold(\
-                weight_data, threshold_rate)
-            weight_data[weight_data > threshold_value] = threshold_value
-            weight_data[weight_data < -threshold_value] = -threshold_value
+            threshold_value = np.percentile(
+                np.abs(weight_data), 1 - threshold_rate)
+            weight_data = np.clip(weight_data, -threshold_value,
+                                  threshold_value)
         scale = threshold_value / quantize_range
         quantized_weight_data = \
             np.around(weight_data / scale).astype(save_weight_dtype)
@@ -1280,18 +1290,3 @@ class WeightQuantization(object):
             dequantized_weight_data[:, i] = \
                 (quantized_weight_data[:, i] * scales[i]).astype(np.float32)
         return dequantized_weight_data
-
-    def _calculate_threshold(self, input, threshold_rate, histogram_bins=5000):
-        input_abs = np.abs(input)
-        hist, hist_edeges = np.histogram(
-            input_abs, bins=histogram_bins, range=(0, np.max(input_abs)))
-        hist = hist / float(sum(hist))
-        hist_sum = 0
-        hist_index = 0
-        for i in range(len(hist)):
-            hist_sum += hist[i]
-            if hist_sum >= 1.0 - threshold_rate:
-                hist_index = i + 1
-                break
-        bin_width = hist_edeges[1] - hist_edeges[0]
-        return hist_index * bin_width
