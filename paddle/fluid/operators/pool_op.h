@@ -23,23 +23,12 @@ limitations under the License. */
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/operators/math/pooling.h"
 #if defined(__HIPCC__) || defined(__NVCC__)
-#include "paddle/fluid/operators/reduce_ops/cub_reduce.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_functor_op.h"
+#include "paddle/fluid/operators/reduce_ops/reduce_op.cu.h"
 #endif
 
 namespace paddle {
 namespace operators {
-template <typename T>
-struct DivideFunctor {
-  HOSTDEVICE explicit inline DivideFunctor(int n) : n_inv((T)(1.0 / n)) {}
-
-  template <typename U>
-  HOSTDEVICE inline U operator()(const U& x) const {
-    return x * static_cast<U>(n_inv);
-  }
-
- private:
-  T n_inv;
-};
 
 using Tensor = framework::Tensor;
 
@@ -219,9 +208,8 @@ class PoolKernel : public framework::OpKernel<T> {
               adaptive) {  // for adaptive_avg_pool2d && output_size == 1
 #if defined(__HIPCC__) || defined(__NVCC__)
             auto stream = dev_ctx.stream();
-            TensorReduce<T, T, cub::Sum, DivideFunctor<T>>(
-                *in_x, out, reduce_dim, static_cast<T>(0), cub::Sum(),
-                DivideFunctor<T>(reduce_num), stream);
+            TensorReduceFunctorImpl<T, T, CustomMean>(*in_x, out, reduce_dim,
+                                                      stream);
 #else  // for cpu
             paddle::operators::math::Pool2dFunctor<
                 DeviceContext, paddle::operators::math::AvgPool<T>, T>
