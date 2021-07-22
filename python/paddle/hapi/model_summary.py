@@ -30,9 +30,9 @@ def summary(net, input_size, dtypes=None):
 
     Args:
         net (Layer): the network which must be a subinstance of Layer.
-        input_size (tuple|InputSpec|list[tuple|InputSpec]): size of input tensor. if model only 
+        input_size (tuple|InputSpec|list[tuple|InputSpec]): size of input tensor. if model only
                     have one input, input_size can be tuple or InputSpec. if model
-                    have multiple input, input_size must be a list which contain 
+                    have multiple input, input_size must be a list which contain
                     every input's shape. Note that input_size only dim of
                     batch_size can be None or -1.
         dtypes (str, optional): if dtypes is None, 'float32' will be used, Default: None.
@@ -90,10 +90,10 @@ def summary(net, input_size, dtypes=None):
                         x = paddle.flatten(x, 1)
                         x = self.fc(x + y)
                     return x
-            
+
             lenet_multi_input = LeNetMultiInput()
 
-            params_info = paddle.summary(lenet_multi_input, [(1, 1, 28, 28), (1, 400)], 
+            params_info = paddle.summary(lenet_multi_input, [(1, 1, 28, 28), (1, 400)],
                                         ['float32', 'float32'])
             print(params_info)
 
@@ -235,26 +235,27 @@ def summary_string(model, input_size, dtypes=None):
                 warnings.warn('Get layer {} output shape failed!')
                 summary[m_key]["output_shape"]
 
-            params = 0
-
             if paddle.in_dynamic_mode():
                 layer_state_dict = layer._parameters
             else:
                 layer_state_dict = layer.state_dict()
 
+            summary[m_key]["nb_params"] = 0
             for k, v in layer_state_dict.items():
-                params += np.prod(v.shape)
+                m_sub_key = m_key + "@" + k
+                summary[m_key][m_sub_key] = dict()
+                summary[m_key][m_sub_key]["nb_params"] = np.prod(v.shape)
 
                 try:
                     if (getattr(getattr(layer, k), 'trainable')) and (
                             not getattr(getattr(layer, k), 'stop_gradient')):
-                        summary[m_key]["trainable"] = True
+                        summary[m_key][m_sub_key]["trainable"] = True
                     else:
-                        summary[m_key]["trainable"] = False
+                        summary[m_key][m_sub_key]["trainable"] = False
                 except:
-                    summary[m_key]["trainable"] = True
+                    summary[m_key][m_sub_key]["trainable"] = True
 
-            summary[m_key]["nb_params"] = params
+                summary[m_key]["nb_params"] += np.prod(v.shape)
 
         if (not isinstance(layer, nn.Sequential) and
                 not isinstance(layer, nn.LayerList) and
@@ -346,6 +347,15 @@ def summary_string(model, input_size, dtypes=None):
     trainable_params = 0
     max_length = 0
     for layer in summary:
+
+        layer_trainable_params = 0
+        for weight_name, weight_info in summary[layer].items():
+            if "@" not in weight_name:
+                continue
+            if not weight_info["trainable"]:
+                continue
+            layer_trainable_params += weight_info["nb_params"]
+
         # input_shape, output_shape, trainable, nb_params
         line_new = "{:^{}} {:^{}} {:^{}} {:^{}}".format(
             layer, table_width['layer_width'],
@@ -365,9 +375,7 @@ def summary_string(model, input_size, dtypes=None):
             for output_shape in summary[layer]["output_shape"]:
                 total_output += np.sum(np.prod(output_shape, axis=-1))
 
-        if "trainable" in summary[layer]:
-            if summary[layer]["trainable"] == True:
-                trainable_params += summary[layer]["nb_params"]
+        trainable_params += layer_trainable_params
         summary_str += line_new + "\n"
 
     def _get_input_size(input_size, size):
