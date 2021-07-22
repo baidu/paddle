@@ -26,11 +26,16 @@
 #include "paddle/fluid/operators/slice_utils.h"
 #include "paddle/fluid/operators/utils.h"
 #include "paddle/fluid/platform/enforce.h"
+#include "paddle/fluid/operators/eigen/eigen_function.h"
+#include "paddle/fluid/operators/slice_op.h"
 
 namespace paddle {
 namespace operators {
 
 using Tensor = framework::Tensor;
+using Variable = framework::Variable;
+using LoDTensorArray = framework::LoDTensorArray;
+using DDim = framework::DDim;
 
 inline std::string GetValueName(framework::proto::VarType::Type data_type) {
   std::string value_name;
@@ -219,6 +224,159 @@ class SetValueKernel : public framework::OpKernel<T> {
     // Step 3: Set out tensor with value_tensor
     out_e.device(eigen_place) = out_e - pad_e;
   }
+};
+
+template <typename DeviceContext, typename T>
+class SetValueGradKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    const Variable* input_var = ctx.InputVar(framework::GradVarName("Out"));
+    bool is_tensor_array = input_var->IsType<LoDTensorArray>();
+    int rank = is_tensor_array ? 1 : ctx.Input<Tensor>(framework::GradVarName("Out"))->dims().size();
+
+    switch (rank) {
+      case 1:
+        SliceCompute<1>(ctx);
+        break;
+      case 2:
+        SliceCompute<2>(ctx);
+        break;
+      case 3:
+        SliceCompute<3>(ctx);
+        break;
+      case 4:
+        SliceCompute<4>(ctx);
+        break;
+      case 5:
+        SliceCompute<5>(ctx);
+        break;
+      case 6:
+        SliceCompute<6>(ctx);
+        break;
+      default:
+        PADDLE_THROW(platform::errors::InvalidArgument(
+            "The rank of input should be less than 7, but received %d.", rank));
+    }
+  }
+
+ private:
+  template <size_t D>
+  void SliceCompute(const framework::ExecutionContext& ctx) const {
+    const Variable* input_var = ctx.InputVar(framework::GradVarName("Out"));
+    // Variable* out_var = ctx.OutputVar(framework::GradVarName("VaueTensor"));
+    bool input_is_array = input_var->IsType<LoDTensorArray>();
+    // bool out_is_array = out_var->IsType<LoDTensorArray>();
+
+    auto axes_int = ctx.Attr<std::vector<int>>("axes");
+    auto starts_int = ctx.Attr<std::vector<int>>("starts");
+    auto ends_int = ctx.Attr<std::vector<int>>("ends");
+    std::vector<int64_t> axes(axes_int.begin(), axes_int.end());
+    std::vector<int64_t> starts(starts_int.begin(), starts_int.end());
+    std::vector<int64_t> ends(ends_int.begin(), ends_int.end());
+
+    auto decrease_axis = ctx.Attr<std::vector<int>>("decrease_axis");
+    auto infer_flags = ctx.Attr<std::vector<int>>("infer_flags");
+
+    // Step 1: Get the accurate attribute value of starts and ends
+    auto starts_tensor_list = ctx.MultiInput<Tensor>("StartsTensorList");
+    if (ctx.HasInput("StartsTensor")) {
+      starts = GetDataFromTensor<int64_t>(ctx.Input<Tensor>("StartsTensor"));
+    } else if (starts_tensor_list.size() > 0) {
+      starts = GetDataFromTensorList<int64_t>(starts_tensor_list);
+    }
+
+    auto ends_tensor_list = ctx.MultiInput<Tensor>("EndsTensorList");
+    if (ctx.HasInput("EndsTensor")) {
+      ends = GetDataFromTensor<int64_t>(ctx.Input<Tensor>("EndsTensor"));
+    } else if (ends_tensor_list.size() > 0) {
+      ends = GetDataFromTensorList<int64_t>(ends_tensor_list);
+    }
+
+    PADDLE_ENFORCE_EQ(
+        starts.size(), axes.size(),
+        platform::errors::InvalidArgument(
+            "The size of starts must be equal to the size of axes."));
+    PADDLE_ENFORCE_EQ(
+        ends.size(), axes.size(),
+        platform::errors::InvalidArgument(
+            "The size of ends must be equal to the size of axes."));
+
+    // Step 2: Compute output
+    if (input_is_array) {
+      // DealTensorArray(ctx, starts, ends, out_is_array);
+      PADDLE_THROW(platform::errors::InvalidArgument(
+          "Input of set_value_grad OP should be Tensor, but received TensorArray."));
+      return;
+    } else {
+      auto in = ctx.Input<Tensor>(framework::GradVarName("Out"));
+      auto out = ctx.Output<Tensor>(framework::GradVarName("ValueTensor"));
+
+      auto in_dims = in->dims();
+      auto out_dims = out->dims();
+      auto slice_dims = out_dims;
+
+      // 2.1 Infer output dims
+      for (size_t i = 0; i < axes.size(); ++i) {
+        // when start == -1 && end == start+1
+        if (starts[i] == -1 && ends[i] == 0 && infer_flags[i] == -1) {
+          auto ret =
+              std::find(decrease_axis.begin(), decrease_axis.end(), axes[i]);
+          if (ret != decrease_axis.end()) {
+            ends[i] = in_dims[axes[i]];
+          }
+        }
+      }
+
+      CheckAndUpdateSliceAttrs(in_dims, axes, &starts, &ends);
+      slice_dims =
+          GetSliceDims<int64_t>(in_dims, axes, starts, ends, nullptr, nullptr);
+      out_dims = GetDecreasedDims(slice_dims, decrease_axis);
+
+      // 2.2 Get output
+      auto offsets = Eigen::DSizes<Eigen::DenseIndex, D>();
+      auto extents = Eigen::DSizes<Eigen::DenseIndex, D>();
+
+      for (size_t i = 0; i < D; ++i) {
+        offsets[i] = 0;
+        extents[i] = slice_dims[i];
+      }
+      for (size_t i = 0; i < axes.size(); ++i) {
+        offsets[axes[i]] = starts[i];
+      }
+
+      out->Resize(slice_dims);
+      out->mutable_data<T>(ctx.GetPlace());
+
+      auto in_t = framework::EigenTensor<T, D>::From(*in, in_dims);
+      auto out_t = framework::EigenTensor<T, D>::From(*out, slice_dims);
+      auto& eigen_place =
+          *ctx.template device_context<DeviceContext>().eigen_device();
+
+      if (in->numel() <= Eigen::NumTraits<int>::highest()) {
+        // similar to tf.slice:
+        // if element number less than INT_MAX, change the type of index to int
+        Eigen::DSizes<int, D> offsets_32bit, extents_32bit;
+        for (size_t i = 0; i < D; i++) {
+          offsets_32bit[i] = offsets[i];
+          extents_32bit[i] = extents[i];
+        }
+        EigenSlice<std::decay_t<decltype(eigen_place)>, T, D>::Eval(
+            eigen_place, framework::To32BitIndex(out_t),
+            framework::To32BitIndex(in_t), offsets_32bit, extents_32bit);
+      } else {
+        EigenSlice<std::decay_t<decltype(eigen_place)>, T, D>::Eval(
+            eigen_place, out_t, in_t, offsets, extents);
+      }
+
+      out->Resize(out_dims);
+      // update gradient of Input
+      auto input_grad = ctx.Input<framework::LoDTensor>(framework::GradVarName("Out"));
+      auto output_grad = ctx.Output<framework::LoDTensor>(framework::GradVarName("Input"));
+      TensorCopy(*input_grad, ctx.GetPlace(), output_grad);
+    }
+  }
+  
+  
 };
 
 }  // namespace operators
