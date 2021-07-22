@@ -9,6 +9,7 @@ find_path(CUPTI_INCLUDE_DIR cupti.h
         $ENV{CUPTI_ROOT} $ENV{CUPTI_ROOT}/include
         ${CUDA_TOOLKIT_ROOT_DIR}/extras/CUPTI/include
         ${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/include
+        ${CUDA_TOOLKIT_ROOT_DIR}/targets/aarch64-linux/include
         NO_DEFAULT_PATH
         )
 
