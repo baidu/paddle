@@ -473,20 +473,24 @@ py_test_modules(test_imperative_resnet MODULES test_imperative_resnet ENVS
     FLAGS_cudnn_deterministic=1 SERIAL)
 set_tests_properties(test_imperative_resnet PROPERTIES LABELS "RUN_TYPE=EXCLUSIVE:NIGHTLY")
 py_test_modules(test_imperative_resnet_sorted_gradient MODULES test_imperative_resnet_sorted_gradient ENVS
-        FLAGS_cudnn_deterministic=1 SERIAL)
+    FLAGS_cudnn_deterministic=1 SERIAL)
 set_tests_properties(test_imperative_resnet_sorted_gradient PROPERTIES LABELS "RUN_TYPE=EXCLUSIVE:NIGHTLY")
 py_test_modules(test_imperative_mnist MODULES test_imperative_mnist ENVS
     FLAGS_cudnn_deterministic=1)
 py_test_modules(test_imperative_mnist_sorted_gradient MODULES test_imperative_mnist_sorted_gradient ENVS
-        FLAGS_cudnn_deterministic=1)
+    FLAGS_cudnn_deterministic=1)
 py_test_modules(test_imperative_se_resnext MODULES test_imperative_se_resnext ENVS
     FLAGS_cudnn_deterministic=1 SERIAL)
 set_tests_properties(test_imperative_se_resnext PROPERTIES LABELS "RUN_TYPE=EXCLUSIVE:NIGHTLY")
 py_test_modules(test_imperative_ocr_attention_model MODULES test_imperative_ocr_attention_model ENVS
-        FLAGS_cudnn_deterministic=1 SERIAL)
-py_test_modules(test_install_check MODULES test_install_check ENVS
-        FLAGS_cudnn_deterministic=1 SERIAL)
+    FLAGS_cudnn_deterministic=1 SERIAL)
+py_test_modules(test_install_check MODULES test_install_check ENVS SERIAL)
 set_tests_properties(test_install_check PROPERTIES LABELS "RUN_TYPE=DIST")
+if(WITH_GPU)
+    py_test_modules(test_install_check_cpu MODULES test_install_check ENVS
+        CUDA_VISIBLE_DIVECES="" SERIAL)
+    set_tests_properties(test_install_check_cpu PROPERTIES LABELS "RUN_TYPE=DIST")
+endif()
 py_test_modules(test_imperative_static_runner_mnist MODULES test_imperative_static_runner_mnist ENVS
     FLAGS_cudnn_deterministic=1)
 py_test_modules(test_imperative_static_runner_while MODULES test_imperative_static_runner_while ENVS
