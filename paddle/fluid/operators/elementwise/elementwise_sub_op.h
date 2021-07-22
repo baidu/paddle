@@ -88,7 +88,19 @@ elementwise_sub_grad(const framework::ExecutionContext& ctx,
 
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 // cuda definition
-template <typename DeviceContext, typename T>
+template <typename DeviceContext, typename T,
+          typename std::enable_if<!std::is_same<
+              T, paddle::platform::float16>::value>::type* = nullptr>
+typename std::enable_if<
+    std::is_same<DeviceContext, platform::CUDADeviceContext>::value>::type
+elementwise_sub_grad(const framework::ExecutionContext& ctx,
+                     const framework::Tensor* x, const framework::Tensor* y,
+                     const framework::Tensor* out,
+                     const framework::Tensor* dout, framework::Tensor* dx,
+                     framework::Tensor* dy);
+template <typename DeviceContext, typename T,
+          typename std::enable_if<std::is_same<
+              T, paddle::platform::float16>::value>::type* = nullptr>
 typename std::enable_if<
     std::is_same<DeviceContext, platform::CUDADeviceContext>::value>::type
 elementwise_sub_grad(const framework::ExecutionContext& ctx,
