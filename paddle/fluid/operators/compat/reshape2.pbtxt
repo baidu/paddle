@@ -22,6 +22,14 @@ def {
 }
 extra {
   attrs {
+    name: "Out0_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_threshold"
+    type: FLOAT
+  }
+  attrs {
     name: "use_quantizer"
     type: BOOLEAN
   }

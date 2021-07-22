@@ -29,6 +29,14 @@ def {
 }
 extra {
   attrs {
+    name: "Y0_threshold"
+    type: FLOAT
+  }
+  attrs {
+    name: "out_threshold"
+    type: FLOAT
+  }
+  attrs {
     name: "use_mkldnn"
     type: BOOLEAN
   }
