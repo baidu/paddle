@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 
 import paddle
+from paddle.static import InputSpec
 
 SEED = 2020
 np.random.seed(SEED)
@@ -174,6 +175,45 @@ class TestSetValueWithLayerAndSave(unittest.TestCase):
             path="./layer_use_set_value",
             input_spec=[x],
             output_spec=None)
+
+
+class TestSliceSupplementCase(unittest.TestCase):
+    def test_static_slice_step(self):
+        paddle.enable_static()
+        array = np.arange(4**3).reshape((4, 4, 4)).astype('int64')
+
+        x = paddle.static.data(name='x', shape=[4, 4, 4], dtype='int64')
+        z1 = x[::2]
+        z2 = x[::-2]
+
+        place = paddle.CPUPlace()
+        prog = paddle.static.default_main_program()
+        exe = paddle.static.Executor(place)
+        exe.run(paddle.static.default_startup_program())
+
+        out = exe.run(prog, feed={'x': array}, fetch_list=[z1, z2])
+
+        self.assertTrue(np.array_equal(out[0], array[::2]))
+        self.assertTrue(np.array_equal(out[1], array[::-2]))
+
+    def test_static_slice_step_dygraph2static(self):
+        paddle.disable_static()
+
+        array = np.arange(4**2 * 5).reshape((5, 4, 4)).astype('int64')
+        inps = paddle.to_tensor(array)
+
+        def func(inps):
+            return inps[::2], inps[::-2]
+
+        origin_result = func(inps)
+        sfunc = paddle.jit.to_static(
+            func, input_spec=[InputSpec(shape=[None, 4, 4])])
+        static_result = sfunc(inps)
+
+        self.assertTrue(
+            np.array_equal(origin_result[0].numpy(), static_result[0].numpy()))
+        self.assertTrue(
+            np.array_equal(origin_result[1].numpy(), static_result[1].numpy()))
 
 
 class TestPaddleStridedSlice(unittest.TestCase):

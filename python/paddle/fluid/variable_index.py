@@ -144,13 +144,14 @@ def _getitem_impl_(var, item):
 
             step = 1 if step is None else step
 
-            if start is None and end is None:
-                assert (step == -1)
+            if start is None and end is None and step == -1:
                 reverse_axes.append(dim)
                 continue
 
-            start = 0 if start is None else start
-            end = MAX_INTEGER if end is None else end
+            if start is None:
+                start = 0 if step > 0 else MAX_INTEGER
+            if end is None:
+                end = MAX_INTEGER if step > 0 else 0
 
         elif isinstance(slice_item, list):
             is_bool_list = False
