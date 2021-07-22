@@ -20,11 +20,12 @@ import paddle.fluid.core as core
 import paddle
 from .. import functional as F
 from paddle.fluid.framework import core, in_dygraph_mode, _varbase_creator
+from .. import Layer
 
 __all__ = []
 
 
-class BCEWithLogitsLoss(fluid.dygraph.Layer):
+class BCEWithLogitsLoss(Layer):
     r"""
     This operator combines the sigmoid layer and the :ref:`api_nn_loss_BCELoss` layer.
     Also, we can see it as the combine of ``sigmoid_cross_entropy_with_logits``
@@ -128,7 +129,7 @@ class BCEWithLogitsLoss(fluid.dygraph.Layer):
         return out
 
 
-class CrossEntropyLoss(fluid.dygraph.Layer):
+class CrossEntropyLoss(Layer):
     r"""
     By default, this operator implements the cross entropy loss function with softmax. This function 
     combines the calculation of the softmax operation and the cross entropy loss function 
@@ -407,7 +408,7 @@ class CrossEntropyLoss(fluid.dygraph.Layer):
         return ret
 
 
-class HSigmoidLoss(fluid.dygraph.Layer):
+class HSigmoidLoss(Layer):
     """
     Hierarchical Sigmoid Layer.
     
@@ -529,7 +530,7 @@ class HSigmoidLoss(fluid.dygraph.Layer):
         return out
 
 
-class MSELoss(fluid.dygraph.layers.Layer):
+class MSELoss(Layer):
     r"""
     **Mean Square Error Loss**
     Computes the mean square error (squared L2 norm) of given input and label.
@@ -596,8 +597,7 @@ class MSELoss(fluid.dygraph.layers.Layer):
             fluid.data_feeder.check_variable_and_dtype(
                 label, 'label', ['float32', 'float64'], 'MSELoss')
 
-        square_out = fluid.layers.square(
-            fluid.layers.elementwise_sub(input, label))
+        square_out = paddle.square(paddle.subtract(input, label))
         if self.reduction == 'none':
             return square_out
 
@@ -608,7 +608,7 @@ class MSELoss(fluid.dygraph.layers.Layer):
         return getattr(fluid.layers, reduce_op)(square_out)
 
 
-class L1Loss(fluid.dygraph.Layer):
+class L1Loss(Layer):
     r"""
     This interface is used to construct a callable object of the ``L1Loss`` class.
     The L1Loss layer calculates the L1 Loss of ``input`` and ``label`` as follows.
@@ -687,7 +687,7 @@ class L1Loss(fluid.dygraph.Layer):
             input, label, self.reduction, name=self.name)
 
 
-class BCELoss(fluid.dygraph.Layer):
+class BCELoss(Layer):
     """
     This interface is used to construct a callable object of the ``BCELoss`` class.
     The BCELoss layer measures the binary_cross_entropy loss between input predictions ``input``
@@ -777,7 +777,7 @@ class BCELoss(fluid.dygraph.Layer):
         return out
 
 
-class NLLLoss(fluid.dygraph.Layer):
+class NLLLoss(Layer):
     r"""
 	:alias_main: paddle.nn.NLLLoss
 	:alias: paddle.nn.NLLLoss,paddle.nn.layer.NLLLoss,paddle.nn.layer.loss.NLLLoss
@@ -886,7 +886,7 @@ class NLLLoss(fluid.dygraph.Layer):
             name=self._name)
 
 
-class KLDivLoss(fluid.dygraph.Layer):
+class KLDivLoss(Layer):
     r"""
     This interface calculates the Kullback-Leibler divergence loss
     between Input(X) and Input(Target). Notes that Input(X) is the
@@ -959,7 +959,7 @@ class KLDivLoss(fluid.dygraph.Layer):
         return out
 
 
-class MarginRankingLoss(fluid.dygraph.Layer):
+class MarginRankingLoss(Layer):
     r"""
 
     This interface is used to construct a callable object of the ``MarginRankingLoss`` class.
@@ -1031,7 +1031,7 @@ class MarginRankingLoss(fluid.dygraph.Layer):
         return out
 
 
-class CTCLoss(fluid.dygraph.Layer):
+class CTCLoss(Layer):
     """
 
     An operator integrating the open source Warp-CTC library (https://github.com/baidu-research/warp-ctc)
@@ -1127,7 +1127,7 @@ class CTCLoss(fluid.dygraph.Layer):
             norm_by_times=norm_by_times)
 
 
-class SmoothL1Loss(fluid.dygraph.Layer):
+class SmoothL1Loss(Layer):
     r"""
     This operator calculates smooth_l1_loss. Creates a criterion that uses a squared
     term if the absolute element-wise error falls below 1 and an L1 term otherwise.

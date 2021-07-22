@@ -30,15 +30,13 @@
 import six
 
 from ...fluid.dygraph import BatchNorm  # noqa: F401
-
 from ...fluid.dygraph import SpectralNorm  # noqa: F401
 
-from ...fluid.dygraph import layers
 from ...framework import get_default_dtype, set_default_dtype
 from ...fluid.framework import in_dygraph_mode
 
-from ...fluid.initializer import Constant
-from ...fluid.param_attr import ParamAttr
+from ..initializer import Constant
+from ...framework import ParamAttr
 from ...fluid.data_feeder import check_variable_and_dtype, check_type
 from ...fluid import core, dygraph_utils
 
@@ -47,14 +45,15 @@ from ..functional import batch_norm, layer_norm, instance_norm
 import numpy as np
 import numbers
 import warnings
-from ...fluid.dygraph.base import no_grad
+from ...framework import no_grad
 from .. import functional as F
 from paddle import _C_ops
+from .. import Layer
 
 __all__ = []
 
 
-class _InstanceNormBase(layers.Layer):
+class _InstanceNormBase(Layer):
     """
     This class is based class for InstanceNorm1D, 2d, 3d. 
 
@@ -317,7 +316,7 @@ class InstanceNorm3D(_InstanceNormBase):
                 len(input.shape)))
 
 
-class GroupNorm(layers.Layer):
+class GroupNorm(Layer):
     """
     This interface is used to construct a callable object of the ``GroupNorm`` class.
     For more details, refer to code examples.
@@ -436,7 +435,7 @@ class GroupNorm(layers.Layer):
             self._num_groups, self._num_channels, self._epsilon)
 
 
-class LayerNorm(layers.Layer):
+class LayerNorm(Layer):
     r"""
     :alias_main: paddle.nn.LayerNorm
 	:alias: paddle.nn.LayerNorm,paddle.nn.layer.LayerNorm,paddle.nn.layer.norm.LayerNorm
@@ -544,7 +543,7 @@ class LayerNorm(layers.Layer):
                                                         self._epsilon)
 
 
-class _BatchNormBase(layers.Layer):
+class _BatchNormBase(Layer):
     """
     BatchNorm base .
     """
@@ -1181,7 +1180,7 @@ class SyncBatchNorm(_BatchNormBase):
         return layer_output
 
 
-class LocalResponseNorm(layers.Layer):
+class LocalResponseNorm(Layer):
     """
         Local Response Normalization performs a type of "lateral inhibition" by normalizing over local input regions.
         For more information, please refer to `ImageNet Classification with Deep Convolutional Neural Networks <https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_

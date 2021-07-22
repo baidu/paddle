@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...fluid.dygraph import layers
 from ...fluid.layer_helper import LayerHelper
 from .. import functional as F
+from .. import Layer
 
 __all__ = []
 
 
-class AvgPool1D(layers.Layer):
+class AvgPool1D(Layer):
     r"""
     This operation applies a 1D average pooling over an input signal composed
     of several input planes, based on the input, output_size, return_mask parameters.
@@ -109,7 +109,7 @@ class AvgPool1D(layers.Layer):
             **self.__dict__)
 
 
-class AvgPool2D(layers.Layer):
+class AvgPool2D(Layer):
     r"""
     This operation applies 2D average pooling over input features based on the input,
     and kernel_size, stride, padding parameters. Input(X) and Output(Out) are
@@ -220,7 +220,7 @@ class AvgPool2D(layers.Layer):
             **self.__dict__)
 
 
-class AvgPool3D(layers.Layer):
+class AvgPool3D(Layer):
     """
     This operation applies 3D max pooling over input features based on the input,
     and kernel_size, stride, padding parameters. Input(X) and Output(Out) are
@@ -318,7 +318,7 @@ class AvgPool3D(layers.Layer):
             **self.__dict__)
 
 
-class MaxPool1D(layers.Layer):
+class MaxPool1D(Layer):
     """
     This operation applies 1D max pooling over input signal
     composed of several input planes based on the input,
@@ -412,7 +412,7 @@ class MaxPool1D(layers.Layer):
             **self.__dict__)
 
 
-class MaxPool2D(layers.Layer):
+class MaxPool2D(Layer):
     r"""
     This operation applies 2D max pooling over input feature based on the input,
     and kernel_size, stride, padding parameters. Input(X) and Output(Out) are
@@ -522,7 +522,7 @@ class MaxPool2D(layers.Layer):
             **self.__dict__)
 
 
-class MaxPool3D(layers.Layer):
+class MaxPool3D(Layer):
     """
     This operation applies 3D max pooling over input features based on the input,
     and kernel_size, stride, padding parameters. Input(X) and Output(Out) are
@@ -620,7 +620,7 @@ class MaxPool3D(layers.Layer):
             **self.__dict__)
 
 
-class AdaptiveAvgPool1D(layers.Layer):
+class AdaptiveAvgPool1D(Layer):
     r"""
 
     This operation applies a 1D adaptive average pooling over an input signal composed
@@ -693,7 +693,7 @@ class AdaptiveAvgPool1D(layers.Layer):
         return 'output_size={}'.format(self.output_size)
 
 
-class AdaptiveAvgPool2D(layers.Layer):
+class AdaptiveAvgPool2D(Layer):
     r"""
 
     This operation applies 2D adaptive avg pooling on input tensor. The h and w dimensions
@@ -779,7 +779,7 @@ class AdaptiveAvgPool2D(layers.Layer):
         return 'output_size={}'.format(self._output_size)
 
 
-class AdaptiveAvgPool3D(layers.Layer):
+class AdaptiveAvgPool3D(Layer):
     r"""
 
     This operation applies 3D adaptive avg pooling on input tensor. The h and w dimensions
@@ -872,7 +872,7 @@ class AdaptiveAvgPool3D(layers.Layer):
         return 'output_size={}'.format(self._output_size)
 
 
-class AdaptiveMaxPool1D(layers.Layer):
+class AdaptiveMaxPool1D(Layer):
     """
 
     This operation applies a 1D adaptive max pooling over an input signal composed
@@ -956,7 +956,7 @@ class AdaptiveMaxPool1D(layers.Layer):
                                                        self.return_mask)
 
 
-class AdaptiveMaxPool2D(layers.Layer):
+class AdaptiveMaxPool2D(Layer):
     """
     This operation applies 2D adaptive max pooling on input tensor. The h and w dimensions
     of the output tensor are determined by the parameter output_size. The difference between adaptive pooling and
@@ -1037,7 +1037,7 @@ class AdaptiveMaxPool2D(layers.Layer):
                                                        self._return_mask)
 
 
-class AdaptiveMaxPool3D(layers.Layer):
+class AdaptiveMaxPool3D(Layer):
     """
     This operation applies 3D adaptive max pooling on input tensor. The h and w dimensions of the output tensor are
     determined by the parameter output_size. The difference between adaptive pooling and pooling is adaptive one focus

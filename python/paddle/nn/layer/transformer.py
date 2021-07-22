@@ -24,8 +24,8 @@ from .norm import LayerNorm
 from .. import functional as F
 from ... import tensor
 from ...fluid import layers
-from ...fluid.dygraph import Layer, LayerList
-from ...fluid.param_attr import ParamAttr
+from .. import Layer, LayerList
+from ...framework import ParamAttr
 from ...fluid.data_feeder import convert_dtype
 
 __all__ = []

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from ...fluid.dygraph.layers import Layer
+from .. import Layer
 from collections.abc import Iterable, Mapping
 
 __all__ = []

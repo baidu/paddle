@@ -14,13 +14,13 @@
 
 # TODO: define specitial functions used in computer vision task 
 
-from ...fluid.dygraph import layers
+from .. import Layer
 from .. import functional
 
 __all__ = []
 
 
-class PixelShuffle(layers.Layer):
+class PixelShuffle(Layer):
     """
     
     PixelShuffle Layer    

@@ -28,7 +28,7 @@ from paddle import framework
 from paddle.device import get_device, get_cudnn_version
 from paddle.nn import functional as F
 from paddle.nn import initializer as I
-from paddle.fluid.dygraph import Layer, LayerList
+from paddle.nn import Layer, LayerList
 from paddle.fluid.layers import utils
 from paddle.fluid.layers.utils import map_structure, flatten, pack_sequence_as
 from paddle.fluid.data_feeder import convert_dtype
@@ -962,7 +962,7 @@ class RNNBase(LayerList):
             # for static-graph, append coalesce_tensor into startup program
             with fluid.program_guard(fluid.default_startup_program(),
                                      fluid.default_startup_program()):
-                with framework.no_grad():
+                with paddle.no_grad():
                     self._helper.append_op(
                         type="coalesce_tensor",
                         inputs={"Input": self._all_weights},
@@ -1040,11 +1040,11 @@ class RNNBase(LayerList):
             ])
         else:
             initial_states = [initial_states] if isinstance(
-                initial_states,
-                paddle.fluid.framework.Variable) else initial_states
+                initial_states, paddle.static.Variable) else initial_states
 
-        if self.could_use_cudnn and (not fluid.core.is_compiled_with_rocm() or
-                                     sequence_length is None):
+        if self.could_use_cudnn and (
+                not paddle.device.is_compiled_with_rocm() or
+                sequence_length is None):
             # Add CPU kernel and dispatch in backend later
             return self._cudnn_impl(inputs, initial_states, sequence_length)
 

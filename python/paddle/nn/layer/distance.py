@@ -15,7 +15,7 @@
 import numpy as np
 
 import paddle
-from ...fluid.dygraph import layers
+from .. import Layer
 from ...fluid.framework import core, in_dygraph_mode
 from ...fluid.data_feeder import check_variable_and_dtype, check_type
 from ...fluid.layer_helper import LayerHelper
@@ -24,7 +24,7 @@ from paddle import _C_ops
 __all__ = []
 
 
-class PairwiseDistance(layers.Layer):
+class PairwiseDistance(Layer):
     r"""
     This operator computes the pairwise distance between two vectors. The
     distance is calculated by p-oreder norm:
@@ -87,7 +87,7 @@ class PairwiseDistance(layers.Layer):
                                  'PairwiseDistance')
         check_variable_and_dtype(y, 'y', ['float32', 'float64'],
                                  'PairwiseDistance')
-        sub = paddle.fluid.layers.elementwise_sub(x, y)
+        sub = paddle.subtract(x, y)
 
         helper = LayerHelper("PairwiseDistance", name=self.name)
         attrs = {

@@ -19,8 +19,8 @@ import numpy as np
 from ...fluid import get_flags
 from ...fluid import core
 from ...device import get_cudnn_version
-from ...fluid.dygraph import layers
-from ...fluid.initializer import Normal
+from .. import Layer
+from ..initializer import Normal
 from .. import functional as F
 from ...fluid.layers import utils
 from ..functional.conv import _update_padding_nd
@@ -31,7 +31,7 @@ __all__ = []
 def _get_default_param_initializer(num_channels, filter_size):
     filter_elem_num = num_channels * np.prod(filter_size)
     std = (2.0 / filter_elem_num)**0.5
-    return Normal(0.0, std, 0)
+    return Normal(0.0, std)
 
 
 def _reverse_repeat_list(t, n):
@@ -42,7 +42,7 @@ def _reverse_repeat_list(t, n):
     return list(x for x in reversed(t) for _ in range(n))
 
 
-class _ConvNd(layers.Layer):
+class _ConvNd(Layer):
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -127,7 +127,7 @@ class _ConvNd(layers.Layer):
                 return None
             filter_elem_num = np.prod(self._kernel_size) * self._in_channels
             std = (2.0 / filter_elem_num)**0.5
-            return Normal(0.0, std, 0)
+            return Normal(0.0, std)
 
         self.weight = self.create_parameter(
             shape=filter_shape,
