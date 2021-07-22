@@ -575,7 +575,7 @@ def _tril_triu_op(helper):
             "lower": True if op_type == 'tril' else False,
         },
         outputs={"Out": out}, )
-
+    out.stop_gradient = True
     return out
 
 
