@@ -20,6 +20,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/ir/multi_devices_graph_pass/multi_devices_graph_pass.h"
 
 DECLARE_bool(use_mkldnn);
+DECLARE_bool(convert_all_blocks);
 
 namespace paddle {
 namespace framework {
@@ -312,6 +313,11 @@ ir::Graph *BuildStrategy::Apply(ir::Graph *graph,
                                 DeviceType use_device) const {
 #endif
   VLOG(1) << "apply all passes";
+  if (FLAGS_convert_all_blocks) {
+    PADDLE_ENFORCE_EQ(
+        graph->IsMainGraph(), true,
+        platform::errors::InvalidArgument("This graph is not main_graph"));
+  }
   // Create a default one if not finalized by user.
   CreatePassesFromStrategy(false);
 
@@ -432,7 +438,14 @@ ir::Graph *BuildStrategy::Apply(ir::Graph *graph,
       }
     }
     VLOG(1) << "Start Apply Pass " << pass->Type();
-    graph = pass->Apply(graph);
+    if (FLAGS_convert_all_blocks) {
+      for (size_t i = 0; i < graph->SubGraphsSize(); ++i) {
+        VLOG(3) << "Apply Pass " << pass->Type() << "to SubGraph " << i;
+        pass->Apply(graph->GetSubGraph(i));
+      }
+    } else {
+      graph = pass->Apply(graph);
+    }
     VLOG(1) << "Finish Apply Pass " << pass->Type();
   }
   VLOG(1) << "All Passes Applied";

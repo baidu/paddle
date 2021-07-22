@@ -139,6 +139,7 @@ if(NOT APPLE AND NOT WIN32 AND (WITH_GPU OR WITH_ROCM))
   set(IR_PASS_DEPS ${IR_PASS_DEPS} fusion_group_pass)
 endif()
 cc_library(build_strategy SRCS build_strategy.cc DEPS pass_builder ${IR_PASS_DEPS})
+cc_test(build_strategy_test SRCS build_strategy_test.cc DEPS build_strategy)
 
 if (WITH_MKLDNN)
   target_link_libraries(build_strategy mkldnn_placement_pass)
