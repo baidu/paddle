@@ -77,7 +77,7 @@ function cmake_base() {
     # Build script will not fail if *.deb does not exist
     rm *.deb 2>/dev/null || true
     # Delete previous built whl packages
-    rm -rf python/dist 2>/dev/null || true
+    rm -rf python 2>/dev/null || true
 
     # Support build for all python3 versions
     PYTHON_FLAGS=""

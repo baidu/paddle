@@ -323,9 +323,9 @@ if '${WITH_MKLDNN}' == 'ON':
         command = "patchelf --set-rpath '$ORIGIN/' ${MKLDNN_SHARED_LIB}"
         if os.system(command) != 0:
             raise Exception("patch libdnnl.so failed, command: %s" % command)
-    shutil.copy('${MKLDNN_SHARED_LIB}', libs_path)
+    shutil.copy('${MKLDNN_SHARED_LIB}', libs_path, follow_symlinks=False)
     if os.name != 'nt':
-        shutil.copy('${MKLDNN_SHARED_LIB_1}', libs_path)
+        shutil.copy('${MKLDNN_SHARED_LIB_1}', libs_path, follow_symlinks=False)
         shutil.copy('${MKLDNN_SHARED_LIB_2}', libs_path)
         package_data['paddle.libs']+=['libmkldnn.so.0', 'libdnnl.so.1', 'libdnnl.so.2']
     else:
@@ -498,7 +498,7 @@ else:
 
 # strip *.so to reduce package size
 if '${WITH_STRIP}' == 'ON':
-    command = 'find ${PADDLE_BINARY_DIR}/python/paddle -name "*.so" | xargs -i strip {}'
+    command = 'find ${PADDLE_BINARY_DIR}/python/paddle -name "*.so*" | xargs -i strip {}'
     if os.system(command) != 0:
         raise Exception("strip *.so failed, command: %s" % command)
 
