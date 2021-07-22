@@ -264,6 +264,10 @@ int32_t CommonSparseTable::initialize_optimizer() {
   } else if (name == "sum") {
     optimizer_ = std::make_shared<SSUM>(value_names_, value_dims_,
                                         value_offsets_, value_idx_);
+  } else if (name == "adagrad") {
+    optimizer_ = std::make_shared<SAdagrad>(value_names_, value_dims_,
+                                            value_offsets_, value_idx_);
+    optimizer_->set_global_lr(_global_lr);
   } else {
     VLOG(3) << "init optimizer failed";
   }

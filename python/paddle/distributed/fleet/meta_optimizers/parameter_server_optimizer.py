@@ -175,7 +175,7 @@ class ParameterServerOptimizer(MetaOptimizerBase):
                                      lr_decay_steps)
 
             for op in ops:
-                if op.type in ["sgd", "adam"]:
+                if op.type in ["sgd", "adam", "adagrad"]:
                     is_sgd_adam = True
                     break
 

@@ -216,5 +216,63 @@ class SAdam : public SparseOptimizer {
   float epsilon;
 };
 
+class SAdagrad : public SparseOptimizer {
+ public:
+  explicit SAdagrad(const std::vector<std::string>& value_names,
+                    const std::vector<int>& value_dims,
+                    const std::vector<int>& value_offsets,
+                    const std::unordered_map<std::string, int>& value_idx)
+      : SparseOptimizer(value_names, value_dims, value_offsets, value_idx) {
+    auto idx = value_idx.at("Param");
+    param_offset = value_offsets.at(idx);
+    update_numel = value_dims.at(idx);
+
+    idx = value_idx.at("LearningRate");
+    lr_offset = value_offsets.at(idx);
+
+    idx = value_idx.at("Moment");
+    m_offset = value_offsets.at(idx);
+
+    // add attr later
+    epsilon = 1.0e-6;
+  }
+
+  void update(const uint64_t* keys, const float* update_values, size_t num,
+              const std::vector<uint64_t>& offsets,
+              ValueBlock* block) override {
+    auto blas = GetBlas<float>();
+    for (auto x : offsets) {
+      auto id = keys[x];
+      auto* values = block->Get(id);
+      float lr_ = (*global_learning_rate_) * (*(values + lr_offset));
+      float* param = values + param_offset;
+      float* moment = values + m_offset;
+
+      std::vector<float> grad, grad2, tmp;
+      grad.resize(update_numel);
+      grad2.resize(update_numel);
+      tmp.resize(update_numel);
+
+      blas.VCOPY(update_numel, update_values + x * update_numel, grad.data());
+      blas.VCOPY(update_numel, update_values + x * update_numel, grad2.data());
+      
+      blas.VSQUARE(update_numel, grad2.data(), grad2.data());
+      blas.VADD(update_numel, moment, grad2.data(), moment);
+      
+      float* tmp_ = tmp.data();
+      SQRT<float>(update_numel, moment, tmp_);
+      ADD<float>(update_numel, tmp_, epsilon, tmp_);
+
+      blas.VDIV(update_numel, grad.data(), tmp_, tmp_);
+      blas.SCAL(update_numel, lr_, tmp_);
+      blas.VSUB(update_numel, param, tmp_, param);
+    }
+  }
+
+  int lr_offset;
+  int m_offset;
+  float epsilon;
+};
+
 }  // namespace distributed
 }  // namespace paddle

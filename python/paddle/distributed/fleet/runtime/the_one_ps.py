@@ -95,6 +95,8 @@ class CommonAccessor:
         opt_input_map["adam"] = [("Param", None), ("Moment1", None),
                                  ("Moment2", None), ("Beta1Pow", 1),
                                  ("Beta2Pow", 1), ("LearningRate", 1)]
+        opt_input_map["adagrad"] = [("Param", None), ("Moment", None),
+                                    ("LearningRate", 1)]
         opt_input_map["sum"] = [("Param", None)]
         opt_input_map["naive_adagrad"] = [("Param", None), ("G2Sum", 1),
                                           ("LearningRate", 1)]
@@ -105,6 +107,7 @@ class CommonAccessor:
         opt_attr_map["naive_adagrad"] = []
         opt_attr_map["adam"] = [("beta1", "f"), ("beta2", "f"),
                                 ("epsilon", "f")]
+        opt_attr_map["adagrad"] = [("epsilon", "f")]
 
         opt_init_map = {}
         opt_init_map["gaussian_random"] = ["seed", "mean", "std"]
