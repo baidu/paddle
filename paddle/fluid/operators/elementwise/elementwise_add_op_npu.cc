@@ -17,6 +17,7 @@ limitations under the License. */
 
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/elementwise/elementwise_add_op.h"
+#include "paddle/fluid/operators/elementwise/elementwise_npu.h"
 #include "paddle/fluid/operators/npu_op_runner.h"
 
 namespace paddle {
@@ -27,12 +28,37 @@ template <typename T>
 class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
+    auto& dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
     auto* x = ctx.Input<framework::LoDTensor>("X");
     auto* y = ctx.Input<framework::LoDTensor>("Y");
     auto* out = ctx.Output<framework::LoDTensor>("Out");
     out->mutable_data<T>(ctx.GetPlace());
 
-    const auto& runner = NpuOpRunner("Add", {*x, *y}, {*out}, {});
+    int axis = ctx.Attr<int>("axis");
+
+    bool direct_compute = false;
+    auto x_dims = x->dims();
+    auto y_dims = y->dims();
+    axis = (axis == -1 ? std::abs(x_dims.size() - y_dims.size()) : axis);
+    if (x_dims.size() >= y_dims.size()) {
+      direct_compute =
+          y_dims == framework::slice_ddim(x_dims, axis, x_dims.size());
+    } else {
+      direct_compute =
+          x_dims == framework::slice_ddim(y_dims, axis, y_dims.size());
+    }
+
+    Tensor transformed_x, transformed_y;
+    if (direct_compute) {
+      transformed_x.ShareDataWith(*x);
+      transformed_y.ShareDataWith(*y);
+    } else {
+      NpuElementWiseOpBroadcast<T>(dev_ctx, x, y, axis, &transformed_x,
+                                   &transformed_y);
+    }
+    const auto& runner =
+        NpuOpRunner("Add", {transformed_x, transformed_y}, {*out}, {});
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
@@ -44,109 +70,75 @@ template <typename T>
 class ElementwiseAddGradNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
-    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
-    auto* dy = ctx.Output<Tensor>(framework::GradVarName("Y"));
+    auto& dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    auto* x = ctx.Input<framework::Tensor>("X");
+    auto* y = ctx.Input<framework::Tensor>("Y");
+    auto* dout = ctx.Input<framework::Tensor>(framework::GradVarName("Out"));
+    auto* dx = ctx.Output<framework::Tensor>(framework::GradVarName("X"));
+    auto* dy = ctx.Output<framework::Tensor>(framework::GradVarName("Y"));
+    int axis = ctx.Attr<int>("axis");
 
-    auto stream =
-        ctx.template device_context<paddle::platform::NPUDeviceContext>()
-            .stream();
-
-    // NOTE(zhiqiu): It seems Ascend Sub follow the broadcast sematics with
-    // default axis=-1?
-    // So, the sub_grad should do reduce if needed.
-    // For example, the shape of each variable in elementwise_sub:
-    // x, dx: [2, 3, 5]
-    // y, dy: [1, 5]
-    // out, dout: [2, 3, 5]
-    // Then, out = x - y  =>  dx = dout, dy = -dout
-    // And, the shape of dy can be computed by two stages reduce,
-    // 1. [2, 3, 5] => [3, 5], ReduceSumD on axis = 0, keep_dims = false.
-    // 2. [3, 5] => [1, 5], ReduceSumD on axis = 0, keep_dims = true.
-
+    axis = (axis == -1 ? std::abs(x->dims().size() - y->dims().size()) : axis);
+    auto stream = dev_ctx.stream();
     if (dx) {
       dx->mutable_data<T>(ctx.GetPlace());
-      // For dx
-      // stage 1
-      auto reduce_ndim = dout->dims().size() - dx->dims().size();
-      std::vector<int> axes;
-      for (auto i = 0; i < reduce_ndim; ++i) {
-        axes.push_back(i);
-      }
-      Tensor* tmp_dout = const_cast<Tensor*>(dout);
-      Tensor reduced_dout(dx->type());
-      if (axes.size() != 0) {
-        std::vector<int64_t> reduced_dout_dims;
-        for (auto i = reduce_ndim; i < dout->dims().size(); ++i) {
-          reduced_dout_dims.push_back(dout->dims()[i]);
-        }
-        reduced_dout.Resize(framework::make_ddim(reduced_dout_dims));
-        reduced_dout.mutable_data<T>(ctx.GetPlace());
-        const auto& runner =
-            NpuOpRunner("ReduceSumD", {*dout}, {reduced_dout},
-                        {{"axes", axes}, {"keep_dims", false}});
-        runner.Run(stream);
-        tmp_dout = &reduced_dout;
-      }
+      if (dx->dims() != dout->dims()) {
+        std::vector<int> dst_dims_vec;
+        std::vector<int> reduce_axes;
+        auto src_dims = dx->dims();
+        auto dout_dims = dout->dims();
 
-      // stage 2
-      axes.clear();
-      for (auto i = 0; i < dx->dims().size(); ++i) {
-        if (dx->dims()[i] == 1) {
-          axes.push_back(i);
+        int src_axis = (src_dims.size() < dout_dims.size() ? axis : 0);
+        for (int ax = 0; ax < dout_dims.size(); ++ax) {
+          if ((ax < src_axis || ax >= src_axis + src_dims.size()) ||
+              (dout_dims[ax] > 1 && src_dims[ax - src_axis] == 1)) {
+            reduce_axes.push_back(ax);
+          } else {
+            dst_dims_vec.push_back(dout_dims[ax]);
+          }
         }
-      }
-      if (axes.size() != 0) {
-        const auto& runner = NpuOpRunner("ReduceSumD", {*tmp_dout}, {*dx},
-                                         {{"axes", axes}, {"keep_dims", true}});
-        runner.Run(stream);
+        if (!reduce_axes.empty()) {
+          Tensor tmp;
+          tmp.ShareDataWith(*dx);
+          tmp.Resize(framework::make_ddim(dst_dims_vec));
+          const auto& runner =
+              NpuOpRunner("ReduceSumD", {*dout}, {tmp},
+                          {{"axes", reduce_axes}, {"keep_dims", false}});
+          runner.Run(stream);
+        }
       } else {
-        framework::TensorCopy(
-            *tmp_dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dx);
+        framework::TensorCopy(*dout, ctx.GetPlace(), dev_ctx, dx);
       }
     }
-
     if (dy) {
-      // For dy
-      // stage 1
-      auto reduce_ndim = dout->dims().size() - dy->dims().size();
-      std::vector<int> axes;
-      for (auto i = 0; i < reduce_ndim; ++i) {
-        axes.push_back(i);
-      }
-      Tensor* tmp_dout = const_cast<Tensor*>(dout);
-      Tensor reduced_dout(dout->type());
-      if (axes.size() != 0) {
-        std::vector<int64_t> reduced_dout_dims;
-        for (auto i = reduce_ndim; i < dout->dims().size(); ++i) {
-          reduced_dout_dims.push_back(dout->dims()[i]);
-        }
-        reduced_dout.Resize(framework::make_ddim(reduced_dout_dims));
-        reduced_dout.mutable_data<T>(ctx.GetPlace());
-        const auto& runner =
-            NpuOpRunner("ReduceSumD", {*dout}, {reduced_dout},
-                        {{"axes", axes}, {"keep_dims", false}});
-        runner.Run(stream);
-        tmp_dout = &reduced_dout;
-      }
+      dy->mutable_data<T>(ctx.GetPlace());
+      if (dy->dims() != dout->dims()) {
+        std::vector<int> dst_dims_vec;
+        std::vector<int> reduce_axes;
+        auto src_dims = dy->dims();
+        auto dout_dims = dout->dims();
 
-      // stage 2
-      axes.clear();
-      for (auto i = 0; i < dy->dims().size(); ++i) {
-        if (dy->dims()[i] == 1) {
-          axes.push_back(i);
+        int src_axis = (src_dims.size() < dout_dims.size() ? axis : 0);
+        for (int ax = 0; ax < dout_dims.size(); ++ax) {
+          if ((ax < src_axis || ax >= src_axis + src_dims.size()) ||
+              (dout_dims[ax] > 1 && src_dims[ax - src_axis] == 1)) {
+            reduce_axes.push_back(ax);
+          } else {
+            dst_dims_vec.push_back(dout_dims[ax]);
+          }
         }
-      }
-      if (axes.size() != 0) {
-        dy->mutable_data<T>(ctx.GetPlace());
-        const auto& runner = NpuOpRunner("ReduceSumD", {*tmp_dout}, {*dy},
-                                         {{"axes", axes}, {"keep_dims", true}});
-        runner.Run(stream);
+        if (!reduce_axes.empty()) {
+          Tensor tmp;
+          tmp.ShareDataWith(*dy);
+          tmp.Resize(framework::make_ddim(dst_dims_vec));
+          const auto& runner =
+              NpuOpRunner("ReduceSumD", {*dout}, {tmp},
+                          {{"axes", reduce_axes}, {"keep_dims", false}});
+          runner.Run(stream);
+        }
       } else {
-        framework::TensorCopy(
-            *tmp_dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dy);
+        framework::TensorCopy(*dout, ctx.GetPlace(), dev_ctx, dy);
       }
     }
   }
