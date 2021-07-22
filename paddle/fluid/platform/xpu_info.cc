@@ -27,6 +27,10 @@ DEFINE_string(selected_xpus, "",
               "between XPU devices, use XPU_VISIBLE_DEVICES can only use"
               "share-memory only.");
 
+DECLARE_uint64(initial_xpu_memory_in_mb);
+DECLARE_uint64(xpu_memory_limit_mb);
+DECLARE_uint64(reallocate_xpu_memory_in_mb);
+
 namespace paddle {
 namespace platform {
 
@@ -101,6 +105,31 @@ void SetXPUDeviceId(int id) {
                         "XPU API return wrong value[%d], please check whether "
                         "Baidu Kunlun Card is properly installed.",
                         ret));
+}
+
+//! Get the initial allocation size of current XPU device.
+size_t XPUInitAllocSize() {
+  size_t init_chunk_size = FLAGS_initial_xpu_memory_in_mb;
+  VLOG(10) << "XPU init chunk size " << init_chunk_size << "M";
+  return init_chunk_size << 20;
+}
+
+//! Get the re-allocation size of current GPU device.
+size_t XPUReallocSize() {
+  size_t realloc_size = FLAGS_reallocate_xpu_memory_in_mb;
+  VLOG(10) << "XPU realloc chunk size " << realloc_size << "M";
+  return realloc_size << 20;
+}
+
+size_t XPUMinChunkSize() {
+  // Allow to allocate the minimum chunk size is 256 bytes.
+  return 1 << 8;
+}
+
+size_t XPUMaxChunkSize() {
+  size_t max_chunk_size = FLAGS_xpu_memory_limit_mb;
+  VLOG(10) << "XPU max chunk size " << (max_chunk_size >> 20) << "M";
+  return max_chunk_size << 20;
 }
 
 }  // namespace platform

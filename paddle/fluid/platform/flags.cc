@@ -602,3 +602,43 @@ DEFINE_bool(check_kernel_launch, false,
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 DEFINE_bool(conv2d_disable_cudnn, false, "Disable cudnn in conv2d");
 #endif
+
+#ifdef PADDLE_WITH_XPU
+/**
+ * XPU related FLAG
+ * Name: FLAGS_initial_xpu_memory_in_mb
+ * Since Version:
+ * Value Range: uint64, default=0 (MB)
+ * Example:
+ * Note: Allocate a specified size of XPU memory block. Later memory usage
+ *       will be allocated from that memory block. If the memory block does not
+ *       have enough XPU memory, the memory block with the size
+ *       FLAGS_reallocate_xpu_memory_in_mb will be requested from the XPU until
+ *       the XPU has no remaining memory.
+ */
+DEFINE_uint64(initial_xpu_memory_in_mb, 4000,
+              "Preallocate a specified size XPU memory block.");
+
+/**
+ * XPU related FLAG
+ * Name: FLAGS_reallocate_gpu_memory_in_mb
+ * Since Version:
+ * Value Range: uint64, default=0 (MB)
+ * Example:
+ * Note: If the allocated XPU memory blocks are exhausted,
+ *       additional XPU memory blocks are reallocated
+ */
+DEFINE_uint64(reallocate_xpu_memory_in_mb, 500,
+              "Reallocate a specified size XPU memory block.");
+
+/**
+ * XPU related FLAG
+ * Name: FLAGS_xpu_memory_limit_mb
+ * Since Version:
+ * Value Range: uint64, default=0 (MB)
+ * Example:
+ * Note: If the allocated XPU memory blocks are exhausted,
+ *       additional XPU memory blocks are reallocated
+ */
+DEFINE_uint64(xpu_memory_limit_mb, 8000, "Memory limitation of XPU device.");
+#endif

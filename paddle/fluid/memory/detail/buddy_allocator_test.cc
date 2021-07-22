@@ -34,6 +34,11 @@ DECLARE_uint64(initial_gpu_memory_in_mb);
 DECLARE_uint64(reallocate_gpu_memory_in_mb);
 #endif
 
+#ifdef PADDLE_WITH_XPU
+DECLARE_uint64(initial_xpu_memory_in_mb);
+DECLARE_uint64(reallocate_xpu_memory_in_mb);
+#endif
+
 namespace paddle {
 namespace memory {
 namespace detail {
@@ -360,6 +365,30 @@ TEST(BuddyAllocator, NpuFraction) {
   TestBuddyAllocator(&buddy_allocator, 10);
   TestBuddyAllocator(&buddy_allocator, 10 << 10);
   TestBuddyAllocator(&buddy_allocator, 10 << 20);
+  buddy_allocator.Release();
+
+  // Greater than max chunk size
+  TestBuddyAllocator(&buddy_allocator, 300 << 20,
+                     /* use_system_allocator = */ true);
+  TestBuddyAllocator(&buddy_allocator, 1 * static_cast<size_t>(1 << 30),
+                     /* use_system_allocator = */ true);
+}
+#endif
+
+#ifdef PADDLE_WITH_XPU
+TEST(BuddyAllocator, NpuFraction) {
+  // In a 16 GB machine, the pool size will be about 160 MB
+  FLAGS_initial_xpu_memory_in_mb = 0;
+  FLAGS_reallocate_xpu_memory_in_mb = 0;
+
+  BuddyAllocator buddy_allocator(
+      std::unique_ptr<SystemAllocator>(new XPUAllocator(0)),
+      platform::XPUMinChunkSize(), platform::XPUMaxChunkSize());
+
+  // Less than pool size
+  TestBuddyAllocator(&buddy_allocator, 5);
+  TestBuddyAllocator(&buddy_allocator, 5 << 10);
+  TestBuddyAllocator(&buddy_allocator, 5 << 20);
   buddy_allocator.Release();
 
   // Greater than max chunk size

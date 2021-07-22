@@ -77,6 +77,22 @@ TEST(NaiveBestFitAllocatorTest, NpuAlloc) {
 }
 #endif
 
+#ifdef PADDLE_WITH_XPU
+TEST(NaiveBestFitAllocatorTest, XpuAlloc) {
+  NaiveBestFitAllocator alloc{platform::XPUPlace(0)};
+  {
+    size_t size = (1 << 20);
+    auto allocation = alloc.Allocate(size);
+  }
+  sleep(10);
+  alloc.Release(platform::XPUPlace(0));
+
+  size_t size = (1 << 20);
+  auto allocation = alloc.Allocate(size);
+  alloc.Release(platform::XPUPlace(0));
+}
+#endif
+
 }  // namespace allocation
 }  // namespace memory
 }  // namespace paddle

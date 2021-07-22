@@ -24,6 +24,9 @@ DECLARE_uint64(reallocate_gpu_memory_in_mb);
 #ifdef PADDLE_WITH_ASCEND_CL
 DECLARE_uint64(reallocate_gpu_memory_in_mb);
 #endif
+#ifdef PADDLE_WITH_XPU
+DECLARE_uint64(reallocate_xpu_memory_in_mb);
+#endif
 
 namespace paddle {
 namespace memory {
@@ -34,8 +37,13 @@ BuddyAllocator::BuddyAllocator(
     size_t max_chunk_size)
     : min_chunk_size_(min_chunk_size),
       max_chunk_size_(max_chunk_size),
+#ifdef PADDLE_WITH_XPU
+      cache_(system_allocator->UseXPU()),
+#else
       cache_(system_allocator->UseGpu()),
-      system_allocator_(std::move(system_allocator)) {}
+#endif
+      system_allocator_(std::move(system_allocator)) {
+}
 
 BuddyAllocator::~BuddyAllocator() {
   VLOG(10) << "BuddyAllocator Disconstructor makes sure that all of these "
@@ -248,6 +256,21 @@ BuddyAllocator::PoolSet::iterator BuddyAllocator::RefillPool(
       // user set FLAGS_reallocate_gpu_memory_in_mb to fix value.
       if (realloc_size_ == 0 || FLAGS_reallocate_gpu_memory_in_mb == 0ul) {
         realloc_size_ = platform::NPUReallocSize();
+      }
+      allocate_bytes = std::max(realloc_size_, request_bytes);
+    }
+  }
+#endif
+#ifdef PADDLE_WITH_XPU
+  if (system_allocator_->UseXPU()) {
+    if ((total_used_ + total_free_) == 0) {
+      // Compute the allocation size for xpu for the first allocation.
+      allocate_bytes = std::max(platform::XPUInitAllocSize(), request_bytes);
+    } else {
+      // Compute the re-allocation size, we store the re-allocation size when
+      // user set FLAGS_reallocate_xpu_memory_in_mb to fix value.
+      if (realloc_size_ == 0 || FLAGS_reallocate_xpu_memory_in_mb == 0ul) {
+        realloc_size_ = platform::XPUReallocSize();
       }
       allocate_bytes = std::max(realloc_size_, request_bytes);
     }

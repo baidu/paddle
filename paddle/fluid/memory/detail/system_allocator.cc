@@ -34,6 +34,10 @@ limitations under the License. */
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/platform/cuda_device_guard.h"
 #endif
+#ifdef PADDLE_WITH_XPU
+#include "paddle/fluid/platform/xpu_header.h"
+#include "paddle/fluid/platform/xpu_info.h"
+#endif
 
 DECLARE_bool(use_pinned_memory);
 DECLARE_double(fraction_of_gpu_memory_to_use);
@@ -363,6 +367,49 @@ void NPUPinnedAllocator::Free(void* p, size_t size, size_t index) {
 }
 
 bool NPUPinnedAllocator::UseGpu() const { return false; }
+
+#endif
+
+#ifdef PADDLE_WITH_XPU
+void* XPUAllocator::Alloc(size_t* index, size_t size) {
+  if (size <= 0) return nullptr;
+
+  void* p = nullptr;
+  platform::XPUDeviceGuard guard(xpu_id_);
+
+  int ret = xpu_malloc(reinterpret_cast<void**>(&p), size);
+  if (ret != XPU_SUCCESS) {
+    std::cout << "xpu memory malloc(" << size << ") failed, try again\n";
+    xpu_wait();
+    ret = xpu_malloc(reinterpret_cast<void**>(&p), size);
+  }
+  if (ret != XPU_SUCCESS) {
+    PADDLE_THROW_BAD_ALLOC(platform::errors::ResourceExhausted(
+        "\n\nOut of memory error on XPU %d. ", xpu_id_));
+  } else {
+    *index = 0;
+    xpu_alloc_size_ += size;
+    return p;
+  }
+}
+
+void XPUAllocator::Free(void* p, size_t size, size_t index) {
+  PADDLE_ENFORCE_EQ(index, 0, platform::errors::InvalidArgument(
+                                  "The index should be 0, index is %d", index));
+  PADDLE_ENFORCE_GE(xpu_alloc_size_, size,
+                    platform::errors::InvalidArgument(
+                        "The size of memory (%d) to free exceeds the size of "
+                        "allocated xpu memory (%d)",
+                        size, xpu_alloc_size_));
+  xpu_alloc_size_ -= size;
+
+  platform::XPUDeviceGuard guard(xpu_id_);
+  xpu_free(p);
+}
+
+bool XPUAllocator::UseGpu() const { return false; }
+
+bool XPUAllocator::UseXPU() { return true; }
 
 #endif
 

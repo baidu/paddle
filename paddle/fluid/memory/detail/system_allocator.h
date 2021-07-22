@@ -32,6 +32,10 @@ class SystemAllocator {
   virtual void* Alloc(size_t* index, size_t size) = 0;
   virtual void Free(void* p, size_t size, size_t index) = 0;
   virtual bool UseGpu() const = 0;
+
+#ifdef PADDLE_WITH_XPU
+  bool UseXPU() { return false; }
+#endif
 };
 
 class CPUAllocator : public SystemAllocator {
@@ -89,6 +93,23 @@ class NPUPinnedAllocator : public SystemAllocator {
 
  private:
   size_t npu_pinnd_alloc_size_ = 0;
+};
+#endif
+
+#ifdef PADDLE_WITH_XPU
+class XPUAllocator : public SystemAllocator {
+ public:
+  explicit XPUAllocator(int xpu_id) : xpu_id_(xpu_id) {}
+
+  virtual void* Alloc(size_t* index, size_t size);
+  virtual void Free(void* p, size_t size, size_t index);
+  virtual bool UseGpu() const;
+
+  bool UseXPU();
+
+ private:
+  size_t xpu_alloc_size_ = 0;
+  int xpu_id_;
 };
 #endif
 

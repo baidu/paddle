@@ -114,50 +114,76 @@ size_t Used<platform::CPUPlace>(const platform::CPUPlace &place) {
 }
 
 // For kunlun XPU
+#ifdef PADDLE_WITH_XPU
+class XPUBuddyAllocatorList {
+ private:
+  XPUBuddyAllocatorList() : devices_(platform::GetXPUSelectedDevices()) {
+    auto xpu_num = devices_.size();
+    allocators_.resize(xpu_num);
+    init_flags_.reserve(xpu_num);
+    for (size_t i = 0; i < xpu_num; ++i) {
+      init_flags_.emplace_back(new std::once_flag());
+    }
+  }
+
+  static XPUBuddyAllocatorList *CreateNewInstance() {
+    return new XPUBuddyAllocatorList();
+  }
+
+ public:
+  static XPUBuddyAllocatorList *Instance() {
+    static auto *instance = CreateNewInstance();
+    return instance;
+  }
+
+  BuddyAllocator *Get(int xpu_id) {
+    auto pos = std::distance(
+        devices_.begin(), std::find(devices_.begin(), devices_.end(), xpu_id));
+    PADDLE_ENFORCE_LT(pos, devices_.size(),
+                      platform::errors::OutOfRange(
+                          "The index exceeds the size of devices, the size of "
+                          "devices is %d, the index is %d",
+                          devices_.size(), pos));
+
+    std::call_once(*init_flags_[pos], [this, pos, xpu_id] {
+      platform::XPUDeviceGuard guard(xpu_id);
+      allocators_[pos].reset(new BuddyAllocator(
+          std::unique_ptr<detail::SystemAllocator>(
+              new detail::XPUAllocator(devices_[pos])),
+          platform::XPUMinChunkSize(), platform::XPUMaxChunkSize()));
+    });
+
+    return allocators_[pos].get();
+  }
+
+ private:
+  std::vector<int> devices_;
+  std::vector<std::unique_ptr<std::once_flag>> init_flags_;
+  std::vector<std::unique_ptr<BuddyAllocator>> allocators_;
+};
+
+BuddyAllocator *GetXPUBuddyAllocator(int xpu_id) {
+  return XPUBuddyAllocatorList::Instance()->Get(xpu_id);
+}
+#endif
+
 template <>
 void *Alloc<platform::XPUPlace>(const platform::XPUPlace &place, size_t size) {
 #ifdef PADDLE_WITH_XPU
-  VLOG(10) << "Allocate " << size << " bytes on " << platform::Place(place);
-  void *p = nullptr;
-  int dev_id = -1;
-  int ret = xpu_current_device(&dev_id);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
-  if (dev_id >= 64) {
-    // if dev_id >= 64, the device is a simulator device, -64 to get real dev_id
-    dev_id -= 64;
+  auto *buddy_allocator = GetXPUBuddyAllocator(place.device);
+  auto *ptr = buddy_allocator->Alloc(size);
+  if (ptr == nullptr) {
+    PADDLE_THROW(platform::errors::ResourceExhausted(
+        "Cannot allocate %s in XPU %d.", string::HumanReadableSize(size),
+        place.device));
+  } else {
+    if (FLAGS_init_allocated_mem) {
+      PADDLE_THROW(platform::errors::Unimplemented(
+          "xpu memory FLAGS_init_allocated_mem is not implemented."));
+    }
   }
-  ret = xpu_set_device(place.device);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
-  ret = xpu_malloc(reinterpret_cast<void **>(&p), size);
-  if (ret != XPU_SUCCESS) {
-    std::cout << "xpu memory malloc(" << size << ") failed, try again\n";
-    xpu_wait();
-    ret = xpu_malloc(reinterpret_cast<void **>(&p), size);
-  }
-  PADDLE_ENFORCE_EQ(
-      ret, XPU_SUCCESS,
-      platform::errors::External(
-          "XPU API return wrong value[%d], no enough memory", ret));
-  if (FLAGS_init_allocated_mem) {
-    PADDLE_THROW(platform::errors::Unimplemented(
-        "xpu memory FLAGS_init_allocated_mem is not implemented."));
-  }
-  ret = xpu_set_device(dev_id);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
-  VLOG(10) << "  pointer=" << p;
-  return p;
+  VLOG(10) << "xpu alloc pointer=" << ptr;
+  return ptr;
 #else
   PADDLE_THROW(
       platform::errors::PermissionDenied("'XPUPlace' is not supported."));
@@ -169,32 +195,9 @@ template <>
 void Free<platform::XPUPlace>(const platform::XPUPlace &place, void *p,
                               size_t size) {
 #ifdef PADDLE_WITH_XPU
-  VLOG(10) << "Allocate " << size << " bytes on " << platform::Place(place);
-  VLOG(10) << "Free pointer=" << p << " on " << platform::Place(place);
-  int dev_id = -1;
-  int ret = xpu_current_device(&dev_id);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
-  if (dev_id >= 64) {
-    // if dev_id >= 64, the device is a simulator device, -64 to get real dev_id
-    dev_id -= 64;
-  }
-  ret = xpu_set_device(place.device);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
-  xpu_free(p);
-  ret = xpu_set_device(dev_id);
-  PADDLE_ENFORCE_EQ(ret, XPU_SUCCESS,
-                    platform::errors::External(
-                        "XPU API return wrong value[%d], please check whether "
-                        "Baidu Kunlun Card is properly installed.",
-                        ret));
+  platform::XPUDeviceGuard(place.device);
+  xpu_wait();
+  GetXPUBuddyAllocator(place.device)->Free(p);
 #else
   PADDLE_THROW(
       platform::errors::PermissionDenied("'XPUPlace' is not supported."));
@@ -204,22 +207,20 @@ void Free<platform::XPUPlace>(const platform::XPUPlace &place, void *p,
 template <>
 uint64_t Release<platform::XPUPlace>(const platform::XPUPlace &place) {
 #ifdef PADDLE_WITH_XPU
-  LOG(WARNING) << "Release XPU pool is not supported now, no action here.";
+  return GetXPUBuddyAllocator(place.device)->Release();
 #else
   PADDLE_THROW(
       platform::errors::PermissionDenied("'XPUPlace' is not supported."));
 #endif
-  return -1;
 }
 
 template <>
 size_t Used<platform::XPUPlace>(const platform::XPUPlace &place) {
 #ifdef PADDLE_WITH_XPU
-  printf("Used func return 0 for XPUPlace\n");
-  return 0;
+  return GetXPUBuddyAllocator(place.device)->Used();
 #else
-  PADDLE_THROW(
-      platform::errors::PermissionDenied("'XPUPlace' is not supported."));
+  PADDLE_THROW(platform::errors::PermissionDenied(
+      "'XPUPlace' is not supported in CPU only device."));
 #endif
 }
 

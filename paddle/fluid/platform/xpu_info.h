@@ -51,6 +51,25 @@ class XPUDeviceGuard {
   int prev_id_{-1};
 };
 
+//! Get the available memory to allocate, which is the size of available xpu
+//! minus reserving.
+size_t XPUAvailableMemToAlloc();
+
+//! Get the maximum allocation size of current XPU device.
+size_t XPUMaxAllocSize();
+
+//! Get the initial allocation size of current XPU device.
+size_t XPUInitAllocSize();
+
+//! Get the re-allocation size of current GPU device.
+size_t XPUReallocSize();
+
+//! Get the minimum chunk size for XPU buddy allocator.
+size_t XPUMinChunkSize();
+
+//! Get the minimum chunk size for XPU buddy allocator.
+size_t XPUMaxChunkSize();
+
 }  // namespace platform
 }  // namespace paddle
 #endif
