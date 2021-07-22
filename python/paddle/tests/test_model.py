@@ -126,7 +126,7 @@ class TestModel(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not fluid.is_compiled_with_cuda():
-            cls.skipTest('module not tested when ONLY_CPU compling')
+            cls().skipTest('module not tested when ONLY_CPU compling')
         cls.device = paddle.set_device('gpu')
         fluid.enable_dygraph(cls.device)
 
