@@ -670,6 +670,8 @@ if (WITH_XPU_BKCL)
     py_test(test_collective_allreduce_api_xpu SRCS "test_collective_allreduce_api.py")
 endif()
 
+cc_test(cc_imp_py_test SRCS cc_imp_py_test.cc DEPS python)
+
 if (WITH_ASCEND_CL)
     add_subdirectory(npu)
 endif()
