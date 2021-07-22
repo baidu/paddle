@@ -49,7 +49,8 @@ class PRChecker(object):
 
     def init(self):
         """ Get pull request. """
-        pr_id = os.getenv('GIT_PR_ID')
+        #pr_id = os.getenv('GIT_PR_ID')
+        pr_id = '33064'
         if not pr_id:
             print('PREC No PR ID')
             exit(0)
