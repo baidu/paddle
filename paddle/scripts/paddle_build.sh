@@ -2260,7 +2260,8 @@ function main() {
         check_coverage
         ;;
       check_rocm_coverage)
-        cmake_gen_and_build ${PYTHON_ABI:-""} ${parallel_number}
+        # To-do(qili93): to be fixed after CI hosts network ready
+        # cmake_gen_and_build ${PYTHON_ABI:-""} ${parallel_number}
         parallel_test
         check_coverage
         ;;

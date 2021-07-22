@@ -15,6 +15,7 @@
 import sys
 import ssl
 import requests
+import paddle.fluid.core as core
 
 
 def download_file():
@@ -25,13 +26,6 @@ def download_file():
         url = "https://sys-p0.bj.bcebos.com/prec/{}".format('disable_ut_win')
     else:
         url = "https://sys-p0.bj.bcebos.com/prec/{}".format('disable_ut')
-    try:
-        import paddle.fluid.core as core
-        if core.is_compiled_with_rocm():
-            url = "https://sys-p0.bj.bcebos.com/prec/{}".format(
-                'disable_ut_rocm_ci')
-    except:
-        pass
     f = requests.get(url)
     data = f.text
     status_code = f.status_code
@@ -44,9 +38,21 @@ def download_file():
         sys.exit(0)
 
 
+def read_rocm_file():
+    with open("rocm/disable_ut_rocm", "r") as rocmfile:
+        data = rocmfile.readlines()
+        lt = data.strip().split('\n')
+        lt = '^' + '$|^'.join(lt) + '$'
+        print(lt)
+        sys.exit(0)
+
+
 if __name__ == '__main__':
     try:
-        download_file()
+        if core.is_compiled_with_rocm():
+            read_rocm_file()
+        else:
+            download_file()
     except Exception as e:
         print(e)
         sys.exit(1)
