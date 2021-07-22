@@ -89,8 +89,8 @@ class LoadCombineOpKernel : public framework::OpKernel<T> {
       DeserializeFromStream(*buffer, tensor, dev_ctx);
 
       auto in_dtype = tensor->type();
-      auto out_dtype =
-          load_as_fp16 ? framework::proto::VarType::FP16 : in_dtype;
+      auto out_dtype = load_as_fp16 ? framework::proto::VarType::FP16
+                                    : framework::proto::VarType::FP32;
 
       if (in_dtype != out_dtype) {
         // convert to float16 tensor

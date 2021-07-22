@@ -102,6 +102,9 @@ void TransDataType(const OpKernelType& kernel_type_for_var,
     case proto::VarType::UINT8:
       framework::VisitDataType(dst_type, CastDataType<uint8_t>(in, out, ctx));
       break;
+    case proto::VarType::INT8:
+      framework::VisitDataType(dst_type, CastDataType<int8_t>(in, out, ctx));
+      break;
     default:
       PADDLE_THROW(platform::errors::Unimplemented(
           "Data type (%s) is not supported when casting data type.",
