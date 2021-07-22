@@ -1148,7 +1148,7 @@ class QuantizationFreezePass(object):
                     ], "the dim of scale_v should be 1 or 2"
                     if scale_v.ndim == 2:
                         scale_v = scale_v[0]
-                    if scale_v.size == 1:
+                    if scale_v.size == 1 and self._weight_quantize_type == 'abs_max':
                         scale_v = scale_v[0]
                     else:
                         scale_v = scale_v.tolist()
