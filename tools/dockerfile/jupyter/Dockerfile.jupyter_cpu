@@ -1,0 +1,19 @@
+ARG BASEIMAGE=jupyterhub/singleuser:1.3.0
+FROM ${BASEIMAGE}
+
+USER root
+RUN pip install --no-cache-dir -i https://mirror.baidu.com/pypi/simple jupyterhub-dummyauthenticator
+RUN pip install --no-cache-dir -i https://mirror.baidu.com/pypi/simple <paddle_whl>
+RUN pip install --no-cache-dir -i https://mirror.baidu.com/pypi/simple visualdl
+
+COPY jupyterhub_config.py /etc/jupyter
+COPY jupyter_notebook_config.py /etc/jupyter
+
+RUN useradd -ms /bin/bash paddle
+
+USER root
+WORKDIR /srv
+ENTRYPOINT ["tini", "-g", "--"]
+CMD ["jupyterhub", "--config=/etc/jupyter/jupyterhub_config.py"]
+
+EXPOSE 80
