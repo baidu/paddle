@@ -38,9 +38,9 @@ class Lamb(Optimizer):
 
         v_t &= \\beta_2 v_{t - 1}  + (1 - \\beta_2)g_t^2
 
-        m_t &= \\frac{m_t}{\\beta_1^t}
+        m_t &= \\frac{m_t}{1 - \\beta_1^t}
 
-        v_t &= \\frac{v_t}{\\beta_2^t}
+        v_t &= \\frac{v_t}{1 - \\beta_2^t}
 
         r_t &= \\frac{m_t}{\\sqrt{v_t}+\\epsilon}
 
@@ -51,8 +51,8 @@ class Lamb(Optimizer):
     learning rate, :math:`\\lambda` the LAMB weight decay rate.
 
     Args:
-        learning_rate (float|Variable, optional): the learning rate used to update parameters. \
-            Can be a float value or a Variable with data type float32. Default 0.001.
+        learning_rate (float|Tensor, optional): the learning rate used to update parameters. \
+            Can be a float value or a Tensor with data type float32. Default 0.001.
         lamb_weight_decay (float, optional): The LAMB weight decay rate. Default 0.01. Remind that weight_decay should be None.
         beta1 (float, optional): The exponential decay rate for the 1st moment estimates.
             Default 0.9.
@@ -70,6 +70,8 @@ class Lamb(Optimizer):
             ( :ref:`api_paddle_fluid_clip_ClipGradByGlobalNorm` , :ref:`api_paddle_fluid_clip_ClipGradByNorm` ,
             :ref:`api_paddle_fluid_clip_ClipGradByValue` ). If you want better convergence, it is recommended
             to use :ref:`api_paddle_fluid_clip_ClipGradByGlobalNorm` . Default None, meaning there is no gradient clipping.
+        exclude_from_weight_decay_fn (function|None): Exclude a parameter from weight 
+            decay when **exclude_from_weight_decay_fn(parameter)** returns true. Default None.
         name(str|None): For detailed information, please refer to
             :ref:`api_guide_Name` . Usually name is no need to set and None by default.
     Examples:

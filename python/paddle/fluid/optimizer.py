@@ -3421,9 +3421,9 @@ class LambOptimizer(AdamOptimizer):
 
         v_t &= \\beta_2 v_{t - 1}  + (1 - \\beta_2)g_t^2
 
-        m_t &= \\frac{m_t}{\\beta_1^t}
+        m_t &= \\frac{m_t}{1 - \\beta_1^t}
 
-        v_t &= \\frac{v_t}{\\beta_2^t}
+        v_t &= \\frac{v_t}{1 - \\beta_2^t}
 
         r_t &= \\frac{m_t}{\\sqrt{v_t}+\\epsilon}
 
