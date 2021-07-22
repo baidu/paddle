@@ -66,7 +66,7 @@ class SimpleFCNet(fluid.dygraph.Layer):
 
 
 class TestDygraphDataLoader(unittest.TestCase):
-    def run_main(self, num_workers, places):
+    def run_main(self, num_workers, places, persistent_workers):
         fluid.default_startup_program().random_seed = 1
         fluid.default_main_program().random_seed = 1
         with fluid.dygraph.guard(places[0]):
@@ -78,7 +78,8 @@ class TestDygraphDataLoader(unittest.TestCase):
                 dataset,
                 num_workers=num_workers,
                 batch_size=BATCH_SIZE,
-                drop_last=True)
+                drop_last=True,
+                persistent_workers=persistent_workers)
 
             step_list = []
             loss_list = []
@@ -109,18 +110,23 @@ class TestDygraphDataLoader(unittest.TestCase):
     def test_main(self):
         # dynamic graph do not run with_data_parallel
         for p in prepare_places(False):
-            results = []
-            for num_workers in [0, 2]:
-                print(self.__class__.__name__, p, num_workers)
-                sys.stdout.flush()
-                ret = self.run_main(num_workers=num_workers, places=p)
-                results.append(ret)
-            assert results[0]['loss'].shape[0] * 2 == results[1]['loss'].shape[
-                0]
+            for persistent_workers in [False, True]:
+                results = []
+                for num_workers in [0, 2]:
+                    print(self.__class__.__name__, p, num_workers,
+                          persistent_workers)
+                    sys.stdout.flush()
+                    ret = self.run_main(
+                        num_workers=num_workers,
+                        places=p,
+                        persistent_workers=persistent_workers)
+                    results.append(ret)
+                assert results[0]['loss'].shape[0] * 2 == results[1][
+                    'loss'].shape[0]
 
 
 class TestDygraphDataLoaderWithBatchedDataset(TestDygraphDataLoader):
-    def run_main(self, num_workers, places):
+    def run_main(self, num_workers, places, persistent_workers):
         fluid.default_startup_program().random_seed = 1
         fluid.default_main_program().random_seed = 1
         with fluid.dygraph.guard(places[0]):
@@ -132,7 +138,8 @@ class TestDygraphDataLoaderWithBatchedDataset(TestDygraphDataLoader):
                 dataset,
                 num_workers=num_workers,
                 batch_size=None,
-                drop_last=True)
+                drop_last=True,
+                persistent_workers=persistent_workers)
 
             step_list = []
             loss_list = []

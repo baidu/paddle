@@ -325,7 +325,8 @@ class DataLoader(object):
                  use_buffer_reader=True,
                  use_shared_memory=True,
                  timeout=0,
-                 worker_init_fn=None):
+                 worker_init_fn=None,
+                 persistent_workers=False):
         self.return_list = return_list
         self.collate_fn = collate_fn
         self.use_buffer_reader = use_buffer_reader
@@ -407,6 +408,9 @@ class DataLoader(object):
             self.pin_memory = True if use_pinned_memory(
             ) is None else use_pinned_memory()
 
+        self._persistent_workers = persistent_workers
+        self._iterator = None
+
     def __len__(self):
         if self.dataset_kind == _DatasetKind.ITER:
             raise ValueError("length of IterableDataset not supported")
@@ -419,6 +423,12 @@ class DataLoader(object):
     def __iter__(self):
         if self.num_workers == 0:
             return _DataLoaderIterSingleProcess(self)
+        elif self._persistent_workers:
+            if self._iterator is None:
+                self._iterator = _DataLoaderIterMultiProcess(self)
+            else:
+                self._iterator._reset()
+            return self._iterator
         else:
             return _DataLoaderIterMultiProcess(self)
 

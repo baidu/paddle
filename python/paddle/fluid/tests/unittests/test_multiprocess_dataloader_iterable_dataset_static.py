@@ -93,14 +93,14 @@ def prepare_places(with_data_parallel, with_cpu=False, with_gpu=True):
     if with_gpu and fluid.core.is_compiled_with_cuda():
         tmp = fluid.cuda_places()[:2]
         assert len(tmp) > 0, "no gpu detected"
-        if with_data_parallel:
+        if with_data_parallel and len(tmp) > 1:
             places.append(tmp)
         places.append([tmp[0]])
     return places
 
 
 class TestStaticDataLoader(unittest.TestCase):
-    def run_main(self, num_workers, places):
+    def run_main(self, num_workers, places, persistent_workers):
         scope = fluid.Scope()
         with fluid.scope_guard(scope):
             startup_prog, main_prog, image, label, loss = simple_fc_net_static()
@@ -113,7 +113,8 @@ class TestStaticDataLoader(unittest.TestCase):
                 num_workers=num_workers,
                 batch_size=BATCH_SIZE,
                 return_list=False,
-                drop_last=True)
+                drop_last=True,
+                persistent_workers=persistent_workers)
             # assert len(dataloader) == int(SAMPLE_NUM / BATCH_SIZE)
 
             exe = fluid.Executor(place=places[0])
@@ -158,14 +159,19 @@ class TestStaticDataLoader(unittest.TestCase):
 
     def test_main(self):
         for p in prepare_places(True):
-            results = []
-            for num_workers in [0, 2]:
-                print(self.__class__.__name__, p, num_workers)
-                sys.stdout.flush()
-                ret = self.run_main(num_workers=num_workers, places=p)
-                results.append(ret)
-            assert results[0]['loss'].shape[0] * 2 == results[1]['loss'].shape[
-                0]
+            for persistent_workers in [False, True]:
+                results = []
+                for num_workers in [0, 2]:
+                    print(self.__class__.__name__, p, num_workers,
+                          persistent_workers)
+                    sys.stdout.flush()
+                    ret = self.run_main(
+                        num_workers=num_workers,
+                        places=p,
+                        persistent_workers=persistent_workers)
+                    results.append(ret)
+                assert results[0]['loss'].shape[0] * 2 == results[1][
+                    'loss'].shape[0]
 
 
 class RandomBatchedDataset(IterableDataset):
@@ -188,7 +194,7 @@ class RandomBatchedDataset(IterableDataset):
 
 
 class TestStaticDataLoaderWithBatchedDataset(TestStaticDataLoader):
-    def run_main(self, num_workers, places):
+    def run_main(self, num_workers, places, persistent_workers):
         scope = fluid.Scope()
         with fluid.scope_guard(scope):
             startup_prog, main_prog, image, label, loss = simple_fc_net_static()
@@ -201,7 +207,8 @@ class TestStaticDataLoaderWithBatchedDataset(TestStaticDataLoader):
                 num_workers=num_workers,
                 batch_size=None,
                 return_list=False,
-                drop_last=True)
+                drop_last=True,
+                persistent_workers=persistent_workers)
 
             exe = fluid.Executor(place=places[0])
             exe.run(startup_prog)

@@ -36,6 +36,10 @@ class _IterableDatasetStopIteration(object):
         self.worker_id = worker_id
 
 
+class _ResumeIteration(object):
+    pass
+
+
 class _DatasetKind(object):
     MAP = 0
     ITER = 1
@@ -290,6 +294,13 @@ def _worker_loop(dataset, dataset_kind, indices_queue, out_queue, done_event,
             try:
                 data = indices_queue.get(MP_STATUS_CHECK_INTERVAL)
             except queue.Empty:
+                continue
+
+            if isinstance(data, _ResumeIteration):
+                out_queue.put((data, None, None))
+                iterator_drained = False
+                fetcher = _DatasetKind.create_fetcher(
+                    dataset_kind, dataset, auto_collate_batch, collate_fn, True)
                 continue
 
             # None as poison piil, so worker event should be set
