@@ -28,13 +28,10 @@ class SliceOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE_EQ(ctx->HasInput("Input"), true,
-                      platform::errors::InvalidArgument(
-                          "Input (Input) of slice op should not be null."));
+    OP_INOUT_CHECK(ctx->HasInput("Input"), "Input", "Input", "slice");
+    OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "slice");
 
-    PADDLE_ENFORCE_EQ(ctx->HasOutput("Out"), true,
-                      platform::errors::InvalidArgument(
-                          "Output (Out) of slice op should not be null."));
+    // Case 1: Special treatment when input is a tensor array.
     auto x_var_type = ctx->GetInputsVarType("Input")[0];
     auto axes = ctx->Attrs().Get<std::vector<int>>("axes");
     if (x_var_type == framework::proto::VarType::LOD_TENSOR_ARRAY) {
@@ -57,6 +54,8 @@ class SliceOp : public framework::OperatorWithKernel {
         return;
       }
     }
+
+    // Case 2: input is a tensor.
     auto in_dims = ctx->GetInputDim("Input");
     PADDLE_ENFORCE_LT(in_dims.size(), 7,
                       platform::errors::InvalidArgument(
@@ -65,101 +64,54 @@ class SliceOp : public framework::OperatorWithKernel {
 
     auto starts = ctx->Attrs().Get<std::vector<int>>("starts");
     auto ends = ctx->Attrs().Get<std::vector<int>>("ends");
-    auto infer_flags = ctx->Attrs().Get<std::vector<int>>("infer_flags");
     auto decrease_axis = ctx->Attrs().Get<std::vector<int>>("decrease_axis");
-
-    auto starts_size = starts.size();
-    auto ends_size = ends.size();
+    auto infer_flags = ctx->Attrs().Get<std::vector<int>>("infer_flags");
     if (infer_flags.empty()) {
       // Initialize infer_flags with 1.
       // To be compatible with other op tests in which infer_flags is not set.
       infer_flags = std::vector<int>(axes.size(), 1);
     }
 
+    // 2.1 Check attrs.
+    auto starts_size = starts.size();
+    auto ends_size = ends.size();
+
     if (ctx->HasInputs("StartsTensorList")) {
-      auto StartsTensorList = ctx->Inputs("StartsTensorList");
-      PADDLE_ENFORCE_GT(StartsTensorList.size(), 0,
+      starts_size = ctx->Inputs("StartsTensorList").size();
+      PADDLE_ENFORCE_GT(starts_size, 0,
                         platform::errors::InvalidArgument(
                             "StartsTensorList size can't be zero"));
-      starts_size = StartsTensorList.size();
     }
     if (ctx->HasInputs("EndsTensorList")) {
-      auto EndsTensorList = ctx->Inputs("EndsTensorList");
-      PADDLE_ENFORCE_GT(EndsTensorList.size(), 0,
-                        platform::errors::InvalidArgument(
-                            "EndsTensorList size can't be zero"));
-      ends_size = EndsTensorList.size();
+      ends_size = ctx->Inputs("EndsTensorList").size();
+      PADDLE_ENFORCE_GT(ends_size, 0, platform::errors::InvalidArgument(
+                                          "EndsTensorList size can't be zero"));
     }
 
-    if (ctx->HasInput("StartsTensor") == false) {
+    if (!ctx->HasInput("StartsTensor")) {
       PADDLE_ENFORCE_EQ(
           starts_size, axes.size(),
           platform::errors::InvalidArgument(
               "The size of starts must be equal to the size of axes."));
     }
-    if (ctx->HasInput("EndsTensor") == false) {
+    if (!ctx->HasInput("EndsTensor")) {
       PADDLE_ENFORCE_EQ(
           ends_size, axes.size(),
           platform::errors::InvalidArgument(
               "The size of ends must be equal to the size of axes."));
     }
 
-    int dim_value, start, end;
-    for (size_t i = 0; i < axes.size(); ++i) {
-      PADDLE_ENFORCE_LT(static_cast<int>(axes[i]), in_dims.size(),
-                        platform::errors::InvalidArgument(
-                            "The index of dimension in axes must be less "
-                            "than the size of input shape."));
-      if (infer_flags[i] == -1) {
-        out_dims[axes[i]] = -1;
-      } else {
-        // infer out_dim shape
-        dim_value = out_dims[axes[i]];
-        if (dim_value > 0) {
-          start = starts[i] < 0 ? (starts[i] + dim_value) : starts[i];
-          end = ends[i] < 0 ? (ends[i] + dim_value) : ends[i];
-          start = std::max(start, 0);
-          end = std::max(end, 0);
-          end = std::min(end, dim_value);
+    CheckAndUpdateSliceAttrs<int>(in_dims, axes, &starts, &ends, nullptr,
+                                  &infer_flags);
 
-          PADDLE_ENFORCE_LE(start, dim_value,
-                            platform::errors::InvalidArgument(
-                                "start should be less than or equal to the "
-                                "dimension value, but received "
-                                "start = %d, shape[%d] = %d.",
-                                starts[i], axes[i], out_dims[axes[i]]));
-          PADDLE_ENFORCE_GT(end, start,
-                            platform::errors::InvalidArgument(
-                                "end should greater than start, but received "
-                                "end = %d, start = %d.",
-                                ends[i], starts[i]));
-          out_dims[axes[i]] = end - start;
-        }
-      }
+    auto slice_dims =
+        GetSliceDims<int>(in_dims, axes, starts, ends, nullptr, &infer_flags);
+    if (ctx->IsRuntime()) {
+      out_dims = GetDecreasedDims<int>(slice_dims, decrease_axis, &infer_flags);
+    } else {
+      out_dims = GetDecreasedDims<int>(slice_dims, decrease_axis, nullptr);
     }
-    // generate new shape
-    if (decrease_axis.size() > 0) {
-      std::vector<int> new_out_shape;
-      for (size_t i = 0; i < decrease_axis.size(); ++i) {
-        if (ctx->IsRuntime() && infer_flags[i] != -1) {
-          PADDLE_ENFORCE_EQ(
-              out_dims[decrease_axis[i]], 1,
-              platform::errors::InvalidArgument("decrease dim should be 1"));
-        }
-        out_dims[decrease_axis[i]] = 0;
-      }
 
-      for (int i = 0; i < out_dims.size(); ++i) {
-        if (out_dims[i] != 0) {
-          new_out_shape.push_back(out_dims[i]);
-        }
-      }
-      if (new_out_shape.size() == 0) {
-        new_out_shape.push_back(1);
-      }
-
-      out_dims = framework::make_ddim(new_out_shape);
-    }
     ctx->SetOutputDim("Out", out_dims);
     if (axes[0] != 0) {
       ctx->ShareLoD("Input", /*->*/ "Out");
@@ -185,6 +137,7 @@ class SliceOp : public framework::OperatorWithKernel {
     return framework::OpKernelType(
         OperatorWithKernel::IndicateVarDataType(ctx, "Input"), ctx.GetPlace());
   }
+
   framework::OpKernelType GetKernelTypeForVar(
       const std::string &var_name, const Tensor &tensor,
       const framework::OpKernelType &expected_kernel_type) const override {
