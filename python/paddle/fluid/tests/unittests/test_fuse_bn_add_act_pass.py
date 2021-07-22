@@ -20,6 +20,8 @@ from op_test import OpTest
 import paddle
 import paddle.fluid as fluid
 from paddle.fluid import core
+import paddle.static.amp as amp
+import paddle.static as static
 
 paddle.enable_static()
 
@@ -233,6 +235,82 @@ class TestFusedBnAddActAPI(unittest.TestCase):
                                  feed={"x": x,
                                        "y": y},
                                  fetch_list=[loss])
+
+
+@unittest.skipIf(
+    not core.is_compiled_with_cuda() or core.cudnn_version() < 8100,
+    "core is not compiled with CUDA and cudnn version need larger than 8.1.0")
+class TestFusedBnAddActAPIWithBf16(unittest.TestCase):
+    def testCase(self):
+        def build_program(main_program, startup_program):
+            with static.program_guard(main_program, startup_program):
+                x = static.data(
+                    name='x', shape=[-1, 1, 28, 28], dtype='float32')
+                y = static.data(name='y', shape=[-1, 1], dtype='int64')
+                conv1_1 = static.nn.conv2d(
+                    input=x,
+                    filter_size=3,
+                    num_filters=32,
+                    stride=1,
+                    padding=1,
+                    act=None,
+                    bias_attr=False,
+                    data_format='NHWC')
+                conv1_2 = static.nn.conv2d(
+                    input=x,
+                    filter_size=3,
+                    num_filters=32,
+                    stride=1,
+                    padding=1,
+                    act=None,
+                    bias_attr=False,
+                    data_format='NHWC')
+                bn = static.nn.batch_norm(
+                    input=conv1_1, act=None, data_layout='NHWC')
+                fused_bn_add_act = fluid.contrib.layers.fused_bn_add_act(
+                    conv1_2, bn)
+                prediction = static.nn.fc(x=fused_bn_add_act,
+                                          size=10,
+                                          activation='softmax')
+                loss = paddle.nn.functional.cross_entropy(
+                    input=prediction, label=y)
+                loss = paddle.mean(loss, axis=None)
+                sgd = paddle.optimizer.SGD(learning_rate=0.1)
+
+                # AMP_bf16 training. This process modifies Program by inserting cast_op.
+                # The input of fused_bn_add_act op will be casted to bf16
+                # remember to add this op to custom_bf16_list
+                sgd = amp.bf16.decorate_bf16(
+                    sgd,
+                    amp_lists=amp.bf16.AutoMixedPrecisionListsBF16(
+                        custom_bf16_list={'fused_bn_add_activation'}),
+                    use_bf16_guard=False,
+                    use_pure_bf16=False)
+
+                sgd.minimize(loss)
+            return x, y, loss
+
+        iters = 5
+        batch_size = 16
+        support_gpu = paddle.is_compiled_with_cuda()
+        if support_gpu:
+            main_program = static.Program()
+            startup_program = static.Program()
+            place = core.CUDAPlace(0)
+            x, y, loss = build_program(main_program, startup_program)
+
+            feeder = fluid.DataFeeder(feed_list=[x, y], place=place)
+            train_reader = paddle.batch(
+                paddle.dataset.mnist.train(), batch_size=batch_size)
+            exe = static.Executor(place)
+            scope = static.Scope()
+            with static.scope_guard(scope):
+                exe.run(startup_program)
+                for _ in range(iters):
+                    data = next(train_reader())
+                    loss_v = exe.run(main_program,
+                                     feed=feeder.feed(data),
+                                     fetch_list=[loss])
 
 
 if __name__ == '__main__':
