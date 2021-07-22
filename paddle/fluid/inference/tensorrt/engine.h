@@ -236,9 +236,29 @@ class TensorRTEngine {
           platform::errors::InvalidArgument(
               "You should build engine first and then set the context."));
       infer_context_[tid].reset(infer_engine_->createExecutionContext());
+      if (with_dynamic_shape_) {
+        // need new profile if it's not the first
+        if (profile_num_ > 0) {
+          infer_context_[tid]->setOptimizationProfile(profile_num_);
+        }
+        profile_index_[tid] = profile_num_;
+        ++profile_num_;
+      }
     }
     return infer_context_[tid].get();
   }
+
+  int GetProfileIndex() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    const std::thread::id tid = std::this_thread::get_id();
+    return profile_index_[tid];
+  }
+
+  int GetBindingsOffset() {
+    return (binding_num_ / max_profile_num) * GetProfileIndex();
+  }
+
+  int GetNbBindings() { return binding_num_; }
 
   nvinfer1::IHostMemory* Serialize() {
     PADDLE_ENFORCE_NOT_NULL(
@@ -286,6 +306,7 @@ class TensorRTEngine {
             "on the same GPU architecture;\n2. The Paddle Inference version of "
             "generating serialization file and doing inference are "
             "consistent."));
+    binding_num_ = infer_engine_->getNbBindings();
   }
 
   void SetRuntimeBatch(size_t batch_size);
@@ -454,6 +475,10 @@ class TensorRTEngine {
   // ensure that the thread is associated with the correct device by calling
   // freshDeviceId().
   void freshDeviceId();
+  int profile_num_{0};
+  std::unordered_map<std::thread::id, int> profile_index_;
+  static const int max_profile_num{2};
+  int binding_num_{0};
 
   // the max batch size
   int max_batch_;
@@ -511,7 +536,7 @@ class TensorRTEngine {
   bool with_dynamic_shape_{false};
 #if IS_TRT_VERSION_GE(6000)
   infer_ptr<nvinfer1::IBuilderConfig> infer_builder_config_;
-  nvinfer1::IOptimizationProfile* optim_profile_;
+  nvinfer1::IOptimizationProfile* optim_profile_[max_profile_num];
   std::vector<std::unique_ptr<plugin::DynamicPluginTensorRT>> owned_pluginv2_;
 #endif
   std::mutex mutex_;

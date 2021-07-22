@@ -42,7 +42,8 @@ void TensorRTEngine::InitNetwork() {
   }
 
   infer_builder_config_.reset(infer_builder_->createBuilderConfig());
-  optim_profile_ = infer_builder_->createOptimizationProfile();
+  for (int i = 0; i < max_profile_num; i++)
+    optim_profile_[i] = infer_builder_->createOptimizationProfile();
 }
 
 void TensorRTEngine::Execute(int batch_size, std::vector<void *> *buffers,
@@ -196,18 +197,20 @@ void TensorRTEngine::FreezeNetwork() {
   if (with_dynamic_shape_) {
 #if IS_TRT_VERSION_GE(6000)
     LOG(INFO) << "Run Paddle-TRT Dynamic Shape mode.";
-    for (auto &input : min_input_shape_) {
-      optim_profile_->setDimensions(
-          input.first.c_str(), nvinfer1::OptProfileSelector::kMIN,
-          Vec2TRT_Dims(input.second, input.first, true));
-      optim_profile_->setDimensions(
-          input.first.c_str(), nvinfer1::OptProfileSelector::kMAX,
-          Vec2TRT_Dims(max_input_shape_[input.first], input.first, true));
-      optim_profile_->setDimensions(
-          input.first.c_str(), nvinfer1::OptProfileSelector::kOPT,
-          Vec2TRT_Dims(optim_input_shape_[input.first], input.first, true));
+    for (int i = 0; i < max_profile_num; i++) {
+      for (auto &input : min_input_shape_) {
+        optim_profile_[i]->setDimensions(
+            input.first.c_str(), nvinfer1::OptProfileSelector::kMIN,
+            Vec2TRT_Dims(input.second, input.first, true));
+        optim_profile_[i]->setDimensions(
+            input.first.c_str(), nvinfer1::OptProfileSelector::kMAX,
+            Vec2TRT_Dims(max_input_shape_[input.first], input.first, true));
+        optim_profile_[i]->setDimensions(
+            input.first.c_str(), nvinfer1::OptProfileSelector::kOPT,
+            Vec2TRT_Dims(optim_input_shape_[input.first], input.first, true));
+      }
+      infer_builder_config_->addOptimizationProfile(optim_profile_[i]);
     }
-    infer_builder_config_->addOptimizationProfile(optim_profile_);
     if (WithFp16() && disable_trt_plugin_fp16()) {
       LOG(INFO) << "NOTE: In order to achieve higher accuracy, you have "
                    "disabled the fp16 mode of TRT Plugin,\n"
@@ -224,6 +227,8 @@ void TensorRTEngine::FreezeNetwork() {
       infer_engine_, platform::errors::Fatal(
                          "Build TensorRT cuda engine failed! Please recheck "
                          "you configurations related to paddle-TensorRT."));
+
+  binding_num_ = infer_engine_->getNbBindings();
 }
 
 nvinfer1::ITensor *TensorRTEngine::DeclareInput(const std::string &name,
