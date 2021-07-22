@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# local constant
+LOCAL_PADDLE_JOB_DIR="/root/paddlejob"
+LOCAL_TOOLS_DIR=${LOCAL_PADDLE_JOB_DIR}/tools
+
+function get_stack() {
+    #set +x
+    STACK="\n*********************Shell Script Stack Trace********************\n"
+    local stack_size=${#FUNCNAME[@]}
+    # to avoid noise we start with 1 to skip the get_stack function
+    for (( i=1; i<$stack_size; i++ )); do
+        local func="${FUNCNAME[$i]}"
+        [[ x${func} = x ]] && func=MAIN
+        local linen="${BASH_LINENO[$(( i - 1 ))]}"
+        local src="${BASH_SOURCE[$i]}"
+        [[ x"$src" = x ]] && src=non_file_source
+        STACK="$STACK   @: [$src: $linen] $func\n"
+    done
+    echo -e ${STACK} >&2
+    #set -x
+}
+
+function check_return() {
+    stat=$?
+    if [[ ${stat} -ne 0 ]]; then
+        echo "[${BASH_SOURCE[1]} : ${BASH_LINENO[0]}] [${FUNCNAME[1]}]" >&2
+        echo "[FATAL]: $1" >&2
+        get_stack
+        exit 1
+    fi
+}
+
+function retry {
+    local n=1
+    local try=$1
+    local cmd="${@: 2}"
+
+    while true; do
+            ${cmd} && break || {
+            if [[ ${n} -lt ${try} ]]; then
+                echo "Command '${cmd}' failed. Attempt ${n}/${try}}:"
+                ((n++))
+            else
+                echo "Command '${cmd}' has failed after ${n} attempts" 
+                return 1
+            fi
+        }
+    done
+}
+
+function init_download() {
+	sys_job_file_path=${SYS_TMP_FILEPATH}/${SYS_USER_ID}/${SYS_JOB_ID}
+	echo "sys_job_file_path: "${sys_job_file_path}
+	retry 5 ${HADOOP_HOME}/bin/hadoop fs -Dfs.default.name=${SYS_FS_NAME} \
+	           -Dhadoop.job.ugi=${SYS_FS_UGI} \
+               -get ${sys_job_file_path}/${K8S_TMP_DIR_NAME}/docker_tools/* ${LOCAL_PADDLE_JOB_DIR}
+
+    check_return "download ${sys_job_file_path}/${K8S_TMP_DIR_NAME}/${SYS_TMP_DOCKER_CORE_FILE_DIR} failed"
+}
+
+# print init log
+stdbuf -oL echo "k8s job initing..."
+
+# init download paddlecloud tools
+init_download 2>&1
+
+# print start log
+stdbuf -oL echo "k8s job starting..."
+chmod +x ${LOCAL_PADDLE_JOB_DIR}/*.sh
+chmod +x ${LOCAL_TOOLS_DIR}/*.sh
+stdbuf -oL /bin/bash ${LOCAL_PADDLE_JOB_DIR}/run.sh 2>&1
+exit_code=$?
+# print end log
+stdbuf -oL echo "k8s job finished"
+exit ${exit_code}

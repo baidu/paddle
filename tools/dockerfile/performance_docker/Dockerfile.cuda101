@@ -1,0 +1,99 @@
+FROM nvidia/cuda:10.1-cudnn7-runtime-ubuntu16.04
+USER root
+
+ENV HOME_WORK_DIR=/root/paddlejob
+# replace utc timezone with local timezone
+ENV TZ='Asia/Shanghai'
+
+ARG https_proxy
+ARG http_proxy
+
+# install base deps
+RUN apt-get update
+RUN apt-get install -y wget openssh-server
+
+
+WORKDIR ${HOME_WORK_DIR}
+
+ADD paddle_k8s ${HOME_WORK_DIR}/
+RUN chmod +x ${HOME_WORK_DIR}/paddle_k8s
+
+# install rdma driver, consistent with local real machine rdma driver version.
+RUN apt-get install -y libnuma1 automake pkg-config tcl dpatch autoconf libnl-3-200 graphviz libgfortran3 tk libnl-route-3-200 bison chrpath libltdl-dev swig flex gfortran
+RUN apt-get install lsb-core -y
+RUN wget -q https://paddlepaddledeps.bj.bcebos.com/MLNX_OFED_LINUX-4.2-1.2.0.0-ubuntu16.04-x86_64.tgz  && \
+    tar zxf MLNX_OFED_LINUX-4.2-1.2.0.0-ubuntu16.04-x86_64.tgz -C ${HOME_WORK_DIR}/ && \
+    cd ${HOME_WORK_DIR}/MLNX_OFED_LINUX-4.2-1.2.0.0-ubuntu16.04-x86_64 && \
+    ./mlnxofedinstall --user-space-only --force && \
+    rm -rf ${HOME_WORK_DIR}/MLNX_OFED_LINUX-4.2-1.2.0.0-ubuntu16.04-x86_64*
+
+# install nccl2
+#RUN wget -q https://paddlepaddledeps.bj.bcebos.com/nccl_2.3.5.tar.gz && \
+#    tar zxf nccl_2.3.5.tar.gz -C ${HOME_WORK_DIR}/ && \
+#    mv nccl_2.3.5/include/nccl.h /usr/include/ && \
+#    mv nccl_2.3.5/lib/libnccl.so /usr/lib/x86_64-linux-gnu/ && \
+#    rm -rf ${HOME_WORK_DIR}/nccl_2.3.5.tar.gz
+
+ENV LD_LIBRARY_PATH=/usr/lib64/:/usr/lib/x86_64-linux-gnu/:${LD_LIBRARY_PATH}
+
+# Add PDC init script (run.sh) deps
+RUN apt-get install tree net-tools iproute2 telnet lsof iputils-ping -y
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+
+
+# upgrade glibc
+RUN apt-get update && apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test
+RUN apt-get update && apt-get -y upgrade && apt-get -y dist-upgrade
+
+# Downgrade gcc&&g++
+WORKDIR /usr/bin 
+COPY build_scripts /build_scripts 
+RUN bash /build_scripts/install_gcc.sh gcc82 && rm -rf /build_scripts 
+RUN cp gcc gcc.bak && cp g++ g++.bak && rm gcc && rm g++ 
+RUN ln -s /usr/local/gcc-8.2/bin/gcc /usr/local/bin/gcc 
+RUN ln -s /usr/local/gcc-8.2/bin/g++ /usr/local/bin/g++ 
+RUN ln -s /usr/local/gcc-8.2/bin/gcc /usr/bin/gcc 
+RUN ln -s /usr/local/gcc-8.2/bin/g++ /usr/bin/g++ 
+ENV PATH=/usr/local/gcc-8.2/bin:$PATH 
+
+# RUN python3.7 and pip3.7
+# Prepare packages for Python
+RUN apt-get -y install zlib1g-dev libffi-dev libssl-dev
+
+WORKDIR ${HOME_WORK_DIR}
+# Install Python3.7
+RUN wget -q https://www.python.org/ftp/python/3.7.0/Python-3.7.0.tgz && \
+    tar -xzf Python-3.7.0.tgz && cd Python-3.7.0 && \
+    CFLAGS="-Wformat" ./configure --prefix=/usr/local/ --enable-shared > /dev/null && \
+    make -j8 > /dev/null && make altinstall > /dev/null && ldconfig
+
+WORKDIR ${HOME_WORK_DIR}
+RUN rm Python-3.7.0.tgz && rm -r Python-3.7.0
+
+RUN python3.7 -m pip install -U pip
+RUN rm -f /usr/bin/python3 /usr/local/bin/pip && \
+       ln -s /usr/local/bin/python3.7 /usr/bin/python3 && \
+       ln -s /usr/local/bin/python3.7 /usr/bin/python && \
+       ln -s /usr/local/bin/pip3.7 /usr/bin/pip && \
+       ln -s /usr/local/bin/pip3.7 /usr/bin/pip3
+RUN rm /usr/bin/lsb_release
+
+RUN rm -f /usr/lib/x86_64-linux-gnu/libcublas.so && \
+    ln -s /usr/lib/x86_64-linux-gnu/libcublas.so.10 /usr/lib/x86_64-linux-gnu/libcublas.so
+
+
+RUN wget -q https://paddlepaddledeps.bj.bcebos.com/nvidia_dali_cuda100-0.24.0-1446725-cp37-cp37m-manylinux2014_x86_64.whl && \ 
+   pip install nvidia_dali_cuda100-0.24.0-1446725-cp37-cp37m-manylinux2014_x86_64.whl && \
+   rm -f nvidia_dali_cuda100-0.24.0-1446725-cp37-cp37m-manylinux2014_x86_64.whl
+
+ADD requirements.txt ${HOME_WORK_DIR} 
+RUN cd ${HOME_WORK_DIR} && pip install -r requirements.txt && rm -f requirements.txt
+
+RUN ln -s /usr/lib/x86_64-linux-gnu/libcudnn.so.7 /usr/lib/x86_64-linux-gnu/libcudnn.so && \
+    ln -s /usr/lib/x86_64-linux-gnu/libnccl.so.2 /usr/lib/x86_64-linux-gnu/libnccl.so && \
+    ln -s /usr/local/cuda-10.1/targets/x86_64-linux/lib/libcusolver.so.10 /usr/local/cuda-10.1/targets/x86_64-linux/lib/libcusolver.so
+
+ENV LD_LIBRARY_PATH=/usr/local/cuda-10.1/targets/x86_64-linux/lib/:${LD_LIBRARY_PATH}
+
+RUN unset https_proxy http_proxy
