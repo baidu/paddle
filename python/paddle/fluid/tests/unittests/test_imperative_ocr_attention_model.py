@@ -305,8 +305,7 @@ class GRUDecoderWithAttention(fluid.dygraph.Layer):
             decoder_size, decoder_size * 3, bias_attr=False)
         self.gru_unit = GRUUnit(
             size=decoder_size * 3, param_attr=None, bias_attr=None)
-        self.out_layer = Linear(
-            decoder_size, num_classes + 2, bias_attr=None, act='softmax')
+        self.out_layer = Linear(decoder_size, num_classes + 2, bias_attr=None)
 
         self.decoder_size = decoder_size
 
@@ -427,8 +426,8 @@ class TestDygraphOCRAttention(unittest.TestCase):
                         label_out, [-1, 1], inplace=False)
                     dy_prediction = fluid.layers.reshape(
                         dy_prediction, [label_out.shape[0], -1], inplace=False)
-                    loss = fluid.layers.cross_entropy(
-                        input=dy_prediction, label=label_out)
+                    loss = fluid.layers.softmax_with_cross_entropy(
+                        logits=dy_prediction, label=label_out)
                     avg_loss = fluid.layers.reduce_sum(loss)
 
                     dy_out = avg_loss.numpy()
@@ -481,8 +480,8 @@ class TestDygraphOCRAttention(unittest.TestCase):
             static_prediction = fluid.layers.reshape(
                 static_prediction, shape=[-1, Config.num_classes + 2])
 
-            cost = fluid.layers.cross_entropy(
-                input=static_prediction, label=static_label_out)
+            cost = fluid.layers.softmax_with_cross_entropy(
+                logits=static_prediction, label=static_label_out)
             static_avg_loss = fluid.layers.reduce_sum(cost)
             # param_grad_list = fluid.backward.append_backward(static_avg_loss)
             optimizer.minimize(static_avg_loss)
