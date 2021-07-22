@@ -624,6 +624,13 @@ class TestDygraphBatchNormAPIError(unittest.TestCase):
 
 
 class TestDygraphBatchNormTrainableStats(unittest.TestCase):
+    def append_batch_norm(self, x, is_test, trainable_statistics):
+        bn = fluid.dygraph.BatchNorm(
+            num_channels=x.shape[1],
+            is_test=is_test,
+            trainable_statistics=trainable_statistics)
+        return bn(x)
+
     def test_dygraph(self):
         places = [fluid.CPUPlace()]
         if core.is_compiled_with_cuda() and core.op_support_gpu("batch_norm"):
@@ -633,11 +640,10 @@ class TestDygraphBatchNormTrainableStats(unittest.TestCase):
 
             def compute(x, is_test, trainable_statistics):
                 with fluid.dygraph.guard(p):
-                    bn = fluid.dygraph.BatchNorm(
-                        shape[1],
+                    y = self.append_batch_norm(
+                        x=fluid.dygraph.to_variable(x),
                         is_test=is_test,
                         trainable_statistics=trainable_statistics)
-                    y = bn(fluid.dygraph.to_variable(x))
                 return y.numpy()
 
             x = np.random.randn(*shape).astype("float32")
@@ -655,12 +661,11 @@ class TestDygraphBatchNormTrainableStats(unittest.TestCase):
 
             def compute(x_np, is_test, trainable_statistics):
                 with program_guard(Program(), Program()):
-                    bn = fluid.dygraph.BatchNorm(
-                        shape[1],
+                    x = fluid.data(name='x', shape=x_np.shape, dtype=x_np.dtype)
+                    y = self.append_batch_norm(
+                        x=x,
                         is_test=is_test,
                         trainable_statistics=trainable_statistics)
-                    x = fluid.data(name='x', shape=x_np.shape, dtype=x_np.dtype)
-                    y = bn(x)
                     exe.run(fluid.default_startup_program())
                     r = exe.run(feed={'x': x_np}, fetch_list=[y])[0]
                 return r
@@ -669,6 +674,34 @@ class TestDygraphBatchNormTrainableStats(unittest.TestCase):
             y1 = compute(x, False, False)
             y2 = compute(x, True, True)
             self.assertTrue(np.allclose(y1, y2))
+
+
+class TestBatchNormTrainableStatsFunctionalAPI(
+        TestDygraphBatchNormTrainableStats):
+    def append_batch_norm(self, x, is_test, trainable_statistics):
+        def _create_parameter(x, name, init_value):
+            num_channels = x.shape[1]
+            param = paddle.create_parameter(
+                shape=[num_channels],
+                dtype=x.dtype,
+                attr=paddle.ParamAttr(
+                    initializer=paddle.nn.initializer.Constant(init_value)))
+            param.stop_gradient = True
+            return param
+
+        running_mean = _create_parameter(x, init_value=0.0)
+        running_var = _create_parameter(x, init_value=1.0)
+        scale = _create_parameter(x, init_value=1.0)
+        bias = _create_parameter(x, init_value=0.0)
+
+        out = paddle.nn.functional.batch_norm(
+            x=x,
+            running_mean=running_mean,
+            running_var=running_var,
+            weight=scale,  # scale
+            bias=bias,  # bias
+            training=not is_test)
+        return out
 
 
 class TestDygraphBatchNormOpenReserveSpace(unittest.TestCase):
