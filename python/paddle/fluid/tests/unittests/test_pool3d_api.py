@@ -471,6 +471,35 @@ class TestPool3DError_API(unittest.TestCase):
 
         self.assertRaises(ValueError, run10)
 
+        def run11():
+            with fluid.dygraph.guard():
+                input_np = np.random.uniform(
+                    -1, 1, [2, 3, 32, 32, 32]).astype(np.float32)
+                input_pd = fluid.dygraph.to_variable(input_np)
+                res_pd = max_pool3d(
+                    input_pd,
+                    kernel_size=2,
+                    stride=0,
+                    padding=0,
+                    data_format='NDHWC',
+                    return_mask=True)
+
+        self.assertRaises(ValueError, run11)
+
+        def run12():
+            with fluid.dygraph.guard():
+                input_np = np.random.uniform(
+                    -1, 1, [2, 3, 32, 32, 32]).astype(np.float32)
+                input_pd = fluid.dygraph.to_variable(input_np)
+                res_pd = avg_pool3d(
+                    input_pd,
+                    kernel_size=2,
+                    stride=0,
+                    padding=0,
+                    data_format='NDHWC')
+
+        self.assertRaises(ValueError, run12)
+
 
 if __name__ == '__main__':
     unittest.main()

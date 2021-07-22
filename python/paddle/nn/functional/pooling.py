@@ -35,10 +35,17 @@ def _check_input(x, dimension):
 
 
 def _check_instance(x, x_name, types=(int, float)):
-
     if not isinstance(x, types):
         raise ValueError("Excepted {} type for {} but received type: {}. ".
                          format(types, x_name, type(x)))
+
+
+def _check_stride(stride, op_name):
+    for item in stride:
+        if item <= 0:
+            raise ValueError(
+                "Excepted stride of  API {} to be greater than 0, but received {}".
+                format(op_name, item))
 
 
 def _zero_padding_in_batch_and_channel(padding, channel_last):
@@ -443,6 +450,8 @@ def avg_pool3d(x,
     else:
         stride = utils.convert_to_list(stride, 3, 'pool_stride')
 
+    _check_stride(stride, "avg_pool3d")
+
     channel_last = _channel_last(data_format, 3)
     padding, padding_algorithm = _update_padding_nd(
         padding, 3, channel_last=channel_last, ceil_mode=ceil_mode)
@@ -824,6 +833,7 @@ def max_pool3d(x,
         stride = kernel_size
     else:
         stride = utils.convert_to_list(stride, 3, 'pool_stride')
+    _check_stride(stride, "max_pool3d")
 
     channel_last = _channel_last(data_format, 3)
 
