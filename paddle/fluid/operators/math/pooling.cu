@@ -70,20 +70,31 @@ __global__ void KernelPool2D(const int nthreads, const T* input_data,
     } else {
       input_data += batch_idx * input_height * input_width * channels;
     }
-    T ele = pool_process.initial();
+    int sec = (hend * wend + 1023) / 1024;
+    T* ele;
+    ele = reinterpret_cast<T*>(malloc(sizeof(T) * sec));
+    for (int i = 0; i < sec; i++) {
+      ele[i] = pool_process.initial();
+    }
     for (int h = hstart; h < hend; ++h) {
       for (int w = wstart; w < wend; ++w) {
         auto input_idx = channel_last ? (h * input_width + w) * channels + c
                                       : h * input_width + w;
-        pool_process.compute(input_data[input_idx], &ele);
+        int flag = (h * wend + w) / 1024;
+        pool_process.compute(input_data[input_idx], &ele[flag]);
       }
     }
+    for (int i = 1; i < sec; i++) {
+      pool_process.compute(ele[i], &ele[0]);
+    }
+
     int pool_size = (exclusive || adaptive) ? (hend - hstart) * (wend - wstart)
                                             : ksize_height * ksize_width;
-    pool_process.finalize(static_cast<T>(pool_size), &ele);
-    output_data[index] = ele;
+    pool_process.finalize(static_cast<T>(pool_size), &(ele[0]));
+    output_data[index] = static_cast<T>(ele[0]);
   }
 }
+
 template <typename PoolProcess, typename T>
 __global__ void KernelPool2DGrad(
     const int nthreads, const T* input_data, const T* output_data,
