@@ -765,10 +765,16 @@ void Blas<platform::CUDADeviceContext>::BatchedGEMM(
             << (use_tensor_op_math ? "True" : "False");
 
     auto fp = std::is_same<T, float>::value ? CUDA_R_32F : CUDA_R_16F;
+    cudaDataType_t computeType = CUDA_R_32F;
+    float f_alpha = static_cast<float>(alpha);
+    float f_beta = static_cast<float>(beta);
+
     context_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
       PADDLE_ENFORCE_CUDA_SUCCESS(platform::dynload::cublasGemmStridedBatchedEx(
-          handle, cuTransB, cuTransA, N, M, K, &alpha, B, fp, ldb, strideB, A,
-          fp, lda, strideA, &beta, C, fp, ldc, strideC, batchCount, fp, algo));
+          handle, cuTransB, cuTransA, N, M, K,
+          reinterpret_cast<void *>(&f_alpha), B, fp, ldb, strideB, A, fp, lda,
+          strideA, reinterpret_cast<void *>(&f_beta), C, fp, ldc, strideC,
+          batchCount, computeType, algo));
     });
   } else {
 #endif  // CUDA_VERSION >= 9010
