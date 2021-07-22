@@ -24,6 +24,7 @@
 #include "paddle/fluid/platform/device_context.h"
 #include "paddle/fluid/platform/dynload/hccl.h"
 #include "paddle/fluid/platform/enforce.h"
+#include "paddle/fluid/platform/type_defs.h"
 
 namespace paddle {
 namespace platform {
@@ -160,6 +161,8 @@ class HCCLComm {
   virtual int device_id() const = 0;
   virtual HcclComm comm() const = 0;
   virtual aclrtStream stream() const = 0;
+  virtual npuEvent_t compute_event() const = 0;
+  virtual npuEvent_t comm_event() const = 0;
   virtual NPUDeviceContext* dev_context() const = 0;
   virtual ~HCCLComm() = default;
 };

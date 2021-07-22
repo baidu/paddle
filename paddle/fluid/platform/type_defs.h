@@ -16,6 +16,8 @@ limitations under the License. */
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_runtime.h>
+#elif defined PADDLE_WITH_ASCEND_CL
+#include "acl/acl.h"
 #else
 #include <cuda_runtime.h>
 #endif
@@ -27,6 +29,8 @@ namespace paddle {
 using gpuStream_t = hipStream_t;
 using gpuError_t = hipError_t;
 using gpuEvent_t = hipEvent_t;
+#elif defined PADDLE_WITH_ASCEND_CL
+using npuEvent_t = aclrtEvent;
 #else
 #define gpuSuccess cudaSuccess
 using gpuStream_t = cudaStream_t;

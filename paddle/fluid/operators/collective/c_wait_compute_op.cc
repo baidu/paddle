@@ -19,8 +19,12 @@ namespace framework {
 class Scope;
 }  // namespace framework
 }  // namespace paddle
-#if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
+#if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL) || \
+    defined(PADDLE_WITH_ASCEND_CL)
 #include "paddle/fluid/platform/collective_helper.h"
+#endif
+#if defined(PADDLE_WITH_ASCEND_CL)
+#include "acl/acl.h"
 #endif
 
 namespace paddle {
@@ -36,10 +40,16 @@ class CWaitComputeOp : public framework::OperatorBase {
 
   void RunImpl(const framework::Scope& scope,
                const platform::Place& place) const override {
-    PADDLE_ENFORCE_EQ(
-        is_gpu_place(place), true,
-        platform::errors::PreconditionNotMet(
-            "wait_compute op can run on gpu place only for now."));
+#if defined(PADDLE_WITH_NCCL)
+    PADDLE_ENFORCE_EQ(is_gpu_place(place), true,
+                      platform::errors::PreconditionNotMet(
+                          "wait_compute op can run on gpu place for now."));
+#endif
+#if defined(PADDLE_WITH_ASCEND_CL)
+    PADDLE_ENFORCE_EQ(is_npu_place(place), true,
+                      platform::errors::PreconditionNotMet(
+                          "wait_compute op can run on npu place for now."));
+#endif
 
 #if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
     int ring_id = Attr<int>("ring_id");
@@ -63,9 +73,26 @@ class CWaitComputeOp : public framework::OperatorBase {
     PADDLE_ENFORCE_CUDA_SUCCESS(cudaEventRecord(event, compute_stream));
     PADDLE_ENFORCE_CUDA_SUCCESS(cudaStreamWaitEvent(comm_stream, event, 0));
 #endif
+// support NPU
+#elif defined(PADDLE_WITH_ASCEND_CL)
+    int ring_id = Attr<int>("ring_id");
+
+    auto dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+    auto compute_stream =
+        static_cast<platform::NPUDeviceContext*>(dev_ctx)->stream();
+    auto comm_stream =
+        platform::HCCLCommContext::Instance().Get(ring_id, place)->stream();
+
+    auto event = platform::HCCLCommContext::Instance()
+                     .Get(ring_id, place)
+                     ->compute_event();
+
+    // compute_stream-->event-->comm_stream
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtRecordEvent(event, compute_stream));
+    PADDLE_ENFORCE_NPU_SUCCESS(aclrtStreamWaitEvent(comm_stream, event));
 #else
     PADDLE_THROW(platform::errors::PreconditionNotMet(
-        "PaddlePaddle should compile with GPU."));
+        "PaddlePaddle should compile with GPU or NPU."));
 #endif
   }
 };

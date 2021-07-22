@@ -15,6 +15,7 @@
 #if defined(PADDLE_WITH_ASCEND_CL)
 #include "paddle/fluid/platform/collective_helper.h"
 #include <utility>
+#include "paddle/fluid/platform/npu_resource_pool.h"
 
 namespace paddle {
 namespace platform {
@@ -48,12 +49,32 @@ class HCCLCommImpl : public HCCLComm {
   }
   NPUDeviceContext* dev_context() const override { return dev_ctx_.get(); }
 
+  // NPU Event
+  npuEvent_t compute_event() const override { return compute_event_.get(); }
+
+  npuEvent_t comm_event() const override { return comm_event_.get(); }
+
+  void set_compute_event(
+      std::shared_ptr<platform::NpuEventObject>&& compute_event) {
+    compute_event_ = std::move(compute_event);
+  }
+
+  void set_comm_event(std::shared_ptr<platform::NpuEventObject>&& comm_event) {
+    comm_event_ = std::move(comm_event);
+  }
+
  private:
   int ring_id_;
   int nranks_;
   int rank_;
   HcclComm comm_;
   std::unique_ptr<NPUDeviceContext> dev_ctx_;
+
+  // used for comm wait compute, compute_stream-->event-->comm_stream
+  std::shared_ptr<platform::NpuEventObject> compute_event_;
+
+  // used for compute wait comm, comm_stream-->event-->compute_stream
+  std::shared_ptr<platform::NpuEventObject> comm_event_;
 };
 
 HCCLComm* HCCLCommContext::CreateHCCLComm(HcclRootInfo* hccl_id, int nranks,
@@ -106,12 +127,19 @@ HCCLComm* HCCLCommContext::AssignHCCLComm(HcclComm comm, int nranks, int rank,
   std::unique_ptr<NPUDeviceContext> dev_ctx(
       new NPUDeviceContext(NPUPlace(dev_id)));
 
+  std::shared_ptr<platform::NpuEventObject> compute_event(
+      platform::NpuEventResourcePool::Instance().New(dev_id));
+  std::shared_ptr<platform::NpuEventObject> comm_event(
+      platform::NpuEventResourcePool::Instance().New(dev_id));
+
   HCCLCommImpl* c = new HCCLCommImpl;
   c->set_ring_id(ring_id);
   c->set_nranks(nranks);
   c->set_rank(rank);
   c->set_comm(comm);
   c->set_dev_ctx(std::move(dev_ctx));
+  c->set_compute_event(std::move(compute_event));
+  c->set_comm_event(std::move(comm_event));
 
   comm_map_mutex_.lock();
   if (comm_map_.count(ring_id) == 0) {

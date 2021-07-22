@@ -4768,8 +4768,17 @@ class PipelineOptimizer(object):
             'index': 0,
             'first_optimize_index': first_optimize_index
         }
+        # record same var op index dict
+        record_vars, record_back_ops = dict(), dict()
+        block_ops = list(block.ops)
+        for index, op in enumerate(block_ops):
+            for var_name in op.input_arg_names:
+                if var_name in record_vars.keys():
+                    record_vars[var_name].append(index)
+                else:
+                    record_vars[var_name] = [index]
 
-        for index, op in enumerate(list(block.ops)):
+        for index, op in enumerate(block_ops):
             cur_device = op.attr(self._op_device_key)
             if cur_device == f"{self._device}:all": continue
             for var_name in op.input_arg_names:
@@ -4849,6 +4858,95 @@ class PipelineOptimizer(object):
                                 'ring_id': ring_id
                             })
                         extra_index_info['index'] += 1
+                        var_shape = list(var.shape)
+                        var_shape[0] = self.micro_batch_size if var_shape[
+                            0] < 0 else var_shape[0]
+                        block._insert_op_without_sync(
+                            index=index + extra_index_info['index'],
+                            type='recv_v2',
+                            outputs={'Out': [var]},
+                            attrs={
+                                'out_shape': var_shape,
+                                'dtype': var.dtype,
+                                self._op_device_key: cur_dev,
+                                self._op_role_key: op_role,
+                                'use_calc_stream': True,
+                                'peer': 0,
+                                'ring_id': ring_id
+                            })
+                        extra_index_info['index'] += 1
+                    elif self._1F1B_by_event:  #1F1B by event
+                        block._insert_op_without_sync(
+                            index=index + extra_index_info['index'],
+                            type='c_wait_compute',
+                            inputs={'X': var},
+                            outputs={'Out': var},
+                            attrs={
+                                'ring_id': ring_id,
+                                self._op_device_key: prev_dev,
+                                self._op_role_key: op_role
+                            })
+                        extra_index_info['index'] += 1
+                        block._insert_op_without_sync(
+                            index=index + extra_index_info['index'],
+                            type='send_v2',
+                            inputs={'X': var},
+                            attrs={
+                                self._op_device_key: prev_dev,
+                                self._op_role_key: op_role,
+                                'use_calc_stream': False,
+                                'ring_id': ring_id,
+                                'peer': 1,
+                            })
+                        extra_index_info['index'] += 1
+
+                        var_indexs = record_vars[var.name]
+                        idx = var_indexs.index(
+                            index) if index in var_indexs else -2
+                        new_op_role = self._op_role.Backward
+                        flag_idx = False
+                        if int(op_role) == int(self._op_role.Backward):
+                            insert_index = extra_index_info[
+                                'first_optimize_index']
+                            new_op_role = self._op_role.Optimize
+                            block._insert_op_without_sync(
+                                index=insert_index + extra_index_info['index'],
+                                type='c_wait_comm',
+                                inputs={'X': var},
+                                outputs={'Out': var},
+                                attrs={
+                                    'ring_id': ring_id,
+                                    self._op_device_key: prev_dev,
+                                    self._op_role_key: new_op_role
+                                })
+                            flag_idx = True
+                        elif idx != len(var_indexs) - 1 and idx != -2:
+                            for id_ in var_indexs[idx + 1:]:
+                                if block_ops[id_].attr(
+                                        self._op_device_key) != prev_dev:
+                                    continue
+                                else:
+                                    record_back_ops[id_] = {
+                                        "var": var,
+                                        "ring_id": ring_id,
+                                        "prev_dev": prev_dev,
+                                        "op_role": new_op_role
+                                    }
+                                    flag_idx = True
+                                    break
+                        if not flag_idx:
+                            block._insert_op_without_sync(
+                                index=index + extra_index_info['index'],
+                                type='c_wait_comm',
+                                inputs={'X': var},
+                                outputs={'Out': var},
+                                attrs={
+                                    'ring_id': ring_id,
+                                    self._op_device_key: prev_dev,
+                                    self._op_role_key: new_op_role
+                                })
+                            extra_index_info['index'] += 1
+
                         var_shape = list(var.shape)
                         var_shape[0] = self.micro_batch_size if var_shape[
                             0] < 0 else var_shape[0]
@@ -4989,6 +5087,26 @@ class PipelineOptimizer(object):
                 _insert_send_recv(
                     int(cur_device.split(':')[1]),
                     int(prev_device.split(':')[1]))
+
+        if self._1F1B_by_event:
+            extra_index = 0
+            record_back_ops_new = dict()
+            for op_k, op_v in record_back_ops.items():
+                record_back_ops_new[op_k + extra_index_info['index']] = op_v
+            for index, op in enumerate(list(block.ops)):
+                if index in record_back_ops_new.keys():
+                    v = record_back_ops_new[index]
+                    block._insert_op_without_sync(
+                        index=index + extra_index,
+                        type='c_wait_comm',
+                        inputs={'X': v["var"]},
+                        outputs={'Out': v["var"]},
+                        attrs={
+                            'ring_id': v["ring_id"],
+                            self._op_device_key: v["prev_dev"],
+                            self._op_role_key: v["op_role"]
+                        })
+                    extra_index += 1
         block._sync_with_cpp()
 
     def _insert_loss_scale(self, block):
@@ -5434,6 +5552,8 @@ class PipelineOptimizer(object):
         assert sorted_device_list == device_list, (
             "With pipeline parallelism, you must use gpu devices one after "
             "another in the order of their ids.")
+        # FLAGS_1F1B_BY_EVENT
+        self._1F1B_by_event = os.environ.get("FLAGS_1F1B_BY_EVENT", None)
         # Step2: add send and recv ops between section boundaries
         self._insert_sendrecv_ops_for_boundaries(main_block)
 
