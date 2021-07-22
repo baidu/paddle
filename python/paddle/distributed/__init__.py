@@ -36,6 +36,13 @@ from .collective import get_group  # noqa: F401
 from .collective import send  # noqa: F401
 from .collective import wait  # noqa: F401
 
+from .auto_parallel import shard_tensor  # noqa: F401
+from .auto_parallel import shard_op  # noqa: F401
+from .auto_parallel import set_shard_mask  # noqa: F401
+from .auto_parallel import set_offload_device  # noqa: F401
+from .auto_parallel import set_pipeline_stage  # noqa: F401
+from .auto_parallel import ProcessMesh  # noqa: F401
+
 from .fleet import BoxPSDataset  # noqa: F401
 
 from .entry_attr import ProbabilityEntry  # noqa: F401
@@ -69,5 +76,11 @@ __all__ = [     #noqa
       "ReduceOp",
       "wait",
       "get_rank",
-      "ProbabilityEntry"
+      "ProbabilityEntry",
+      "shard_tensor",
+      "shard_op",
+      "set_shard_mask",
+      "set_offload_device",
+      "set_pipeline_stage",
+      "ProcessMesh",
 ]

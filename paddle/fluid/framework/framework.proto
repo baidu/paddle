@@ -60,6 +60,14 @@ message OpDesc {
     repeated double float64s = 16;
   };
 
+  message DistributedAttr {
+    required string name = 1;
+    required AttrType type = 2;
+    optional int32 i = 3;
+    optional string s = 4;
+    repeated int32 ints = 5;
+  };
+
   message Var {
     required string parameter = 1;
     repeated string arguments = 2;
@@ -70,6 +78,7 @@ message OpDesc {
   repeated Var outputs = 2;
   repeated Attr attrs = 4;
   optional bool is_target = 5 [ default = false ];
+  repeated DistributedAttr dist_attrs = 6;
 };
 
 // OpProto describes a C++ framework::OperatorBase derived class.
@@ -167,12 +176,27 @@ message VarType {
 }
 
 message VarDesc {
+
+  message DistributedAttr {
+    message ProcessMesh {
+      required string name = 1;
+      repeated int32 ints = 2;
+    }
+    required string name = 1;
+    required AttrType type = 2;
+    optional int32 i = 3;
+    optional string s = 5;
+    repeated int32 ints = 6;
+    optional ProcessMesh mesh = 7;
+  };
+
   required string name = 1;
   required VarType type = 2;
   optional bool persistable = 3 [ default = false ];
   // True if the variable is an input data and
   // have to check the feed data shape and dtype
   optional bool need_check_feed = 4 [ default = false ];
+  repeated DistributedAttr dist_attrs = 5;
 }
 
 message BlockDesc {

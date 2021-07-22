@@ -19,6 +19,7 @@ limitations under the License. */
 #include <vector>
 
 #include "glog/logging.h"
+#include "paddle/fluid/framework/attribute.h"
 #include "paddle/fluid/framework/framework.pb.h"
 
 namespace paddle {
@@ -117,6 +118,26 @@ class VarDesc {
     desc_.set_need_check_feed(need_check_feed);
   }
 
+  bool HasDistributedAttr(const std::string &name) const {
+    return distributed_attrs_.find(name) != distributed_attrs_.end();
+  }
+
+  std::vector<std::string> DistributedAttrNames() const;
+
+  void SetDistributedAttr(const std::string &name, const Attribute &v);
+  void RemoveDistributedAttr(const std::string &name);
+
+  Attribute GetDistributedAttr(const std::string &name) const;
+
+  template <typename T>
+  T GetDistributedAttrIfExists(const std::string &name) const {
+    T result{};
+    if (HasDistributedAttr(name)) {
+      result = BOOST_GET_CONST(T, GetDistributedAttr(name));
+    }
+    return result;
+  }
+
  private:
   const proto::VarType::TensorDesc &tensor_desc() const;
   std::vector<proto::VarType::TensorDesc> tensor_descs() const;
@@ -124,6 +145,8 @@ class VarDesc {
   std::vector<proto::VarType::TensorDesc *> mutable_tensor_descs();
 
   proto::VarDesc desc_;
+  AttributeMap distributed_attrs_;
+  bool need_update_{false};
 };
 
 bool operator==(const VarDesc &left, const VarDesc &right);
