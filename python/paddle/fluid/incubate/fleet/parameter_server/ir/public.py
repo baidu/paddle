@@ -406,6 +406,7 @@ class CompileTimeStrategy(object):
                 name, ctx = self._step_ctx()
                 send_ctx[name] = ctx
         else:
+            idx = 0
             for pairs in self.origin_sparse_pairs:
                 param, grad = pairs
                 param_name = param.name
@@ -425,9 +426,10 @@ class CompileTimeStrategy(object):
                                   param_ctx.aggregate(),
                                   param_ctx.is_sparse(),
                                   param_ctx.is_distributed())
+                idx += 1
 
                 send_ctx[ctx.var_name()] = ctx
-            name, ctx = self._step_ctx()
+            name, ctx = self._step_ctx(idx)
             send_ctx[name] = ctx
         return send_ctx
 
