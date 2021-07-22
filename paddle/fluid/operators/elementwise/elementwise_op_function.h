@@ -25,6 +25,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/memory/malloc.h"
+#include "paddle/fluid/operators/amp/fp16_type_traits.h"
 #include "paddle/fluid/operators/elementwise/elementwise_op_function.cu.h"
 #include "paddle/fluid/platform/gpu_info.h"
 #include "paddle/fluid/platform/transform.h"
@@ -1677,6 +1678,7 @@ static __global__ void ElemwiseGradBroadcast2CUDAKernel(
   int ttid = tid;
 
   if (is_xsize_larger) {
+    T local_y = y[j];
     while (true) {
       int i = ttid / post;
       int k = ttid % post;
@@ -1685,11 +1687,12 @@ static __global__ void ElemwiseGradBroadcast2CUDAKernel(
       int x_offset = i * n * post + j * post + k;
 
       if (dx != nullptr) {
-        dx[x_offset] = dx_op(x[x_offset], y[j], out[x_offset], dout[x_offset]);
+        dx[x_offset] =
+            dx_op(x[x_offset], local_y, out[x_offset], dout[x_offset]);
       }
 
       if (dy != nullptr) {
-        val += dy_op(x[x_offset], y[j], out[x_offset], dout[x_offset]);
+        val += dy_op(x[x_offset], local_y, out[x_offset], dout[x_offset]);
       }
 
       ttid += ELEMWISE_MAX_BLOCK_DIM;
@@ -1704,6 +1707,7 @@ static __global__ void ElemwiseGradBroadcast2CUDAKernel(
       }
     }
   } else {  // x.dims < y.dims, broadcast for x.
+    T local_x = x[j];
     while (true) {
       int i = ttid / post;
       int k = ttid % post;
@@ -1712,11 +1716,12 @@ static __global__ void ElemwiseGradBroadcast2CUDAKernel(
       int y_offset = i * n * post + j * post + k;
 
       if (dy != nullptr) {
-        dy[y_offset] = dy_op(x[j], y[y_offset], out[y_offset], dout[y_offset]);
+        dy[y_offset] =
+            dy_op(local_x, y[y_offset], out[y_offset], dout[y_offset]);
       }
 
       if (dx != nullptr) {
-        val += dx_op(x[j], y[y_offset], out[y_offset], dout[y_offset]);
+        val += dx_op(local_x, y[y_offset], out[y_offset], dout[y_offset]);
       }
 
       ttid += ELEMWISE_MAX_BLOCK_DIM;
@@ -1733,16 +1738,244 @@ static __global__ void ElemwiseGradBroadcast2CUDAKernel(
   }
 }
 
+template <typename T, int N>
+struct GetVecType;
+
+template <typename T>
+struct GetVecType<T, 1> {
+  using Type = T;
+};
+
+template <>
+struct GetVecType<paddle::platform::float16, 2> {
+  using Type = half2;
+};
+
+template <>
+struct GetVecType<paddle::platform::float16, 4> {
+  using Type = float2;
+};
+
+template <>
+struct GetVecType<float, 2> {
+  using Type = float2;
+};
+
+template <>
+struct GetVecType<float, 4> {
+  using Type = float4;
+};
+
+template <>
+struct GetVecType<double, 2> {
+  using Type = double2;
+};
+
+template <>
+struct GetVecType<double, 4> {
+  using Type = double4;
+};
+
+// each matrix is divided into "tile_num" tiles by dimension "n"
+// each tile compute "pre * post" elemwise_grad result
+// post number continuous threads deal with a tile
+// each thread loop "pre" outside assure read and write coalescing
+template <typename T, typename DX_OP, typename DY_OP, int vec_size>
+static __global__ void ElemwiseGradBroadcast2ThreadVecCUDAKernel(
+    const T *__restrict__ x, const T *__restrict__ y, const T *__restrict__ out,
+    const T *__restrict__ dout, int pre, int mid, int post,
+    bool is_xsize_larger, DX_OP dx_op, DY_OP dy_op, T *__restrict__ dx,
+    T *__restrict__ dy) {
+  assert((mid * post) % vec_size == 0);
+
+  const int elem_per_block = (blockDim.x * vec_size / post) * post;
+  const int elem_thread_start = threadIdx.x * vec_size;
+  if (elem_thread_start >= elem_per_block) return;
+
+  const int total_elem_num = mid * post;
+  const int elem_global_start = blockIdx.x * elem_per_block + elem_thread_start;
+  if (elem_global_start >= total_elem_num) return;
+
+  // shared memory
+  using AccT = typename details::MPTypeTrait<T>::Type;
+  __shared__ __align__(sizeof(AccT)) unsigned char
+      s_mem[ELEMWISE_MAX_BLOCK_DIM * sizeof(AccT) * vec_size];
+  AccT *s_data = reinterpret_cast<AccT *>(s_mem);
+
+#pragma unroll
+  for (int k = 0; k < vec_size; k++) s_data[elem_thread_start + k] = (AccT)0;
+
+  // vectorize data read and write
+  using VecT = typename GetVecType<T, vec_size>::Type;
+  VecT vec_out, vec_dout;
+  T *buf_out = reinterpret_cast<T *>(&vec_out);
+  T *buf_dout = reinterpret_cast<T *>(&vec_dout);
+
+  if (is_xsize_larger) {
+    VecT vec_x, vec_dx;
+    T *buf_x = reinterpret_cast<T *>(&vec_x);
+    T *buf_dx = reinterpret_cast<T *>(&vec_dx);
+
+    for (int i = 0; i < pre; i++) {
+      // x_offset is consecutive for all thread in block
+      int x_offset = i * total_elem_num + elem_global_start;
+
+      // vectorize read x to ensure coalescing
+      vec_x = reinterpret_cast<const VecT *>(&x[x_offset])[0];
+      vec_out = reinterpret_cast<const VecT *>(&out[x_offset])[0];
+      vec_dout = reinterpret_cast<const VecT *>(&dout[x_offset])[0];
+      if (dx != nullptr) {
+#pragma unroll
+        for (int k = 0; k < vec_size; k++) {
+          const int mid_id = (elem_global_start + k) / post;
+          buf_dx[k] = dx_op(buf_x[k], y[mid_id], buf_out[k], buf_dout[k]);
+        }
+        // vectorize write dx
+        reinterpret_cast<VecT *>(&dx[x_offset])[0] = vec_dx;
+      }
+
+      if (dy != nullptr) {
+#pragma unroll
+        for (int k = 0; k < vec_size; k++) {
+          const int mid_id = (elem_global_start + k) / post;
+          s_data[elem_thread_start + k] += static_cast<AccT>(
+              dy_op(buf_x[k], y[mid_id], buf_out[k], buf_dout[k]));
+        }
+      }
+    }
+    __syncthreads();
+
+    if (dy != nullptr) {
+// calculate total "dy[nid]" value
+#pragma unroll
+      for (int k = 0; k < vec_size; k++) {
+        const int mid_id = (elem_global_start + k) / post;
+        const int mid_id_in_block = (elem_thread_start + k) / post;
+        const int tile_beg = mid_id_in_block * post;
+        AccT val(0);
+        for (int l = 0; l < post; l++) {
+          val += s_data[tile_beg + l];
+        }
+        dy[mid_id] = static_cast<T>(val);
+      }
+    }
+  } else {  // x.dims < y.dims, broadcast for x.
+    VecT vec_y, vec_dy;
+    T *buf_y = reinterpret_cast<T *>(&vec_y);
+    T *buf_dy = reinterpret_cast<T *>(&vec_dy);
+
+    for (int i = 0; i < pre; i++) {
+      // y_offset is consecutive for all thread in block
+      int y_offset = i * total_elem_num + elem_global_start;
+
+      // vectorize read x
+      vec_y = reinterpret_cast<const VecT *>(&y[y_offset])[0];
+      vec_out = reinterpret_cast<const VecT *>(&out[y_offset])[0];
+      vec_dout = reinterpret_cast<const VecT *>(&dout[y_offset])[0];
+      if (dy != nullptr) {
+#pragma unroll
+        for (int k = 0; k < vec_size; k++) {
+          const int mid_id = (elem_global_start + k) / post;
+          buf_dy[k] = dy_op(x[mid_id], buf_y[k], buf_out[k], buf_dout[k]);
+        }
+        // vectorize write dx
+        reinterpret_cast<VecT *>(&dy[y_offset])[0] = vec_dy;
+      }
+
+      if (dx != nullptr) {
+#pragma unroll
+        for (int k = 0; k < vec_size; k++) {
+          const int mid_id = (elem_global_start + k) / post;
+          s_data[elem_thread_start + k] += static_cast<AccT>(
+              dx_op(x[mid_id], buf_y[k], buf_out[k], buf_dout[k]));
+        }
+      }
+    }
+    __syncthreads();
+
+    if (dx != nullptr) {
+// calculate total "dx[nid]" value
+#pragma unroll
+      for (int k = 0; k < vec_size; k++) {
+        const int mid_id = (elem_global_start + k) / post;
+        const int mid_id_in_block = (elem_thread_start + k) / post;
+        const int tile_beg = mid_id_in_block * post;
+        AccT val(0);
+        for (int l = 0; l < post; l++) {
+          val += s_data[tile_beg + l];
+        }
+        dx[mid_id] = static_cast<T>(val);
+      }
+    }
+  }
+}
+
+#define LAUNCH_ELEMWISE_GRAD_KERNEL(vec_size)                                 \
+  int post_per_block = std::min(ELEMWISE_MAX_BLOCK_DIM * vec_size / post, n); \
+  int elem_per_block = post_per_block * post;                                 \
+  while (elem_per_block % vec_size != 0) elem_per_block -= post;              \
+  post_per_block = elem_per_block / post;                                     \
+  int thread_per_block = elem_per_block / vec_size;                           \
+  int block_per_grid = (n + post_per_block - 1) / post_per_block;             \
+  ElemwiseGradBroadcast2ThreadVecCUDAKernel<                                  \
+      T, DX_OP, DY_OP,                                                        \
+      vec_size><<<block_per_grid, thread_per_block, 0, stream>>>(             \
+      x, y, out, dout, pre, n, post, is_xsize_larger, dx_op, dy_op, dx, dy);
+
+template <typename T, typename DX_OP, typename DY_OP>
+static typename std::enable_if<
+    !std::is_same<T, paddle::platform::float16>::value &&
+        !std::is_same<T, float>::value && !std::is_same<T, double>::value,
+    void>::type
+LaunchElemwiseGradBroadcast2ThreadVecCUDAKernel(gpuStream_t stream, const T *x,
+                                                const T *y, const T *out,
+                                                const T *dout, int pre, int n,
+                                                int post, bool is_xsize_larger,
+                                                DX_OP dx_op, DY_OP dy_op, T *dx,
+                                                T *dy) {
+  LAUNCH_ELEMWISE_GRAD_KERNEL(1)
+}
+
+template <typename T, typename DX_OP, typename DY_OP>
+static
+    typename std::enable_if<std::is_same<T, paddle::platform::float16>::value ||
+                                std::is_same<T, float>::value ||
+                                std::is_same<T, double>::value,
+                            void>::type
+    LaunchElemwiseGradBroadcast2ThreadVecCUDAKernel(
+        gpuStream_t stream, const T *x, const T *y, const T *out, const T *dout,
+        int pre, int n, int post, bool is_xsize_larger, DX_OP dx_op,
+        DY_OP dy_op, T *dx, T *dy) {
+  const int last_num = n * post;
+
+  if (last_num % 4 == 0) {
+    LAUNCH_ELEMWISE_GRAD_KERNEL(4)
+  } else if (last_num % 2 == 0) {
+    LAUNCH_ELEMWISE_GRAD_KERNEL(2)
+  } else {
+    LAUNCH_ELEMWISE_GRAD_KERNEL(1)
+  }
+}
+
+#undef LAUNCH_ELEMWISE_GRAD_KERNEL
+
 template <typename T, typename DX_OP, typename DY_OP>
 static void ElemwiseGradBroadcast2CUDA(gpuStream_t stream, const T *x,
                                        const T *y, const T *out, const T *dout,
                                        int pre, int n, int post,
                                        bool is_xsize_larger, DX_OP dx_op,
                                        DY_OP dy_op, T *dx, T *dy) {
-  int block_size = std::min(ELEMWISE_MAX_BLOCK_DIM, pre * post);
-  int gird_size = n;
-  ElemwiseGradBroadcast2CUDAKernel<<<gird_size, block_size, 0, stream>>>(
-      x, y, out, dout, pre, n, post, is_xsize_larger, dx_op, dy_op, dx, dy);
+  int num = pre * post;
+  if (num <= 64 && n >= ELEMWISE_MAX_BLOCK_DIM * 3) {
+    LaunchElemwiseGradBroadcast2ThreadVecCUDAKernel<T, DX_OP, DY_OP>(
+        stream, x, y, out, dout, pre, n, post, is_xsize_larger, dx_op, dy_op,
+        dx, dy);
+  } else {
+    int block_size = std::min(ELEMWISE_MAX_BLOCK_DIM, pre * post);
+    int gird_size = n;
+    ElemwiseGradBroadcast2CUDAKernel<<<gird_size, block_size, 0, stream>>>(
+        x, y, out, dout, pre, n, post, is_xsize_larger, dx_op, dy_op, dx, dy);
+  }
 }
 
 #endif
