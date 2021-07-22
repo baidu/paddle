@@ -18,7 +18,7 @@ import unittest
 import numpy as np
 import os
 import sys
-from io import BytesIO
+import six
 
 import paddle
 import paddle.nn as nn
@@ -37,7 +37,10 @@ SEED = 10
 IMAGE_SIZE = 784
 CLASS_NUM = 10
 
-LARGE_PARAM = 2**26
+if six.PY2:
+    LARGE_PARAM = 2**2
+else:
+    LARGE_PARAM = 2**26
 
 
 def random_batch_reader():
@@ -95,19 +98,22 @@ class TestSaveLoadLargeParameters(unittest.TestCase):
     def test_large_parameters_paddle_save(self):
         # enable dygraph mode
         paddle.disable_static()
-        paddle.set_device("cpu")
         # create network
         layer = LayerWithLargeParameters()
         save_dict = layer.state_dict()
 
         path = os.path.join("test_paddle_save_load_large_param_save",
                             "layer.pdparams")
-        protocol = 4
+        if six.PY2:
+            protocol = 2
+        else:
+            protocol = 4
         paddle.save(save_dict, path, protocol=protocol)
-        dict_load = paddle.load(path, return_numpy=True)
+        dict_load = paddle.load(path)
         # compare results before and after saving
         for key, value in save_dict.items():
-            self.assertTrue(np.array_equal(dict_load[key], value.numpy()))
+            self.assertTrue(
+                np.array_equal(dict_load[key].numpy(), value.numpy()))
 
 
 class TestSaveLoadPickle(unittest.TestCase):
@@ -406,10 +412,11 @@ class TestSaveLoadAny(unittest.TestCase):
         ]
         obj2 = {'k1': obj1, 'k2': state_dict, 'epoch': 123}
         obj3 = (paddle.randn(
-            [5, 4], dtype='float32'), np.random.randn(3, 4).astype("float32"), {
-                "state_dict": state_dict,
-                "opt": state_dict
-            })
+            [5, 4], dtype='float32'), np.ndarray(
+                [3, 4], dtype="float32"), {
+                    "state_dict": state_dict,
+                    "opt": state_dict
+                })
         obj4 = (np.random.randn(5, 6), (123, ))
 
         path1 = "test_save_load_any_complex_object_dygraph/obj1"
@@ -771,71 +778,6 @@ class TestSaveLoadAny(unittest.TestCase):
         self.assertTrue(np.array_equal(origin_array, load_tensor_array))
 
 
-class TestSaveLoadToMemory(unittest.TestCase):
-    def test_dygraph_save_to_memory(self):
-        paddle.disable_static()
-        linear = LinearNet()
-        state_dict = linear.state_dict()
-        byio = BytesIO()
-        paddle.save(state_dict, byio)
-        tensor = paddle.randn([2, 3], dtype='float32')
-        paddle.save(tensor, byio)
-        byio.seek(0)
-        # load state_dict
-        dict_load = paddle.load(byio, return_numpy=True)
-        for k, v in state_dict.items():
-            self.assertTrue(np.array_equal(v.numpy(), dict_load[k]))
-        # load tensor
-        tensor_load = paddle.load(byio, return_numpy=True)
-        self.assertTrue(np.array_equal(tensor_load, tensor.numpy()))
-
-        with self.assertRaises(ValueError):
-            paddle.save(4, 3)
-        with self.assertRaises(ValueError):
-            paddle.save(state_dict, '')
-        with self.assertRaises(ValueError):
-            paddle.fluid.io._open_file_buffer('temp', 'b')
-
-    def test_static_save_to_memory(self):
-        paddle.enable_static()
-        with new_program_scope():
-            # create network
-            x = paddle.static.data(
-                name="x", shape=[None, IMAGE_SIZE], dtype='float32')
-            z = paddle.static.nn.fc(x, 10, bias_attr=False)
-            z = paddle.static.nn.fc(z, 128, bias_attr=False)
-            loss = fluid.layers.reduce_mean(z)
-            place = fluid.CPUPlace(
-            ) if not paddle.fluid.core.is_compiled_with_cuda(
-            ) else fluid.CUDAPlace(0)
-            prog = paddle.static.default_main_program()
-            exe = paddle.static.Executor(place)
-            exe.run(paddle.static.default_startup_program())
-
-            state_dict = prog.state_dict()
-            keys = list(state_dict.keys())
-            tensor = state_dict[keys[0]]
-
-            byio = BytesIO()
-            byio2 = BytesIO()
-            paddle.save(prog, byio2)
-            paddle.save(tensor, byio)
-            paddle.save(state_dict, byio)
-            byio.seek(0)
-            byio2.seek(0)
-
-            prog_load = paddle.load(byio2)
-            self.assertTrue(prog.desc.serialize_to_string() ==
-                            prog_load.desc.serialize_to_string())
-
-            tensor_load = paddle.load(byio, return_numpy=True)
-            self.assertTrue(np.array_equal(tensor_load, np.array(tensor)))
-
-            state_dict_load = paddle.load(byio, return_numpy=True)
-            for k, v in state_dict.items():
-                self.assertTrue(np.array_equal(np.array(v), state_dict_load[k]))
-
-
 class TestSaveLoad(unittest.TestCase):
     def setUp(self):
         # enable dygraph mode
@@ -936,17 +878,30 @@ class TestSaveLoadProgram(unittest.TestCase):
 
 class TestSaveLoadLayer(unittest.TestCase):
     def test_save_load_layer(self):
+        if six.PY2:
+            return
+
         paddle.disable_static()
         inps = paddle.randn([1, IMAGE_SIZE], dtype='float32')
         layer1 = LinearNet()
         layer2 = LinearNet()
         layer1.eval()
         layer2.eval()
-        origin_layer = (layer1, layer2)
         origin = (layer1(inps), layer2(inps))
         path = "test_save_load_layer_/layer.pdmodel"
+        paddle.save((layer1, layer2), path)
+
+        # static
+        paddle.enable_static()
         with self.assertRaises(ValueError):
-            paddle.save(origin_layer, path)
+            paddle.load(path)
+        # dygraph
+        paddle.disable_static()
+
+        loaded_layer = paddle.load(path)
+        loaded_result = [l(inps) for l in loaded_layer]
+        for i in range(len(origin)):
+            self.assertTrue((origin[i] - loaded_result[i]).abs().max() < 1e-10)
 
 
 if __name__ == '__main__':
