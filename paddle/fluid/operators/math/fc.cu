@@ -15,6 +15,7 @@ limitations under the License. */
 #include <algorithm>
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/fc.h"
+#include <cuda_fp16.h>
 
 namespace paddle {
 namespace operators {
@@ -31,6 +32,11 @@ struct FcTypeTraits<float> {
 template <>
 struct FcTypeTraits<double> {
   typedef double4 Type;
+};
+
+template <>
+struct FcTypeTraits<platform::float16> {
+  typedef half4 Type;
 };
 
 template <typename T, bool DoRelu>
@@ -127,6 +133,7 @@ class FCFunctor<platform::CUDADeviceContext, T> {
 
 template class FCFunctor<platform::CUDADeviceContext, float>;
 template class FCFunctor<platform::CUDADeviceContext, double>;
+template class FCFunctor<platform::CUDADeviceContext, platform::float16>;
 
 }  // namespace math
 }  // namespace operators
