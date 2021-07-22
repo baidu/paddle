@@ -109,6 +109,8 @@ struct PADDLE_ALIGN(2) float16 {
     x = *reinterpret_cast<uint16_t*>(&res);
 
 #elif defined(__F16C__)
+// see: https://clang.llvm.org/doxygen/f16cintrin_8h_source.html
+#include <immintrin.h>  // f16cintrin.h
     x = _cvtss_sh(val, 0);
 
 #else
