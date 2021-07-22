@@ -2,14 +2,14 @@
 # Use rocm-terminal base image for both rocm environment
 # When you modify it, please be aware of rocm version
 #
-# Build: ROCM 4.0.1
+# Build: Paddle ROCM Image
 # cd Paddle/tools/dockerfile
 # docker build -f Dockerfile.rocm  \
-#        -t paddlepaddle/paddle-centos-rocm401-dev:latest .
+#        -t paddlepaddle/paddle:latest-centos-dev-rocm4.0 .
 #
 # docker run -it --device=/dev/kfd --device=/dev/dri \
 # --security-opt seccomp=unconfined --group-add video \
-# paddlepaddle/paddle-centos-rocm401-dev:latest /bin/bash
+# paddlepaddle/paddle:latest-centos-dev-rocm4.0 /bin/bash
 
 FROM centos:7.8.2003
 MAINTAINER PaddlePaddle Authors <paddle-dev@baidu.com>
@@ -21,7 +21,7 @@ ENV LANGUAGE en_US.UTF-8
 RUN yum install -y epel-release deltarpm sudo openssh-server gettext-devel sqlite-devel \
         zlib-devel openssl-devel pcre-devel vim tk-devel tkinter libtool xz graphviz wget curl-devel \
         make bzip2 git patch unzip bison yasm diffutils automake which file kernel-headers kernel-devel \
-        net-tools numactl-devel chrpath screen initscripts
+        net-tools numactl-devel chrpath screen initscripts tree tmux
 
 # Install devtoolset-7
 RUN yum install -y yum-utils centos-release-scl && \
@@ -47,12 +47,19 @@ ENV PATH=/opt/cmake-3.16/bin:${PATH}
 RUN yum install -y kmod wget openblas-devel epel-release
 RUN echo "[ROCm]" > /etc/yum.repos.d/rocm.repo && \
     echo "name=ROCm" >> /etc/yum.repos.d/rocm.repo && \
-    echo "baseurl=http://repo.radeon.com/rocm/yum/4.0.1" >> /etc/yum.repos.d/rocm.repo && \
+    echo "baseurl=https://repo.radeon.com/rocm/yum/4.0.1" >> /etc/yum.repos.d/rocm.repo && \
     echo "enabled=1" >> /etc/yum.repos.d/rocm.repo && \
-    echo "gpgcheck=0" >> /etc/yum.repos.d/rocm.repo
+    echo "gpgcheck=1" >> /etc/yum.repos.d/rocm.repo && \
+    echo "gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" >> /etc/yum.repos.d/rocm.repo
 RUN yum install -y rocm-dev rocm-utils rocfft miopen-hip rocblas hipsparse rocrand rccl hipcub rocthrust rocprofiler-dev roctracer-dev
+# fix miopen
+RUN cd /opt/rocm && rm -rf miopen/ && wget https://paddle-ci.cdn.bcebos.com/miopen.2.11.0.tar.gz && \
+    tar -zxvf miopen.2.11.0.tar.gz && rm -rf miopen.2.11.0.tar.gz && \
+    cd /opt/rocm/lib && rm -rf libMIOpen.so.1.0.40001 && ln -s ../miopen/lib/libMIOpen.so.1.0 ./
 # fix rocthrust
 RUN sed -i '21 a #include <thrust/system/hip/config.h>' /opt/rocm/include/thrust/system/hip/detail/error.inl
+# fix openblas
+RUN sed -i '53 a typedef CBLAS_ORDER CBLAS_LAYOUT;' /usr/include/openblas/cblas.h
 # export ROCM env
 ENV ROCM_PATH=/opt/rocm
 ENV HIP_PATH=/opt/rocm/hip
@@ -60,6 +67,10 @@ ENV HIP_CLANG_PATH=/opt/rocm/llvm/bin
 ENV PATH=/opt/rocm/bin:$PATH
 ENV PATH=/opt/rocm/opencl/bin:$PATH
 ENV LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
+# env for miopen
+ENV MIOPEN_FIND_MODE=5
+ENV MIOPEN_DEBUG_CONV_IMPLICIT_GEMM=0
+ENV MIOPEN_SYSTEM_DB_PATH=/opt/rocm/miopen/share/miopen/db/
 
 # git 2.17.1
 RUN cd /opt && wget -q https://paddle-ci.gz.bcebos.com/git-2.17.1.tar.gz && \
@@ -141,6 +152,12 @@ RUN cd /opt && wget https://paddle-ci.gz.bcebos.com/ccache-3.7.9.tar.gz && \
     make -j8 && make install && \
     ln -s /usr/local/ccache-3.7.9/bin/ccache /usr/local/bin/ccache && \
     cd .. && rm -rf ccache-3.7.9.tar.gz && rm -rf ccache-3.7.9
+
+# install COCO API
+RUN /opt/conda/bin/pip install cython
+RUN cd /opt && wget https://github.com/cocodataset/cocoapi/archive/refs/heads/master.zip && \
+    unzip master.zip && cd cocoapi-master/PythonAPI/ && make && make install && \
+    rm -rf /opt/master.zip && rm -rf /opt/cocoapi-master
 
 # configure ssh
 RUN sed -i "s/^#PermitRootLogin/PermitRootLogin/" /etc/ssh/sshd_config && \
