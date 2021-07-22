@@ -357,3 +357,42 @@ class AmpScaler(object):
             new_decr_every_n_nan_or_inf(int):  The new_decr_every_n_nan_or_inf used to update the num `n`, `n` represent decreases loss scaling every `n` accumulated steps with nan or inf gradients.
         """
         self._decr_every_n_nan_or_inf = new_decr_every_n_nan_or_inf
+
+    def state_dict(self):
+        """
+        Returns state of the scaler as a `dict`, If this instance is not enabled, returns an empty dict.
+        Reurns:
+            A dict of scaler includes:
+            init_loss_scaling (float, optional): The initial loss scaling factor.
+            incr_ratio(float, optional): The multiplier to use when increasing the loss scaling.
+            decr_ratio(float, optional): The less-than-one-multiplier to use when decreasing the loss scaling.
+            incr_every_n_steps(int, optional): Increases loss scaling every n consecutive steps with finite gradients.
+            decr_every_n_nan_or_inf(int, optional): Decreases loss scaling every n accumulated steps with nan or inf gradients.
+        """
+        return {
+            "init_loss_scaling": self._init_loss_scaling,
+            "incr_ratio": self._incr_ratio,
+            "decr_ratio": self._decr_ratio,
+            "incr_every_n_steps": self._incr_every_n_steps,
+            "decr_every_n_nan_or_inf": self._decr_every_n_nan_or_inf
+        } if self._enable else {}
+
+    def load_state_dict(self, state_dict):
+        """
+        Loads the scaler state.
+        Args:
+           state_dict(dict): scaler state.  Should be an object returned from a call to `AmpScaler.state_dict()`.
+        """
+        if not self._enable:
+            return
+
+        if len(state_dict) == 0:
+            raise RuntimeError(
+                "The input state dict is empty, possibly because it was saved "
+                "from a disabled instance of GradScaler.")
+
+        self._init_loss_scaling = state_dict["init_loss_scaling"]
+        self._incr_ratio = state_dict["incr_ratio"]
+        self._decr_ratio = state_dict["decr_ratio"]
+        self._incr_every_n_steps = state_dict["incr_every_n_steps"]
+        self._decr_every_n_nan_or_inf = state_dict["decr_every_n_nan_or_inf"]

@@ -237,6 +237,25 @@ class TestAmpScaler(unittest.TestCase):
             scaler.set_init_loss_scaling(100)
             self.assertEqual(scaler.get_init_loss_scaling() == 100, True)
 
+    def test_state_dict_and_load_state_dict(self):
+        with fluid.dygraph.guard():
+            scaler1 = paddle.amp.GradScaler(
+                enable=True,
+                init_loss_scaling=14,
+                incr_ratio=233.0,
+                decr_ratio=0.523,
+                incr_every_n_steps=1090,
+                decr_every_n_nan_or_inf=20,
+                use_dynamic_loss_scaling=True)
+            scaler_state = scaler1.state_dict()
+            scaler2 = paddle.amp.GradScaler(enable=True)
+            scaler2.load_state_dict(scaler_state)
+            self.assertEqual(scaler2.get_init_loss_scaling() == 14, True)
+            self.assertEqual(scaler2.get_incr_ratio() == 233.0, True)
+            self.assertEqual(scaler2.get_decr_ratio() == 0.523, True)
+            self.assertEqual(scaler2.get_incr_every_n_steps() == 1090, True)
+            self.assertEqual(scaler2.get_decr_every_n_nan_or_inf() == 20, True)
+
 
 def reader_decorator(reader):
     def __reader__():
