@@ -80,7 +80,6 @@ function install_gcc(){
   if [ "${gcc_version}" == "8.2.0" ];then
     sed -i 's#<install_gcc>#WORKDIR /usr/bin \
       COPY tools/dockerfile/build_scripts /build_scripts \
-      RUN bash /build_scripts/install_trt.sh \
       RUN bash /build_scripts/install_gcc.sh gcc82 \&\& rm -rf /build_scripts \
       RUN cp gcc gcc.bak \&\& cp g++ g++.bak \&\& rm gcc \&\& rm g++ \
       RUN ln -s /usr/local/gcc-8.2/bin/gcc /usr/local/bin/gcc \
