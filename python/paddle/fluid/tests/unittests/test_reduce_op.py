@@ -561,7 +561,7 @@ class TestKeepDim8DReduce(Test1DReduce):
         }
 
 
-class TestReduceAll(Test1DReduce):
+class TestReduceAll1(Test1DReduce):
     def setUp(self):
         self.op_type = "reduce_sum"
         self.inputs = {'X': np.random.random((5, 6, 2, 10)).astype("float64")}
@@ -569,7 +569,7 @@ class TestReduceAll(Test1DReduce):
         self.outputs = {'Out': self.inputs['X'].sum()}
 
 
-class TestReduceAll(Test1DReduce):
+class TestReduceAll2(Test1DReduce):
     def setUp(self):
         self.op_type = "reduce_sum"
         self.inputs = {
@@ -666,7 +666,7 @@ class TestReduceSumWithNumelOne(OpTest):
         self.check_grad(['X'], 'Out')
 
 
-class TestReduceAll(OpTest):
+class TestReduceAll3(OpTest):
     def setUp(self):
         self.op_type = "reduce_sum"
         self.inputs = {'X': np.random.random((100, 1, 1)).astype("float64")}
