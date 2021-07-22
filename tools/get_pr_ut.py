@@ -199,7 +199,11 @@ class PRChecker(object):
 
     def get_pr_diff_lines(self):
         file_to_diff_lines = {}
-        r = requests.get(self.pr.diff_url)
+        try:
+            r = requests.get(self.pr.diff_url)
+        except Exception as e:
+            print(e)
+            r = requests.get(self.pr.diff_url)
         data = r.text
         data = data.split('\n')
         ix = 0
