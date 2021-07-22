@@ -146,6 +146,17 @@ class CheckFiniteAndUnscaleGpuKernel : public framework::OpKernel<T> {
         T, MPDType><<<blocks_per_grid, threads_per_block,
                       (xs_size + 1) * sizeof(int64_t), dev_ctx.stream()>>>(
         d_xs, inverse_scale_v, xs_size, d_starts, found_inf_data, d_outs);
+
+    framework::Tensor cpu_found_inf;
+    auto* cpu_found_inf_data = cpu_found_inf.mutable_data<bool>({1}, cpu_place);
+    dev_ctx.Wait();
+    framework::TensorCopy(
+        *found_inf, platform::CPUPlace(),
+        ctx.template device_context<platform::DeviceContext>(), &cpu_found_inf);
+    dev_ctx.Wait();
+    VLOG(0) << "yoki: found_inf in check_finite op: "
+            << static_cast<float>(*cpu_found_inf_data);
+
     VLOG(3) << "finish kernel";
   }
 };

@@ -61,6 +61,37 @@ class CheckFiniteAndUnscaleNPUKernel : public framework::OpKernel<T> {
     runner_inverse.Run(stream);
     tmp_inverse_out = &inverse_out;
 
+    bool found_inf_data = false;
+
+    size_t x_size = xs.size();
+    for (size_t i = 0; i < x_size; ++i) {
+      const auto* x = xs[i];
+
+      // step2: CheckNumerics
+      // CheckNumerics runs on the Ascend AI CPU, which delivers poor
+      // performance.
+      Tensor check_xout(x->type());
+      check_xout.Resize(x->dims());
+      check_xout.mutable_data<T>(ctx.GetPlace());
+      try {
+        const auto& runner_checknumerics =
+            NpuOpRunner("CheckNumerics", {*x}, {check_xout},
+                        {{"message", std::string("check_nan_and_inf")}});
+        runner_checknumerics.Run(stream);
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .Wait();
+      } catch (platform::EnforceNotMet& exception) {
+        LOG(WARNING) << "[check_nan_and_inf] detected contains NaN or INF!!!";
+        found_inf_data = true;
+      } catch (...) {
+        LOG(WARNING) << "[check_nan_and_inf] detected contains NaN or INF!!!";
+        found_inf_data = true;
+      }
+    }  // end for
+
+    VLOG(0) << "yoki: found_inf in CheckNumerics method: "
+            << static_cast<float>(found_inf_data);
+
     // NOTE(zhiqiu):
     Tensor tmp;
     tmp.mutable_data<float>({8}, ctx.GetPlace());
@@ -81,6 +112,27 @@ class CheckFiniteAndUnscaleNPUKernel : public framework::OpKernel<T> {
     const auto& runner_greater =
         NpuOpRunner("GreaterEqual", {sum, const_tensor}, {*found_inf}, {});
     runner_greater.Run(stream);
+
+    std::vector<bool> found_inf_cpu;
+    TensorToVector(*found_inf, ctx.device_context(), &found_inf_cpu);
+    VLOG(0) << "yoki: found_inf in check_finite npu op: "
+            << static_cast<float>(found_inf_cpu[0]);
+
+    if (found_inf_cpu[0]) {
+      size_t x_size = xs.size();
+      for (size_t i = 0; i < x_size; ++i) {
+        const auto* x = xs[i];
+
+        std::vector<T> check_x;
+        TensorToVector(*x, ctx.device_context(), &check_x);
+        for (int i = 0; i < static_cast<int>(check_x.size()); ++i) {
+          // VLOG(0) << "check_x[" << i<< "] : yokinum: "<< check_x[i];
+          if (std::isnan(check_x[i]) || std::isinf(check_x[i])) {
+            VLOG(0) << "yokinan: " << check_x[i];
+          }
+        }
+      }
+    }
 
     // NOTE(zhiqiu): The normal logic is :
     // out = in, if found_inf = true
