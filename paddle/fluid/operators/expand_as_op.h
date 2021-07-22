@@ -13,42 +13,12 @@ limitations under the License. */
 
 #include <vector>
 
-#include <boost/preprocessor/arithmetic/div.hpp>
-#include <boost/preprocessor/arithmetic/mod.hpp>
-#include <boost/preprocessor/comparison/greater.hpp>
-#include <boost/preprocessor/comparison/greater_equal.hpp>
-#include <boost/preprocessor/control/if.hpp>
-#include <boost/preprocessor/repetition/repeat.hpp>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/eigen/eigen_function.h"
 
 #define MAX_RANK_SUPPORTED 6
-// 1. BOOST_PP_REPEAT macro represents a fast horizontal repetition construct.
-//    Usage: BOOST_PP_REPEAT(count, macro, data).
-//    This macro expands to the sequence:
-//    macro(z, 0, data) macro(z, 1, data) ... macro(z, count - 1, data).
-// 2. As for our case, count = MAX_RANK_SUPPORTED(which is 6).
-//    So the range of n is 0-5(which is count-1).
-//    We want to generate case 1-6 instead of case 0-5.
-//    So we need to change n to n + 1.
-#define EXPAND_AS_TEMPLATE(z, n, data) \
-  case n + 1: {                        \
-    ExpandAs<n + 1>(context);          \
-    break;                             \
-  }
-#define REP_EXPAND_AS_TEMPLATE(n) BOOST_PP_REPEAT(n, EXPAND_AS_TEMPLATE, ~)
-#define COND(n) BOOST_PP_GREATER_EQUAL(n, BOOST_PP_MOD(n, MAX_RANK_SUPPORTED))
-#define EXPAND_AS_GRAD_CASE(n)                                           \
-  case n + 1: {                                                          \
-    ExpandAsBackward<n + 1>(context, reshape_dims_vec, reduce_dims_vec); \
-    break;                                                               \
-  }
-#define EXPAND_AS_GRAD_TEMPLATE(z, n, data) \
-  BOOST_PP_IF(COND(n), EXPAND_AS_GRAD_CASE(n), )
-#define REP_EXPAND_AS_GRAD_TEMPLATE(n) \
-  BOOST_PP_REPEAT(n, EXPAND_AS_GRAD_TEMPLATE, ~)
 
 namespace paddle {
 namespace operators {
@@ -67,7 +37,24 @@ class ExpandAsKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& context) const override {
     auto rank = context.Input<Tensor>("X")->dims().size();
     switch (rank) {
-      REP_EXPAND_AS_TEMPLATE(MAX_RANK_SUPPORTED)
+      case 1:
+        ExpandAs<1>(context);
+        break;
+      case 2:
+        ExpandAs<2>(context);
+        break;
+      case 3:
+        ExpandAs<3>(context);
+        break;
+      case 4:
+        ExpandAs<4>(context);
+        break;
+      case 5:
+        ExpandAs<5>(context);
+        break;
+      case 6:
+        ExpandAs<6>(context);
+        break;
       default:
         PADDLE_THROW(platform::errors::InvalidArgument(
             "Only support tensor with rank being between 1 and 6. But received "
@@ -165,7 +152,24 @@ class ExpandAsGradKernel : public framework::OpKernel<T> {
                             "to %d, but the value received is %d.",
                             MAX_RANK_SUPPORTED, dims));
       switch (dims) {
-        REP_EXPAND_AS_GRAD_TEMPLATE(MAX_RANK_SUPPORTED)
+        case 1:
+          ExpandAsBackward<1>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 2:
+          ExpandAsBackward<2>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 3:
+          ExpandAsBackward<3>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 4:
+          ExpandAsBackward<4>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 5:
+          ExpandAsBackward<5>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 6:
+          ExpandAsBackward<6>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
         default:
           PADDLE_THROW(platform::errors::InvalidArgument(
               "Only support tensor with rank being between 1 and 6. But "

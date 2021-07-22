@@ -17,40 +17,12 @@ limitations under the License. */
 #include <algorithm>
 #include <vector>
 
-#include <boost/preprocessor/arithmetic/div.hpp>
-#include <boost/preprocessor/arithmetic/mod.hpp>
-#include <boost/preprocessor/comparison/greater.hpp>
-#include <boost/preprocessor/comparison/greater_equal.hpp>
-#include <boost/preprocessor/control/if.hpp>
-#include <boost/preprocessor/repetition/repeat.hpp>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/eigen/eigen_function.h"
 
 #define MAX_RANK_SUPPORTED 6
-// 1. BOOST_PP_REPEAT macro represents a fast horizontal repetition construct.
-//    Usage: BOOST_PP_REPEAT(count, macro, data).
-//    This macro expands to the sequence:
-//    macro(z, 0, data) macro(z, 1, data) ... macro(z, count - 1, data).
-// 2. As for our case, count = MAX_RANK_SUPPORTED(which is 6).
-//    So the range of n is 0-5(which is count-1).
-//    We want to generate case 1-6 instead of case 0-5.
-//    So we need to change n to n + 1.
-#define TILE_TEMPLATE(z, n, data) \
-  case n + 1: {                   \
-    Tile<n + 1>(context);         \
-    break;                        \
-  }
-#define REP_TILE_TEMPLATE(n) BOOST_PP_REPEAT(n, TILE_TEMPLATE, ~)
-#define COND(n) BOOST_PP_GREATER_EQUAL(n, BOOST_PP_MOD(n, MAX_RANK_SUPPORTED))
-#define TILE_GRAD_CASE(n)                                            \
-  case n + 1: {                                                      \
-    TileBackward<n + 1>(context, reshape_dims_vec, reduce_dims_vec); \
-    break;                                                           \
-  }
-#define TILE_GRAD_TEMPLATE(z, n, data) BOOST_PP_IF(COND(n), TILE_GRAD_CASE(n), )
-#define REP_TILE_GRAD_TEMPLATE(n) BOOST_PP_REPEAT(n, TILE_GRAD_TEMPLATE, ~)
 
 namespace paddle {
 namespace operators {
@@ -130,7 +102,26 @@ class TileKernel : public framework::OpKernel<T> {
             "must be less than or equal to %d, but the value received is %d.",
             MAX_RANK_SUPPORTED, repeat_times_size));
     rank = std::max(rank, repeat_times_size);
-    switch (rank) { REP_TILE_TEMPLATE(MAX_RANK_SUPPORTED) }
+    switch (rank) {
+      case 1:
+        Tile<1>(context);
+        break;
+      case 2:
+        Tile<2>(context);
+        break;
+      case 3:
+        Tile<3>(context);
+        break;
+      case 4:
+        Tile<4>(context);
+        break;
+      case 5:
+        Tile<5>(context);
+        break;
+      case 6:
+        Tile<6>(context);
+        break;
+    }
   }
 
  protected:
@@ -251,7 +242,24 @@ class TileGradKernel : public framework::OpKernel<T> {
                             "to %d, but the value received is %d.",
                             MAX_RANK_SUPPORTED, dims));
       switch (dims) {
-        REP_TILE_GRAD_TEMPLATE(MAX_RANK_SUPPORTED)
+        case 1:
+          TileBackward<1>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 2:
+          TileBackward<2>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 3:
+          TileBackward<3>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 4:
+          TileBackward<4>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 5:
+          TileBackward<5>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
+        case 6:
+          TileBackward<6>(context, reshape_dims_vec, reduce_dims_vec);
+          break;
         default:
           PADDLE_THROW(platform::errors::InvalidArgument(
               "Only support tensor with rank being between 1 and 6. But "

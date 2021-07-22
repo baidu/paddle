@@ -17,10 +17,9 @@
 #include <string>
 #include <vector>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "paddle/fluid/framework/ir/graph.h"
 #include "paddle/fluid/framework/ir/pass.h"
+#include "paddle/fluid/string/string_helper.h"
 
 namespace paddle {
 namespace framework {
@@ -109,7 +108,7 @@ class LockFreeOptimizePass : public Pass {
                                 "Input argument node cannot be nullptr."));
 
     return node->NodeType() == Node::Type::kVariable &&
-           boost::algorithm::ends_with(node->Name(), name);
+           paddle::string::ends_with(node->Name(), name);
   }
 
   inline bool IsVarNameContains(ir::Node* node, const std::string& name) const {

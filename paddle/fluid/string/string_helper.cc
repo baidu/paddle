@@ -88,6 +88,11 @@ inline int str_to_float(const char* str, float* v) {
   return index;
 }
 
+bool ends_with(std::string const& input, std::string const& test) {
+  if (test.size() > input.size()) return false;
+  return std::equal(test.rbegin(), test.rend(), input.rbegin());
+}
+
 // A helper class for reading lines from file.
 // A line buffer is maintained. It
 // doesn't need to know the maximum possible length of a line.
@@ -100,7 +105,7 @@ char* LineFileReader::getdelim(FILE* f, char delim) {
       _buffer[--ret] = 0;
     }
 
-    _length = (size_t)ret;
+    _length = static_cast<size_t>(ret);
     return _buffer;
   } else {
     _length = 0;

@@ -17,7 +17,6 @@ limitations under the License. */
 #include <vector>
 #include "paddle/fluid/framework/io/fs.h"
 
-#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include "paddle/fluid/distributed/index_dataset/index_wrapper.h"
 

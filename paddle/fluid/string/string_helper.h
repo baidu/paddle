@@ -38,7 +38,8 @@ void format_string_append(std::string& str, const char* fmt,  // NOLINT
   CHECK_GE(len, 0);
   size_t oldlen = str.length();
   str.resize(oldlen + len + 1);
-  CHECK(snprintf(&str[oldlen], (size_t)len + 1, fmt, args...) == len);
+  CHECK(snprintf(&str[oldlen], static_cast<size_t>(len) + 1, fmt, args...) ==
+        len);
   str.resize(oldlen + len);
 }
 
@@ -67,6 +68,9 @@ std::string trim_spaces(const std::string& str);
 std::string erase_spaces(const std::string& str);
 
 int str_to_float(const char* str, float* v);
+
+// checks whether the test string is a suffix of the input string.
+bool ends_with(std::string const& input, std::string const& test);
 
 // split string by delim
 template <class T = std::string>

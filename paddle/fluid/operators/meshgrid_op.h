@@ -16,12 +16,6 @@
 
 #include <vector>
 
-#include <boost/preprocessor/arithmetic/mod.hpp>
-#include <boost/preprocessor/comparison/greater.hpp>
-#include <boost/preprocessor/comparison/greater_equal.hpp>
-#include <boost/preprocessor/control/if.hpp>
-#include <boost/preprocessor/repetition/repeat.hpp>
-
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
@@ -29,31 +23,6 @@
 #include "paddle/fluid/platform/errors.h"
 
 #define MAX_RANK_SUPPORTED 6
-// 1. BOOST_PP_REPEAT macro represents a fast horizontal repetition construct.
-//    Usage: BOOST_PP_REPEAT(count, macro, data).
-//    This macro expands to the sequence:
-//    macro(z, 0, data) macro(z, 1, data) ... macro(z, count - 1, data).
-// 2. As for our case, count = MAX_RANK_SUPPORTED(which is 6).
-//    So the range of n is 0-5(which is count-1).
-//    We want to generate case 1-6 instead of case 0-5.
-//    So we need to change n to n + 1.
-#define MESHGRID_TEMPLATE(z, n, data) \
-  case n + 1: {                       \
-    MeshgridForward<n + 1>(context);  \
-    break;                            \
-  }
-#define REP_MESHGRID_TEMPLATE(n) BOOST_PP_REPEAT(n, MESHGRID_TEMPLATE, ~)
-#define COND(n) BOOST_PP_GREATER_EQUAL(n, BOOST_PP_MOD(n, MAX_RANK_SUPPORTED))
-
-#define MESHGRID_GRAD_CASE(n)         \
-  case n + 1: {                       \
-    MeshgridBackward<n + 1>(context); \
-    break;                            \
-  }
-#define MESHGRID_GRAD_TEMPLATE(z, n, data) \
-  BOOST_PP_IF(COND(n), MESHGRID_GRAD_CASE(n), )
-#define REP_MESHGRID_GRAD_TEMPLATE(n) \
-  BOOST_PP_REPEAT(n, MESHGRID_GRAD_TEMPLATE, ~)
 
 namespace paddle {
 namespace operators {
@@ -65,7 +34,24 @@ class MeshgridKernel : public framework::OpKernel<T> {
     auto ins = context.MultiInput<framework::Tensor>("X");
     auto rank = ins.size();
     switch (rank) {
-      REP_MESHGRID_TEMPLATE(MAX_RANK_SUPPORTED)
+      case 1:
+        MeshgridForward<1>(context);
+        break;
+      case 2:
+        MeshgridForward<2>(context);
+        break;
+      case 3:
+        MeshgridForward<3>(context);
+        break;
+      case 4:
+        MeshgridForward<4>(context);
+        break;
+      case 5:
+        MeshgridForward<5>(context);
+        break;
+      case 6:
+        MeshgridForward<6>(context);
+        break;
       default:
         PADDLE_THROW(platform::errors::InvalidArgument(
             "Excepted Tensor numbers between 1 and 6, but only received d% .",
@@ -141,7 +127,24 @@ class MeshgridGradKernel : public framework::OpKernel<T> {
         context.MultiInput<framework::Tensor>(framework::GradVarName("Out"));
     int n = out_grad.size();
     switch (n) {
-      REP_MESHGRID_GRAD_TEMPLATE(MAX_RANK_SUPPORTED)
+      case 1:
+        MeshgridBackward<1>(context);
+        break;
+      case 2:
+        MeshgridBackward<2>(context);
+        break;
+      case 3:
+        MeshgridBackward<3>(context);
+        break;
+      case 4:
+        MeshgridBackward<4>(context);
+        break;
+      case 5:
+        MeshgridBackward<5>(context);
+        break;
+      case 6:
+        MeshgridBackward<6>(context);
+        break;
       default:
         PADDLE_THROW(platform::errors::InvalidArgument(
             "Excepted Tensor numbers between 1 and 6, but only received d% .",
