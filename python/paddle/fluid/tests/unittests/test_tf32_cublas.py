@@ -18,6 +18,7 @@ import numpy as np
 import paddle
 import paddle.fluid as fluid
 import paddle.fluid.core as core
+from tf32_precision import tf32_on_and_off
 
 
 class TestTF32Switch(unittest.TestCase):
@@ -49,6 +50,27 @@ class TestTF32OnMatmul(unittest.TestCase):
                 expected_result = np.matmul(input_array1, input_array2)
             self.assertTrue(np.allclose(expected_result, out.numpy(), 1e-03))
             core.set_cublas_switch(True)  # restore the switch
+        else:
+            pass
+
+
+class TestTF32Precision(unittest.TestCase):
+    def setUp(self):
+        self.precision = 1e-6
+
+    @tf32_on_and_off(0.001)
+    def test_dygraph_without_out(self):
+        if core.is_compiled_with_cuda():
+            place = fluid.CUDAPlace(0)
+            with fluid.dygraph.guard(place):
+                input_array1 = np.random.rand(8, 8).astype("float32")
+                input_array2 = np.random.rand(8, 8).astype("float32")
+                data1 = fluid.dygraph.to_variable(input_array1)
+                data2 = fluid.dygraph.to_variable(input_array2)
+                out = paddle.matmul(data1, data2)
+                expected_result = np.matmul(input_array1, input_array2)
+            self.assertTrue(
+                np.allclose(expected_result, out.numpy(), self.precision))
         else:
             pass
 
