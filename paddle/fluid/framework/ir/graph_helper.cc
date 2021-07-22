@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include "paddle/fluid/framework/ir/graph_helper.h"
+#include <queue>
 #include <stack>
 
 DEFINE_string(print_sub_graph_dir, "",
@@ -393,6 +394,85 @@ std::vector<Node *> TopologyVarientSort(const Graph &graph,
     default:
       return framework::ir::TopologyDfsSortOperations(graph);
   }
+}
+
+class DescOrderComparator {
+ public:
+  bool operator()(const Node *n1, const Node *n2) {
+    return (n1->DescOrder() > n2->DescOrder()) ||
+           ((n1->DescOrder() == n2->DescOrder()) &&
+            (n1->ToString() > n2->ToString()));
+  }
+};
+
+std::vector<ir::Node *> TopologySortGraphByDescOrder(const Graph &graph) {
+  std::vector<ir::Node *> sorted_ops;
+  std::priority_queue<Node *, std::vector<Node *>, DescOrderComparator> q;
+  std::unordered_map<Node *, std::unordered_set<Node *>> in_ops;
+  std::unordered_map<Node *, std::unordered_set<Node *>> out_ops;
+
+  // ensure all op node in 'in_ops' and 'out_ops'
+  for (const auto &n : graph.Nodes()) {
+    if (!n->IsOp()) continue;
+
+    in_ops.emplace(n, std::unordered_set<Node *>());
+    out_ops.emplace(n, std::unordered_set<Node *>());
+  }
+
+  // record all op's input op and output op
+  for (const auto &n : graph.Nodes()) {
+    if (!n->IsOp()) continue;
+
+    // traverse all input op
+    for (const auto &var : n->inputs) {
+      for (const auto &in : var->inputs) {
+        // use at instead of [] to prevent no unrecorded op node
+        in_ops.at(n).insert(in);
+        out_ops.at(in).insert(n);
+      }
+    }
+  }
+
+  // find topology entrance
+  for (const auto &n : graph.Nodes()) {
+    if (!n->IsOp()) continue;
+
+    if (in_ops.at(n).empty()) {
+      q.push(n);
+    }
+  }
+
+  // topological sorting
+  while (!q.empty()) {
+    // Do not get by reference!!! The element will pop later.
+    const auto cur_op = q.top();
+    q.pop();
+
+    sorted_ops.push_back(cur_op);
+    for (const auto &out : out_ops.at(cur_op)) {
+      PADDLE_ENFORCE_GT(in_ops.at(out).count(cur_op), 0,
+                        platform::errors::InvalidArgument(
+                            "We find %s in %s's output list, "
+                            "but cannot find %s in %s's input list. "
+                            "Please ensure graph completely.",
+                            out->Name().c_str(), cur_op->Name().c_str(),
+                            cur_op->Name().c_str(), out->Name().c_str()));
+      in_ops.at(out).erase(cur_op);
+
+      // push if in-degree is 0
+      if (in_ops.at(out).empty()) {
+        q.push(out);
+      }
+    }
+  }
+
+  PADDLE_ENFORCE_EQ(
+      sorted_ops.size(), in_ops.size(),
+      platform::errors::InvalidArgument("Topological sorting incompletely, "
+                                        "only sorted %zd op but total %zd.",
+                                        sorted_ops.size(), in_ops.size()));
+
+  return sorted_ops;
 }
 
 }  // namespace ir

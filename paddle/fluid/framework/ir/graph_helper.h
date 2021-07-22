@@ -87,6 +87,8 @@ std::vector<T *> FilterByNodeWrapper(const Graph &graph) {
   return ret;
 }
 
+std::vector<ir::Node *> TopologySortGraphByDescOrder(const Graph &graph);
+
 }  // namespace ir
 }  // namespace framework
 }  // namespace paddle

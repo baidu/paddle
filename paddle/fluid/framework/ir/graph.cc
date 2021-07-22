@@ -17,7 +17,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/ir/graph.h"
 #include "paddle/fluid/framework/operator.h"
 
-DEFINE_bool(convert_all_blocks, false,
+DEFINE_bool(convert_all_blocks, true,
             "Convert all blocks in program into SSAgraphs");
 
 namespace paddle {
@@ -93,10 +93,16 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromBlock(
   std::unordered_map<std::string, VarDesc *> all_vars;
   // var nodes for each var name, will have multiple versions in SSA
   std::map<std::string, std::vector<ir::Node *>> var_nodes;
-  for (auto *var : block.AllVars()) {
-    all_vars.emplace(var->Name(), var);
+
+  const BlockDesc *block_var_visible = &block;
+  while (block_var_visible != nullptr) {
+    for (auto *var : block_var_visible->AllVars()) {
+      all_vars.emplace(var->Name(), var);
+    }
+    block_var_visible = block_var_visible->ParentBlock();
   }
 
+  int desc_order = 0;
   auto not_visited_vars = all_vars;
   auto all_ops = block.AllOps();
   PADDLE_ENFORCE_LE(
@@ -109,6 +115,8 @@ std::map<std::string, std::vector<ir::Node *>> Graph::InitFromBlock(
     auto *op = all_ops[i];
     VLOG(3) << "create OpNode by " << op->Type();
     ir::Node *node = CreateOpNode(op);
+    node->SetDescOrder(desc_order);
+    ++desc_order;
     // For input args, reuse the same var name if it was created before.
     // Otherwise, create a new one.
     for (auto &each_var_name : op->InputArgumentNames()) {

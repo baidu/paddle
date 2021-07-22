@@ -162,6 +162,35 @@ class TestProgram(unittest.TestCase):
         self.assertRaises(TypeError, program._copy_dist_param_info_from,
                           "program")
 
+    def test_remove_training_info(self):
+        def net():
+            reader = fluid.layers.py_reader(
+                capacity=10,
+                shapes=[[-1, 10], [-1, 1]],
+                lod_levels=[0, 0],
+                dtypes=['float32', 'int64'],
+                use_double_buffer=True)
+            in_data, label = fluid.layers.read_file(reader)
+            predict_label = fluid.layers.fc(in_data, size=2, act='softmax')
+            loss = fluid.layers.mean(
+                fluid.layers.cross_entropy(
+                    input=predict_label, label=label))
+
+            optimizer = fluid.optimizer.Adam()
+            optimizer.minimize(loss)
+
+        main_program = fluid.Program()
+        with fluid.program_guard(main_program):
+            net()
+
+        removed_program = main_program._remove_training_info()
+
+        for i in range(removed_program.num_blocks):
+            block = removed_program.block(i)
+            for var in block.desc.all_vars():
+                self.assertFalse(var.has_is_parameter())
+                self.assertFalse(var.has_stop_gradient())
+
 
 if __name__ == '__main__':
     unittest.main()

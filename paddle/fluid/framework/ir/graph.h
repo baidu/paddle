@@ -104,7 +104,14 @@ class Graph {
     attr_dels_.clear();
   }
 
-  bool IsConstructedByPartialProgram() const { return is_partial_; }
+  bool IsConstructedByPartialProgram() const {
+    if (FLAGS_convert_all_blocks) {
+      if (IsMainGraph()) {
+        return GetSubGraph(0)->IsConstructedByPartialProgram();
+      }
+    }
+    return is_partial_;
+  }
 
   bool Has(const std::string &attr_name) const {
     if (FLAGS_convert_all_blocks) {

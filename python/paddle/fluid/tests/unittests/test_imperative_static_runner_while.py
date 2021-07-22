@@ -31,6 +31,7 @@ import paddle.fluid.transpiler.details.program_utils as pu
 
 LOADED_VAR_SUFFIX = ".load_0"
 
+paddle.enable_static()
 
 def while_softmax_regression(img):
     def cond(i, times, pred):

@@ -29,6 +29,9 @@ const char kGraphToProgramSortKind[] = "__graph_to_program_sort_kind__";
 class GraphToProgramPass : public Pass {
  protected:
   void ApplyImpl(ir::Graph* graph) const override;
+
+ private:
+  void GraphToBlock(const Graph* graph, proto::BlockDesc* block) const;
 };
 
 }  // namespace ir
