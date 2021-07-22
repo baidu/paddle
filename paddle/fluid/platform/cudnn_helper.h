@@ -18,6 +18,7 @@ limitations under the License. */
 #include <vector>
 
 #include "paddle/fluid/framework/operator.h"
+#include "paddle/fluid/platform/bfloat16.h"
 #include "paddle/fluid/platform/dynload/cudnn.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/float16.h"

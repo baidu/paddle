@@ -454,6 +454,7 @@ class BatchNormKernel<platform::CUDADeviceContext, T>
             ctx.GetPlace(), transformed_x.type(), reserve_space_size);
         workspace_ptr = workspace_tensor.mutable_data(
             ctx.GetPlace(), transformed_x.type(), workspace_size);
+
         PADDLE_ENFORCE_CUDA_SUCCESS(
             platform::dynload::cudnnBatchNormalizationForwardTrainingEx(
                 handle, mode_, CUDNN_BATCHNORM_OPS_BN, CudnnDataType<T>::kOne(),
@@ -1339,28 +1340,46 @@ class BatchNormDoubleGradKernel<platform::CUDADeviceContext, T>
 
 namespace ops = paddle::operators;
 namespace plat = paddle::platform;
+
+#define REGISTER_BN_FP32_EX(op_name, grad, ...)                              \
+  REGISTER_OP_CUDA_KERNEL(                                                   \
+      op_name, ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, float>, \
+      ##__VA_ARGS__);
+
+#define REGISTER_BN_FP32_FP16(op_name, grad) \
+  REGISTER_BN_FP32_EX(                       \
+      op_name, grad,                         \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, plat::float16>)
+
+#define REGISTER_BN_FP32_FP64(op_name, grad) \
+  REGISTER_BN_FP32_EX(                       \
+      op_name, grad,                         \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, double>)
+
+#define REGISTER_BN_FP32_FP64_FP16(op_name, grad)                    \
+  REGISTER_BN_FP32_EX(                                               \
+      op_name, grad,                                                 \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, double>, \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, plat::float16>)
+
+#define REGISTER_BN_FP32_FP64_FP16_BF16(op_name, grad)                      \
+  REGISTER_BN_FP32_EX(                                                      \
+      op_name, grad,                                                        \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, double>,        \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, plat::float16>, \
+      ops::BatchNorm##grad##Kernel<plat::CUDADeviceContext, plat::bfloat16>)
+
 #ifdef PADDLE_WITH_HIP
-// MIOPEN do not support double
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm, ops::BatchNormKernel<plat::CUDADeviceContext, float>,
-    ops::BatchNormKernel<plat::CUDADeviceContext, plat::float16>);
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm_grad, ops::BatchNormGradKernel<plat::CUDADeviceContext, float>,
-    ops::BatchNormGradKernel<plat::CUDADeviceContext, plat::float16>);
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm_grad_grad,
-    ops::BatchNormDoubleGradKernel<plat::CUDADeviceContext, float>);
+REGISTER_BN_FP32_FP16(batch_norm, )
+REGISTER_BN_FP32_FP16(batch_norm_grad, Grad)
+REGISTER_BN_FP32_EX(batch_norm_grad_grad, DoubleGrad)
 #else
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm, ops::BatchNormKernel<plat::CUDADeviceContext, float>,
-    ops::BatchNormKernel<plat::CUDADeviceContext, double>,
-    ops::BatchNormKernel<plat::CUDADeviceContext, plat::float16>);
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm_grad, ops::BatchNormGradKernel<plat::CUDADeviceContext, float>,
-    ops::BatchNormGradKernel<plat::CUDADeviceContext, double>,
-    ops::BatchNormGradKernel<plat::CUDADeviceContext, plat::float16>);
-REGISTER_OP_CUDA_KERNEL(
-    batch_norm_grad_grad,
-    ops::BatchNormDoubleGradKernel<plat::CUDADeviceContext, float>,
-    ops::BatchNormDoubleGradKernel<plat::CUDADeviceContext, double>);
+#if CUDNN_VERSION >= 8100
+REGISTER_BN_FP32_FP64_FP16_BF16(batch_norm, )
+REGISTER_BN_FP32_FP64_FP16_BF16(batch_norm_grad, Grad)
+#else
+REGISTER_BN_FP32_FP64_FP16(batch_norm, )
+REGISTER_BN_FP32_FP64_FP16(batch_norm_grad, Grad)
+REGISTER_BN_FP32_FP64(batch_norm_grad_grad, DoubleGrad)
+#endif
 #endif

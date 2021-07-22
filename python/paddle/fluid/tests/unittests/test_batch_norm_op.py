@@ -684,5 +684,64 @@ class TestDygraphBatchNormOpenReserveSpace(unittest.TestCase):
             os.environ['FLAGS_cudnn_batchnorm_spatial_persistent'] = '0'
 
 
+# Test NV Bfloat16. 
+# Execute Test below when compiled with GPU && cudnn version >= 8100
+@unittest.skipIf(
+    not core.is_compiled_with_cuda() or core.cudnn_version() < 8100,
+    "core is not compiled with CUDA and cudnn version need larger than 8.1.0")
+class TestBatchNormBfloat16DataType(unittest.TestCase):
+    def test_bfloat16_datatype(self):
+        with program_guard(Program(), Program()):
+            paddle.disable_static()
+            batch_norm = paddle.nn.BatchNorm(10)
+
+            # Result using fp32 
+            # 1. input
+            x = np.random.random(size=(5, 10)).astype("float32")
+            raw_data = paddle.to_tensor(x, stop_gradient=False)
+            # init grad with random value
+            y = np.random.random(size=(5, 10)).astype("float32")
+            raw_grad_ouputs = paddle.to_tensor(y, stop_gradient=False)
+            # 2. forward compute
+            forward_fp32 = batch_norm(raw_data)
+            # 3. backward compute
+            backward_fp32 = paddle.grad(
+                outputs=forward_fp32,
+                inputs=raw_data,
+                grad_outputs=raw_grad_ouputs)
+
+            # Result using bf16
+            raw_data_bf16 = paddle.cast(raw_data, core.VarDesc.VarType.BF16)
+            raw_grad_ouputs_bf16 = paddle.cast(raw_grad_ouputs,
+                                               core.VarDesc.VarType.BF16)
+            # bf16 forward&backward computation
+            forward_bf16 = batch_norm(raw_data_bf16)
+            backward_bf16 = paddle.grad(
+                outputs=forward_bf16,
+                inputs=raw_data_bf16,
+                grad_outputs=raw_grad_ouputs_bf16)
+
+            # convert bf16 results to fp32 for comparison
+            forward_bf162fp32 = paddle.cast(forward_bf16,
+                                            core.VarDesc.VarType.FP32)
+            backward_bf162fp32 = paddle.cast(backward_bf16[0],
+                                             core.VarDesc.VarType.FP32)
+
+            # checkout forward&backward
+            self.assertTrue(
+                np.allclose(
+                    forward_bf162fp32.numpy(),
+                    forward_fp32.numpy(),
+                    rtol=1e-2,
+                    atol=1e-2))
+            self.assertTrue(
+                np.allclose(
+                    backward_bf162fp32.numpy(),
+                    backward_fp32[0].numpy(),
+                    rtol=1e-2,
+                    atol=1e-2))
+            paddle.enable_static()
+
+
 if __name__ == '__main__':
     unittest.main()
