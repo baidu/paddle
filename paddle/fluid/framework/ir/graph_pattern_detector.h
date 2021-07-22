@@ -1562,6 +1562,28 @@ struct FusionGru : public PatternBase {
   PATTERN_DECL_NODE(out);
 };
 
+// fusion_lstm op
+// Forward pass for fusion_lstm.
+// fusion_lstm out is a result of the operator.
+struct FusionLSTM : public PatternBase {
+  FusionLSTM(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "fusion_lstm") {}
+  // TODO(lidanqing): Is it enough to detect fusion_lstm with these things
+  PDNode* operator()();
+
+  // declare op
+  PATTERN_DECL_NODE(op);
+
+  // declate inputs
+  PATTERN_DECL_NODE(x);
+  PATTERN_DECL_NODE(weight_h);
+  PATTERN_DECL_NODE(weight_x);
+
+  // decalre outputs
+  PATTERN_DECL_NODE(hidden);
+  PATTERN_DECL_NODE(cell);
+};
+
 // two concatenated fusion_gru ops
 // Forward pass for fusion of two concatenated fusion_gru ops.
 // concat_out is a result of the operator().

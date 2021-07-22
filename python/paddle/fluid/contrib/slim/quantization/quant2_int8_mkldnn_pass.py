@@ -71,6 +71,7 @@ class Quant2Int8MkldnnPass(object):
         self._relu_ops = ['relu', 'relu6']
         self._matmul_ops = ['matmul']
         self._gru_ops = ['fusion_gru', 'multi_gru']
+        self._lstm_ops = ['fusion_lstm']
         self._weight_thresholds = {}
         # Collect the Input and Output sclaes from Fake quant models
         self._var_quant_scales = {}
@@ -534,10 +535,38 @@ class Quant2Int8MkldnnPass(object):
                         self._var_quant_scales[wx_var_name] = (use_unsigned_int,
                                                                lod_tensor)
 
+        def _compute_single_lstm_weight_scales(wx_var_name, wh_var_name):
+            wx = np.array(self._load_param(self._scope, wx_var_name))
+            wh = np.array(self._load_param(self._scope, wh_var_name))
+
+            lstm_weights_scale = 1.0 / np.max(
+                np.abs(np.concatenate(
+                    [wx[:, :], wh[:, :]], axis=0)), axis=0)
+            lstm_weights_scale = lstm_weights_scale.astype('float')
+
+            return self._convert_scale2tensor(lstm_weights_scale)
+
+        def _compute_lstm_weight_scales(wx_name, wh_name):
+            for op in graph.all_op_nodes():
+                if op.op().type() in self._lstm_ops:
+                    assert len(op.input(wx_name)) == len(
+                        op.input(wh_name)
+                    ), 'Mismatch in number of weights inputs ({} for WeightX vs. {} for WeightH).'.format(
+                        len(op.input(wx_name)), len(op.input(wh_name)))
+                    for i, wx_var_name in enumerate(op.input(wx_name)):
+                        wh_var_name = op.input(wh_name)[i]
+                        use_unsigned_int = False
+                        lod_tensor = _compute_single_lstm_weight_scales(
+                            wx_var_name, wh_var_name)
+                        self._var_quant_scales[wx_var_name] = (use_unsigned_int,
+                                                               lod_tensor)
+
         _compute_var_scales(self._conv_ops, "Filter", axis=1)
         _compute_var_scales(self._fc_ops, "W", axis=0)
         _compute_var_scales(self._gru_ops, "WeightH", axis=0)
+        _compute_var_scales(self._lstm_ops, "WeightH", axis=0)
         _compute_gru_weight_scales("WeightX", "WeightH")
+        _compute_lstm_weight_scales("WeightX", "WeightH")
         return graph
 
     def _find_avg_pooling_ids(self, graph):

@@ -58,6 +58,7 @@ class CPUQuantizePass : public FusePassBase {
   void QuantizeReshape(Graph* graph) const;
   void QuantizeMatmul(Graph* graph) const;
   void QuantizeElementwiseAdd(Graph* graph) const;
+  void QuantizeFusionLSTM(Graph* graph) const;
   void QuantizeFusionGru(Graph* graph) const;
   void QuantizeMultiGru(Graph* graph) const;
 

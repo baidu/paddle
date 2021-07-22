@@ -16,6 +16,7 @@
 #include <string>
 
 #include "paddle/fluid/framework/op_version_registry.h"
+#include "paddle/fluid/string/pretty_log.h"
 
 namespace paddle {
 namespace framework {
@@ -348,6 +349,9 @@ void FCLstmFusePass::ApplyImpl(ir::Graph* graph) const {
       BuildFusion(graph, name_scope_, param_scope(), true /*with_fc_bias*/);
 
   AddStatis(fusion_count);
+
+  string::PrettyLogDetail("---    fused %d pairs of fc lstm patterns",
+                          fusion_count);
 }
 
 }  // namespace ir

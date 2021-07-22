@@ -101,6 +101,19 @@ void SetOp(ProgramDesc* prog, const std::string& type, const std::string& name,
     op->SetAttr("Scale_data", 1.0f);
     op->SetAttr("Shift_data", 0.0f);
     op->SetAttr("Weight_scale", std::vector<float>{1.0f});
+  } else if (type == "fusion_lstm") {
+    op->SetInput("X", {inputs[0]});
+    op->SetInput("Bias", {inputs[1]});
+    op->SetInput("WeightX", {inputs[2]});
+    op->SetInput("WeightH", {inputs[3]});
+
+    op->SetOutput("Hidden", {outputs[0]});
+    op->SetOutput("Cell", {outputs[1]});
+
+    op->SetAttr("mkldnn_data_type", mkldnn_data_type);
+    op->SetAttr("Scale_data", 1.0f);
+    op->SetAttr("Shift_data", 0.0f);
+    op->SetAttr("Weight_scale", std::vector<float>{1.0f});
   }
 }
 
@@ -418,6 +431,25 @@ ProgramDesc BuildProgramDescFusionGru() {
   return prog;
 }
 
+static const std::initializer_list<std::string> variable_names_fusion_lstm = {
+    "x", "wx", "wh", "b", "h", "c"};
+
+// (x, wx, wh, b)->Fusion_lstm_1->h
+ProgramDesc BuildProgramDescFusionLSTM() {
+  ProgramDesc prog;
+  for (auto& v : variable_names_transpose) {
+    auto* var = prog.MutableBlock(0)->Var(v);
+    if (v.find("wx") == 0 || v.find("wh") || v.find("b")) {
+      var->SetPersistable(true);
+    }
+  }
+
+  SetOp(&prog, "fusion_lstm", "Fusion_lstm_1", {"x", "wx", "wh", "b"},
+        {"h", "c"}, true, "int8");
+
+  return prog;
+}
+
 void MainTestFusionGru(const ProgramDesc& prog, int gru_count, int quant_count,
                        int dequant_count, int added_nodes_count, float scale,
                        float shift) {
@@ -468,6 +500,59 @@ TEST(CpuQuantizePass, fusion_gru) {
   int added_nodes_count = 1 + 1 + 0 + 0;
   MainTestFusionGru(BuildProgramDescFusionGru(), gru_count, quant_count,
                     dequant_count, added_nodes_count, 2. * 127, 128.);
+}
+
+void MainTestFusionLSTM(const ProgramDesc& prog, int expect_lstm_count,
+                        int quant_count, int dequant_count,
+                        int added_nodes_count, float scale, float shift) {
+  std::unique_ptr<ir::Graph> graph(new ir::Graph(prog));
+  int original_nodes_num, current_nodes_num;
+  PreparePass(&graph, prog, variable_names_fusion_lstm, &original_nodes_num,
+              &current_nodes_num);
+
+  int quantize_nodes_count = 0;
+  int dequantize_nodes_count = 0;
+  int lstm_nodes_count = 0;
+  for (auto* node : graph->Nodes()) {
+    if (node->IsOp()) {
+      auto* op = node->Op();
+      if (op->Type() == "fusion_lstm") {
+        lstm_nodes_count++;
+
+        auto op_name = BOOST_GET_CONST(std::string, op->GetAttr("name"));
+        EXPECT_EQ(BOOST_GET_CONST(float, op->GetAttr("Scale_data")), scale)
+            << "Scale_data for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(float, op->GetAttr("Shift_data")), shift)
+            << "Shift_data for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(std::vector<float>,
+                                  op->GetAttr("Scale_weights"))[0],
+                  scale)
+            << "Scale_weights for node '" + op_name + "'.";
+        EXPECT_EQ(BOOST_GET_CONST(bool, op->GetAttr("force_fp32_output")), true)
+            << "force_fp32_output for node '" + op_name + "'.";
+      } else if (op->Type() == "quantize") {
+        quantize_nodes_count++;
+      } else if (op->Type() == "dequantize") {
+        dequantize_nodes_count++;
+      }
+    }
+  }
+  EXPECT_EQ(lstm_nodes_count, expect_lstm_count);
+  EXPECT_EQ(quantize_nodes_count, quant_count);
+  EXPECT_EQ(dequantize_nodes_count, dequant_count);
+  EXPECT_EQ(original_nodes_num + added_nodes_count, current_nodes_num);
+}
+
+TEST(CpuQuantizePass, fusion_lstm) {
+  // (x, wx, wh, b)->Fusion_lstm->h
+  int expect_lstm_count = 1;
+  int expect_quant_count = 1;
+  int dequant_count = 0;
+  // 1 Quant + 1 IN + 0 DeQuant + 0 OUT
+  int added_nodes_count = 1 + 1 + 0 + 0;
+  MainTestFusionLSTM(BuildProgramDescFusionLSTM(), expect_lstm_count,
+                     expect_quant_count, dequant_count, added_nodes_count,
+                     2. * 127, 128.);
 }
 
 const std::vector<std::string> churn_out_vars(ProgramDesc* prog,

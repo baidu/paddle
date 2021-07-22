@@ -2249,9 +2249,10 @@ PDNode *patterns::MultipleQuantize::operator()() {
 PDNode *patterns::QuantizePlacement::operator()(
     const std::unordered_set<std::string> &quantize_enabled_op_types) {
   std::unordered_set<std::string> supported_op_types =
-      std::unordered_set<std::string>(
-          {"concat", "conv2d", "elementwise_add", "fc", "matmul", "pool2d",
-           "prior_box", "relu", "reshape2", "transpose2", "fusion_gru"});
+      std::unordered_set<std::string>({"concat", "conv2d", "elementwise_add",
+                                       "fc", "matmul", "pool2d", "prior_box",
+                                       "relu", "reshape2", "transpose2",
+                                       "fusion_gru", "fusion_lstm"});
   if (!quantize_enabled_op_types.empty()) {
     supported_op_types = quantize_enabled_op_types;
   }
@@ -2715,6 +2716,26 @@ PDNode *patterns::MatmulTransposeReshapePattern::operator()() {
   transpose_op->LinksFrom({matmul_out}).LinksTo({transpose_out});
   reshape_op->LinksFrom({transpose_out}).LinksTo({reshape_out});
   return reshape_out;
+}
+
+PDNode *patterns::FusionLSTM::operator()() {
+  auto op = pattern->NewNode(op_repr())->assert_is_op("fusion_lstm");
+  auto x = pattern->NewNode(x_repr())->AsInput()->assert_is_op_input(
+      "fusion_lstm", "X");
+  auto weight_h = pattern->NewNode(weight_h_repr())
+                      ->AsInput()
+                      ->assert_is_op_input("fusion_lstm", "WeightH");
+  auto weight_x = pattern->NewNode(weight_x_repr())
+                      ->AsInput()
+                      ->assert_is_op_input("fusion_lstm", "WeightX");
+  auto hidden = pattern->NewNode(hidden_repr())
+                    ->AsOutput()
+                    ->assert_is_op_output("fusion_lstm", "Hidden");
+  auto cell = pattern->NewNode(cell_repr())
+                  ->AsOutput()
+                  ->assert_is_op_output("fusion_lstm", "Cell");
+  op->LinksFrom({x, weight_h, weight_x}).LinksTo({hidden, cell});
+  return hidden;
 }
 
 PDNode *patterns::FusionGru::operator()() {
