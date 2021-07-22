@@ -260,16 +260,36 @@ if(NOT WITH_CRYPTO)
     LIST(REMOVE_ITEM TEST_OPS test_crypto)
 endif()
 
+message(STATUS "-------------------------------------")
+#set(PYTHONPATH ${PADDLE_BINARY_DIR}/python)
+if (WIN32)
+    message("This is win32.")
+    #set(PYTHONPATH ${PYTHONPATH};${CMAKE_CURRENT_BINARY_DIR})
+    set(PYTHONPATH ${PADDLE_BINARY_DIR}\\python;${CMAKE_CURRENT_BINARY_DIR})
+else()
+    message("This is not win32.")
+    #set(PYTHONPATH ${PYTHONPATH}:${CMAKE_CURRENT_BINARY_DIR})
+    set(PYTHONPATH ${PADDLE_BINARY_DIR}/python:${CMAKE_CURRENT_BINARY_DIR})
+endif()
+message("PYTHONPATH = ${PYTHONPATH}")
+message(STATUS "-------------------------------------")
 function(py_test_modules TARGET_NAME)
   if(WITH_TESTING)
     set(options SERIAL)
     set(oneValueArgs "")
     set(multiValueArgs MODULES DEPS ENVS)
+    #set(PYTHONPATH ${PADDLE_BINARY_DIR}/python:${CMAKE_CURRENT_BINARY_DIR})
+    #set(PYTHONPATH ${PADDLE_BINARY_DIR}/python)
+    #if (WIN32)
+    #    set(PYTHONPATH ${PYTHONPATH};${CMAKE_CURRENT_BINARY_DIR})
+    #else()
+    #    set(PYTHONPATH ${PYTHONPATH}:${CMAKE_CURRENT_BINARY_DIR})
+    #endif()
     cmake_parse_arguments(py_test_modules "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(WITH_COVERAGE AND NOT (WITH_INCREMENTAL_COVERAGE AND "$ENV{PADDLE_GIT_DIFF_PY_FILE}" STREQUAL ""))
         add_test(NAME ${TARGET_NAME}
-                COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}
+                COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PYTHONPATH} ${py_test_modules_ENVS}
                 COVERAGE_FILE=${PADDLE_BINARY_DIR}/python-coverage.data
                 ${PYTHON_EXECUTABLE} -m coverage run --branch -p ${PADDLE_SOURCE_DIR}/tools/test_runner.py ${py_test_modules_MODULES}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -281,7 +301,7 @@ function(py_test_modules TARGET_NAME)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
         add_test(NAME ${TARGET_NAME}
-                COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PADDLE_BINARY_DIR}/python ${py_test_modules_ENVS}
+                COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PYTHONPATH} ${py_test_modules_ENVS}
                 ${PYTHON_EXECUTABLE} ${PADDLE_SOURCE_DIR}/tools/test_runner.py ${py_test_modules_MODULES}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
