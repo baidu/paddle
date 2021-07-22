@@ -17,8 +17,9 @@
 import numpy as np
 from ...fluid.data_feeder import check_dtype
 from ...fluid.layer_helper import LayerHelper
-from ...fluid.framework import Variable, in_dygraph_mode
-from ...fluid.layers.tensor import assign
+from ...fluid.framework import in_dygraph_mode
+from ...static import Variable
+from ...tensor.creation import assign
 from ...fluid import core, dygraph_utils
 from ...fluid.layers.layer_function_generator import templatedoc
 from ...fluid.layers.sequence_lod import sequence_mask

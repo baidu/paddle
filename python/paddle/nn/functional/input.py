@@ -14,7 +14,8 @@
 
 from __future__ import print_function
 import warnings
-from ...fluid.framework import Variable, in_dygraph_mode
+from ...fluid.framework import in_dygraph_mode
+from ...static import Variable
 from ...fluid.layer_helper import LayerHelper
 from ...fluid.layers import core
 from ...fluid.data_feeder import check_variable_and_dtype, check_dtype

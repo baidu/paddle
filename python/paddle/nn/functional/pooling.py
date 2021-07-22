@@ -15,7 +15,8 @@
 # TODO: define pooling functions
 from ...fluid import core
 from ...fluid.framework import in_dygraph_mode
-from ...fluid.layers import utils, LayerHelper, unsqueeze, squeeze
+from ...fluid.layers import utils, LayerHelper
+from ...tensor.manipulation import unsqueeze, squeeze
 from ...fluid.data_feeder import check_type, check_variable_and_dtype
 from paddle import _C_ops
 from paddle import _C_ops

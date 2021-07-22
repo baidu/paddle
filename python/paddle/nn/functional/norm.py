@@ -19,8 +19,8 @@ from ...fluid.data_feeder import check_variable_and_dtype, check_type
 from ...fluid.layer_helper import LayerHelper
 from ...fluid.framework import in_dygraph_mode, core
 from ...framework import create_parameter
-from ...fluid.initializer import Constant
-from ...fluid.param_attr import ParamAttr
+from ..initializer import Constant
+from ...framework import ParamAttr
 from ...fluid import core, dygraph_utils
 import numbers
 from paddle import _C_ops
@@ -104,8 +104,7 @@ def normalize(x, p=2, axis=1, epsilon=1e-12, name=None):
         type='p_norm', inputs={'X': x}, outputs={'Out': out}, attrs=attrs)
     eps = out.block.create_var(dtype=out.dtype)
     paddle.fluid.layers.fill_constant([1], out.dtype, epsilon, out=eps)
-    return paddle.fluid.layers.elementwise_div(
-        x, paddle.maximum(out, eps), name=name)
+    return paddle.divide(x, paddle.maximum(out, eps), name=name)
 
 
 def batch_norm(x,

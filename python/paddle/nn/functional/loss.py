@@ -27,7 +27,7 @@ from ...fluid.layers.nn import _elementwise_op_in_dygraph
 from ...fluid.layers import dice_loss  # noqa: F401
 from ...fluid.layers import log_loss  # noqa: F401
 from ...fluid.layers import npair_loss  # noqa: F401
-from ...fluid.layers import reshape
+from ...tensor.manipulation import reshape
 from ...fluid.layers import softmax_with_cross_entropy as fluid_softmax_with_cross_entropy
 from ...fluid.layers import square_error_cost  # noqa: F401
 
@@ -36,7 +36,7 @@ from ...fluid.layers import huber_loss
 from ...fluid.layer_helper import LayerHelper
 from ...fluid.framework import in_dygraph_mode
 from ...fluid.framework import _varbase_creator
-from ...fluid.framework import Variable
+from ...static import Variable
 from paddle.utils import deprecated
 from paddle import _C_ops
 
@@ -291,9 +291,7 @@ def binary_cross_entropy_with_logits(logit,
             pos_weight, 'pos_weight', ['float32', 'float64'],
             'binary_cross_entropy_with_logits')
         log_weight = paddle.add(
-            paddle.multiply(
-                label, paddle.fluid.layers.elementwise_sub(pos_weight, one)),
-            one)
+            paddle.multiply(label, paddle.subtract(pos_weight, one)), one)
         pos_weight_name = name if reduction == 'none' and weight is None else None
         out = paddle.multiply(out, log_weight, name=pos_weight_name)
 
@@ -515,9 +513,9 @@ def smooth_l1_loss(input, label, reduction='mean', delta=1.0, name=None):
     if reduction == 'none':
         return out
     elif reduction == 'mean':
-        return fluid.layers.reduce_mean(out)
+        return paddle.mean(out)
     elif reduction == 'sum':
-        return fluid.layers.reduce_sum(out)
+        return paddle.sum(out)
 
 
 def margin_ranking_loss(input,
@@ -592,7 +590,7 @@ def margin_ranking_loss(input,
     fluid.data_feeder.check_variable_and_dtype(
         label, 'label', ['float32', 'float64'], 'margin_rank_loss')
 
-    out = paddle.fluid.layers.elementwise_sub(other, input)
+    out = paddle.subtract(other, input)
     out = paddle.multiply(out, label)
 
     if margin != 0.0:
@@ -898,11 +896,11 @@ def kl_div(input, label, reduction='mean', name=None):
     if fluid.data_feeder.convert_dtype(
             input.dtype) == 'float32' and fluid.data_feeder.convert_dtype(
                 label.dtype) == 'float64':
-        input = fluid.layers.cast(input, 'float64')
+        input = paddle.cast(input, 'float64')
     elif fluid.data_feeder.convert_dtype(
             input.dtype) == 'float64' and fluid.data_feeder.convert_dtype(
                 label.dtype) == 'float32':
-        label = fluid.layers.cast(label, 'float64')
+        label = paddle.cast(label, 'float64')
 
     if paddle.in_dynamic_mode():
         out = _C_ops.kldiv_loss(input, label, 'reduction', reduction)
@@ -988,16 +986,12 @@ def mse_loss(input, label, reduction='mean', name=None):
             label, 'label', ['float32', 'float64'], 'mse_loss')
 
     if reduction == 'none':
-        return paddle.fluid.layers.square(
-            paddle.fluid.layers.elementwise_sub(input, label), name=name)
+        return paddle.square(paddle.subtract(input, label), name=name)
     elif reduction == 'mean':
         return paddle.mean(
-            paddle.fluid.layers.square(
-                paddle.fluid.layers.elementwise_sub(input, label)),
-            name=name)
+            paddle.square(paddle.subtract(input, label)), name=name)
     else:
-        return paddle.sum(paddle.fluid.layers.square(
-            paddle.fluid.layers.elementwise_sub(input, label)),
+        return paddle.sum(paddle.square(paddle.subtract(input, label)),
                           name=name)
 
 

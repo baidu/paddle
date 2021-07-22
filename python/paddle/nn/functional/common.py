@@ -16,18 +16,21 @@ import warnings
 import paddle
 from ...fluid.framework import in_dygraph_mode, default_main_program
 from paddle.fluid.layer_helper import LayerHelper
-from paddle.fluid.layers.tensor import Variable, fill_constant, zeros, concat
+from paddle.fluid.layers.tensor import fill_constant
+from ...tensor import concat
+from ...tensor.creation import zeros
+from paddle.static import Variable
 from ...fluid.layers import core
 from ...fluid import dygraph_utils
 # TODO: define the common functions to build a neural network  
 from ...fluid.layers import unfold  # noqa: F401
-from ...fluid.layers import squeeze
-from ...fluid.layers import unsqueeze
+from ...tensor.manipulation import squeeze
+from ...tensor.manipulation import unsqueeze
 from ...tensor import clip
 from ...tensor import sum
 from ...tensor import sqrt
 from ...fluid.data_feeder import check_variable_and_dtype, check_dtype
-from ...fluid.framework import Variable, in_dygraph_mode, _varbase_creator
+from ...fluid.framework import in_dygraph_mode, _varbase_creator
 
 from ...fluid.framework import in_dygraph_mode
 from ...fluid import core, dygraph_utils
@@ -927,9 +930,9 @@ def dropout(x,
         keep_prob = 1 - p
         if training:
             if p == 1.:
-                return layers.scale(x, scale=0.)
+                return paddle.scale(x, scale=0.)
 
-            scale_input = layers.scale(
+            scale_input = paddle.scale(
                 x, scale=1 / keep_prob) if mode == 'upscale_in_train' else x
 
             #get mask shape
@@ -947,17 +950,17 @@ def dropout(x,
                 mask_shape[i] = input_shape[i]
 
             #get mask
-            random_tensor = layers.uniform_random(
+            random_tensor = paddle.uniform(
                 mask_shape, dtype='float32', min=0., max=1.0)
             p = layers.fill_constant(shape=[1], dtype='float32', value=p)
-            keep_mask = layers.greater_equal(random_tensor, p)
+            keep_mask = paddle.greater_equal(random_tensor, p)
 
-            scale_input = layers.cast(scale_input, dtype)
-            keep_mask = layers.cast(keep_mask, dtype)
+            scale_input = paddle.cast(scale_input, dtype)
+            keep_mask = paddle.cast(keep_mask, dtype)
             ret = paddle.multiply(scale_input, keep_mask, name=name)
             return ret
         else:  # test
-            ret = layers.scale(
+            ret = paddle.scale(
                 x, scale=keep_prob) if mode == 'downscale_in_infer' else x
             return ret
 
@@ -1113,7 +1116,7 @@ def alpha_dropout(x, p=0.5, training=True, name=None):
 
     if training:
         if p == 1:
-            return layers.scale(x, scale=0.)
+            return paddle.scale(x, scale=0.)
         #get transformation params
         alpha = 1.6732632423543772848170429916717
         scale = 1.0507009873554804934193349852946
@@ -1125,23 +1128,22 @@ def alpha_dropout(x, p=0.5, training=True, name=None):
         input_shape = x.shape
 
         #get mask
-        random_tensor = layers.uniform_random(
+        random_tensor = paddle.uniform(
             input_shape, dtype='float32', min=0., max=1.0)
         p = layers.fill_constant(shape=[1], dtype='float32', value=p)
-        keep_mask = layers.greater_equal(random_tensor, p)
-        keep_mask = layers.cast(keep_mask, dtype)
-        drop_mask = layers.elementwise_sub(
+        keep_mask = paddle.greater_equal(random_tensor, p)
+        keep_mask = paddle.cast(keep_mask, dtype)
+        drop_mask = paddle.subtract(
             layers.fill_constant(
                 shape=input_shape, dtype=dtype, value=1.),
             keep_mask)
 
         #apply mask
         b = layers.fill_constant(shape=[1], dtype=dtype, value=b)
-        y = layers.elementwise_add(
-            paddle.multiply(x, keep_mask),
-            layers.scale(
-                drop_mask, scale=alpha_p))
-        res = layers.elementwise_add(layers.scale(y, scale=a), b, name=name)
+        y = paddle.add(paddle.multiply(x, keep_mask),
+                       paddle.scale(
+                           drop_mask, scale=alpha_p))
+        res = paddle.add(paddle.scale(y, scale=a), b, name=name)
         return res
     else:  # test
         return x
@@ -1277,42 +1279,42 @@ def pad(x, pad, mode='constant', value=0, data_format="NCHW", name=None):
             if x_dim == 3:
                 pad = concat([zeros((4, ), dtype="int32"), pad], axis=0)
                 unsqueezed_dim = [3, 4]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
             elif x_dim == 4:
                 pad = concat([pad, zeros((2, ), dtype="int32")], axis=0)
                 unsqueezed_dim = [2]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
         elif data_format in ["NLC", "NHWC", "NDHWC"]:
             data_format = "NDHWC"
             if x_dim == 3:
                 pad = concat([zeros((4, ), dtype="int32"), pad], axis=0)
                 unsqueezed_dim = [2, 3]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
             elif x_dim == 4:
                 pad = concat([pad, zeros((2, ), dtype="int32")], axis=0)
                 unsqueezed_dim = [1]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
     else:
         if data_format in ["NCL", "NCHW", "NCDHW"]:
             data_format = "NCDHW"
             if x_dim == 3:
                 pad = [0, 0, 0, 0] + pad
                 unsqueezed_dim = [3, 4]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
             elif x_dim == 4:
                 pad = pad + [0, 0]
                 unsqueezed_dim = [2]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
         elif data_format in ["NLC", "NHWC", "NDHWC"]:
             data_format = "NDHWC"
             if x_dim == 3:
                 pad = [0, 0, 0, 0] + pad
                 unsqueezed_dim = [2, 3]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
             elif x_dim == 4:
                 pad = pad + [0, 0]
                 unsqueezed_dim = [1]
-                x = unsqueeze(x, axes=unsqueezed_dim)
+                x = unsqueeze(x, axis=unsqueezed_dim)
 
     if in_dygraph_mode():
         if isinstance(pad, Variable):
@@ -1336,7 +1338,7 @@ def pad(x, pad, mode='constant', value=0, data_format="NCHW", name=None):
             type='pad3d', inputs=inputs, outputs={"Out": out}, attrs=attrs)
 
     if len(unsqueezed_dim) != 0:
-        out = squeeze(out, axes=unsqueezed_dim)
+        out = squeeze(out, axis=unsqueezed_dim)
 
     return out
 

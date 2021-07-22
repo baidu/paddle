@@ -13,7 +13,8 @@
 # limitations under the License.
 
 from ...device import get_cudnn_version
-from ...fluid.framework import core, in_dygraph_mode, Variable
+from ...fluid.framework import core, in_dygraph_mode
+from ...static import Variable
 from ...fluid.layer_helper import LayerHelper
 from ...fluid.data_feeder import check_variable_and_dtype
 from ...fluid import dygraph_utils
