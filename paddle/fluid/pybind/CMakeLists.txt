@@ -56,6 +56,7 @@ set(PYBIND_SRCS
   ir.cc
   inference_api.cc
   compatible.cc
+  io.cc
   generator_py.cc)
 
 if(WITH_ASCEND)

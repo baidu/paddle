@@ -68,6 +68,7 @@ limitations under the License. */
 #include "paddle/fluid/platform/monitor.h"
 #include "paddle/fluid/platform/place.h"
 #include "paddle/fluid/platform/profiler.h"
+#include "paddle/fluid/pybind/io.h"
 #ifdef PADDLE_WITH_ASCEND
 #include "paddle/fluid/pybind/ascend_wrapper_py.h"
 #endif
@@ -498,96 +499,12 @@ PYBIND11_MODULE(core_noavx, m) {
 #endif
     return tensor;
   });
-  m.def("_save_lod_tensor", [](const LoDTensor &tensor,
-                               const std::string &str_file_name) {
-    std::ofstream fout(str_file_name, std::ios::binary);
-    PADDLE_ENFORCE_EQ(static_cast<bool>(fout), true,
-                      platform::errors::Unavailable(
-                          "Cannot open %s to save variables.", str_file_name));
-    SerializeToStream(fout, tensor);
-
-    int64_t tellp = fout.tellp();
-    fout.close();
-    return tellp;
-  });
-  m.def("_load_lod_tensor", [](LoDTensor &tensor,
-                               const std::string &str_file_name) {
-    std::ifstream fin(str_file_name, std::ios::binary);
-    PADDLE_ENFORCE_EQ(static_cast<bool>(fin), true,
-                      platform::errors::Unavailable(
-                          "Cannot open %s to load variables.", str_file_name));
-
-    DeserializeFromStream(fin, &tensor);
-    int64_t tellg = fin.tellg();
-    fin.close();
-    return tellg;
-  });
-  m.def("_save_selected_rows", [](const SelectedRows &selected_rows,
-                                  const std::string &str_file_name) {
-    std::ofstream fout(str_file_name, std::ios::binary);
-    PADDLE_ENFORCE_EQ(
-        static_cast<bool>(fout), true,
-        platform::errors::Unavailable("Cannot open %s to save SelectedRows.",
-                                      str_file_name));
-
-    SerializeToStream(fout, selected_rows);
-    int64_t tellp = fout.tellp();
-    fout.close();
-    return tellp;
-  });
-  m.def("_load_selected_rows",
-        [](SelectedRows &selected_rows, const std::string &str_file_name) {
-          std::ifstream fin(str_file_name, std::ios::binary);
-          PADDLE_ENFORCE_EQ(
-              static_cast<bool>(fin), true,
-              platform::errors::Unavailable(
-                  "Cannot open %s to load SelectedRows.", str_file_name));
-
-          DeserializeFromStream(fin, &selected_rows);
-          int64_t tellg = fin.tellg();
-          fin.close();
-          return tellg;
-        });
-  m.def("_save_static_dict",
-        [](const std::string &str_file_name, const py::handle &vec_var_list,
-           const Scope &scope) {
-          std::vector<std::string> vec_name_list = GetNameList(vec_var_list);
-          SaveStaticNameListToDisk(str_file_name, vec_name_list, scope);
-        });
-
-  m.def("_load_static_dict",
-        [](const std::string &str_file_name, const py::handle &vec_var_list,
-           const Scope &scope, const Executor *executor) {
-          std::vector<std::string> vec_name_list = GetNameList(vec_var_list);
-          CreateVariableIfNotExit(vec_var_list, scope, executor);
-          LoadStaticNameListFromDisk(str_file_name, vec_name_list, scope);
-        });
 
   m.def("_create_loaded_parameter",
         [](const py::handle &vec_var_list, const Scope &scope,
            const Executor *executor) {
           CreateVariableIfNotExit(vec_var_list, scope, executor);
         });
-
-  m.def("_save_dygraph_dict", [](const std::string &str_file_name,
-                                 const PyNameVarBaseMap &state_dict) {
-    auto vec_var_base_list = GetVarBaseList(state_dict);
-
-    SaveDygraphVarBaseListToDisk(str_file_name, vec_var_base_list);
-  });
-
-  m.def("_load_dygraph_dict", [](const std::string &str_file_name) {
-    auto load_tensor = LoadDygraphVarBaseListFromDisk(str_file_name);
-
-    std::unordered_map<std::string, std::shared_ptr<imperative::VarBase>>
-        map_output;
-
-    for (size_t i = 0; i < load_tensor.size(); ++i) {
-      map_output.emplace(load_tensor[i]->Name(), load_tensor[i]);
-    }
-
-    return map_output;
-  });
 
   m.def("save_op_version_info", [](framework::ProgramDesc &desc) {
     framework::compatible::pb::OpVersionMap pb_vmap{desc.OpVersionMap()};
@@ -3113,6 +3030,7 @@ All parameter, weight, gradient are variables in Paddle.
       .def("device_count", &ParallelExecutor::DeviceCount);
 
   BindFleetWrapper(&m);
+  BindIO(&m);
 
 #ifdef PADDLE_WITH_PSLIB
   BindHeterWrapper(&m);

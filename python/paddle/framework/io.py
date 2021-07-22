@@ -32,6 +32,7 @@ from paddle import fluid
 from paddle.fluid import core
 from paddle.fluid.io import _unpack_saved_dict, _pack_loaded_dict, _pickle_loads_mac
 from paddle.fluid.io import _legacy_save as _legacy_static_save
+from paddle.fluid.io import _open_file_buffer, _is_file_path, _is_memory_buffer
 
 from paddle.fluid.framework import Variable, _varbase_creator, _dygraph_tracer, in_dygraph_mode, ParamBase, _current_expected_place, Program
 from paddle.fluid.dygraph.jit import _SaveLoadConfig
@@ -466,30 +467,81 @@ def _parse_load_result(obj, return_numpy):
 def _save_lod_tensor(tensor, file_name):
     if not tensor._is_initialized():
         raise ValueError("The saved tensor is not initialized.")
-    _seek = core._save_lod_tensor(tensor, file_name)
-    # '_seek' is the end position of this tensor in the file.
+    if _is_file_path(file_name):
+        _seek = core.save_lod_tensor(tensor, file_name)
+        # '_seek' is the end position of this tensor in the file.
+
+    elif _is_memory_buffer(file_name):
+        tensor_bytes = core.save_lod_tensor_to_memory(tensor)
+
+        with _open_file_buffer(file_name, 'wb') as f:
+            f.write(tensor_bytes)
+            _seek = f.tell()
+
+    else:
+        raise NotImplementedError(
+            'Only supports saving objects to file or BytesIO, but received {}'.
+            format(type(file_name)))
     return _seek
 
 
 def _load_lod_tensor(file_name):
     temp_t = paddle.fluid.core.LoDTensor()
-    # '_seek' is the end position of this tensor in the file.
-    _seek = paddle.fluid.core._load_lod_tensor(temp_t, file_name)
+    if _is_file_path(file_name):
+        # '_seek' is the end position of this tensor in the file.
+        _seek = paddle.fluid.core.load_lod_tensor(temp_t, file_name)
+
+    elif _is_memory_buffer(file_name):
+        with _open_file_buffer(file_name, 'rb') as f:
+            tensor_bytes = f.read()
+            paddle.fluid.core.load_lod_tensor_from_memory(temp_t, tensor_bytes)
+            _seek = f.tell()
+
+    else:
+        raise NotImplementedError(
+            'Only supports load objects from file or BytesIO, but received {}'.
+            format(type(file_name)))
+
     return temp_t, _seek
 
 
 def _save_selected_rows(selected_rows, file_name):
-    # '_seek' is the end position of this SelectedRows in the file.
     if not selected_rows.get_tensor()._is_initialized():
         raise ValueError("The saved tensor is not initialized.")
-    _seek = core._save_selected_rows(selected_rows, file_name)
+    if _is_file_path(file_name):
+        # '_seek' is the end position of this SelectedRows in the file.
+        _seek = core.save_selected_rows(selected_rows, file_name)
+
+    elif _is_memory_buffer(file_name):
+        selected_rows_bytes = core.save_selected_rows_to_memory(selected_rows)
+        with _open_file_buffer(file_name, 'wb') as f:
+            f.write(selected_rows_bytes)
+            _seek = f.tell()
+    else:
+        raise NotImplementedError(
+            'Only supports saving objects to file or BytesIO, but received {}'.
+            format(type(file_name)))
     return _seek
 
 
 def _load_selected_rows(file_name):
     temp_sr = core.SelectedRows()
-    # '_seek' is the end position of this SelectedRows in the file.
-    _seek = core._load_selected_rows(temp_sr, file_name)
+    if _is_file_path(file_name):
+        # '_seek' is the end position of this SelectedRows in the file.
+        _seek = core.load_selected_rows(temp_sr, file_name)
+
+    elif _is_memory_buffer(file_name):
+        with _open_file_buffer(file_name, 'rb') as f:
+            selected_rows_bytes = f.read()
+            paddle.fluid.core.load_selected_rows_from_memory(
+                temp_sr, selected_rows_bytes)
+        _seek = f.tell()
+
+    else:
+        raise NotImplementedError(
+            'Only supports load objects from file or BytesIO, but received {}'.
+            format(type(file_name)))
+
     return temp_sr, _seek
 
 
@@ -525,7 +577,7 @@ def save(obj, path, protocol=4, **configs):
     
     Args:
         obj(Object) : The object to be saved.
-        path(str) : The path of the object to be saved. 
+        path(str|BytesIO) : The path/buffer of the object to be saved. 
           If saved in the current directory, the input path string will be used as the file name. 
         protocol(int, optional): The protocol version of pickle module must be greater than 1 and less than 5.
                                  Default: 4
@@ -609,18 +661,39 @@ def save(obj, path, protocol=4, **configs):
             main_program = paddle.static.default_main_program()
             path = "example/main_program.pdmodel"
             paddle.save(main_program, path)
-    '''
-    # 1. input check
-    filename = os.path.basename(path)
-    if filename == "":
-        raise ValueError("The input path MUST be format of dirname/filename "
-                         "[dirname\\filename in Windows system], but received "
-                         "filename is empty string.")
 
-    # 2. save object
-    dirname = os.path.dirname(path)
-    if dirname and not os.path.exists(dirname):
-        os.makedirs(dirname)
+
+            # example 5: save object to memory
+            from io import BytesIO
+            import paddle
+            from paddle.nn import Linear
+            paddle.disable_static()
+
+            linear = Linear(5, 10)
+            state_dict = linear.state_dict()
+            byio = BytesIO()
+            paddle.save(state_dict, byio)
+            tensor = paddle.randn([2, 3], dtype='float32')
+            paddle.save(tensor, byio)
+    
+    '''
+    if _is_file_path(path):
+        # 1. input check
+        filename = os.path.basename(path)
+        if filename == "":
+            raise ValueError(
+                "The input path MUST be format of dirname/filename "
+                "[dirname\\filename in Windows system], but received "
+                "filename is empty string.")
+
+        # 2. save object
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
+    elif not _is_memory_buffer(path):
+        raise ValueError(
+            "only supports saving objects to file and `BytesIO`, but got {}".
+            format(type(path)))
 
     config = _parse_save_config(configs)
 
@@ -641,7 +714,7 @@ def save(obj, path, protocol=4, **configs):
 
         if isinstance(obj, Program):
             obj.desc.flush()
-            with open(path, "wb") as f:
+            with _open_file_buffer(path, "wb") as f:
                 f.write(obj.desc.serialize_to_string())
 
         elif _is_state_dict(obj):
@@ -650,7 +723,7 @@ def save(obj, path, protocol=4, **configs):
             else:
                 _legacy_static_save(obj, path, protocol)
         else:
-            with open(path, 'wb') as f:
+            with _open_file_buffer(path, 'wb') as f:
                 _pickle_save(obj, f, protocol)
 
 
@@ -664,12 +737,6 @@ def _legacy_save(obj, path, protocol=2):
     if len(obj) == 0:
         warnings.warn("The input state dict is empty, no need to save.")
 
-    filename = os.path.basename(path)
-    if filename == "":
-        raise ValueError("The input path MUST be format of dirname/filename "
-                         "[dirname\\filename in Windows system], but received "
-                         "filename is empty string.")
-
     if not isinstance(protocol, int):
         raise ValueError("The 'protocol' MUST be `int`, but received {}".format(
             type(protocol)))
@@ -678,26 +745,33 @@ def _legacy_save(obj, path, protocol=2):
         raise ValueError("Expected 1<'protocol'<5, but received protocol={}".
                          format(protocol))
 
-    # 2. save object
-    dirname = os.path.dirname(path)
-    if dirname and not os.path.exists(dirname):
-        os.makedirs(dirname)
+    if _is_file_path(path):
+        filename = os.path.basename(path)
+        if filename == "":
+            raise ValueError(
+                "The input path MUST be format of dirname/filename "
+                "[dirname\\filename in Windows system], but received "
+                "filename is empty string.")
+        # 2. save object
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
 
-    # TODO(chenweihang): supports save other object
     if isinstance(obj, dict):
         saved_obj = _build_saved_state_dict(obj)
 
     saved_obj = _unpack_saved_dict(saved_obj, protocol)
 
     # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
-    if sys.platform == 'darwin' and sys.version_info.major == 3:
+    if _is_file_path(
+            path) and sys.platform == 'darwin' and sys.version_info.major == 3:
         pickle_bytes = pickle.dumps(saved_obj, protocol=protocol)
         with open(path, 'wb') as f:
             max_bytes = 2**30
             for i in range(0, len(pickle_bytes), max_bytes):
                 f.write(pickle_bytes[i:i + max_bytes])
     else:
-        with open(path, 'wb') as f:
+        with _open_file_buffer(path, 'wb') as f:
             pickle.dump(saved_obj, f, protocol=protocol)
 
 
@@ -732,7 +806,7 @@ def load(path, **configs):
         ``Layer.set_state_dict`` later.
 
     Args:
-        path(str) : The path to load the target object. Generally, the path is the target 
+        path(str|BytesIO) : The path/buffer to load the target object. Generally, the path is the target 
             file path. When loading state_dict from the saved result of the API used to save 
             the inference model, the path may be a file prefix or directory.
         **configs (dict, optional): other load configuration options for compatibility. We do not 
@@ -838,18 +912,36 @@ def load(path, **configs):
             print(load_main)
 
 
+            # example 5: save object to memory
+            from io import BytesIO
+            import paddle
+            from paddle.nn import Linear
+            paddle.disable_static()
+
+            linear = Linear(5, 10)
+            state_dict = linear.state_dict()
+            byio = BytesIO()
+            paddle.save(state_dict, byio)
+            tensor = paddle.randn([2, 3], dtype='float32')
+            paddle.save(tensor, byio)
+            byio.seek(0)
+            # load state_dict
+            dict_load = paddle.load(byio)
+
     '''
 
-    if os.path.isfile(path):
+    if _is_memory_buffer(path) or os.path.isfile(path):
         config = _parse_load_config(configs)
         if six.PY2:
             exception_type = KeyError
         else:
             exception_type = pickle.UnpicklingError
         try:
-            with open(path, 'rb') as f:
+            with _open_file_buffer(path, 'rb') as f:
                 # When value of dict is lager than 4GB ,there is a Bug on 'MAC python3'
-                if sys.platform == 'darwin' and sys.version_info.major == 3:
+                if _is_file_path(
+                        path
+                ) and sys.platform == 'darwin' and sys.version_info.major == 3:
                     load_result = _pickle_loads_mac(path, f)
                 else:
                     load_result = pickle.load(f) if six.PY2 else pickle.load(
@@ -891,7 +983,7 @@ def load(path, **configs):
                         return tensor
                 except:
                     try:
-                        with open(path, "rb") as f:
+                        with _open_file_buffer(path, "rb") as f:
                             program_desc_str = f.read()
                             program = Program.parse_from_string(
                                 program_desc_str)
@@ -911,9 +1003,9 @@ def _legacy_load(path, **configs):
     load_result = None
     config = _parse_load_config(configs)
 
-    if os.path.isfile(path):
+    if os.path.isfile(path) or _is_memory_buffer(path):
         # we think path is file means this file is created by paddle.save
-        with open(path, 'rb') as f:
+        with _open_file_buffer(path, 'rb') as f:
             load_result = pickle.load(f) if six.PY2 else pickle.load(
                 f, encoding='latin1')
         load_result = _pack_loaded_dict(load_result)

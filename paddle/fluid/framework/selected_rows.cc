@@ -121,7 +121,7 @@ void SerializeToStream(std::ostream& os, const SelectedRows& selected_rows) {
   SerializeToStream(os, selected_rows, *dev_ctx);
 }
 
-void DeserializeFromStream(std::ifstream& os, SelectedRows* selected_rows) {
+void DeserializeFromStream(std::istream& os, SelectedRows* selected_rows) {
   platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
   const platform::DeviceContext* dev_ctx;
   dev_ctx = pool.Get(platform::CPUPlace());
