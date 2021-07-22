@@ -131,6 +131,24 @@ class TestTopkOp5(TestTopkOp):
         self.outputs = {'Out': output, 'Indices': indices}
 
 
+class TestTopkOp6(OpTest):
+    def init_args(self):
+        self.k = 100
+        self.axis = 1
+        self.largest = True
+
+    def setUp(self):
+        self.op_type = "top_k_v2"
+        self.dtype = np.float64
+        self.input_data = np.random.rand(80, 16384)
+        self.init_args()
+        self.inputs = {'X': self.input_data}
+        self.attrs = {'k': self.k, 'axis': self.axis, 'largest': self.largest}
+        output, indices = numpy_topk(
+            self.input_data, axis=self.axis, k=self.k, largest=self.largest)
+        self.outputs = {'Out': output, 'Indices': indices}
+
+
 class TestTopKAPI(unittest.TestCase):
     def setUp(self):
         np.random.seed(123)
