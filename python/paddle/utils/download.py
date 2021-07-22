@@ -60,7 +60,7 @@ __all__ = ['get_weights_path_from_url']
 
 WEIGHTS_HOME = osp.expanduser("~/.cache/paddle/hapi/weights")
 
-DOWNLOAD_RETRY_LIMIT = 3
+DOWNLOAD_RETRY_LIMIT = 5
 
 
 def is_url(path):
