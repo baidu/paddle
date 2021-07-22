@@ -386,7 +386,7 @@ rem ----------------------------------------------------------------------------
 :build
 @ECHO OFF
 echo    ========================================
-echo    Step 2. Buile Paddle ...
+echo    Step 2. Build Paddle ...
 echo    ========================================
 
 for /F %%# in ('wmic cpu get NumberOfLogicalProcessors^|findstr [0-9]') do set /a PARALLEL_PROJECT_COUNT=%%#*4/5

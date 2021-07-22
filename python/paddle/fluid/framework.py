@@ -448,11 +448,11 @@ def cuda_places(device_ids=None):
     Examples:
         .. code-block:: python
 
+            # required: gpu
+
             import paddle
             import paddle.static as static
 
-            # required: gpu
-            
             paddle.enable_static()
 
             cuda_places = static.cuda_places()
@@ -489,8 +489,8 @@ def xpu_places(device_ids=None):
         list of paddle.XPUPlace: Created XPU place list.
     Examples:
         .. code-block:: python
-            # required: xpu
 
+            # required: xpu
             import paddle
             import paddle.static as static
             
@@ -558,6 +558,8 @@ def cuda_pinned_places(device_count=None):
 
     Examples:
         .. code-block:: python
+
+            # required: gpu
 
             import paddle.fluid as fluid
             cuda_pinned_places_cpu_num = fluid.cuda_pinned_places()

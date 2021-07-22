@@ -2152,6 +2152,7 @@ function main() {
         ;;
       build_and_check)
         set +e
+        export WITH_GPU=ON
         check_style_info=$(check_style)
         check_style_code=$?
         find_temporary_files

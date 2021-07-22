@@ -56,6 +56,7 @@ class AbsOpMaker : public framework::OpProtoAndCheckerMaker {
 Abs Operator.
 
 This operator is used to perform elementwise abs for input $X$.
+
 $$out = |x|$$
 
 )DOC");

@@ -849,6 +849,8 @@ class DetectionMAP(object):
     Examples:
         .. code-block:: python
 
+            # required: gpu
+
             import paddle.fluid as fluid
 
             import paddle

@@ -1488,7 +1488,7 @@ All parameter, weight, gradient are variables in Paddle.
 
     Examples:
         .. code-block:: python
-
+          # required: gpu
           import paddle
 
           place = paddle.CUDAPlace(0)
@@ -1555,6 +1555,7 @@ All parameter, weight, gradient are variables in Paddle.
     **Note**:
     Examples:
         .. code-block:: python
+          # required: xpu
           import paddle.fluid as fluid
           xpu_place = fluid.XPUPlace(0)
         )DOC")
@@ -1646,6 +1647,7 @@ All parameter, weight, gradient are variables in Paddle.
 
     Examples:
         .. code-block:: python
+          # required: gpu
 
           import paddle
           place = paddle.CUDAPinnedPlace()

@@ -158,7 +158,7 @@ class ActivationOpGrad : public framework::OperatorWithKernel {
 UNUSED constexpr char SigmoidDoc[] = R"DOC(
 Sigmoid Activation Operator
 
-$$out = \\frac{1}{1 + e^{-x}}$$
+$$out = \frac{1}{1 + e^{-x}}$$
 
 )DOC";
 
@@ -171,7 +171,7 @@ $$out = x * \\frac{1}{1 + e^{-x}}$$
 UNUSED constexpr char LogSigmoidDoc[] = R"DOC(
 Logsigmoid Activation Operator
 
-$$out = \\log \\frac{1}{1 + e^{-x}}$$
+$$out = \log \frac{1}{1 + e^{-x}}$$
 
 )DOC";
 
@@ -199,21 +199,21 @@ $$out = \max(x, 0)$$
 UNUSED constexpr char TanhDoc[] = R"DOC(
 Tanh Activation Operator.
 
-$$out = \\frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}$$
+$$out = \frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}$$
 
 )DOC";
 
 UNUSED constexpr char TanhShrinkDoc[] = R"DOC(
 TanhShrink Activation Operator.
 
-$$out = x - \\frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}$$
+$$out = x - \frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}$$
 
 )DOC";
 
 UNUSED constexpr char SqrtDoc[] = R"DOC(
 Sqrt Activation Operator.
 
-$$out=\\sqrt{x}=x^{1/2}$$
+$$out = \sqrt{x} = x^{1/2}$$
 
 **Note**:
   input value must be greater than or equal to zero.
@@ -225,21 +225,21 @@ Rsqrt Activation Operator.
 
 Please make sure input is legal in case of numeric errors.
 
-$$out = \\frac{1}{\\sqrt{x}}$$
+$$out = \frac{1}{\sqrt{x}}$$
 
 )DOC";
 
 UNUSED constexpr char CeilDoc[] = R"DOC(
 Ceil Operator. Computes ceil of x element-wise.
 
-$$out = \\lceil x \\rceil$$
+$$out = \left \lceil x \right \rceil$$
 
 )DOC";
 
 UNUSED constexpr char FloorDoc[] = R"DOC(
 Floor Activation Operator. Computes floor of x element-wise.
 
-$$out = \\lfloor x \\rfloor$$
+$$out = \left \lfloor x \right \rfloor$$
 
 )DOC";
 
@@ -300,7 +300,7 @@ The OP rounds the values in the input to the nearest integer value.
 UNUSED constexpr char ReciprocalDoc[] = R"DOC(
 Reciprocal Activation Operator.
 
-$$out = \\frac{1}{x}$$
+$$out = \frac{1}{x}$$
 
 )DOC";
 
@@ -350,7 +350,7 @@ $$out = x^2$$
 UNUSED constexpr char SoftsignDoc[] = R"DOC(
 Softsign Activation Operator.
 
-$$out = \\frac{x}{1 + \|x\|}$$
+$$out = \frac{x}{1 + \|x\|}$$
 
 )DOC";
 
@@ -464,9 +464,9 @@ class SoftShrinkOpMaker : public framework::OpProtoAndCheckerMaker {
 
 ..  math::
     out = \begin{cases}
-         x - \lambda, \text{if } x > \lambda \\
-         x + \lambda, \text{if } x < -\lambda \\
-         0,  \text{otherwise}
+         x - \lambda, & \text{if } x > \lambda \\
+         x + \lambda, & \text{if } x < -\lambda \\
+         0, & \text{otherwise}
          \end{cases}
 
 )DOC");
@@ -613,7 +613,7 @@ class STanhOpMaker : public framework::OpProtoAndCheckerMaker {
     AddComment(R"DOC(
 STanh Activation Operator.
 
-$$out = b * \\frac{e^{a * x} - e^{-a * x}}{e^{a * x} + e^{-a * x}}$$
+$$out = b * \frac{e^{a * x} - e^{-a * x}}{e^{a * x} + e^{-a * x}}$$
 
 )DOC");
   }
@@ -633,8 +633,8 @@ class ThresholdedReluOpMaker : public framework::OpProtoAndCheckerMaker {
 ..  math::
 
     out = \begin{cases}
-             x,  \text{if } x > threshold \\
-             0,  \text{otherwise}
+             x, & \text{if } x > threshold \\
+             0, & \text{otherwise}
           \end{cases}
 )DOC");
   }
@@ -677,7 +677,7 @@ class SwishOpMaker : public framework::OpProtoAndCheckerMaker {
     AddComment(R"DOC(
 Swish Activation Operator.
 
-$$out = \\frac{x}{1 + e^{- \beta \ x}}$$
+$$out = \frac{x}{1 + e^{- \beta \ x}}$$
 
 )DOC");
   }
@@ -1495,7 +1495,7 @@ REGISTER_OP_VERSION(hard_shrink)
 REGISTER_OP_VERSION(softplus)
     .AddCheckpoint(
         R"ROC(add new attributes [beta] and [threshold], and the formula is changed to "
-         " softplus(x) = \\frac{1}{beta} * \\log(1 + e^{beta * x}) \\\\ \\text{For numerical"
+         " softplus(x) = \frac{1}{beta} * \log(1 + e^{beta * x}) \\ \text{For numerical"
          " stability, the implementation reverts to the linear function when: beta * x > threshold.})ROC",
         paddle::framework::compatible::OpVersionDesc()
             .NewAttr("beta", "The beta value of the new formula", 1.0f)

@@ -2335,6 +2335,7 @@ def cond(pred, true_fn=None, false_fn=None, name=None):
         .. code-block:: python
 
             import paddle
+            from paddle.fluid.layers import fill_constant
 
             #
             # pseudocode:
@@ -2346,14 +2347,14 @@ def cond(pred, true_fn=None, false_fn=None, name=None):
 
 
             def true_func():
-                return paddle.fill_constant(shape=[1, 2], dtype='int32',
+                return fill_constant(shape=[1, 2], dtype='int32',
                                             value=1), paddle.fill_constant(shape=[2, 3],
                                                                            dtype='bool',
                                                                            value=True)
 
 
             def false_func():
-                return paddle.fill_constant(shape=[3, 4], dtype='float32',
+                return fill_constant(shape=[3, 4], dtype='float32',
                                             value=3), paddle.fill_constant(shape=[4, 5],
                                                                            dtype='int64',
                                                                            value=2)

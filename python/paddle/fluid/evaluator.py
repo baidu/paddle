@@ -339,6 +339,8 @@ class DetectionMAP(Evaluator):
     Examples:
         .. code-block:: python
 
+            import paddle.fluid as fluid
+
             exe = fluid.executor(place)
             map_evaluator = fluid.Evaluator.DetectionMAP(input,
                 gt_label, gt_box, gt_difficult)

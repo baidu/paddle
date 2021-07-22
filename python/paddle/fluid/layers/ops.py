@@ -480,11 +480,11 @@ softshrink.__doc__ = r"""
 :strong:`Softshrink Activation Operator`
 
 ..  math::
-    out = \\begin{cases}
-            x - \\alpha, \\text{if } x > \\alpha \\\\
-            x + \\alpha, \\text{if } x < -\\alpha \\\\
-            0,  \\text{otherwise}
-          \\end{cases}
+    out = \begin{cases}
+            x - \alpha, \text{if } x > \alpha \\
+            x + \alpha, \text{if } x < -\alpha \\
+            0,  \text{otherwise}
+          \end{cases}
 
 
 Args:
@@ -598,10 +598,10 @@ thresholded_relu.__doc__ = r"""
 
 Equation:
     ..  math::
-        out = \\begin{cases}
-            x, &if x > threshold \\\\
+        out = \begin{cases}
+            x, &if x > threshold \\
             0, &otherwise
-            \\end{cases}
+            \end{cases}
 
 Args:
     x(Variable): The input of Thresholded ReLU op, Tensor or LoDTensor, dtype: float32 or float64.
@@ -683,11 +683,11 @@ For more details, see [Gaussian Error Linear Units](https://arxiv.org/abs/1606.0
 Equation:
     if approximate is True
     ..  math::
-        out = 0.5 * x * (1 + tanh(\\sqrt{\\frac{2}{\\pi}} * (x + 0.044715x^{3})))
+        out = 0.5 * x * (1 + tanh(\sqrt{\frac{2}{\pi}} * (x + 0.044715x^{3})))
 
     else
     ..  math::
-        out = 0.5 * x * (1 + erf(\\frac{x}{\\sqrt{2}}))
+        out = 0.5 * x * (1 + erf(\frac{x}{\sqrt{2}}))
 
 Args:
 
@@ -766,7 +766,7 @@ For more details, see [Error function](https://en.wikipedia.org/wiki/Error_funct
 
 Equation:
     ..  math::
-        out = \\frac{2}{\\sqrt{\\pi}} \\int_{0}^{x}e^{- \\eta^{2}}d\\eta
+        out = \frac{2}{\sqrt{\pi}} \int_{0}^{x}e^{- \eta^{2}}d\eta
 
 Args:
 

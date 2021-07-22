@@ -365,8 +365,7 @@ def zeros_like(x, dtype=None, name=None):
         data type (use ``dtype`` if ``dtype`` is not None) as ``x``.
 
     Raise:
-        TypeError: If ``dtype`` is not None and is not bool, float16, float32,
-        float64, int32 or int64.
+        TypeError: If ``dtype`` is not None and is not bool, float16, float32, float64, int32 or int64.
 
     Examples:
         .. code-block:: python

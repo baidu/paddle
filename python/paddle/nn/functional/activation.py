@@ -37,7 +37,7 @@ def elu(x, alpha=1.0, name=None):
 
     .. math::
 
-        elu(x) = max(0, x) + min(0, \\alpha * (e^{x}-1))
+        elu(x) = max(0, x) + min(0, \alpha * (e^{x}-1))
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -91,13 +91,13 @@ def gelu(x, approximate=False, name=None):
 
     .. math::
 
-        gelu(x) = 0.5 * x * (1 + tanh(\\sqrt{\\frac{2}{\\pi}} * (x + 0.044715x^{3})))
+        gelu(x) = 0.5 * x * (1 + tanh(\sqrt{\frac{2}{\pi}} * (x + 0.044715x^{3})))
 
     else
 
     .. math::
 
-        gelu(x) = 0.5 * x * (1 + erf(\\frac{x}{\\sqrt{2}}))
+        gelu(x) = 0.5 * x * (1 + erf(\frac{x}{\sqrt{2}}))
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -144,13 +144,13 @@ def hardshrink(x, threshold=0.5, name=None):
     .. math::
 
         hardshrink(x)=
-            \\left\\{
-            \\begin{aligned}
-            &x, & & if \\ x > threshold \\\\
-            &x, & & if \\ x < -threshold \\\\
-            &0, & & if \\ others
-            \\end{aligned}
-            \\right.
+            \left\{
+            \begin{aligned}
+            &x, & & if \ x > threshold \\
+            &x, & & if \ x < -threshold \\
+            &0, & & if \ others
+            \end{aligned}
+            \right.
 
     Args:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -192,11 +192,11 @@ def hardtanh(x, min=-1.0, max=1.0, name=None):
 
     .. math::
 
-        hardtanh(x)= \\begin{cases}
-                        max, \\text{if } x > max \\\\
-                        min, \\text{if } x < min \\\\
-                        x,  \\text{otherwise}
-                      \\end{cases}
+        hardtanh(x)= \begin{cases}
+                        max, & \text{if } x > max \\
+                        min, & \text{if } x < min \\
+                        x, & \text{otherwise}
+                      \end{cases}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -246,13 +246,13 @@ def hardsigmoid(x, slope=0.1666667, offset=0.5, name=None):
     .. math::
 
         hardsigmoid(x)=
-            \\left\\{
-            \\begin{aligned}
-            &0, & & \\text{if } x \\leq -3 \\\\
-            &1, & & \\text{if } x \\geq 3 \\\\
-            &slope * x + offset, & & \\text{otherwise}
-            \\end{aligned}
-            \\right.
+            \left\{
+            \begin{aligned}
+            &0, & & \text{if } x \leq -3 \\
+            &1, & & \text{if } x \geq 3 \\
+            &slope * x + offset, & & \text{otherwise}
+            \end{aligned}
+            \right.
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -302,13 +302,13 @@ def hardswish(x, name=None):
     .. math::
 
         hardswish(x)=
-            \\left\\{
-            \\begin{aligned}
-            &0, & & \\text{if } x \\leq -3 \\\\
-            &x, & & \\text{if } x \\geq 3 \\\\
-            &\\frac{x(x+3)}{6}, & & \\text{otherwise}
-            \\end{aligned}
-            \\right.
+            \left\{
+            \begin{aligned}
+            &0, & & \text{if } x \leq -3 \\
+            &x, & & \text{if } x \geq 3 \\
+            &\frac{x(x+3)}{6}, & & \text{otherwise}
+            \end{aligned}
+            \right.
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -345,13 +345,13 @@ def leaky_relu(x, negative_slope=0.01, name=None):
     leaky_relu activation
 
     .. math::
-        leaky\\_relu(x)=
-            \\left\\{
-            \\begin{aligned}
-            &x, & & if \\ x >= 0 \\\\
-            &negative\_slope * x, & & otherwise \\\\
-            \\end{aligned}
-            \\right. \\\\
+        leaky\_relu(x)=
+            \left\{
+            \begin{aligned}
+            &x, & & if \ x >= 0 \\
+            &negative\_slope * x, & & otherwise \\
+            \end{aligned}
+            \right.
 
     Args:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -513,7 +513,7 @@ def log_sigmoid(x, name=None):
 
     .. math::
 
-        log\\_sigmoid(x) = log \\frac{1}{1 + e^{-x}}
+        log\_sigmoid(x) = log \frac{1}{1 + e^{-x}}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -554,12 +554,12 @@ def maxout(x, groups, axis=1, name=None):
 
     .. math::
 
-        &out_{si+j} = \\max_{k} x_{gsi + sk + j} \\\\
-        &g = groups \\\\
-        &s = \\frac{input.size}{num\\_channels} \\\\
-        &0 \\le i < \\frac{num\\_channels}{groups} \\\\
-        &0 \\le j < s \\\\
-        &0 \\le k < groups
+        &out_{si+j} = \max_{k} x_{gsi + sk + j} \\
+        &g = groups \\
+        &s = \frac{input.size}{num\_channels} \\
+        &0 \le i < \frac{num\_channels}{groups} \\
+        &0 \le j < s \\
+        &0 \le k < groups
 
     Parameters:
         x (Tensor): The input is 4-D Tensor with shape [N, C, H, W] or [N, H, W, C], the data type
@@ -670,10 +670,10 @@ def selu(x,
     .. math::
 
         selu(x)= scale *
-                 \\begin{cases}
-                   x, \\text{if } x > 0 \\\\
-                   alpha * e^{x} - alpha, \\text{if } x <= 0
-                 \\end{cases}
+                 \begin{cases}
+                   x, & \text{if } x > 0 \\
+                   alpha * e^{x} - alpha, & \text{if } x <= 0
+                 \end{cases}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -778,7 +778,7 @@ def softmax(x, axis=-1, dtype=None, name=None):
 
     .. math::
 
-        softmax[i, j] = \\frac{\\exp(x[i, j])}{\\sum_j(exp(x[i, j])}
+        softmax[i, j] = \frac{\exp(x[i, j])}{\sum_j(exp(x[i, j])}
 
     Example:
 
@@ -923,8 +923,8 @@ def softplus(x, beta=1, threshold=20, name=None):
 
     .. math::
 
-        softplus(x) = \\frac{1}{beta} * \\log(1 + e^{beta * x}) \\\\
-        \\text{For numerical stability, the implementation reverts to the linear function when: beta * x > threshold.}
+        softplus(x) = \frac{1}{beta} * \log(1 + e^{beta * x}) \\
+        \text{For numerical stability, the implementation reverts to the linear function when: beta * x > threshold.}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -968,11 +968,11 @@ def softshrink(x, threshold=0.5, name=None):
 
     .. math::
 
-        softshrink(x)= \\begin{cases}
-                        x - threshold, \\text{if } x > threshold \\\\
-                        x + threshold, \\text{if } x < -threshold \\\\
-                        0,  \\text{otherwise}
-                      \\end{cases}
+        softshrink(x)= \begin{cases}
+                        x - threshold, \text{if } x > threshold \\
+                        x + threshold, \text{if } x < -threshold \\
+                        0,  \text{otherwise}
+                      \end{cases}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -1019,7 +1019,7 @@ def softsign(x, name=None):
 
     .. math::
 
-        softsign(x) = \\frac{x}{1 + |x|}
+        softsign(x) = \frac{x}{1 + |x|}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -1134,10 +1134,10 @@ def thresholded_relu(x, threshold=1.0, name=None):
 
     .. math::
 
-        thresholded\\_relu(x) = \\begin{cases}
-                                 x, \\text{if } x > threshold \\\\
-                                 0, \\text{otherwise}
-                                \\end{cases}
+        thresholded\_relu(x) = \begin{cases}
+                                 x, & \text{if } x > threshold \\
+                                 0, & \text{otherwise}
+                                \end{cases}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.
@@ -1181,10 +1181,10 @@ def log_softmax(x, axis=-1, dtype=None, name=None):
 
     .. math::
 
-        \\begin{aligned} 
-        log\\_softmax[i, j] &= log(softmax(x)) \\\\
-        &= log(\\frac{\\exp(X[i, j])}{\\sum_j(\\exp(X[i, j])})
-        \\end{aligned}
+        \begin{aligned} 
+            log\_softmax[i, j] &= log(softmax(x)) \\
+            &= log(\frac{\exp(X[i, j])}{\sum_j(\exp(X[i, j])})
+        \end{aligned}
 
     Parameters:
         x (Tensor): The input Tensor with data type float32, float64.

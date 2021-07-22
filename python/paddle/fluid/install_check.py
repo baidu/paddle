@@ -59,7 +59,7 @@ def run_check():
             # W0805 04:24:59.496919 35357 device_context.cc:268] Please NOTE: device: 0, CUDA Capability: 70, Driver API Version: 10.2, Runtime API Version: 10.1
             # W0805 04:24:59.505594 35357 device_context.cc:276] device: 0, cuDNN Version: 7.6.
             # Your Paddle Fluid works well on SINGLE GPU or CPU.
-            # Your Paddle Fluid works well on MUTIPLE GPU or CPU.
+            # Your Paddle Fluid works well on MULTIPLE GPUs or CPU.
             # Your Paddle Fluid is installed successfully! Let's start deep Learning with Paddle Fluid now
     """
     paddle.enable_static()
@@ -142,13 +142,13 @@ def run_check():
     print("Your Paddle Fluid works well on SINGLE GPU or CPU.")
     try:
         test_parallerl_exe()
-        print("Your Paddle Fluid works well on MUTIPLE GPU or CPU.")
+        print("Your Paddle Fluid works well on MULTIPLE GPUs or CPU.")
         print(
             "Your Paddle Fluid is installed successfully! Let's start deep Learning with Paddle Fluid now"
         )
     except Exception as e:
         logging.warning(
-            "Your Paddle Fluid has some problem with multiple GPU. This may be caused by:"
+            "Your Paddle Fluid has some problem with MULTIPLE GPUs. This may be caused by:"
             "\n 1. There is only 1 or 0 GPU visible on your Device;"
             "\n 2. No.1 or No.2 GPU or both of them are occupied now"
             "\n 3. Wrong installation of NVIDIA-NCCL2, please follow instruction on https://github.com/NVIDIA/nccl-tests "

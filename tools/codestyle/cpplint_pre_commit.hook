@@ -4,7 +4,7 @@ TOTAL_ERRORS=0
 if [[ ! $TRAVIS_BRANCH ]]; then
   # install cpplint on local machine.
   if [[ ! $(which cpplint) ]]; then
-    pip install cpplint
+    pip3 install cpplint
   fi
   # diff files on local machine. 
   files=$(git diff --cached --name-status | awk '$1 != "D" {print $2}')

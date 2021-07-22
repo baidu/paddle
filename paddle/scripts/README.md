@@ -131,7 +131,7 @@ But this works only if all dependencies of `train.py` are in the production imag
 ### Run PaddlePaddle Book In Docker
 
 Our [book repo](https://github.com/paddlepaddle/book) also provide a docker
-image to start a jupiter notebook inside docker so that you can run this book
+image to start a jupyter notebook inside docker so that you can run this book
 using docker:
 
 ```bash
