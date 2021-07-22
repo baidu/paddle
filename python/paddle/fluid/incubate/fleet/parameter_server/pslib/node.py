@@ -526,8 +526,10 @@ class DownpourWorker(Worker):
                 key_names = [var.name for var in sorted_slot_key_vars]
                 for key_name in key_names:
                     if key_name not in keys:
-                        raise ValueError("sparse table %s slot_key error" %
-                                         table_id)
+                        print("table.slot_key ", keys)
+                        print("sorted_slot_key_vars ", key_names)
+                        raise ValueError("sparse table %s slot_key %s error" %
+                                         table_id, key_name)
                 target_table = table
                 break
 
@@ -583,6 +585,8 @@ class DownpourWorker(Worker):
                     if dense_grad_name == desc_dense_grad_name:
                         return
                     else:
+                        print("dense_grad_name ", dense_grad_name)
+                        print("desc_dense_grad_name ", desc_dense_grad_name)
                         raise ValueError(
                             "dense table %s dense_gradient_variable_name "
                             "error" % table_id)
