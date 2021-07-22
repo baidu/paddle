@@ -124,7 +124,7 @@ void FleetWrapper::FinalizeWorker() {
 void FleetWrapper::BarrierWithTable(uint32_t barrier_type) {
   VLOG(3) << "Going to Barrier worker";
   auto* communicator = Communicator::GetInstance();
-  communicator->BarrierWithTable(barrier_type);
+  communicator->BarrierWithTable(barrier_type, 10800000);
 }
 
 uint64_t FleetWrapper::RunServer(const std::string& ip, uint32_t port) {

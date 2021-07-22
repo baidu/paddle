@@ -16,12 +16,13 @@
 
 #include <algorithm>
 #include <condition_variable>  // NOLINT
-#include <mutex>               // NOLINT
+#include <memory>
+#include <mutex>  // NOLINT
 #include <set>
 
-#include "paddle/fluid/distributed/table/table.h"
-
+#include "paddle/fluid/distributed/common/sema.h"
 #include "paddle/fluid/distributed/common/utils.h"
+#include "paddle/fluid/distributed/table/table.h"
 
 namespace paddle {
 namespace distributed {
@@ -115,7 +116,7 @@ class DenseTable : public Table {
 class BarrierTable : public Table {
  public:
   BarrierTable() {}
-  virtual ~BarrierTable() {}
+  virtual ~BarrierTable();
 
   virtual void *get_shard(size_t shard_idx) { return 0; }
 
@@ -155,12 +156,15 @@ class BarrierTable : public Table {
       std::unordered_map<uint32_t, std::shared_ptr<Table>> *table_map) override;
 
  private:
+  void update_pour_thread();
+
   std::mutex mutex_;
-  std::condition_variable trainer_wait_;
-  std::set<uint64_t> trainer_ids_;
-  std::set<uint64_t> trainer_all_;
+  std::unique_ptr<std::thread> pour_update_thread_{nullptr};
+  std::shared_ptr<LightweightSemaphore> sem_;
+  std::shared_ptr<BlockingQueue<uint32_t>> trainer_ids_;
+  std::set<uint32_t> trainer_all_;
   std::atomic<int> trigger_;
-  std::atomic<bool> exit_;
+  bool exit_ = false;
   std::unordered_map<uint32_t, std::shared_ptr<Table>> *table_map_;
 };
 }  // namespace distributed

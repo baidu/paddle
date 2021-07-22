@@ -140,8 +140,8 @@ class PSClient {
   virtual std::future<int32_t> start_profiler() = 0;
   virtual std::future<int32_t> stop_profiler() = 0;
 
-  virtual std::future<int32_t> barrier(size_t table_id,
-                                       uint32_t barrier_type) = 0;
+  virtual std::future<int32_t> barrier(size_t table_id, uint32_t barrier_type,
+                                       int timeout_ms) = 0;
 
   virtual std::future<int32_t> pull_geo_param(size_t table_id,
                                               std::vector<float> *values,

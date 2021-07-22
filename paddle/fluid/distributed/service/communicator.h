@@ -29,6 +29,8 @@ limitations under the License. */
 #include <vector>
 
 #include "gflags/gflags.h"
+#include "paddle/fluid/distributed/common/sema.h"
+#include "paddle/fluid/distributed/common/utils.h"
 #include "paddle/fluid/distributed/communicator_common.h"
 #include "paddle/fluid/framework/scope.h"
 #include "paddle/fluid/framework/variable.h"
@@ -57,62 +59,6 @@ namespace distributed {
 
 using Scope = framework::Scope;
 using Variable = framework::Variable;
-
-template <typename T>
-class BlockingQueue {
- public:
-  explicit BlockingQueue(size_t capacity) : capacity_(capacity) {
-    PADDLE_ENFORCE_GT(capacity_, 0,
-                      platform::errors::InvalidArgument(
-                          "The capacity must be greater than 0."));
-  }
-
-  bool Push(const T &elem) {
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [&] { return queue_.size() < capacity_; });
-      queue_.push_back(elem);
-    }
-    cv_.notify_one();
-    return true;
-  }
-
-  bool Push(T &&elem) {
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [&] { return queue_.size() < capacity_; });
-      queue_.emplace_back(std::move(elem));
-    }
-    cv_.notify_one();
-    return true;
-  }
-
-  T Pop() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [=] { return !queue_.empty(); });
-    T rc(std::move(queue_.front()));
-    queue_.pop_front();
-    cv_.notify_one();
-    return rc;
-  }
-
-  size_t Cap() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return capacity_;
-  }
-
-  size_t Size() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return queue_.size();
-  }
-
- private:
-  const size_t capacity_;
-  std::deque<T> queue_;
-
-  mutable std::mutex mutex_;
-  std::condition_variable cv_;
-};
 
 template <typename T, int MajorType = Eigen::RowMajor,
           typename IndexType = Eigen::DenseIndex>
@@ -255,8 +201,9 @@ class Communicator {
 
   virtual void Barrier() {}
 
-  virtual void BarrierWithTable(uint32_t barrier_type) {
-    auto rets = _worker_ptr->barrier(barrier_table_id_, barrier_type);
+  virtual void BarrierWithTable(uint32_t barrier_type, int timeout_ms) {
+    auto rets =
+        _worker_ptr->barrier(barrier_table_id_, barrier_type, timeout_ms);
     rets.wait();
   }
 
@@ -425,7 +372,9 @@ class HalfAsyncCommunicator : public AsyncCommunicator {
   HalfAsyncCommunicator() {}
 
   explicit HalfAsyncCommunicator(const std::map<std::string, std::string> &envs)
-      : AsyncCommunicator(envs) {}
+      : AsyncCommunicator(envs) {
+    sem_ = std::make_shared<LightweightSemaphore>(0);
+  }
 
   void InitEnvs() {
     // enfore to recv after send
@@ -460,6 +409,8 @@ class HalfAsyncCommunicator : public AsyncCommunicator {
  protected:
   // mutex for Wait for barrier
   std::mutex barrier_mutex_;
+  std::shared_ptr<LightweightSemaphore> sem_;
+  volatile bool no_barrier_ = false;
   std::condition_variable barrier_cond_;
   std::atomic<int64_t> barrier_trigger_{0};
   std::atomic<int64_t> barrier_counter_{0};

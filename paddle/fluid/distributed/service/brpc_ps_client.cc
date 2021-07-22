@@ -272,7 +272,8 @@ std::future<int32_t> BrpcPsClient::print_table_stat(uint32_t table_id) {
   return fut;
 }
 std::future<int32_t> BrpcPsClient::send_cmd(
-    uint32_t table_id, int cmd_id, const std::vector<std::string> &params) {
+    uint32_t table_id, int cmd_id, const std::vector<std::string> &params,
+    int timeout_ms) {
   size_t request_call_num = _server_channels.size();
   DownpourBrpcClosure *closure = new DownpourBrpcClosure(
       request_call_num, [request_call_num, cmd_id](void *done) {
@@ -298,7 +299,7 @@ std::future<int32_t> BrpcPsClient::send_cmd(
     }
     PsService_Stub rpc_stub(get_cmd_channel(i));
     closure->cntl(i)->set_timeout_ms(
-        10800000);  // cmd msg don't limit timeout for save/load
+        timeout_ms);  // cmd msg don't limit timeout for save/load
     rpc_stub.service(closure->cntl(i), closure->request(i),
                      closure->response(i), closure);
   }
@@ -410,8 +411,10 @@ std::future<int32_t> BrpcPsClient::stop_profiler() {
 }
 
 std::future<int32_t> BrpcPsClient::barrier(size_t table_id,
-                                           uint32_t barrier_type) {
-  return send_cmd(table_id, PS_BARRIER, {std::to_string(barrier_type)});
+                                           uint32_t barrier_type,
+                                           int timeout_ms) {
+  return send_cmd(table_id, PS_BARRIER, {std::to_string(barrier_type)},
+                  timeout_ms);
 }
 
 std::future<int32_t> BrpcPsClient::pull_geo_param(size_t table_id,

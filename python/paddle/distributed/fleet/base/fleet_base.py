@@ -820,6 +820,11 @@ class Fleet(object):
                     "If the strategy in fleet.distributed_optimizer() is "
                     "not None, then it will overwrite the DistributedStrategy in fleet.init(), "
                     "which will take effect in distributed training.")
+            else:
+                if not strategy.a_sync:
+                    os.environ["CPU_NUM"] = "1"
+                    os.environ["PS_TRAINING_MODE"] = "SYNC"
+
             self._user_defined_strategy = copy.deepcopy(strategy)
 
         self._context = {}

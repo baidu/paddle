@@ -24,11 +24,71 @@
 #include <utility>
 #include <vector>
 
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/platform/device_context.h"
 
 namespace paddle {
 namespace distributed {
+
+template <typename T>
+class BlockingQueue {
+ public:
+  explicit BlockingQueue(size_t capacity) : capacity_(capacity) {
+    if (capacity_ <= 0) {
+      throw std::runtime_error("The capacity must be greater than 0.");
+    }
+  }
+
+  bool Push(const T& elem) {
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      cv_.wait(lock, [&] { return queue_.size() < capacity_; });
+      queue_.push_back(elem);
+    }
+    cv_.notify_one();
+    return true;
+  }
+
+  bool Push(T&& elem) {
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      cv_.wait(lock, [&] { return queue_.size() < capacity_; });
+      queue_.emplace_back(std::move(elem));
+    }
+    cv_.notify_one();
+    return true;
+  }
+
+  T Pop() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [=] { return !queue_.empty(); });
+    T rc(std::move(queue_.front()));
+    queue_.pop_front();
+    cv_.notify_one();
+    return rc;
+  }
+
+  size_t Cap() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return capacity_;
+  }
+
+  size_t Size() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return queue_.size();
+  }
+
+ private:
+  const size_t capacity_;
+  std::deque<T> queue_;
+
+  mutable std::mutex mutex_;
+  std::condition_variable cv_;
+};
 
 template <typename T>
 inline paddle::operators::math::BlasT<paddle::platform::CPUDeviceContext, T>

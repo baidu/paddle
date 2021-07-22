@@ -392,7 +392,7 @@ class TestFleetBase(unittest.TestCase):
                   format(basename))
 
         if tr0_ret != 0 or tr1_ret != 0:
-            if is_listen_failed(ps0_err) or is_listen_failed(ps1_err):
+            if is_listen_failed(ps0_err_log) or is_listen_failed(ps1_err_log):
                 print("find parameter server port bind failed, skip the error")
                 tr0_ret, tr1_ret = 0, 0
             else:

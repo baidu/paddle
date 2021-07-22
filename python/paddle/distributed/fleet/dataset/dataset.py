@@ -13,6 +13,7 @@
 # limitations under the License.
 """This is definition of dataset class, which is high performance IO."""
 
+import os
 import paddle
 from paddle.fluid.proto import data_feed_pb2
 from google.protobuf import text_format
@@ -118,6 +119,11 @@ class DatasetBase(object):
         Args:
             thread_num(int): thread num
         """
+
+        mode = os.getenv("PS_TRAINING_MODE", "NONE")
+        if mode == "SYNC":
+            thread_num = 1
+
         self.dataset.set_thread_num(thread_num)
         self.thread_num = thread_num
 
@@ -210,8 +216,17 @@ class DatasetBase(object):
         Set data_feed_desc before load or shuffle,
         user no need to call this function.
         """
+
+        mode = os.getenv("PS_TRAINING_MODE", "NONE")
+        if mode == "SYNC":
+            self.thread_num = 1
+
         if self.thread_num > len(self.filelist):
             self.thread_num = len(self.filelist)
+
+        if self.thread_num <= 0:
+            self.thread_num = 1
+
         self.dataset.set_thread_num(self.thread_num)
         self.dataset.set_data_feed_desc(self._desc())
         self.dataset.create_readers()
@@ -530,8 +545,14 @@ class InMemoryDataset(DatasetBase):
         Set data_feed_desc before load or shuffle,
         user no need to call this function.
         """
+
+        mode = os.getenv("PS_TRAINING_MODE", "NONE")
+        if mode == "SYNC":
+            self.thread_num = 1
+
         if self.thread_num <= 0:
             self.thread_num = 1
+
         self.dataset.set_thread_num(self.thread_num)
         if self.queue_num is None:
             self.queue_num = self.thread_num
@@ -1130,10 +1151,17 @@ class QueueDataset(DatasetBase):
         Set data_feed_desc/thread num/filelist before run,
         user no need to call this function.
         """
+
+        mode = os.getenv("PS_TRAINING_MODE", "NONE")
+        if mode == "SYNC":
+            self.thread_num = 1
+
         if self.thread_num > len(self.filelist):
             self.thread_num = len(self.filelist)
-        if self.thread_num == 0:
+
+        if self.thread_num <= 0:
             self.thread_num = 1
+
         self.dataset.set_thread_num(self.thread_num)
         self.dataset.set_filelist(self.filelist)
         self.dataset.set_data_feed_desc(self._desc())

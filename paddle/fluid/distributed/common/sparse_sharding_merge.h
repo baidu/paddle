@@ -52,8 +52,7 @@ class ShardingMerge {
   ShardingMerge() {}
   ~ShardingMerge() {}
 
-  void Merge(const std::vector<std::string> &inputs,
-             const std::vector<int64_t> &feasigns, const std::string &output,
+  void Merge(const std::vector<std::string> &inputs, const std::string &output,
              const int embedding_dim) {
     pool_.reset(new ::ThreadPool(inputs.size()));
 
@@ -63,8 +62,8 @@ class ShardingMerge {
 
     auto begin = GetCurrentUS();
     for (int x = 0; x < inputs.size(); ++x) {
-      tasks[x] = pool_->enqueue([this, x, &rows, &inputs, &feasigns]() -> int {
-        DeserializeRowsFromFile(inputs[x], feasigns[x], &rows[x]);
+      tasks[x] = pool_->enqueue([this, x, &rows, &inputs]() -> int {
+        DeserializeRowsFromFile(inputs[x], &rows[x]);
         return 0;
       });
     }
@@ -283,13 +282,10 @@ class ShardingMerge {
   }
 
   void DeserializeRowsFromFile(const std::string &input_file,
-                               const int64_t feasigns,
                                std::vector<int64_t> *rows) {
     std::string line;
     std::vector<std::string> columns;
     std::ifstream file(input_file);
-
-    rows->reserve(feasigns);
 
     while (std::getline(file, line)) {
       columns = string::Split(line, '\t');

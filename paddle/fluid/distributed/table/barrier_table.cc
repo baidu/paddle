@@ -17,6 +17,12 @@
 namespace paddle {
 namespace distributed {
 
+BarrierTable::~BarrierTable() {
+  exit_ = true;
+  pour_update_thread_->join();
+  pour_update_thread_.reset(nullptr);
+}
+
 int32_t BarrierTable::initialize() {
   auto trainers = _config.common().trainer_num();
   trigger_.store(trainers);
@@ -24,45 +30,63 @@ int32_t BarrierTable::initialize() {
   for (int x = 0; x < trainers; ++x) {
     trainer_all_.insert(x);
   }
+
+  trainer_ids_ = std::make_shared<BlockingQueue<uint32_t>>(trainers);
+  sem_ = std::make_shared<LightweightSemaphore>(0);
+  pour_update_thread_.reset(
+      new std::thread(std::bind(&BarrierTable::update_pour_thread, this)));
+
   VLOG(1) << "BarrierTable init trigger: " << trigger_.load();
   return 0;
+}
+
+void BarrierTable::update_pour_thread() {
+  VLOG(1) << "running update_pour_thread";
+  while (!exit_) {
+    std::set<uint32_t> trainer_ids;
+
+    while (trainer_ids.size() < trigger_.load() && !exit_) {
+      if (trainer_ids_->Size() != 0) {
+        auto id = trainer_ids_->Pop();
+        trainer_ids.insert(id);
+
+        std::vector<uint32_t> diffs(trainer_all_.size());
+        auto iter = std::set_difference(trainer_all_.begin(),
+                                        trainer_all_.end(), trainer_ids.begin(),
+                                        trainer_ids.end(), diffs.begin());
+        diffs.resize(iter - diffs.begin());
+
+        auto diff = to_string<uint32_t>(diffs);
+        VLOG(1) << "receive trainer: " << id
+                << ", still need trainers: " << diff;
+      }
+    }
+
+    if (!exit_) {
+      VLOG(1) << "barrier table optimize begin";
+      for (auto& x : *table_map_) {
+        auto table = x.second;
+        table->pour();
+      }
+      VLOG(1) << "barrier table optimize done";
+    }
+    sem_->signal(trainer_ids.size());
+  }
 }
 
 // 0: send_barrier 1: recv_barrier 2: complete
 int32_t BarrierTable::barrier(const uint32_t trainer_id,
                               const std::string barrier_type) {
-  std::unique_lock<std::mutex> lock(mutex_);
-
   if (barrier_type == "2") {
     trigger_.fetch_sub(1, std::memory_order::memory_order_relaxed);
-    VLOG(1) << "trigger sub to : " << trigger_.load();
-  } else {
-    trainer_ids_.insert(trainer_id);
-    VLOG(1) << "barrier type: " << barrier_type
-            << " add trainer id: " << trainer_id;
+    VLOG(3) << "trigger sub to : " << trigger_.load();
+    return 0;
   }
 
-  if (trainer_ids_.size() < trigger_.load()) {
-    std::vector<uint32_t> diffs(trainer_all_.size());
-    auto iter = std::set_difference(trainer_all_.begin(), trainer_all_.end(),
-                                    trainer_ids_.begin(), trainer_ids_.end(),
-                                    diffs.begin());
-    diffs.resize(iter - diffs.begin());
-
-    auto diff = to_string<uint32_t>(diffs);
-    VLOG(1) << "still need trainers: " << diff;
-    trainer_wait_.wait(lock, [&] { return trainer_ids_.size() == 0; });
-  } else {
-    VLOG(1) << "barrier table optimize begin";
-    for (auto& x : *table_map_) {
-      auto table = x.second;
-      table->pour();
-    }
-    VLOG(1) << "barrier table optimize done";
-
-    trainer_ids_.clear();
-    trainer_wait_.notify_all();
-  }
+  VLOG(3) << "barrier type: " << barrier_type
+          << " add trainer id: " << trainer_id;
+  trainer_ids_->Push(trainer_id);
+  sem_->wait();
   return 0;
 }
 

@@ -153,7 +153,8 @@ class BrpcPsClient : public PSClient {
 
   virtual std::future<int32_t> print_table_stat(uint32_t table_id);
 
-  virtual std::future<int32_t> barrier(size_t table_id, uint32_t barrier_type);
+  virtual std::future<int32_t> barrier(size_t table_id, uint32_t barrier_type,
+                                       int timeout_ms = 10800000);
 
   virtual std::future<int32_t> pull_geo_param(size_t table_id,
                                               std::vector<float> *values,
@@ -193,7 +194,8 @@ class BrpcPsClient : public PSClient {
   }
 
   std::future<int32_t> send_cmd(uint32_t table_id, int cmd_id,
-                                const std::vector<std::string> &param);
+                                const std::vector<std::string> &param,
+                                int timeout_ms = 10800000);
 
   std::future<int32_t> send_save_cmd(uint32_t table_id, int cmd_id,
                                      const std::vector<std::string> &param);

@@ -136,14 +136,14 @@ FetchResultType AsyncSSAGraphExecutor::Run(
                     platform::errors::InvalidArgument(
                         "AsyncSSAGraphExecutor does not support unmerged "
                         "results to be fetched!"));
+#if defined PADDLE_WITH_PSCORE
+  if (strategy_.thread_barrier_) {
+    paddle::distributed::Communicator::GetInstance()->BarrierTriggerReset(
+        places_.size());
+  }
+#endif
   // init once
   if (run_futures_.size() == 0 && places_.size() > 1) {
-#if defined PADDLE_WITH_PSCORE
-    if (strategy_.thread_barrier_) {
-      paddle::distributed::Communicator::GetInstance()->BarrierTriggerReset(
-          places_.size());
-    }
-#endif
     exception_holder_.Clear();
     StartOffPythonTrainLoop(return_merged);
   }

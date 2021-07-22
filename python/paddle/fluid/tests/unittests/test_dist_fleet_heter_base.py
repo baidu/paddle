@@ -83,7 +83,7 @@ class FleetDistHeterRunnerBase(object):
         self.strategy.a_sync = True
         self.strategy.a_sync_configs = {
             "launch_barrier": True,
-            "heter_worker_device_guard": 'gpu'
+            "heter_worker_device_guard": 'cpu'
         }
         return self.strategy
 
@@ -137,7 +137,7 @@ class TestFleetHeterBase(unittest.TestCase):
         self._pservers = 2
         self._port_set = set()
 
-        self._heter_device = "gpu"
+        self._heter_device = "cpu"
 
         global DIST_UT_PORT
         if DIST_UT_PORT == 0 and os.getenv("PADDLE_DIST_UT_PORT"):
@@ -345,7 +345,7 @@ def runtime_main(test_class):
     parser.add_argument(
         '--heter_trainer_endpoints', type=str, required=False, default="")
     parser.add_argument(
-        '--heter_trainer_device', type=str, required=False, default="gpu")
+        '--heter_trainer_device', type=str, required=False, default="cpu")
     parser.add_argument('--gloo_path', type=str, required=False, default="")
     parser.add_argument('--current_id', type=int, required=False, default=0)
     parser.add_argument('--trainers', type=int, required=False, default=1)

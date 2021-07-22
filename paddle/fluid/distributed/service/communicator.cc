@@ -24,17 +24,14 @@ limitations under the License. */
 #define LEARNING_RATE_DECAY_COUNTER "@LR_DECAY_COUNTER@"
 #define STEP_COUNTER "@PS_STEP_COUNTER@"
 
+constexpr int barrier_timeout = 60000;
+constexpr int init_timeout = 10800000;
+
 namespace paddle {
 namespace distributed {
 
 using framework::LoDTensor;
 using framework::SelectedRows;
-
-inline double GetCurrentUS() {
-  struct timeval time;
-  gettimeofday(&time, NULL);
-  return 1e+6 * time.tv_sec + time.tv_usec;
-}
 
 Communicator::Communicator() {}
 
@@ -112,7 +109,7 @@ void Communicator::RpcRecvDense(const std::vector<std::string> &varnames,
       float *temp_data = temp_tensor->mutable_data<float>(platform::CPUPlace());
       paddle::distributed::Region reg(temp_data, tensor->numel());
       regions.emplace_back(std::move(reg));
-      VLOG(1) << "AsyncCommunicator::RpcRecvDense Var " << t << " table_id "
+      VLOG(4) << "AsyncCommunicator::RpcRecvDense Var " << t << " table_id "
               << table_id << " Temp_data[0] " << temp_data[0]
               << " Temp_data[-1] " << temp_data[tensor->numel() - 1];
 #endif
@@ -129,7 +126,7 @@ void Communicator::RpcRecvDense(const std::vector<std::string> &varnames,
   for (auto &t : varnames) {
     Variable *var = scope->FindVar(t);
     LoDTensor *tensor = var->GetMutable<LoDTensor>();
-    VLOG(1) << "AsyncCommunicator::RecvNoBarrier Var " << t << " On gpu? "
+    VLOG(4) << "AsyncCommunicator::RecvNoBarrier Var " << t << " On gpu? "
             << platform::is_gpu_place(tensor->place());
     if (platform::is_gpu_place(tensor->place())) {
 #ifdef PADDLE_WITH_CUDA
@@ -137,7 +134,7 @@ void Communicator::RpcRecvDense(const std::vector<std::string> &varnames,
           xpu_temp_scope_->FindVar(t)->GetMutable<LoDTensor>();
       framework::TensorCopy(*temp_tensor, tensor->place(), tensor);
       float *temp_data = temp_tensor->mutable_data<float>(platform::CPUPlace());
-      VLOG(1) << "AsyncCommunicator::RpcRecvDense Var " << t << " table_id "
+      VLOG(4) << "AsyncCommunicator::RpcRecvDense Var " << t << " table_id "
               << table_id << " Temp_data[0] " << temp_data[0]
               << " Temp_data[-1] " << temp_data[tensor->numel() - 1];
 #endif
@@ -165,7 +162,7 @@ void Communicator::RpcSendDenseParam(const std::vector<std::string> &varnames,
       framework::TensorCopy(*tensor, platform::CPUPlace(), temp_tensor);
       paddle::distributed::Region reg(temp_data, tensor->numel());
       regions.emplace_back(std::move(reg));
-      VLOG(1) << "AsyncCommunicator::RpcSendDenseParam Var " << t
+      VLOG(4) << "AsyncCommunicator::RpcSendDenseParam Var " << t
               << " table_id " << table_id << " Temp_data[0] " << temp_data[0]
               << " Temp_data[-1] " << temp_data[tensor->numel() - 1];
 #endif
@@ -173,7 +170,7 @@ void Communicator::RpcSendDenseParam(const std::vector<std::string> &varnames,
       float *w = tensor->mutable_data<float>(place);
       paddle::distributed::Region reg(w, tensor->numel());
       regions.emplace_back(std::move(reg));
-      VLOG(1) << "AsyncCommunicator::RpcSendDenseParam Var " << t
+      VLOG(4) << "AsyncCommunicator::RpcSendDenseParam Var " << t
               << " talbe_id " << table_id << " Temp_data[0] " << w[0]
               << " Temp_data[-1] " << w[tensor->numel() - 1];
     }
@@ -335,12 +332,12 @@ void Communicator::InitParams(const RecvCtxMap &recv_varname_to_ctx) {
       auto &table_id = iter.first;
       auto &varnames = iter.second;
       RpcSendDenseParam(varnames, table_id, *recv_scope_);
-      VLOG(1) << "push dense param to table " << table_id
+      VLOG(4) << "push dense param to table " << table_id
               << " from 0' trainer done";
     }
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
   } else {
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
     for (auto &iter : recv_varname_to_ctx) {
       auto &table_id = iter.first;
       auto &varnames = iter.second;
@@ -349,7 +346,7 @@ void Communicator::InitParams(const RecvCtxMap &recv_varname_to_ctx) {
               << " from 0' trainer done";
     }
   }
-  BarrierWithTable(1);
+  BarrierWithTable(1, init_timeout);
   return;
 }
 
@@ -435,7 +432,7 @@ void AsyncCommunicator::RecvNoBarrier() {
     for (auto &t : var_names) {
       Variable *var = recv_scope_->FindVar(t);
       LoDTensor *tensor = var->GetMutable<LoDTensor>();
-      VLOG(1) << "AsyncCommunicator::RecvNoBarrier Var " << t << " On gpu? "
+      VLOG(4) << "AsyncCommunicator::RecvNoBarrier Var " << t << " On gpu? "
               << platform::is_gpu_place(tensor->place());
       if (platform::is_gpu_place(tensor->place())) {
 #ifdef PADDLE_WITH_CUDA
@@ -548,11 +545,16 @@ void HalfAsyncCommunicator::MainThread() {
   }
 
   while (running_) {
-    SendByCommunicator();
-    BarrierSend();
-    RecvByCommunicator();
-    BarrierRecv();
-    BarrierWeakUp();
+    if (!waiting_) {
+      SendByCommunicator();
+      BarrierSend();
+      RecvByCommunicator();
+      BarrierRecv();
+      BarrierWeakUp();
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      VLOG(3) << "wait for running";
+    }
   }
   VLOG(1) << "communicator stopped, send thread exit";
 }
@@ -690,27 +692,26 @@ void HalfAsyncCommunicator::BarrierTriggerReset(int initial_val) {
 }
 
 void HalfAsyncCommunicator::Barrier() {
-  barrier_counter_++;
-
   if (!running_) {
     VLOG(3) << "Communicator is not running, release barrier";
     return;
   }
 
-  {
-    std::unique_lock<std::mutex> lk(barrier_mutex_);
-    barrier_cond_.wait(lk, [this] { return (barrier_counter_ == 0); });
-  }
+  barrier_counter_++;
+  sem_->wait();
 }
 
 int HalfAsyncCommunicator::BatchesCounter() {
   while (running_) {
-    if (barrier_counter_.load() >= barrier_trigger_.load() &&
-        barrier_trigger_.load() != 0) {
+    if (barrier_counter_.load() >= barrier_trigger_.load()) {
       break;
     } else {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+  }
+
+  if (barrier_trigger_.load() == 0) {
+    waiting_ = true;
   }
 
   return barrier_counter_.load();
@@ -718,7 +719,7 @@ int HalfAsyncCommunicator::BatchesCounter() {
 
 void HalfAsyncCommunicator::SendByCommunicator() {
   int batches = BatchesCounter();
-  VLOG(1) << "HalfAsyncCommunicator::BatchesCounter = " << batches;
+  VLOG(3) << "HalfAsyncCommunicator::BatchesCounter = " << batches;
   if (batches <= 0) return;
 
   std::vector<std::future<void>> tasks;
@@ -760,18 +761,19 @@ void HalfAsyncCommunicator::SendByCommunicator() {
 
 void HalfAsyncCommunicator::BarrierWeakUp() {
   barrier_counter_.store(0);
-  barrier_cond_.notify_all();
+  auto triggers = barrier_trigger_.load();
+  sem_->signal(triggers);
 }
 
 void SyncCommunicator::BarrierSend() {
   if (!running_) return;
-  BarrierWithTable(0);
+  BarrierWithTable(0, barrier_timeout);
   VLOG(4) << "BarrierSend with SyncCommunicator";
 }
 
 void SyncCommunicator::BarrierRecv() {
   if (!running_) return;
-  BarrierWithTable(1);
+  BarrierWithTable(1, barrier_timeout);
 
   VLOG(4) << "BarrierRecv with SyncCommunicator";
 }
@@ -893,11 +895,11 @@ void GeoCommunicator::InitDense(std::vector<std::string> &varnames,
                                 int table_id) {
   if (trainer_id_ == 0) {
     RpcSendDenseParam(varnames, table_id, *recv_scope_);
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
     VLOG(1) << "push dense param to table " << table_id
             << " from 0' trainer done";
   } else {
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
     RpcRecvDense(varnames, table_id, recv_scope_);
     VLOG(1) << "pull dense param to table " << table_id
             << " from 0' trainer done";
@@ -951,7 +953,7 @@ void GeoCommunicator::SendDense(const CommContext &send_ctx) {
               t_delta->data<float>(), t_timestamp->data<float>());
   }
   RpcSendDense(send_ctx, *delta_scope_);
-  VLOG(1) << "Finish Send Dense " << var_names[0] << ", table_id: " << table_id;
+  VLOG(4) << "Finish Send Dense " << var_names[0] << ", table_id: " << table_id;
   return;
 }
 
@@ -988,7 +990,7 @@ void GeoCommunicator::RecvDense(const CommContext &send_ctx) {
     blas.VCOPY(t_latest->numel(), t_pserver.data<float>(),
                t_old->data<float>());
   }
-  VLOG(1) << "Finish Recv Dense " << varnames[0] << ", table_id: " << table_id;
+  VLOG(4) << "Finish Recv Dense " << varnames[0] << ", table_id: " << table_id;
   return;
 }
 
@@ -996,11 +998,11 @@ void GeoCommunicator::InitSparse(const std::string &var_name, int table_id) {
   VLOG(1) << "Init Sparse " << var_name << " : table " << table_id << " begin.";
   if (trainer_id_ == 0) {
     RpcSendSparseParam(var_name, table_id, *recv_scope_);
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
     VLOG(1) << "push sparse param to table " << table_id
             << " from 0' trainer done";
   } else {
-    BarrierWithTable(1);
+    BarrierWithTable(1, init_timeout);
     RpcRecvSparse(var_name, table_id, recv_scope_);
     VLOG(1) << "pull sparse param to table " << table_id
             << " from 0' trainer done";
@@ -1049,7 +1051,7 @@ void GeoCommunicator::SendSparse(const std::string &varname,
                                  int ep_idx) {
   platform::RecordEvent record_event("GeoCommunicator->SendSparse");
   std::string param_name = SplitedGradToParam(varname);
-  VLOG(1) << "In GeoCommunicator::SendSparse(" << varname << " " << param_name
+  VLOG(4) << "In GeoCommunicator::SendSparse(" << varname << " " << param_name
           << ", ids.size = " << sparse_ids.size() << ", table_id: " << table_id
           << ", ep_idx: " << ep_idx;
 
@@ -1110,7 +1112,7 @@ void GeoCommunicator::SendSparse(const std::string &varname,
       (const float **)push_g_vec.data(), sparse_ids.size(), closure, ep_idx);
   status.wait();
 
-  VLOG(1) << "Finish Send Sparse " << varname
+  VLOG(4) << "Finish Send Sparse " << varname
           << ", ids.size = " << sparse_ids.size() << ", table_id: " << table_id;
   return;
 }
@@ -1125,7 +1127,7 @@ void GeoCommunicator::RecvSparse(const std::string &varname, int table_id,
   status.wait();
 
   std::string param = SplitedGradToParam(varname);
-  VLOG(1) << "RecvSparse receive var: " << varname << " " << param << ", "
+  VLOG(4) << "RecvSparse receive var: " << varname << " " << param << ", "
           << table_id << "; ids Size: " << keys.size()
           << "; values size: " << values.size();
 
@@ -1157,7 +1159,7 @@ void GeoCommunicator::RecvSparse(const std::string &varname, int table_id,
     // pserver => old
     blas.VCOPY(dims1, values.data() + j * dims1, old_data);
   }
-  VLOG(1) << "Finish Recv Sparse " << param << ", table_id: " << table_id;
+  VLOG(4) << "Finish Recv Sparse " << param << ", table_id: " << table_id;
 }
 
 void GeoCommunicator::MainThread() {

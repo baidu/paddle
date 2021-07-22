@@ -108,7 +108,8 @@ class PsLocalClient : public PSClient {
     return fut;
   }
 
-  virtual std::future<int32_t> barrier(size_t table_id, uint32_t barrier_type) {
+  virtual std::future<int32_t> barrier(size_t table_id, uint32_t barrier_type,
+                                       int timeout_ms) {
     std::promise<int32_t> prom;
     std::future<int32_t> fut = prom.get_future();
     prom.set_value(0);
