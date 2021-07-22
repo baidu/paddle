@@ -399,7 +399,6 @@ void HeterComm<KeyType, ValType, GradType>::merge_grad(int gpu_num,
 
   auto d_num_runs_out_mem = memory::AllocShared(place, sizeof(int));
   int* d_num_runs_out = reinterpret_cast<int*>(d_num_runs_out_mem->ptr());
-
   PADDLE_ENFORCE_CUDA_SUCCESS(cub::DeviceReduce::ReduceByKey(
       NULL, temp_storage_bytes, d_merge_keys_ptr, d_keys, d_merge_grads_ptr,
       d_grads, d_num_runs_out, merger_, len, stream, false));
