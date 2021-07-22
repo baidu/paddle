@@ -90,5 +90,6 @@ PaddlePaddle用户可领取**免费Tesla V100在线算力资源**，训练模型
 - [服务器部署](https://aistudio.baidu.com/aistudio/course/introduce/19084): 详细介绍高性能服务器端部署实操，包含本地端及服务化Serving部署等
 - [端侧部署](https://aistudio.baidu.com/aistudio/course/introduce/22690): 详细介绍端侧多场景部署实操，从移端端设备、IoT、网页到小程序部署
 
+
 ## 版权和许可证
 PaddlePaddle由[Apache-2.0 license](LICENSE)提供
