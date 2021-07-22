@@ -83,6 +83,16 @@ function run_model_benchmark {
     bash model_ci.sh
 }
 
-compile_install_paddle
-prepare_data
-run_model_benchmark
+case $1 in
+  whl_check)
+    compile_install_paddle
+  ;;
+  run_benchmark)
+    prepare_data
+    run_model_benchmark
+  ;;
+  *)
+    echo "Error: Incorrect or no parameters"
+    exit 1
+  ;;
+esac
