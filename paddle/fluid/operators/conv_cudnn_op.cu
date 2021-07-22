@@ -87,7 +87,8 @@ class CUDNNConvOpKernel : public framework::OpKernel<T> {
     // Tensor Core introduced from Volta GPUs supports more faster conv op
     // with FP16 in NHWC data format.
     const bool compute_in_nhwc =
-        dtype == CUDNN_DATA_HALF && IsVoltaOrLater(dev_ctx);
+        (dtype == CUDNN_DATA_HALF || dtype == CUDNN_DATA_BFLOAT16) &&
+        IsVoltaOrLater(dev_ctx);
     // We will only do data format conversion from NHWC to NCHW.
     // cudnn will convert NCHW to NHWC automatically on Tensor Core.
     auto compute_format =
@@ -404,7 +405,8 @@ class CUDNNConvGradOpKernel : public framework::OpKernel<T> {
     auto compute_format = DataLayout::kNCHW;
 #else
     const bool compute_in_nhwc =
-        dtype == CUDNN_DATA_HALF && IsVoltaOrLater(dev_ctx);
+        (dtype == CUDNN_DATA_HALF || dtype == CUDNN_DATA_BFLOAT16) &&
+        IsVoltaOrLater(dev_ctx);
     auto compute_format =
         compute_in_nhwc && channel_last ? DataLayout::kNHWC : DataLayout::kNCHW;
 #endif
