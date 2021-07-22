@@ -8,3 +8,4 @@ Pillow
 six
 decorator
 astor
+wheel
