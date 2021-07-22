@@ -33,10 +33,11 @@ the image layout as follows.
 from __future__ import print_function
 
 import six
+import sys
 import numpy as np
 # FIXME(minqiyang): this is an ugly fix for the numpy bug reported here
 # https://github.com/numpy/numpy/issues/12497
-if six.PY3:
+if six.PY3 and not getattr(sys, 'frozen', False):
     import subprocess
     import sys
     import_cv2_proc = subprocess.Popen(
