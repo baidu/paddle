@@ -28,9 +28,10 @@ def parse_case_name(log_file_name):
     """Parse case name.
     """
     case_id, case_info = log_file_name.split("-")
-    direction = case_info.split(".")[0].split("_")[-1]
+    # case_info_list -> [framework, device, task, direction]
+    case_info_list = case_info.split(".")[0].split("_")
 
-    return "%s (%s)" % (case_id, direction)
+    return "%s (%s on %s)" % (case_id, case_info_list[3], case_info_list[1])
 
 
 def parse_log_file(log_file):
@@ -43,6 +44,9 @@ def parse_log_file(log_file):
         for line in f.read().strip().split('\n')[::-1]:
             try:
                 result = json.loads(line)
+                # maybe get a string
+                if not isinstance(result, dict):
+                    continue
                 if result.get("disabled", False) == True:
                     return None
                 return result
