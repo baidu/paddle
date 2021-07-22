@@ -191,5 +191,6 @@ fi
 
 if [ "$COVERAGE_LINES_ASSERT" = "1" ] || [ "$PYTHON_COVERAGE_LINES_ASSERT" = "1" ]; then
     echo "exit 9" > /tmp/paddle_coverage.result
+    echo -e "\033[31m CI Failed: Coverage check failed. \033[0m"
     exit 9
 fi

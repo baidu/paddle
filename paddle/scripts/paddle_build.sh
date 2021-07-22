@@ -273,6 +273,7 @@ EOF
         -DON_INFER=${ON_INFER:-OFF} \
         -DWITH_UNITY_BUILD=${WITH_UNITY_BUILD:-OFF};build_error=$?
     if [ "$build_error" != 0 ];then
+        echo -e "\033[31m CI Failed: Your PR build Failed. \033[0m"
         exit 7;
     fi
 }
@@ -288,7 +289,7 @@ function cmake_gen_in_current_dir() {
 }
 
 function abort(){
-    echo "Your change doesn't follow PaddlePaddle's code style." 1>&2
+    echo "Your PR doesn't follow PaddlePaddle's code style." 1>&2
     echo "Please use pre-commit to check what is wrong." 1>&2
     exit 4
 }
@@ -361,6 +362,7 @@ function build_base() {
     collect_ccache_hits
 
     if [ "$build_error" != 0 ];then
+        echo -e "\033[31m CI Failed: Your PR build Failed. \033[0m"
         exit 7;
     fi
 }
@@ -450,6 +452,7 @@ EOF
     collect_ccache_hits
 
     if [ "$build_error" != 0 ];then
+        echo -e "\033[31m CI Failed: Your PR build Failed. \033[0m"
         exit 7;
     fi
 
@@ -904,14 +907,16 @@ EOF
 function assert_api_spec_approvals() {
     /bin/bash ${PADDLE_ROOT}/tools/check_api_approvals.sh;approval_error=$?
     if [ "$approval_error" != 0 ];then
-       exit 6
+        echo -e "\033[31m CI Failed: Your PR need to be approved. \033[0m"
+        exit 6
     fi
 }
 
 function assert_file_diff_approvals() {
     /bin/bash ${PADDLE_ROOT}/tools/check_file_diff_approvals.sh;file_approval_error=$?
     if [ "$file_approval_error" != 0 ];then
-       exit 6
+        echo -e "\033[31m CI Failed: Your PR need to be approved. \033[0m"
+        exit 6
     fi
 }
 
@@ -1142,9 +1147,7 @@ set -x
             added_uts=^$(awk BEGIN{RS=EOF}'{gsub(/\n/,"$|^");print}' $PADDLE_ROOT/added_ut)$
             ctest -R "(${added_uts})" --output-on-failure --repeat-until-fail 3 --timeout 15;added_ut_error=$?
             if [ "$added_ut_error" != 0 ];then
-                echo "========================================"
-                echo "Added UT should not exceed 15 seconds"
-                echo "========================================"
+                echo -e "\033[31m CI Failed: Added UT should not exceed 15 seconds. \033[0m"
                 exit 8;
             fi
         fi
@@ -1358,6 +1361,7 @@ function show_ut_retry_result() {
         echo "========================================="
         echo "The following tests FAILED: "
         echo "${failed_test_lists_ult}"
+        echo -e "\033[31m CI Failed: There are more than 10 failed uts in your PR. \033[0m"
         exit 8;
     else
         read retry_unittests_ut_name <<< $(echo "$retry_unittests_record" | grep -oEi "\-.+\(" | sed 's/(//' | sed 's/- //' )
@@ -1376,6 +1380,7 @@ function show_ut_retry_result() {
             echo "========================================"
             echo "The following tests FAILED: "
             echo "${retry_unittests_record}" | sort -u | grep -E "$failed_ut_re"
+            echo -e "\033[31m CI Failed: Unit test failed. \033[0m"
             exit 8;
         fi
     fi
@@ -1395,6 +1400,7 @@ EOF
         ut_endTime_s=`date +%s`
         echo "CPU testCase Time: $[ $ut_endTime_s - $ut_startTime_s ]s"
         if [[ "$EXIT_CODE" != "0" ]]; then
+            echo -e "\033[31m CI Failed: Unit test failed. \033[0m"
             exit 8;
         fi
     fi
@@ -1611,6 +1617,7 @@ set -x
         ut_endTime_s=`date +%s`
         echo "XPU testCase Time: $[ $ut_endTime_s - $ut_startTime_s ]s"
         if [[ "$EXIT_CODE" != "0" ]]; then
+            echo -e "\033[31m CI Failed: Unit test failed. \033[0m"
             exit 8;
         fi
     fi   
@@ -1932,6 +1939,7 @@ EOF
     collect_ccache_hits
 
     if [ "$build_error" != 0 ];then
+        echo -e "\033[31m CI Failed: Your PR build Failed. \033[0m"
         exit 7;
     fi
     endTime_s=`date +%s`
@@ -1972,6 +1980,7 @@ EOF
     echo "ipipe_log_param_Test_Fluid_Lib_Total_Time: $[ $fluid_endTime_s - $fluid_startTime_s ]s" >> ${PADDLE_ROOT}/build/build_summary.txt     
     ./clean.sh
     if [[ "$EXIT_CODE" != "0" ]]; then
+        echo -e "\033[31m CI Failed: Unit test failed. \033[0m"
         exit 8;
     fi
 }
@@ -2011,6 +2020,7 @@ EOF
     echo "ipipe_log_param_Test_Fluid_Lib_Train_Total_Time: $[ $fluid_train_endTime_s - $fluid_train_startTime_s ]s"
     ./clean.sh
     if [[ "$EXIT_CODE" != "0" ]]; then
+        echo -e "\033[31m CI Failed: Unit test failed. \033[0m"
         exit 8;
     fi
 }
@@ -2086,13 +2096,14 @@ function summary_check_problems() {
       if [ $check_style_code -ne 0 ];then
         echo "*****Code format error***** Please fix it according to the diff information:"
         echo "$check_style_info" | grep "code format error" -A $(echo "$check_style_info" | wc -l)
+
       fi
       if [ $example_code -ne 0 ];then
         echo "*****Example code error***** Please fix the error listed in the information:"
         echo "$example_info" | grep "API check -- Example Code" -A $(echo "$example_info" | wc -l)
       fi
-      [ $check_style_code -ne 0 ] && exit $check_style_code
-      [ $example_code -ne 0 ] && exit $example_code
+      [ $check_style_code -ne 0 ] && echo -e "\033[31m CI Failed: Your PR doesn't follow PaddlePaddle's code style. \033[0m" && exit $check_style_code
+      [ $example_code -ne 0 ] && echo -e "\033[31m CI Failed: Api's example code check failed. \033[0m" && exit $example_code
     fi
     set -x
 }

@@ -50,7 +50,7 @@ inline std::default_random_engine& local_random_engine() {
   struct engine_wrapper_t {
     std::default_random_engine engine;
     engine_wrapper_t() {
-      static std::atomic<uint64_t> x(0);
+      //static std::atomic<uint64_t> x(0);
       std::seed_seq sseq = {x++, x++, x++,
                             static_cast<uint64_t>(current_realtime() * 1000)};
       engine.seed(sseq);
