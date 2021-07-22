@@ -483,6 +483,9 @@ class DataParallel(layers.Layer):
 
         self._layers = layers
         self.find_unused_parameters = find_unused_parameters
+        # NOTE(liuyuhui): The find_unused_parameters must be true for xpu. 
+        if core.is_compiled_with_xpu():
+            self.find_unused_parameters = True
 
         # NOTE(chenweihang): The ParallelStrategy here is not strictly a strategy. 
         # It just stores some environment variables, which can be constructed by 
