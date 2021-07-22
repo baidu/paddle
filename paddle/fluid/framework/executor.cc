@@ -66,7 +66,19 @@ ExecutorPrepareContext::~ExecutorPrepareContext() {
   VLOG(5) << "destroy ExecutorPrepareContext";
 }
 
-Executor::Executor(const platform::Place& place) : place_(place) {}
+Executor::Executor(const platform::Place& place) : place_(place) {
+  if (platform::is_npu_place(place)) {
+#ifndef PADDLE_WITH_ASCEND_CL
+    PADDLE_THROW(platform::errors::Unavailable(
+        "Cannot run operator on place %s, please recompile paddle or "
+        "reinstall Paddle with NPU support.",
+        place));
+#else
+    auto dev_id = BOOST_GET_CONST(platform::NPUPlace, place).device;
+    platform::SetNPUDeviceId(dev_id);
+#endif
+  }
+}
 
 Executor::~Executor() {
 #ifdef PADDLE_WITH_MKLDNN

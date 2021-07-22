@@ -216,8 +216,12 @@ void OperatorBase::Run(const Scope& scope, const platform::Place& place) {
           "reinstall Paddle with NPU support.",
           place));
 #else
-      auto dev_id = BOOST_GET_CONST(platform::NPUPlace, place).device;
-      platform::SetNPUDeviceId(dev_id);
+// NOTE(zhiqiu): SetNPUDeviceId costs 3.3 us on average.
+// However, currently, without PE, we only use one device.
+// So, we only need to set device in exe.run once.
+
+// auto dev_id = BOOST_GET_CONST(platform::NPUPlace, place).device;
+// platform::SetNPUDeviceId(dev_id);
 #endif
     }
 
