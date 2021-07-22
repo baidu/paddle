@@ -1255,16 +1255,24 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
       if (ddW) {
 #ifdef PADDLE_WITH_HIP
         // MIOPEN ONLY support beta to be 0.0f
+        Tensor conv_x_ddw(dO->type());
+        conv_x_ddw.Resize(transformed_ddO_channel.dims());
+        T* conv_x_ddw_data = conv_x_ddw.mutable_data<T>(ctx.GetPlace());
         wkspace_handle.RunFunc(
             [&](void* workspace_ptr) {
               PADDLE_ENFORCE_CUDA_SUCCESS(
                   platform::dynload::miopenConvolutionForward(
                       handle, &alpha, args2.idesc.desc(), x, args2.wdesc.desc(),
                       ddw, args2.cdesc.desc(), fwd_algo2, &beta,
-                      args2.odesc.desc(), transformed_ddy_channel,
-                      workspace_ptr, workspace_size));
+                      args2.odesc.desc(), conv_x_ddw_data, workspace_ptr,
+                      workspace_size));
             },
             workspace_size);
+        PADDLE_ENFORCE_CUDA_SUCCESS(platform::dynload::miopenOpTensor(
+            handle, miopenTensorOpAdd, &alpha, args2.odesc.desc(),
+            transformed_ddy_channel, &alpha, args2.odesc.desc(),
+            conv_x_ddw_data, &beta, args2.odesc.desc(),
+            transformed_ddy_channel));
 #else
         for (int i = 0; i < groups; i++) {
           wkspace_handle.RunFunc(

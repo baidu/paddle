@@ -141,7 +141,7 @@ REGISTER_OP_CPU_KERNEL_FUNCTOR(memcpy, float, ops::MemcpyKernel, double,
                                ops::MemcpyKernel, plat::float16,
                                ops::MemcpyKernel);
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_ROCM)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 REGISTER_OP_CUDA_KERNEL_FUNCTOR(memcpy, float, ops::MemcpyKernel, double,
                                 ops::MemcpyKernel, int, ops::MemcpyKernel,
                                 int64_t, ops::MemcpyKernel, bool,

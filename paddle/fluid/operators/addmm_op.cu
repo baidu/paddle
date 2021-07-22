@@ -16,9 +16,15 @@ limitations under the License. */
 
 namespace ops = paddle::operators;
 namespace plat = paddle::platform;
-
+#ifdef PADDLE_WITH_HIP
+REGISTER_OP_CUDA_KERNEL(addmm,
+                        ops::AddMMKernel<plat::CUDADeviceContext, float>);
+REGISTER_OP_CUDA_KERNEL(addmm_grad,
+                        ops::AddMMGradKernel<plat::CUDADeviceContext, float>);
+#else
 REGISTER_OP_CUDA_KERNEL(addmm, ops::AddMMKernel<plat::CUDADeviceContext, float>,
                         ops::AddMMKernel<plat::CUDADeviceContext, double>);
 REGISTER_OP_CUDA_KERNEL(addmm_grad,
                         ops::AddMMGradKernel<plat::CUDADeviceContext, float>,
                         ops::AddMMGradKernel<plat::CUDADeviceContext, double>);
+#endif

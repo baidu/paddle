@@ -39,8 +39,17 @@ class TestConvDoubleGradCheck(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -66,8 +75,17 @@ class TestConvDoubleGradCheck(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -91,8 +109,17 @@ class TestConvDoubleGradCheckTest1(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -116,8 +143,17 @@ class TestConv3DDoubleGradCheck(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -141,8 +177,17 @@ class TestConv3DDoubleGradCheckTest1(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -172,8 +217,17 @@ class TestConv2DoubleGradCheck_AsyPadding(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -203,8 +257,17 @@ class TestConv2DoubleGradCheck_PaddingSAME(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -234,8 +297,17 @@ class TestConv2DoubleGradCheck_PaddingVALID(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -267,8 +339,17 @@ class TestConv2DoubleGradCheck_ChannelLast(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -300,8 +381,17 @@ class TestConv2DoubleGradCheck_ChannelLast_AsyPadding(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -331,8 +421,17 @@ class TestConv3DDoubleGradCheck_AsyPadding(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -363,8 +462,17 @@ class TestConv3DoubleGradCheck_PaddingSAME(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -394,8 +502,17 @@ class TestConv3DoubleGradCheck_PaddingVALID(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -427,8 +544,17 @@ class TestConv3DDoubleGradCheck_ChannelLast(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -460,8 +586,17 @@ class TestConv3DDoubleGradCheck_ChannelLast_AsyPadding(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = [fluid.CPUPlace()]
@@ -491,8 +626,17 @@ class TestDepthWiseConvDoubleGradCheck(unittest.TestCase):
         w_arr = []
         for p in w:
             w_arr.append(np.random.uniform(-1, 1, p.shape).astype(dtype))
-        gradient_checker.double_grad_check(
-            [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
+        if core.is_compiled_with_rocm():
+            gradient_checker.double_grad_check(
+                [x] + w,
+                y,
+                x_init=[x_arr] + w_arr,
+                place=place,
+                eps=eps,
+                atol=1e-4)
+        else:
+            gradient_checker.double_grad_check(
+                [x] + w, y, x_init=[x_arr] + w_arr, place=place, eps=eps)
 
     def test_grad(self):
         places = []

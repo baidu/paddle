@@ -27,7 +27,7 @@ class TestAddMMOp(OpTest):
     # test basic
     def setUp(self):
         self.op_type = "addmm"
-        self.dtype = np.float64
+        self.dtype = np.float32 if core.is_compiled_with_rocm() else np.float64
         self.init_dtype_type()
         self.inputs = {
             'Input': np.random.random((100, 1)).astype(self.dtype),
@@ -46,16 +46,31 @@ class TestAddMMOp(OpTest):
         self.check_output()
 
     def test_check_grad_normal(self):
-        self.check_grad(['Input', 'X', 'Y'], 'Out')
+        if core.is_compiled_with_rocm():
+            self.check_grad(['Input', 'X', 'Y'], 'Out', max_relative_error=5e-2)
+        else:
+            self.check_grad(['Input', 'X', 'Y'], 'Out')
 
     def test_check_grad_x(self):
-        self.check_grad(['X'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['X'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['X'], 'Out', no_grad_set=None)
 
     def test_check_grad_y(self):
-        self.check_grad(['Y'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['Y'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['Y'], 'Out', no_grad_set=None)
 
     def test_check_grad_input(self):
-        self.check_grad(['Input'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['Input'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['Input'], 'Out', no_grad_set=None)
 
 
 class TestAddMMOpError(unittest.TestCase):
@@ -167,7 +182,7 @@ class TestAddMMOp2(TestAddMMOp):
     # test alpha and beta
     def setUp(self):
         self.op_type = "addmm"
-        self.dtype = np.float64
+        self.dtype = np.float32 if core.is_compiled_with_rocm() else np.float64
         self.init_dtype_type()
         self.inputs = {
             'Input': np.random.random((20, 30)).astype(self.dtype),
@@ -186,7 +201,7 @@ class TestAddMMOp3(OpTest):
     # test broadcast
     def setUp(self):
         self.op_type = "addmm"
-        self.dtype = np.float64
+        self.dtype = np.float32 if core.is_compiled_with_rocm() else np.float64
         self.init_dtype_type()
         self.inputs = {
             'Input': np.random.random((1, 100)).astype(self.dtype),
@@ -207,16 +222,31 @@ class TestAddMMOp3(OpTest):
         self.check_output()
 
     def test_check_grad_normal(self):
-        self.check_grad(['Input', 'X', 'Y'], 'Out')
+        if core.is_compiled_with_rocm():
+            self.check_grad(['Input', 'X', 'Y'], 'Out', max_relative_error=5e-2)
+        else:
+            self.check_grad(['Input', 'X', 'Y'], 'Out')
 
     def test_check_grad_x(self):
-        self.check_grad(['X'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['X'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['X'], 'Out', no_grad_set=None)
 
     def test_check_grad_y(self):
-        self.check_grad(['Y'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['Y'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['Y'], 'Out', no_grad_set=None)
 
     def test_check_grad_input(self):
-        self.check_grad(['Input'], 'Out', no_grad_set=None)
+        if core.is_compiled_with_rocm():
+            self.check_grad(
+                ['Input'], 'Out', no_grad_set=None, max_relative_error=5e-2)
+        else:
+            self.check_grad(['Input'], 'Out', no_grad_set=None)
 
 
 class TestAddMMOp4(unittest.TestCase):

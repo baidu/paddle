@@ -117,11 +117,18 @@ class CenterLossCUDAKernel : public framework::OpKernel<T> {
     size_t N = centers->dims()[0];
     size_t D = centers->dims()[1];
     size_t K = labels->numel();
-
-    dim3 threads(128, 8);
+#ifdef __HIPCC__
+    constexpr size_t block_dim_x = 64;
+    constexpr size_t block_dim_y = 4;
+#else
+    constexpr size_t block_dim_x = 128;
+    constexpr size_t block_dim_y = 8;
+#endif
+    dim3 threads(block_dim_x, block_dim_y);
     dim3 grids(8, 1);
 
-    ComputeDifferent<T, 128, 8, 8><<<grids, threads, 0, stream>>>(
+    ComputeDifferent<T, block_dim_x, block_dim_y,
+                     8><<<grids, threads, 0, stream>>>(
         centers_diff_data, x_data, centers_data, label_data, N, K, D);
 
     auto &place = *ctx.template device_context<DeviceContext>().eigen_device();
@@ -131,7 +138,8 @@ class CenterLossCUDAKernel : public framework::OpKernel<T> {
     auto z = EigenVector<T>::Flatten(*out_loss);
     z.device(place) = sub_res_pow2.sum(Eigen::array<int, 1>({{1}}));
     if (need_update) {
-      UpdateCenters<T, 128, 8, 8><<<grids, threads, 0, stream>>>(
+      UpdateCenters<T, block_dim_x, block_dim_y,
+                    8><<<grids, threads, 0, stream>>>(
           centers_out_data, centers_diff_data, label_data, N, K, D, lr_center);
     }
   }

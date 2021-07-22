@@ -14,7 +14,13 @@ limitations under the License. */
 
 #include "paddle/fluid/operators/fused/fusion_transpose_flatten_concat_op.h"
 #include "paddle/fluid/framework/op_registry.h"
+#ifdef PADDLE_WITH_HIP
+#include "paddle/fluid/operators/math/concat_and_split.h"
+#include "paddle/fluid/operators/transpose_op.h"
+#include "paddle/fluid/platform/miopen_helper.h"
+#else
 #include "paddle/fluid/platform/cudnn_helper.h"
+#endif
 
 namespace paddle {
 namespace platform {
@@ -31,6 +37,35 @@ using CudnnDataType = platform::CudnnDataType<T>;
 template <typename T>
 class TransposeFlattenConcatFusionKernel : public framework::OpKernel<T> {
  public:
+#ifdef PADDLE_WITH_HIP
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto ins = ctx.MultiInput<framework::Tensor>("X");
+    auto* out = ctx.Output<framework::Tensor>("Out");
+    out->mutable_data<T>(ctx.GetPlace());
+    std::vector<int> trans_axis = ctx.Attr<std::vector<int>>("trans_axis");
+    int flatten_axis = ctx.Attr<int>("flatten_axis");
+    int concat_axis = ctx.Attr<int>("concat_axis");
+    auto& dev_ctx = ctx.template device_context<platform::CUDADeviceContext>();
+
+    int rank = ins[0]->dims().size();
+    int max_dim = rank < 4 ? 4 : rank;
+    std::vector<framework::Tensor> transformed_inputs;
+
+    for (size_t k = 0; k < ins.size(); ++k) {
+      framework::Tensor transformed_ins_k(ins[k]->type());
+      transformed_ins_k.Resize(ins[k]->dims().transpose(trans_axis));
+      transformed_ins_k.mutable_data<T>(ctx.GetPlace());
+      TransCompute<platform::CUDADeviceContext, T>(
+          max_dim, dev_ctx, *ins[k], &transformed_ins_k, trans_axis);
+      transformed_ins_k.Resize(
+          framework::flatten_to_2d(transformed_ins_k.dims(), flatten_axis));
+      transformed_inputs.push_back(transformed_ins_k);
+    }
+    paddle::operators::math::ConcatFunctor<platform::CUDADeviceContext, T>
+        concat_functor;
+    concat_functor(dev_ctx, transformed_inputs, concat_axis, out);
+  }
+#else
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto ins = ctx.MultiInput<framework::Tensor>("X");
     auto* out = ctx.Output<framework::Tensor>("Out");
@@ -113,12 +148,19 @@ class TransposeFlattenConcatFusionKernel : public framework::OpKernel<T> {
     PADDLE_ENFORCE_CUDA_SUCCESS(
         platform::dynload::cudnnDestroyTensorDescriptor(out_desc));
   }
+#endif
 };
 
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
+#ifdef PADDLE_WITH_HIP
 REGISTER_OP_CUDA_KERNEL(fusion_transpose_flatten_concat,
                         ops::TransposeFlattenConcatFusionKernel<float>,
                         ops::TransposeFlattenConcatFusionKernel<double>);
+#else
+REGISTER_OP_CUDA_KERNEL(fusion_transpose_flatten_concat,
+                        ops::TransposeFlattenConcatFusionKernel<float>,
+                        ops::TransposeFlattenConcatFusionKernel<double>);
+#endif
