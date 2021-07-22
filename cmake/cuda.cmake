@@ -192,7 +192,8 @@ add_definitions("-DCUDA_VERSION_MINOR=\"${CUDA_VERSION_MINOR}\"")
 add_definitions("-DCUDA_TOOLKIT_ROOT_DIR=\"${CUDA_TOOLKIT_ROOT_DIR}\"")
 
 # setting nvcc arch flags
-select_nvcc_arch_flags(NVCC_FLAGS_EXTRA)
+# select_nvcc_arch_flags(NVCC_FLAGS_EXTRA)
+set(NVCC_FLAGS_EXTRA "-gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${NVCC_FLAGS_EXTRA}")
 message(STATUS "NVCC_FLAGS_EXTRA: ${NVCC_FLAGS_EXTRA}")
 
