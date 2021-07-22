@@ -1001,7 +1001,7 @@ def mse_loss(input, label, reduction='mean', name=None):
                           name=name)
 
 
-def ctc_loss(log_probs,
+def ctc_loss(logits,
              labels,
              input_lengths,
              label_lengths,
@@ -1016,7 +1016,7 @@ def ctc_loss(log_probs,
     is interated to the Warp-CTC library to normalize values for each row of the input tensor.
 
     Parameters:
-        log_probs (Tensor): The unscaled probability sequence with padding, which is a 3-D Tensor. The tensor shape is [max_logit_length, batch_size, num_classes + 1], where max_logit_length is the longest length of input logit sequence. The data type should be float32 or float64.
+        logits (Tensor): The unscaled probability sequence with padding, which is a 3-D Tensor. The tensor shape is [max_logit_length, batch_size, num_classes + 1], where max_logit_length is the longest length of input logit sequence. The data type should be float32 or float64.
         labels (Tensor): The ground truth sequence with padding, which must be a 3-D Tensor. The tensor shape is [batch_size, max_label_length], where max_label_length is the longest length of label sequence. The data type must be int32.
         input_lengths (Tensor): The length for each input sequence, it should have shape [batch_size] and dtype int64.
         label_lengths (Tensor): The length for each label sequence, it should have shape [batch_size] and dtype int64.
@@ -1025,7 +1025,7 @@ def ctc_loss(log_probs,
         norm_by_times (bool, default False) – Whether to normalize the gradients by the number of time-step, which is also the sequence’s length. There is no need to normalize the gradients if reduction mode is 'mean'.
 
     Returns:
-        Tensor, The Connectionist Temporal Classification (CTC) loss between ``log_probs`` and  ``labels``. If attr:`reduction` is ``'none'``, the shape of loss is [batch_size], otherwise, the shape of loss is [1]. Data type is the same as ``log_probs``.
+        Tensor, The Connectionist Temporal Classification (CTC) loss between ``logits`` and  ``labels``. If attr:`reduction` is ``'none'``, the shape of loss is [batch_size], otherwise, the shape of loss is [1]. Data type is the same as ``logits``.
 
     Examples:
 
@@ -1046,7 +1046,7 @@ def ctc_loss(log_probs,
             class_num = 3
 
             np.random.seed(1)
-            log_probs = np.array([[[4.17021990e-01, 7.20324516e-01, 1.14374816e-04],
+            logits = np.array([[[4.17021990e-01, 7.20324516e-01, 1.14374816e-04],
                                     [3.02332580e-01, 1.46755889e-01, 9.23385918e-02]],
 
                                     [[1.86260208e-01, 3.45560730e-01, 3.96767467e-01],
@@ -1065,19 +1065,19 @@ def ctc_loss(log_probs,
             input_lengths = np.array([5, 5]).astype("int64")
             label_lengths = np.array([3, 3]).astype("int64")
 
-            log_probs = paddle.to_tensor(log_probs)
+            logits = paddle.to_tensor(logits)
             labels = paddle.to_tensor(labels)
             input_lengths = paddle.to_tensor(input_lengths)
             label_lengths = paddle.to_tensor(label_lengths)
 
-            loss = F.ctc_loss(log_probs, labels,
+            loss = F.ctc_loss(logits, labels,
                 input_lengths,
                 label_lengths,
                 blank=0,
                 reduction='none')
             print(loss)  #[3.9179852 2.9076521]
 
-            loss = F.ctc_loss(log_probs, labels,
+            loss = F.ctc_loss(logits, labels,
                 input_lengths,
                 label_lengths,
                 blank=0,
@@ -1086,7 +1086,7 @@ def ctc_loss(log_probs,
 
     """
 
-    loss_out = fluid.layers.warpctc(log_probs, labels, blank, norm_by_times,
+    loss_out = fluid.layers.warpctc(logits, labels, blank, norm_by_times,
                                     input_lengths, label_lengths)
 
     loss_out = fluid.layers.squeeze(loss_out, [-1])

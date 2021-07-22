@@ -1044,14 +1044,14 @@ class CTCLoss(fluid.dygraph.Layer):
         reduction (string, optional): Indicate how to average the loss, the candicates are ``'none'`` | ``'mean'`` | ``'sum'``. If :attr:`reduction` is ``'mean'``, the output loss will be divided by the label_lengths, and then return the mean of quotient; If :attr:`reduction` is ``'sum'``, return the sum of loss; If :attr:`reduction` is ``'none'``, no reduction will be applied. Default is ``'mean'``.
 
     Shape:
-        log_probs (Tensor): The unscaled probability sequence with padding, which is a 3-D Tensor. The tensor shape is [max_logit_length, batch_size, num_classes + 1], where max_logit_length is the longest length of input logit sequence. The data type should be float32 or float64.
+        logits (Tensor): The unscaled probability sequence with padding, which is a 3-D Tensor. The tensor shape is [max_logit_length, batch_size, num_classes + 1], where max_logit_length is the longest length of input logit sequence. The data type should be float32 or float64.
         labels (Tensor): The ground truth sequence with padding, which must be a 3-D Tensor. The tensor shape is [batch_size, max_label_length], where max_label_length is the longest length of label sequence. The data type must be int32.
         input_lengths (Tensor): The length for each input sequence, it should have shape [batch_size] and dtype int64.
         label_lengths (Tensor): The length for each label sequence, it should have shape [batch_size] and dtype int64.
         norm_by_times (bool, default false) – Whether to normalize the gradients by the number of time-step, which is also the sequence’s length. There is no need to normalize the gradients if reduction mode is 'mean'.
 
     Returns:
-        Tensor, The Connectionist Temporal Classification (CTC) loss between ``log_probs`` and  ``labels``. If attr:`reduction` is ``'none'``, the shape of loss is [batch_size], otherwise, the shape of loss is [1]. Data type is the same as ``log_probs``.
+        Tensor, The Connectionist Temporal Classification (CTC) loss between ``logits`` and  ``labels``. If attr:`reduction` is ``'none'``, the shape of loss is [batch_size], otherwise, the shape of loss is [1]. Data type is the same as ``logits``.
 
     Examples:
 
@@ -1071,7 +1071,7 @@ class CTCLoss(fluid.dygraph.Layer):
             class_num = 3
 
             np.random.seed(1)
-            log_probs = np.array([[[4.17021990e-01, 7.20324516e-01, 1.14374816e-04],
+            logits = np.array([[[4.17021990e-01, 7.20324516e-01, 1.14374816e-04],
                                     [3.02332580e-01, 1.46755889e-01, 9.23385918e-02]],
 
                                     [[1.86260208e-01, 3.45560730e-01, 3.96767467e-01],
@@ -1090,17 +1090,17 @@ class CTCLoss(fluid.dygraph.Layer):
             input_lengths = np.array([5, 5]).astype("int64")
             label_lengths = np.array([3, 3]).astype("int64")
 
-            log_probs = paddle.to_tensor(log_probs)
+            logits = paddle.to_tensor(logits)
             labels = paddle.to_tensor(labels)
             input_lengths = paddle.to_tensor(input_lengths)
             label_lengths = paddle.to_tensor(label_lengths)
 
-            loss = paddle.nn.CTCLoss(blank=0, reduction='none')(log_probs, labels,
+            loss = paddle.nn.CTCLoss(blank=0, reduction='none')(logits, labels,
                 input_lengths,
                 label_lengths)
             print(loss)  #[3.9179852 2.9076521]
 
-            loss = paddle.nn.CTCLoss(blank=0, reduction='mean')(log_probs, labels,
+            loss = paddle.nn.CTCLoss(blank=0, reduction='mean')(logits, labels,
                 input_lengths,
                 label_lengths)
             print(loss)  #[1.1376063]
@@ -1112,13 +1112,13 @@ class CTCLoss(fluid.dygraph.Layer):
         self.reduction = reduction
 
     def forward(self,
-                log_probs,
+                logits,
                 labels,
                 input_lengths,
                 label_lengths,
                 norm_by_times=False):
         return paddle.nn.functional.ctc_loss(
-            log_probs,
+            logits,
             labels,
             input_lengths,
             label_lengths,
