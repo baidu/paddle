@@ -18,6 +18,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 #include "paddle/fluid/framework/variable.h"
 #include "paddle/fluid/platform/bkcl_helper.h"
@@ -31,8 +32,46 @@
 namespace paddle {
 namespace imperative {
 
+static std::string array_to_string(float* data, size_t len) {
+    std::stringstream ss;
+    ss << "[" << len << "]";
+    for (size_t j = 0; j < len; ++j) {
+          if (j % 10 == 0) {
+              ss << "\n " << data[j];
+          } else {
+              ss << " " << data[j];
+          }
+    }
+    return ss.str();
+}
+
+static std::string tensor_to_string(framework::Tensor* t) {
+    std::stringstream ss;
+    ss << "hello, tensor_to_string: numel is: [" << t->numel() << "]";
+    auto& place = t->place();
+    void* data = t->mutable_data(place);
+    if (platform::is_xpu_place(place)) {
+        ss << "[xpu]";
+        // copy
+        float* temp = new float[t->numel()];
+        memory::Copy(platform::CPUPlace(), reinterpret_cast<void*>(temp),
+                BOOST_GET_CONST(platform::XPUPlace, place),
+                reinterpret_cast<void*>(data),
+                t->numel() * sizeof(float));
+        ss << array_to_string(temp, t->numel());
+        delete[] temp;
+    } else if (platform::is_cpu_place(place)) {
+        ss << "[cpu]";
+        ss << array_to_string(reinterpret_cast<float*>(data), t->numel());
+        // no copy
+    } else {
+        ss << "[???]";
+    }
+    return ss.str();
+}
+
 static void AllReduce(const framework::Tensor &src, framework::Tensor *dst,
-                      const XPUStream stream, const platform::BKCLComm *comm) {
+                      const XPUStream stream, const platform::BKCLComm *comm, int xpu_id) {
   const auto &place = src.place();
   PADDLE_ENFORCE_EQ(
       platform::is_xpu_place(place), true,
@@ -48,6 +87,14 @@ static void AllReduce(const framework::Tensor &src, framework::Tensor *dst,
                                     bkcl_dtype, BKCL_ADD, stream),
                     BKCL_SUCCESS, platform::errors::PreconditionNotMet(
                                       "BKCL all reduce failed"));
+  // houjue debug, print dest values
+  static std::ofstream stored_buffer;
+  std::stringstream ss;
+  ss << xpu_id;
+  std::string file_name = "./log/all_reduce_" + ss.str() + ".log";
+  stored_buffer.open(file_name, std::ios::app);
+  stored_buffer << tensor_to_string(dst);
+  stored_buffer.close();
 }
 /*
 Baidu Kunlun Communication Library(BKCL) is designed for multi Baidu Kunlun
@@ -140,8 +187,9 @@ void BKCLParallelContext::AllReduceByStream(const framework::Variable &src,
     if (!dst->IsType<framework::LoDTensor>()) {
       dst->Clear();
     }
+    int xpu_id = BOOST_GET_CONST(platform::XPUPlace, place_).device;
     AllReduce(src.Get<framework::LoDTensor>(),
-              dst->GetMutable<framework::LoDTensor>(), stream, comm);
+              dst->GetMutable<framework::LoDTensor>(), stream, comm, xpu_id);
   } else {
     PADDLE_THROW(platform::errors::InvalidArgument(
         "XPU unsupported variable type %s for imperative allreduce, only "

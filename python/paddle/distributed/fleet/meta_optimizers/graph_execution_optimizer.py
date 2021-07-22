@@ -107,13 +107,13 @@ class GraphExecutionOptimizer(MetaOptimizerBase):
                 name="BKCLID", persistable=True, type=core.VarDesc.VarType.RAW)
 
             #NOTE(liuyuhui) Baidu Kunlun Communication Library(BKCL) currently do not support multi machines.
-            assert build_strategy.bkcl_comm_num == 1, \
-                "Baidu Kunlun Communication Library(BKCL) currently do not support multi machines."
-            for i in range(1, build_strategy.bkcl_comm_num):
-                startup_program.global_block().create_var(
-                    name="BKCLID_{}".format(i),
-                    persistable=True,
-                    type=core.VarDesc.VarType.RAW)
+            #assert build_strategy.bkcl_comm_num == 1, \
+            #    "Baidu Kunlun Communication Library(BKCL) currently do not support multi machines."
+            #for i in range(1, build_strategy.bkcl_comm_num):
+            #    startup_program.global_block().create_var(
+            #        name="BKCLID_{}".format(i),
+            #        persistable=True,
+            #        type=core.VarDesc.VarType.RAW)
 
             startup_program.global_block().append_op(
                 type="gen_bkcl_id",

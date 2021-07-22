@@ -23,9 +23,7 @@ if(WITH_MKLDNN)
 endif()
 
 
-if(WITH_DISTRIBUTE)
-    add_subdirectory(collective)
-endif()
+add_subdirectory(collective)
 
 if (WITH_PSCORE)
     add_subdirectory(pscore)

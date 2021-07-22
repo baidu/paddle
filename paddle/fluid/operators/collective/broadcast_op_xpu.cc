@@ -15,6 +15,7 @@ limitations under the License. */
 #include <algorithm>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 #include "paddle/fluid/framework/data_type.h"
 #include "paddle/fluid/framework/lod_tensor.h"
@@ -34,6 +35,31 @@ namespace operators {
 template <typename T>
 class BKCLBroadcastOpKernel : public framework::OpKernel<T> {
  public:
+  void Debug(const framework::ExecutionContext& ctx, void* send_recv_buffer, size_t len, int dev_id) const {
+      // houjue debug, print data to file to check consistency
+      float* send_cpu = new float[len];
+      static std::ofstream stored_buffer;
+      std::stringstream ss;
+      ss << dev_id;
+      std::string file_name = "./log/send_recv_buffer_" + ss.str() + ".log";
+      stored_buffer.open(file_name, std::ios::app);
+
+      memory::Copy(platform::CPUPlace(), reinterpret_cast<void*>(send_cpu),
+              BOOST_GET_CONST(platform::XPUPlace, ctx.GetPlace()),
+              reinterpret_cast<void*>(send_recv_buffer),
+              len * sizeof(float));
+      VLOG(0) << file_name << " address = " << send_recv_buffer;
+      ss << "[broadcast]";
+      for (size_t j = 0; j < len; ++j) {
+          if (j % 10 == 0) {
+              stored_buffer << "\n " << send_cpu[j];
+          } else {
+              stored_buffer << " " << send_cpu[j];
+          }
+      }
+      stored_buffer.close();
+      delete[] send_cpu;
+  }
   void Compute(const framework::ExecutionContext& ctx) const override {
     PADDLE_ENFORCE_EQ(platform::is_xpu_place(ctx.GetPlace()), true,
                       platform::errors::PreconditionNotMet(
@@ -71,6 +97,9 @@ class BKCLBroadcastOpKernel : public framework::OpKernel<T> {
     auto ret = bkcl_broadcast(comm, send_recv_buffer, send_recv_buffer,
                               static_cast<size_t>(in->numel()) * scale,
                               data_type, root_dev_id, stream);
+    // houjue debug
+    Debug(ctx, send_recv_buffer, static_cast<size_t>(in->numel()) * scale, dev_id);
+
     PADDLE_ENFORCE_EQ(ret, BKCL_SUCCESS,
                       platform::errors::Unavailable("bkcl_broadcast failed"));
 
