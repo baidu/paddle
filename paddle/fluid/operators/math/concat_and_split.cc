@@ -40,18 +40,18 @@ class ConcatFunctor<platform::CPUDeviceContext, T> {
                   const std::vector<framework::Tensor>& input, int axis,
                   framework::Tensor* output) {
     // TODO(zcd): Add input data validity checking
-    int num = input.size();
+    size_t num = input.size();
 
-    int rows = 1;
+    int64_t rows = 1;
     auto dim_0 = input[0].dims();
     for (int i = 0; i < axis; ++i) {
       rows *= dim_0[i];
     }
-    int out_rows = rows, out_cols = 0;
+    int64_t out_rows = rows, out_cols = 0;
 
     std::vector<int64_t> input_cols(input.size());
-    for (int i = 0; i < num; ++i) {
-      int t_cols = input[i].numel() / rows;
+    for (size_t i = 0; i < num; ++i) {
+      int64_t t_cols = input[i].numel() / rows;
       out_cols += t_cols;
       input_cols[i] = t_cols;
     }
@@ -59,11 +59,11 @@ class ConcatFunctor<platform::CPUDeviceContext, T> {
 
     // computation
     auto output_data = output->data<T>();
-    int col_idx = 0;
-    for (int j = 0; j < num; ++j) {
-      int col_len = input_cols[j];
+    int64_t col_idx = 0;
+    for (size_t j = 0; j < num; ++j) {
+      int64_t col_len = input_cols[j];
       auto input_data = input[j].data<T>();
-      for (int k = 0; k < out_rows; ++k) {
+      for (int64_t k = 0; k < out_rows; ++k) {
         memory::Copy(cpu_place, output_data + k * out_cols + col_idx, cpu_place,
                      input_data + k * col_len, sizeof(T) * col_len);
       }
