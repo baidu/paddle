@@ -44,7 +44,7 @@ def spectral_norm(weight, u, v, dim, power_iters, eps):
         u = u / (u_norm + eps)
 
     sigma = (u * np.matmul(weight_mat, v)).sum()
-    return weight / sigma
+    return weight / sigma, u, v
 
 
 @skip_check_grad_ci(
@@ -63,6 +63,7 @@ class TestSpectralNormOpNoGrad(OpTest):
             "dim": self.dim,
             "power_iters": self.power_iters,
             "eps": self.eps,
+            "fix_state": self.fix_state,
         }
 
         self.inputs = {
@@ -71,9 +72,9 @@ class TestSpectralNormOpNoGrad(OpTest):
             "V": v,
         }
 
-        output = spectral_norm(weight, u, v, self.dim, self.power_iters,
-                               self.eps)
-        self.outputs = {"Out": output}
+        output, new_u, new_v = spectral_norm(weight, u, v, self.dim, self.power_iters,
+                                             self.eps)
+        self.outputs = {"Out": output, "UOut": new_u, "VOut": new_v}
 
     def test_check_output(self):
         self.check_output()
@@ -85,6 +86,7 @@ class TestSpectralNormOpNoGrad(OpTest):
         self.dim = 0
         self.power_iters = 5
         self.eps = 1e-12
+        self.fix_state = True
 
 
 @skip_check_grad_ci(
@@ -99,6 +101,7 @@ class TestSpectralNormOpNoGrad2(TestSpectralNormOpNoGrad):
         self.dim = 1
         self.power_iters = 10
         self.eps = 1e-12
+        self.fix_state = True
 
 
 class TestSpectralNormOp(TestSpectralNormOpNoGrad):
@@ -115,6 +118,7 @@ class TestSpectralNormOp(TestSpectralNormOpNoGrad):
         self.dim = 0
         self.power_iters = 0
         self.eps = 1e-12
+        self.fix_state = True
 
 
 class TestSpectralNormOp2(TestSpectralNormOp):
@@ -125,6 +129,41 @@ class TestSpectralNormOp2(TestSpectralNormOp):
         self.dim = 1
         self.power_iters = 0
         self.eps = 1e-12
+        self.fix_state = True
+
+
+class TestSpectralNormOpFixState(TestSpectralNormOpNoGrad):
+    def test_check_grad_ignore_uv(self):
+        self.check_grad(
+            ['Weight'],
+            'Out',
+            no_grad_set=set(["U", "V"]), )
+
+    def initTestCase(self):
+        self.weight_shape = (10, 12)
+        self.u_shape = (10, )
+        self.v_shape = (12, )
+        self.dim = 0
+        self.power_iters = 3
+        self.eps = 1e-12
+        self.fix_state = False
+
+
+class TestSpectralNormOpUpdateState(TestSpectralNormOpNoGrad):
+    def test_check_grad_ignore_uv(self):
+        self.check_grad(
+            ['Weight'],
+            'Out',
+            no_grad_set=set(["U", "V"]), )
+
+    def initTestCase(self):
+        self.weight_shape = (10, 12)
+        self.u_shape = (10, )
+        self.v_shape = (12, )
+        self.dim = 0
+        self.power_iters = 3
+        self.eps = 1e-12
+        self.fix_state = True
 
 
 class TestSpectralNormOpError(unittest.TestCase):

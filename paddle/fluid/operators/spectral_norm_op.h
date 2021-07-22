@@ -61,13 +61,12 @@ static inline void TransCompute(const int rank, const Tensor& in, Tensor* out,
 }
 
 template <typename DeviceContext, typename T>
-static inline void CalcMatrixSigmaAndNormWeight(
-    Tensor* sigma, Tensor* u, Tensor* v, Tensor* weight, const int power_iters,
+static inline void UpdateUandV(
+    Tensor* u, Tensor* v, Tensor* weight, const int power_iters,
     const float eps, const framework::ExecutionContext& ctx) {
+  if (power_iters <= 0) return;
   auto& place = *ctx.template device_context<DeviceContext>().eigen_device();
   auto blas = math::GetBlas<DeviceContext, T>(ctx);
-  auto sigma_t = EigenTensor<T, 2>::From(*sigma);
-  auto weight_t = EigenTensor<T, 2>::From(*weight);
   auto u_t = EigenTensor<T, 2>::From(*u);
   auto v_t = EigenTensor<T, 2>::From(*v);
 
@@ -88,6 +87,22 @@ static inline void CalcMatrixSigmaAndNormWeight(
             Array1(h));
     u_t.device(place) = u_t / (u_t_norm + u_t_norm.constant(eps));
   }
+}
+
+// CalcMatrixSigmaAndNormWeight will not update u and v
+template <typename DeviceContext, typename T>
+static inline void CalcMatrixSigmaAndNormWeight(
+    Tensor* sigma, const Tensor* u, const Tensor* v,
+    Tensor* weight, const framework::ExecutionContext& ctx) {
+  auto& place = *ctx.template device_context<DeviceContext>().eigen_device();
+  auto blas = math::GetBlas<DeviceContext, T>(ctx);
+  auto sigma_t = EigenTensor<T, 2>::From(*sigma);
+  auto weight_t = EigenTensor<T, 2>::From(*weight);
+  auto u_t = EigenTensor<T, 2>::From(*u);
+
+  const int h = weight->dims()[0];
+  const int w = weight->dims()[1];
+
   Tensor weight_v;
   weight_v.mutable_data<T>({h, 1}, ctx.GetPlace());
   blas.MatMul(*weight, false, *v, false, T(1), &weight_v, T(0));
@@ -109,6 +124,8 @@ class SpectralNormKernel : public framework::OpKernel<T> {
     auto u = ctx.Input<Tensor>("U");
     auto v = ctx.Input<Tensor>("V");
     auto out = ctx.Output<Tensor>("Out");
+    auto u_out = ctx.Output<Tensor>("UOut");
+    auto v_out = ctx.Output<Tensor>("VOut");
 
     int dim = ctx.Attr<int>("dim");
     int power_iters = ctx.Attr<int>("power_iters");
@@ -144,12 +161,14 @@ class SpectralNormKernel : public framework::OpKernel<T> {
 
     Tensor sigma;
     sigma.mutable_data<T>(weight_mat.dims(), ctx.GetPlace());
-    Tensor uu, vv;
-    TensorCopySync(*u, ctx.GetPlace(), &uu);
-    TensorCopySync(*v, ctx.GetPlace(), &vv);
-    CalcMatrixSigmaAndNormWeight<DeviceContext, T>(
-        &sigma, &(uu.Resize({h, 1})), &(vv.Resize({w, 1})), &weight_mat,
+    TensorCopySync(*u, ctx.GetPlace(), u_out);
+    TensorCopySync(*v, ctx.GetPlace(), v_out);
+    UpdateUandV<DeviceContext, T>(
+        &(u_out->Resize({h, 1})), &(v_out->Resize({w, 1})), &weight_mat,
         power_iters, eps, ctx);
+    CalcMatrixSigmaAndNormWeight<DeviceContext, T>(
+        &sigma, &(u_out->Resize({h, 1})), &(v_out->Resize({w, 1})), &weight_mat,
+        ctx);
 
     if (dim != 0) {
       std::vector<int> perm;
@@ -180,17 +199,19 @@ class SpectralNormGradKernel : public framework::OpKernel<T> {
     auto& dev_ctx = ctx.template device_context<DeviceContext>();
     auto blas = math::GetBlas<DeviceContext, T>(ctx);
     auto weight = ctx.Input<Tensor>("Weight");
-    auto u = ctx.Input<Tensor>("U");
-    auto v = ctx.Input<Tensor>("V");
+    auto u_out = ctx.Input<Tensor>("UOut");
+    auto v_out = ctx.Input<Tensor>("VOut");
     auto out_grad = ctx.Input<Tensor>(framework::GradVarName("Out"));
     auto weight_grad = ctx.Output<Tensor>(framework::GradVarName("Weight"));
 
     int dim = ctx.Attr<int>("dim");
-    int power_iters = ctx.Attr<int>("power_iters");
-    float eps = ctx.Attr<float>("eps");
 
-    const int h = u->dims()[0];
-    const int w = v->dims()[0];
+    const int h = u_out->dims()[0];
+    const int w = v_out->dims()[0];
+
+    Tensor u_mat, v_mat;
+    TensorCopySync(*u_out, ctx.GetPlace(), &u_mat);
+    TensorCopySync(*v_out, ctx.GetPlace(), &v_mat);
 
     Tensor weight_mat, out_grad_mat;
     auto dims = weight->dims();
@@ -225,16 +246,14 @@ class SpectralNormGradKernel : public framework::OpKernel<T> {
 
     Tensor sigma;
     sigma.mutable_data<T>(weight_mat.dims(), ctx.GetPlace());
-    Tensor uu, vv;
-    TensorCopySync(*u, ctx.GetPlace(), &uu);
-    TensorCopySync(*v, ctx.GetPlace(), &vv);
+
     CalcMatrixSigmaAndNormWeight<DeviceContext, T>(
-        &sigma, &(uu.Resize({h, 1})), &(vv.Resize({w, 1})), &weight_mat,
-        power_iters, eps, ctx);
+        &sigma, &(u_mat.Resize({h, 1})), &(v_mat.Resize({w, 1})), &weight_mat,
+        ctx);
 
     Tensor uv;
     uv.mutable_data<T>({h, w}, ctx.GetPlace());
-    blas.MatMul(uu.Resize({h, 1}), false, vv.Resize({w, 1}), false, T(1), &uv,
+    blas.MatMul(u_mat.Resize({h, 1}), false, v_mat.Resize({w, 1}), false, T(1), &uv,
                 T(0));
 
     Tensor weight_grad_mat;

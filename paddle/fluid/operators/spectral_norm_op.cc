@@ -30,6 +30,8 @@ class SpectralNormOp : public framework::OperatorWithKernel {
     OP_INOUT_CHECK(ctx->HasInput("U"), "Input", "U", "SpectralNorm");
     OP_INOUT_CHECK(ctx->HasInput("V"), "Input", "V", "SpectralNorm");
     OP_INOUT_CHECK(ctx->HasOutput("Out"), "Output", "Out", "SpectralNorm");
+    OP_INOUT_CHECK(ctx->HasOutput("UOut"), "Output", "UOut", "SpectralNorm");
+    OP_INOUT_CHECK(ctx->HasOutput("VOut"), "Output", "VOut", "SpectralNorm");
 
     auto dim_weight = ctx->GetInputDim("Weight");
     auto rank_weight = dim_weight.size();
@@ -88,6 +90,8 @@ class SpectralNormOp : public framework::OperatorWithKernel {
     }
 
     ctx->SetOutputDim("Out", dim_weight);
+    ctx->SetOutputDim("UOut", dim_u);
+    ctx->SetOutputDim("VOut", dim_v);
     ctx->ShareLoD("Weight", /*->*/ "Out");
   }
 
@@ -126,6 +130,10 @@ class SpectralNormOpMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("Out",
               "The output weight tensor of spectral_norm operator, "
               "This tensor is in same shape with Input(Weight).");
+    AddOutput("UOut",
+              "The updated value of `U`");
+    AddOutput("VOut",
+              "The updated value of `V`");
 
     AddAttr<int>("dim",
                  "The index of dimension which should be permuted "
@@ -145,7 +153,6 @@ class SpectralNormOpMaker : public framework::OpProtoAndCheckerMaker {
                    "the denominator to aviod divide zero. "
                    "Default 1e-12.")
         .SetDefault(1e-12);
-
     AddComment(R"DOC(
           This layer calculates the spectral normalization value of weight of
           fc, conv1d, conv2d, conv3d layers which should be 2-D, 3-D, 4-D, 5-D
@@ -198,6 +205,8 @@ class SpectralNormGradOpMaker : public framework::SingleGradOpMaker<T> {
     op->SetInput("Weight", this->Input("Weight"));
     op->SetInput("U", this->Input("U"));
     op->SetInput("V", this->Input("V"));
+    op->SetInput("UOut", this->Output("UOut"));
+    op->SetInput("VOut", this->Output("VOut"));
 
     op->SetOutput(framework::GradVarName("Weight"), this->InputGrad("Weight"));
 

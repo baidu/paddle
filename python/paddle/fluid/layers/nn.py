@@ -3740,11 +3740,13 @@ def spectral_norm(weight, dim=0, power_iters=1, eps=1e-12, name=None):
 
     # create output
     out = helper.create_variable(dtype=dtype)
+    u_out = helper.create_variable(dtype=dtype)
+    v_out = helper.create_variable(dtype=dtype)
 
     helper.append_op(
         type="spectral_norm",
         inputs=inputs,
-        outputs={"Out": out, },
+        outputs={"Out": out, "UOut": u_out, "VOut": v_out},
         attrs={
             "dim": dim,
             "power_iters": power_iters,
