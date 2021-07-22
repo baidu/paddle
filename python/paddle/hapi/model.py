@@ -2141,7 +2141,7 @@ class Model(object):
             _input_size = input_size
         else:
             _input_size = self._inputs
-        return summary(self.network, _input_size, dtype)
+        return summary(self.network, _input_size, dtypes=dtype)
 
     def _verify_spec(self, specs, shapes=None, dtypes=None, is_input=False):
         out_specs = []
