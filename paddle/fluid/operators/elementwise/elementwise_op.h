@@ -182,6 +182,9 @@ class ElementwiseOpMaker : public framework::OpProtoAndCheckerMaker {
     AddAttr<float>("Scale_out",
                    "(float, default 1.0f), The quantize scale of output data")
         .SetDefault(1.0f);
+    AddAttr<bool>("use_addto",
+                  "(bool, default false) If use addto strategy or not.")
+        .SetDefault(false);
     AddOpComment();
   }
 
