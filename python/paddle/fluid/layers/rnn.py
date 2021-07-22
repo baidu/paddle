@@ -21,6 +21,7 @@ import warnings
 import paddle
 from paddle.utils import deprecated
 from . import nn
+from . import core
 from . import tensor
 from . import control_flow
 from . import utils
@@ -2516,8 +2517,8 @@ def lstm(input,
 
                         Three tensors, rnn_out, last_h, last_c:
 
-                        - rnn_out is result of LSTM hidden, shape is :math:`[seq\_len, batch\_size, hidden\_size]` \
-                          if is_bidirec set to True, shape will be :math:`[seq\_len, batch\_size, hidden\_size*2]`
+                        - rnn_out is result of LSTM hidden, shape is :math:`[batch\_size, seq\_len, hidden\_size]` \
+                          if is_bidirec set to True, shape will be :math:`[batch\_size, seq\_len, hidden\_size*2]`
                         - last_h is the hidden state of the last step of LSTM \
                           shape is :math:`[num\_layers, batch\_size, hidden\_size]` \
                           if is_bidirec set to True, shape will be :math:`[num\_layers*2, batch\_size, hidden\_size]`
@@ -2549,6 +2550,7 @@ def lstm(input,
             rnn_out.shape  # (-1, 100, 150)
             last_h.shape  # (1, 20, 150)
             last_c.shape  # (1, 20, 150)
+
     """
 
     helper = LayerHelper('cudnn_lstm', **locals())
