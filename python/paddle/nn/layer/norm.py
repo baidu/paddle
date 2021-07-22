@@ -579,7 +579,7 @@ class _BatchNormBase(layers.Layer):
                 attr=self._weight_attr,
                 shape=param_shape,
                 default_initializer=Constant(1.0))
-            self.weight.stop_gradient = self._weight_attr != None and self._weight_attr.learning_rate == 0.
+            self.weight.stop_gradient = self._weight_attr is not None and self._weight_attr.learning_rate == 0.
 
         if bias_attr == False:
             self.bias = self.create_parameter(
@@ -591,7 +591,7 @@ class _BatchNormBase(layers.Layer):
         else:
             self.bias = self.create_parameter(
                 attr=self._bias_attr, shape=param_shape, is_bias=True)
-            self.bias.stop_gradient = self._bias_attr != None and self._bias_attr.learning_rate == 0.
+            self.bias.stop_gradient = self._bias_attr is not None and self._bias_attr.learning_rate == 0.
 
         moving_mean_name = None
         moving_variance_name = None
