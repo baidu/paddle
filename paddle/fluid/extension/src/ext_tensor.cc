@@ -124,6 +124,21 @@ void DeviceCopy(T *src, T *dst, PlaceType src_plc, PlaceType dst_plc,
   }                                                     \
   auto *tensor = static_cast<framework::LoDTensor *>(tensor_.get());
 
+#define GET_INNER_PLACE                               \
+  platform::Place place;                              \
+  switch (place_) {                                   \
+    case PlaceType::kCPU:                             \
+      place = platform::CPUPlace();                   \
+      break;                                          \
+    case PlaceType::kGPU:                             \
+      place = platform::CUDAPlace();                  \
+      break;                                          \
+    default:                                          \
+      PADDLE_THROW(platform::errors::Unavailable(     \
+          "Custom operator unsupported place id(%d)", \
+          static_cast<int>(place_)));                 \
+  }
+
 void Tensor::reshape(const std::vector<int64_t> &shape) {
   GET_CASTED_TENSOR
   auto new_dim = framework::make_ddim(shape);
@@ -254,6 +269,63 @@ Tensor Tensor::copy_to(const PlaceType &target_place) const {
         "Not supported place transform of place: %d to place: %d",
         static_cast<int>(src_place), static_cast<int>(target_place)));
   }
+  return target;
+}
+
+Tensor Tensor::slice(const int64_t begin_idx, const int64_t end_idx) const {
+  GET_CASTED_TENSOR
+  GET_INNER_PLACE
+  framework::Tensor intermediate = tensor->Slice(begin_idx, end_idx);
+  std::vector<int64_t> shape_vec =
+      framework::vectorize<int64_t>(tensor->dims());
+  shape_vec[0] = end_idx - begin_idx;
+  Tensor target = Tensor(place_, shape_vec);
+  auto *target_tensor =
+      static_cast<framework::LoDTensor *>(target.tensor_.get());
+  auto dtype = tensor->type();
+  switch (dtype) {
+    case framework::proto::VarType::FP32:
+      target_tensor->mutable_data<float>(place);
+      break;
+    case framework::proto::VarType::FP64:
+      target_tensor->mutable_data<double>(place);
+      break;
+    case framework::proto::VarType::INT64:
+      target_tensor->mutable_data<int64_t>(place);
+      break;
+    case framework::proto::VarType::INT32:
+      target_tensor->mutable_data<int32_t>(place);
+      break;
+    case framework::proto::VarType::INT16:
+      target_tensor->mutable_data<int16_t>(place);
+      break;
+    case framework::proto::VarType::INT8:
+      target_tensor->mutable_data<int8_t>(place);
+      break;
+    case framework::proto::VarType::UINT8:
+      target_tensor->mutable_data<uint8_t>(place);
+      break;
+    case framework::proto::VarType::BOOL:
+      target_tensor->mutable_data<bool>(place);
+      break;
+    case framework::proto::VarType::COMPLEX64:
+      target_tensor->mutable_data<complex64>(place);
+      break;
+    case framework::proto::VarType::COMPLEX128:
+      target_tensor->mutable_data<complex128>(place);
+      break;
+    case framework::proto::VarType::FP16:
+      target_tensor->mutable_data<float16>(place);
+      break;
+    // TODO(JiabinYang) support more data types if needed.
+    default:
+      PADDLE_THROW(platform::errors::Unavailable(
+          "Not supported VarType(%s) for slicing.",
+          ToString(framework::CustomTensorUtils::ConvertInnerDTypeToEnumDType(
+              dtype))));
+      break;
+  }
+  target_tensor->ShareDataWith(intermediate);
   return target;
 }
 
