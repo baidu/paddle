@@ -55,6 +55,10 @@ MkldnnQuantizerConfig::MkldnnQuantizerConfig() {
   rules_["elementwise_add"]["Y"] = ScaleAlgo::KL;
   rules_["elementwise_add"]["Out"] = ScaleAlgo::KL;
 
+  rules_["elementwise_mul"]["X"] = ScaleAlgo::KL;
+  rules_["elementwise_mul"]["Y"] = ScaleAlgo::KL;
+  rules_["elementwise_mul"]["Out"] = ScaleAlgo::KL;
+
   // Reshape2 does not perform calculation on the data and shapes are not
   // changed. Scale is calculated on input data and assign to Quantize and
   // Dequantize scale.
@@ -63,6 +67,24 @@ MkldnnQuantizerConfig::MkldnnQuantizerConfig() {
   rules_["reshape2"]["ShapeTensor"] = ScaleAlgo::NONE;
   rules_["reshape2"]["XShape"] = ScaleAlgo::NONE;
   rules_["reshape2"]["Out"] = ScaleAlgo::NONE;
+
+  rules_["fusion_gru"]["X"] = ScaleAlgo::KL;
+  rules_["fusion_gru"]["H0"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["Bias"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["WeightX"] = ScaleAlgo::NONE;  // Weights will be handled
+  rules_["fusion_gru"]["WeightH"] = ScaleAlgo::NONE;  // separately
+  rules_["fusion_gru"]["ReorderedH0"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["XX"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["BatchedInput"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["BatchedOut"] = ScaleAlgo::NONE;
+  rules_["fusion_gru"]["Hidden"] = ScaleAlgo::KL;
+
+  rules_["multi_gru"]["X"] = ScaleAlgo::KL;
+  rules_["multi_gru"]["Bias"] = ScaleAlgo::NONE;
+  rules_["multi_gru"]["WeightX"] = ScaleAlgo::NONE;  // Weights will be handled
+  rules_["multi_gru"]["WeightH"] = ScaleAlgo::NONE;  // separately
+  rules_["multi_gru"]["Scale_weights"] = ScaleAlgo::NONE;
+  rules_["multi_gru"]["Hidden"] = ScaleAlgo::KL;
 }
 
 ScaleAlgo MkldnnQuantizerConfig::scale_algo(

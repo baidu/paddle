@@ -195,6 +195,21 @@ function(inference_analysis_api_lexical_bfloat16_test_run TARGET_NAME test_binar
              --iterations=2)
 endfunction()
 
+function(inference_analysis_api_lexical_int8_test_run TARGET_NAME test_binary infer_model data_path fuse_multi_gru)
+    inference_analysis_test_run(${TARGET_NAME}
+    COMMAND ${test_binary}
+        ARGS --infer_model=${infer_model}
+             --infer_data=${data_path}
+             --batch_size=100
+             --cpu_num_threads=${CPU_NUM_THREADS_ON_CI}
+             --with_accuracy_layer=true
+             --use_analysis=true
+             --enable_int8=true
+             --quantized_accuracy=0.01
+             --fuse_multi_gru=${fuse_multi_gru}
+             --iterations=4)
+endfunction()
+
 function(preprocess_data2bin_test_run target py_script_source data_dir output_file)
 	py_test(${target} SRCS ${CMAKE_CURRENT_SOURCE_DIR}/${py_script_source}
 	        ARGS --data_dir=${data_dir}
@@ -475,6 +490,10 @@ if(WITH_MKLDNN)
   inference_analysis_api_lexical_test_run(test_analyzer_lexical_gru ${LEXICAL_TEST_APP} ${GRU_MODEL_PATH} ${GRU_DATA_PATH})
   # run bfloat16 lexical analysis test
   inference_analysis_api_lexical_bfloat16_test_run(test_analyzer_lexical_gru_bfloat16 ${LEXICAL_TEST_APP} ${GRU_MODEL_PATH} ${GRU_DATA_PATH})
+  # run post-training quantization lexical analysis test
+  inference_analysis_api_lexical_int8_test_run(test_analyzer_lexical_gru_int8 ${LEXICAL_TEST_APP} ${GRU_MODEL_PATH} ${GRU_DATA_PATH} false)
+  # run post-training quantization lexical analysis test with multi_gru fuse 
+  inference_analysis_api_lexical_int8_test_run(test_analyzer_lexical_gru_int8_multi_gru ${LEXICAL_TEST_APP} ${GRU_MODEL_PATH} ${GRU_DATA_PATH} true)
 
   ### optimized FP32 vs. Quant INT8 tests
   
