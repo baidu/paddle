@@ -1432,12 +1432,14 @@ def save_inference_model(dirname,
         main_program.desc._set_version()
         paddle.fluid.core.save_op_version_info(main_program.desc)
         with open(model_basename, "wb") as f:
-            f.write(main_program.desc.serialize_to_string())
+            f.write(main_program._remove_training_info()
+                    .desc.serialize_to_string())
     else:
         # TODO(panyx0718): Save more information so that it can also be used
         # for training and more flexible post-processing.
         with open(model_basename + ".main_program", "wb") as f:
-            f.write(main_program.desc.serialize_to_string())
+            f.write(main_program._remove_training_info()
+                    .desc.serialize_to_string())
 
     if program_only:
         warnings.warn(

@@ -510,7 +510,7 @@ def save_inference_model(path_prefix, feed_vars, fetch_vars, executor,
     program = _get_valid_program(kwargs.get('program', None))
     program = normalize_program(program, feed_vars, fetch_vars)
     # serialize and save program
-    program_bytes = _serialize_program(program)
+    program_bytes = _serialize_program(program._remove_training_info())
     save_to_file(model_path, program_bytes)
     # serialize and save params
     params_bytes = _serialize_persistables(program, executor)

@@ -1203,7 +1203,7 @@ class Executor(object):
                 if vardesc.persistable() == False and \
                     vardesc.type() == core.VarDesc.VarType.LOD_TENSOR and \
                     vardesc.need_check_feed() == True and \
-                    varobj._stop_gradient == True and \
+                    varobj.stop_gradient == True and \
                     varobj.is_data == True and \
                     varobj.belong_to_optimizer == False and \
                     varname not in feed:
