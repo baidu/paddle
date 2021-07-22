@@ -101,6 +101,8 @@ std::shared_ptr<std::mt19937_64> GetCPURandomEngine(uint64_t seed) {
   }
 }
 
+uint64_t GetSeed() { return DefaultCPUGenerator()->GetCurrentSeed(); }
+
 GeneratorState Generator::GetState() {
   std::lock_guard<std::mutex> lock(this->mu_);
   state_.cpu_engine = *engine_;

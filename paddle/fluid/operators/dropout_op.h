@@ -13,16 +13,19 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 #pragma once
 
+#include <algorithm>
 #include <cstring>
 #include <random>
 #include <string>
-
-#include <algorithm>
 #include "paddle/fluid/framework/eigen.h"
 #include "paddle/fluid/framework/generator.h"
 #include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/operators/jit/macro.h"
+#include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/platform/gpu_launch_config.h"
-
+#ifdef PADDLE_WITH_MKLML
+#include <omp.h>
+#endif
 namespace paddle {
 namespace operators {
 
@@ -87,10 +90,9 @@ class CPUDropoutKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& context) const override {
     auto* x = context.Input<Tensor>("X");
-    auto* seed =
-        context.HasInput("Seed") ? context.Input<Tensor>("Seed") : nullptr;
     auto* y = context.Output<Tensor>("Out");
     const auto* x_data = x->data<T>();
+
     auto* y_data = y->mutable_data<T>(context.GetPlace());
     float dropout_prob = context.Attr<float>("dropout_prob");
 
@@ -100,7 +102,7 @@ class CPUDropoutKernel : public framework::OpKernel<T> {
     if (!context.Attr<bool>("is_test")) {
       auto* mask = context.Output<Tensor>("Mask");
       auto* mask_data = mask->mutable_data<uint8_t>(context.GetPlace());
-      size_t size = framework::product(mask->dims());
+      int size = framework::product(mask->dims());
 
       // Special case when dropout_prob is 1.0
       if (dropout_prob == 1.0f) {
@@ -108,6 +110,39 @@ class CPUDropoutKernel : public framework::OpKernel<T> {
         std::memset(mask_data, 0, size * sizeof(*mask_data));  // NOLINT
         return;
       }
+
+#ifdef PADDLE_WITH_MKLML
+      int* retValue = new int[size];
+#pragma omp parallel
+      {
+        int nthr = omp_get_max_threads();
+        const int ithr = omp_get_thread_num();
+        const int avg_amount = (size + nthr - 1) / nthr;
+        const int my_offset = ithr * avg_amount;
+        const int my_amount =
+            std::min(my_offset + avg_amount, size) - my_offset;
+        if (my_amount > 0) {
+          VSLStreamStatePtr stream;
+          vslNewStream(&stream, VSL_BRNG_MCG31, framework::GetSeed());
+          vslSkipAheadStream(stream, my_offset);
+          viRngBernoulli(VSL_RNG_METHOD_BERNOULLI_ICDF, stream, my_amount,
+                         retValue + my_offset, 1.0 - dropout_prob);
+          vslDeleteStream(&stream);
+        }
+      }
+      float factor = 1.0f / static_cast<T>(1.0f - dropout_prob);
+#pragma omp parallel for
+      for (int i = 0; i < size; i++) {
+        mask_data[i] = static_cast<uint8_t>(retValue[i]);
+        if (upscale_in_train) {
+          y_data[i] = x_data[i] * factor * retValue[i];
+        } else {
+          y_data[i] = x_data[i] * retValue[i];
+        }
+      }
+#else
+      auto* seed =
+          context.HasInput("Seed") ? context.Input<Tensor>("Seed") : nullptr;
       // std::minstd_rand engine;
       // NOTE: fixed seed should only be used in unittest or for debug.
       // Guarantee to use random seed in training.
@@ -119,10 +154,8 @@ class CPUDropoutKernel : public framework::OpKernel<T> {
             context.Attr<bool>("fix_seed") ? context.Attr<int>("seed") : 0;
       }
       auto engine = framework::GetCPURandomEngine(seed_data);
-
       std::uniform_real_distribution<float> dist(0, 1);
-
-      for (size_t i = 0; i < size; ++i) {
+      for (int i = 0; i < size; ++i) {
         if (dist(*engine) < dropout_prob) {
           mask_data[i] = 0;
           y_data[i] = 0;
@@ -135,6 +168,8 @@ class CPUDropoutKernel : public framework::OpKernel<T> {
           }
         }
       }
+#endif
+
     } else {
       if (upscale_in_train) {
         const auto* X_data = x->data<T>();

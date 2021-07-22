@@ -288,7 +288,20 @@ shutil.copy('${WARPCTC_LIBRARIES}', libs_path)
 if '${WITH_MKL}' == 'ON':
     shutil.copy('${MKLML_SHARED_LIB}', libs_path)
     shutil.copy('${MKLML_SHARED_IOMP_LIB}', libs_path)
-    package_data['paddle.libs']+=[('libmklml_intel' if os.name != 'nt' else 'mklml') + ext_name, ('libiomp5' if os.name != 'nt' else 'libiomp5md') + ext_name]
+    shutil.copy('${MKLML_SHARED_RT_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_CORE_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_VML_DEF_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_THREAD_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_LP64_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_DEF_LIB}', libs_path)
+    shutil.copy('${MKLML_SHARED_AVX512_LIB}', libs_path)
+    package_data['paddle.libs']+=[('libmklml_intel' if os.name != 'nt' else 'mklml') + ext_name, ('libiomp5' if os.name != 'nt' else 'libiomp5md') + ext_name
+    ,('libmkl_rt' if os.name != 'nt' else 'libmkl_rt') + ext_name
+    ,('libmkl_core' if os.name != 'nt' else 'libmkl_core') + ext_name
+    ,('libmkl_intel_lp64' if os.name != 'nt' else 'libmkl_intel_lp64') + ext_name
+    ,('libmkl_intel_thread' if os.name != 'nt' else 'libmkl_intel_thread') + ext_name
+    ,('libmkl_def' if os.name != 'nt' else 'libmkl_def') + ext_name
+    ,('libmkl_avx512' if os.name != 'nt' else 'libmkl_avx512') + ext_name]
 else:
     if os.name == 'nt':
         # copy the openblas.dll

@@ -118,6 +118,8 @@ struct Generator {
 // The DefaultCPUGenerator is used in manual_seed()
 const std::shared_ptr<Generator>& DefaultCPUGenerator();
 
+uint64_t GetSeed();
+
 // If op seed is set or global is not set, the OpDefaultCPUEngine is used.
 std::shared_ptr<std::mt19937_64> OpDefaultCPUEngine();
 
