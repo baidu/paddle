@@ -75,8 +75,8 @@ class Momentum(Optimizer):
         rescale_grad (float, optional): Multiply the gradient with `rescale_grad` before updating. \
             Often choose to be ``1.0/batch_size``.
         name (str, optional): The default value is None. Normally there is no need for user
-                to set this property. For more information, please refer to
-                :ref:`api_guide_Name` .
+            to set this property. For more information, please refer to
+            :ref:`api_guide_Name` .
 
     Examples:
         .. code-block:: python

@@ -48,8 +48,8 @@ class SGD(Optimizer):
             ( :ref:`api_fluid_clip_GradientClipByGlobalNorm` , :ref:`api_fluid_clip_GradientClipByNorm` ,
             :ref:`api_fluid_clip_GradientClipByValue` ). Default None, meaning there is no gradient clipping.
         name (str, optional): The default value is None. Normally there is no need for user
-                to set this property. For more information, please refer to
-                :ref:`api_guide_Name` . 
+            to set this property. For more information, please refer to
+            :ref:`api_guide_Name` . 
         
     Examples:
         .. code-block:: python
