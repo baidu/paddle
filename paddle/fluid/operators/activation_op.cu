@@ -1177,6 +1177,53 @@ struct CudaSwishGradFunctor : public BaseActivationFunctor<T> {
 };
 
 template <typename T>
+struct CudaMishFunctor : public BaseActivationFunctor<T> {
+  using MPType = typename details::MPTypeTrait<T>::Type;
+  MPType one = static_cast<MPType>(1.0f);
+  float threshold;
+
+  typename BaseActivationFunctor<T>::AttrPair GetAttrs() {
+    return {{"threshold", &threshold}};
+  }
+
+  // mish(x) = x * tanh(softplus(x))
+  // softplus(x) = x, if x > threshold
+  //             = ln(1 + exp(x)), otherwise
+  // Inputs: args[0], the input x
+  __device__ __forceinline__ T operator()(const T* args) const {
+    MPType x = static_cast<MPType>(args[0]);
+    MPType sp = (x > static_cast<MPType>(threshold)) ? x : log(one + exp(x));
+    return static_cast<T>(x * tanh(sp));
+  }
+};
+
+template <typename T>
+struct CudaMishGradFunctor : public BaseActivationFunctor<T> {
+  using MPType = typename details::MPTypeTrait<T>::Type;
+  MPType one = static_cast<MPType>(1.0f);
+  float threshold;
+
+  typename BaseActivationFunctor<T>::AttrPair GetAttrs() {
+    return {{"threshold", &threshold}};
+  }
+
+  // dx = dout * (tanh(sp) + x * (1 - tanh(sp) ** 2) * (1 - exp(-sp)))
+  // sp = softplus(x)
+  // Inputs: args[0], the input dout
+  //         args[1], the input x
+  __device__ __forceinline__ T operator()(const T* args) const {
+    MPType dout = static_cast<MPType>(args[0]);
+    MPType x = static_cast<MPType>(args[1]);
+    MPType sp = (x > static_cast<MPType>(threshold)) ? x : log(one + exp(x));
+    MPType gsp = one - exp(-sp);
+    MPType tsp = tanh(sp);
+    return static_cast<T>(dout * (tsp + x * (one - tsp * tsp) * gsp));
+  }
+
+  static constexpr ActBwdOpFwdDeps FwdDeps() { return kDepX; }
+};
+
+template <typename T>
 struct CudaThresholdedReluFunctor : public BaseActivationFunctor<T> {
   T zero = static_cast<T>(0.0f);
   float threshold;
@@ -1686,6 +1733,7 @@ REGISTER_OP_CUDA_KERNEL(
   __macro(hard_sigmoid, HardSigmoid, CudaHardSigmoidFunctor,                  \
           CudaHardSigmoidGradFunctor);                                        \
   __macro(swish, Swish, CudaSwishFunctor, CudaSwishGradFunctor);              \
+  __macro(mish, Mish, CudaMishFunctor, CudaMishGradFunctor);                  \
   __macro(thresholded_relu, ThresholdedRelu, CudaThresholdedReluFunctor,      \
           CudaThresholdedReluGradFunctor);                                    \
   __macro(hard_swish, HardSwish, CudaHardSwishFunctor,                        \

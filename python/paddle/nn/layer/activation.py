@@ -812,6 +812,52 @@ class Swish(layers.Layer):
         return name_str
 
 
+class Mish(layers.Layer):
+    r"""
+    Mish Activation.
+
+    ..  math::
+
+        softplus(x) = \begin{cases}
+                x, \text{if } x > \text{threshold} \\
+                \ln(1 + e^{x}),  \text{otherwise}
+            \end{cases}
+
+        Mish(x) = x * \tanh(softplus(x))
+    
+    Parameters:
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Shape:
+        - input: Tensor with any shape.
+        - output: Tensor with the same shape as input.
+    
+    Examples:
+
+        .. code-block:: python
+
+            import paddle
+            import numpy as np
+
+            x = paddle.to_tensor(np.array([-5., 0., 5.]))
+            m = paddle.nn.Mish()
+            out = m(x) # [-0.03357624, 0., 4.99955208]
+
+    """
+
+    def __init__(self, name=None):
+        super(Mish, self).__init__()
+        self._name = name
+
+    def forward(self, x):
+        return F.mish(x, self._name)
+
+    def extra_repr(self):
+        name_str = 'name={}'.format(self._name) if self._name else ''
+        return name_str
+
+
 class Tanhshrink(layers.Layer):
     """
     Tanhshrink Activation

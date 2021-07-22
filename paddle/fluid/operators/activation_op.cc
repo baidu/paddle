@@ -683,6 +683,35 @@ $$out = \\frac{x}{1 + e^{- \beta \ x}}$$
   }
 };
 
+class MishOpMaker : public framework::OpProtoAndCheckerMaker {
+ public:
+  void Make() override {
+    AddInput("X", "Input of Mish operator");
+    AddOutput("Out", "Output of Mish operator");
+    AddAttr<float>(
+        "threshold",
+        "Constant threshold of softplus in Mish operator. Approximate value "
+        "of softplus will be used if absolute value of input is greater than "
+        ":attr:`threshold`")
+        .SetDefault(20.f);
+    AddAttr<bool>("use_mkldnn",
+                  "(bool, default false) Only used in mkldnn kernel")
+        .SetDefault(false);
+    AddComment(R"DOC(
+Mish Activation Operator.
+
+..  math::
+    softplus(x) = \begin{cases}
+            x, \text{if } x > \text{threshold} \\
+            \ln(1 + e^{x}),  \text{otherwise}
+          \end{cases}
+
+    out = x * \tanh(softplus(x))
+
+)DOC");
+  }
+};
+
 class HardSwishOpMaker : public framework::OpProtoAndCheckerMaker {
  public:
   void Make() override {

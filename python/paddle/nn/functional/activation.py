@@ -1091,6 +1091,47 @@ def swish(x, name=None):
     return out
 
 
+def mish(x, name=None):
+    r"""
+    mish activation.
+
+    ..  math::
+
+        softplus(x) = \begin{cases}
+                x, \text{if } x > \text{threshold} \\
+                \ln(1 + e^{x}),  \text{otherwise}
+            \end{cases}
+
+        mish(x) = x * \tanh(softplus(x))
+    
+    Parameters:
+        x (Tensor): The input Tensor with data type float32, float64.
+        name (str, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        A Tensor with the same data type and shape as ``x`` .
+
+    Examples:
+        .. code-block:: python
+
+            import paddle
+            import paddle.nn.functional as F
+            import numpy as np
+
+            x = paddle.to_tensor(np.array([-5., 0., 5.]))
+            out = F.mish(x) # [-0.03357624, 0., 4.99955208]
+    """
+    if in_dygraph_mode():
+        return core.ops.mish(x)
+
+    check_variable_and_dtype(x, 'x', ['float16', 'float32', 'float64'], 'mish')
+    helper = LayerHelper('mish', **locals())
+    out = helper.create_variable_for_type_inference(x.dtype)
+    helper.append_op(type='mish', inputs={'X': x}, outputs={'Out': out})
+    return out
+
+
 def tanhshrink(x, name=None):
     """
     tanhshrink activation
