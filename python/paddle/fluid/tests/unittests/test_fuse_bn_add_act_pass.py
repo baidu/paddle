@@ -159,6 +159,8 @@ class TestFusedBnAddActAPI(unittest.TestCase):
         return loss
 
     def check(self, place, use_cuda):
+        if use_cuda and core.is_compiled_with_rocm():
+            return
         paddle.seed(1)
         paddle.framework.random._manual_program_seed(1)
         iters = 5
@@ -217,6 +219,8 @@ class TestFusedBnAddActAPI(unittest.TestCase):
 
     def test_fuse_bn_add_act_API(self):
         # build_fused_program: use fused_bn_add_act python API
+        if core.is_compiled_with_rocm():
+            return
         main_program = fluid.Program()
         startup_program = fluid.Program()
         place = fluid.CUDAPlace(0)

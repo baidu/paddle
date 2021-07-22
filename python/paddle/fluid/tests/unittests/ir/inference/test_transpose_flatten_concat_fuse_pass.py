@@ -43,7 +43,7 @@ class TransposeFlattenConcatFusePassTest(InferencePassTest):
     def test_check_output(self):
         # There is no cpu pass for transpose_flatten_concat_fuse
         if core.is_compiled_with_cuda():
-            use_gpu = True
+            use_gpu = False if core.is_compiled_with_rocm() else True
             self.check_output_with_option(use_gpu)
 
         PassVersionChecker.IsCompatible('transpose_flatten_concat_fuse_pass')
@@ -72,7 +72,7 @@ class TransposeFlattenConcatFusePassWithAxisTest(InferencePassTest):
     def test_check_output(self):
         # There is no cpu pass for transpose_flatten_concat_fuse
         if core.is_compiled_with_cuda():
-            use_gpu = True
+            use_gpu = False if core.is_compiled_with_rocm() else True
             self.check_output_with_option(use_gpu)
 
         self.assertTrue(

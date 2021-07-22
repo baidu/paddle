@@ -107,6 +107,10 @@ class CoalesceTensorOpKernel : public framework::OpKernel<T> {
     auto out_tensors = context.MultiOutput<framework::LoDTensor>("Output");
     size_t offset = 0;
     if (context.Attr<bool>("copy_data")) {
+#ifdef PADDLE_WITH_HIP
+      math::SetConstant<DeviceContext, T> set_constant;
+      set_constant(dev_ctx, fused_tensor, static_cast<T>(0));
+#endif
       for (size_t i = 0; i < in_var_names.size(); ++i) {
         size_t len = static_cast<size_t>(in_tensors[i]->numel());
         auto sub_tensor = fused_tensor->Slice(

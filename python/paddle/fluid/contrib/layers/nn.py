@@ -49,6 +49,7 @@ from paddle.fluid.param_attr import ParamAttr
 
 from paddle.fluid.framework import Variable, convert_np_dtype_to_dtype_
 from paddle.fluid.layers import slice, reshape
+from paddle.device import get_device
 import warnings
 from paddle import _C_ops
 
@@ -1747,6 +1748,8 @@ def fused_bn_add_act(x,
                         data = next(train_reader())
                         loss_v = exe.run(main_program, feed=feeder.feed(data), fetch_list=[loss])
     """
+    if core.is_compiled_with_rocm() and get_device() != 'cpu':
+        raise RuntimeError('fused_bn_add_act is not supported for rocm gpu.')
     helper = LayerHelper('fused_bn_add_act', **locals())
 
     check_variable_and_dtype(x, 'input', ['float16', 'float32', 'float64'],
