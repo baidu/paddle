@@ -453,6 +453,15 @@ set(TEST_OPS_WITH_GC
   test_mean_op
   test_pad2d_op
   test_scatter_op
+  test_sequence_concat
+  test_sequence_conv
+  test_sequence_pool
+  test_sequence_expand_as
+  test_sequence_expand
+  test_sequence_pad_op
+  test_sequence_unpad_op
+  test_sequence_scatter_op
+  test_sequence_slice_op
   test_slice_op
   test_space_to_depth_op
   test_squared_l2_distance_op)
@@ -752,6 +761,9 @@ set_tests_properties(test_imperative_lod_tensor_to_selected_rows PROPERTIES TIME
 set_tests_properties(test_lstm_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_imperative_star_gan_with_gradient_penalty PROPERTIES TIMEOUT 120)
 set_tests_properties(test_warpctc_op PROPERTIES TIMEOUT 120)
+set_tests_properties(test_sequence_conv PROPERTIES TIMEOUT 120)
+set_tests_properties(test_sequence_pool PROPERTIES TIMEOUT 120)
+set_tests_properties(test_sequence_concat PROPERTIES TIMEOUT 120)
 set_tests_properties(test_bicubic_interp_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_deformable_conv_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_nearest_interp_op PROPERTIES TIMEOUT 120)
