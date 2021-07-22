@@ -1145,6 +1145,12 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
                                        platform::EventRole::kInnerOp);
     (*kernel_func_)(
         ExecutionContext(*this, exec_scope, *dev_ctx, *runtime_ctx));
+#ifdef PADDLE_WITH_XPU
+    if (std::getenv("FLAGS_opt_xpu_mem") != nullptr &&
+        platform::is_xpu_place(kernel_type_->place_)) {
+      dev_ctx->Wait();
+    }
+#endif
   }
 
   if (!transfered_inplace_vars.empty()) {
