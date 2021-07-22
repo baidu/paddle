@@ -333,6 +333,12 @@ class GemmConvKernel : public framework::OpKernel<T> {
     math::Im2ColFunctor<math::ColFormat::kCFO, DeviceContext, T> im2col;
 
     auto blas = math::GetBlas<DeviceContext, T>(dev_ctx);
+    VLOG(10) << " use_cudnn=false"
+             << " data_format=" << data_format << " groups=" << groups
+             << " is_expand=" << is_expand << " data_dim=" << data_dim
+             << " input_shape=[" << input->dims() << "]"
+             << " filter_size=[" << filter_dims << "]"
+             << " op=conv";
     for (int i = 0; i < batch_size; i++) {
       Tensor in_batch =
           transformed_input.Slice(i, i + 1).Resize(in_matrix_shape);
@@ -506,6 +512,12 @@ class GemmConvGradKernel : public framework::OpKernel<T> {
       math::Col2VolFunctor<DeviceContext, T> col2vol;
       math::Col2ImFunctor<math::ColFormat::kCFO, DeviceContext, T> col2im;
 
+      VLOG(10) << " use_cudnn=false"
+               << " data_format=" << data_format << " groups=" << groups
+               << " is_expand=" << is_expand << " data_dim=" << data_dim
+               << " input_shape=[" << input->dims() << "]"
+               << " filter_size=[" << filter_dims << "]"
+               << " op=conv_grad";
       for (int i = 0; i < batch_size; i++) {
         Tensor out_grad_batch =
             transformed_output_grad.Slice(i, i + 1).Resize(output_matrix_shape);
@@ -695,6 +707,12 @@ class GemmConvDoubleGradKernel : public framework::OpKernel<T> {
     math::SetConstant<DeviceContext, T> set_zero;
     auto blas = math::GetBlas<DeviceContext, T>(dev_ctx);
 
+    VLOG(10) << " use_cudnn=false"
+             << " data_format=" << data_format << " groups=" << groups
+             << " is_expand=" << is_expand << " data_dim=" << data_dim
+             << " input_shape=[" << X->dims() << "]"
+             << " filter_size=[" << filter_dims << "]"
+             << " op=conv_grad_grad";
     // dx convolution double grad:  gemm + col2im(col2vol)
     // dx = ddw * dy  ==> dx(N, Cin, H, W), ddw(Cout, Cin, kh, kw), dy(N, Cout,
     // oH, oW)
@@ -931,7 +949,11 @@ class DepthwiseConvKernel : public framework::OpKernel<T> {
     }
 
     auto& dev_ctx = context.template device_context<DeviceContext>();
-
+    VLOG(10) << " use_cudnn=false"
+             << " data_format=" << data_format << "fuse_relu=" << fuse_relu
+             << " input_shape=[" << input->dims() << "]"
+             << " filter_size=[" << filter_dims << "]"
+             << " op=depthwise_conv";
     if (fuse_relu) {
       math::DepthwiseConvFunctor<DeviceContext, T, true> depthwiseConv;
       depthwiseConv(dev_ctx, *input, filter, strides, paddings, dilations,
@@ -994,6 +1016,11 @@ class DepthwiseConvGradKernel : public framework::OpKernel<T> {
     math::SetConstant<DeviceContext, T> set_zero;
     auto& dev_ctx = context.template device_context<DeviceContext>();
 
+    VLOG(10) << " use_cudnn=false"
+             << " data_format=" << data_format << "fuse_relu=" << fuse_relu
+             << " input_shape=[" << input->dims() << "]"
+             << " filter_size=[" << filter_dims << "]"
+             << " op=depthwise_conv_grad";
     if (input_grad) {
       input_grad->mutable_data<T>(context.GetPlace());
       set_zero(dev_ctx, input_grad, static_cast<T>(0));

@@ -150,6 +150,14 @@ class CUDNNConvOpKernel : public framework::OpKernel<T> {
     int data_dim = strides.size();  // 2d or 3d
     bool is_sys_pad = math::IsSymmetricPadding(paddings, data_dim);
 
+    VLOG(10) << " use_cudnn=true"
+             << " data_format=" << data_format << " groups=" << groups
+             << " is_exhaustive_search=" << exhaustive_search
+             << " is_sys_pad=" << is_sys_pad << " input_shape=["
+             << input->dims() << "]"
+             << " filter_size=[" << filter_dims[2] << ", " << filter_dims[3]
+             << "]"
+             << " op=conv";
     Tensor transformed_input;
     std::vector<int> padding_common(data_dim, 0);
     if (!is_sys_pad) {
@@ -495,6 +503,14 @@ class CUDNNConvGradOpKernel : public framework::OpKernel<T> {
     std::vector<int> padding_common(data_dim, 0);
     std::vector<int> input_pad(transformed_input_channel.dims().size() * 2, 0);
 
+    VLOG(10) << " use_cudnn=true"
+             << " data_format=" << data_format << " groups=" << groups
+             << " is_exhaustive_search=" << exhaustive_search
+             << " is_sys_pad=" << is_sys_pad << " input_shape=["
+             << input->dims() << "]"
+             << " filter_size=[" << filter_dims[2] << ", " << filter_dims[3]
+             << "]"
+             << " op=conv_grad";
     if (!is_sys_pad) {
       // get pad
       std::vector<int> padding_diff(data_dim);
@@ -962,6 +978,14 @@ class CUDNNConvDoubleGradOpKernel : public framework::OpKernel<T> {
     std::vector<int> padding_common(data_dim, 0);
     std::vector<int> input_pad(X->dims().size() * 2, 0);
 
+    VLOG(10) << " use_cudnn=true"
+             << " data_format=" << data_format << " groups=" << groups
+             << " is_exhaustive_search=" << exhaustive_search
+             << " is_sys_pad=" << is_sys_pad << " input_shape=[" << X->dims()
+             << "]"
+             << " filter_size=[" << filter_dims[2] << ", " << filter_dims[3]
+             << "]"
+             << " op=conv_grad_grad";
     if (!is_sys_pad) {
       // get pad
       std::vector<int> padding_diff(data_dim);
