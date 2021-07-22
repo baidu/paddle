@@ -165,6 +165,7 @@ __all__ = [
     'affine_grid',
     'affine_channel',
     'similarity_focus',
+    'search_grnn',
     'hash',
     'grid_sampler',
     'log_loss',
@@ -193,6 +194,53 @@ __all__ = [
     'uniform_random',
     'unbind',
 ]
+
+
+def search_grnn(input,
+                num_input,
+                num_hidden,
+                param_attr_in,
+                param_attr_hidden,
+                dtype='float32',
+                is_test=False,
+                name=None):
+
+    helper = LayerHelper('search_grnn', **locals())
+
+    input_shape = list(input.shape)
+    assert len(input_shape) == 2 and input_shape[-1] == num_input
+
+    _cap_h = num_hidden
+    _cap_e = input_shape[-1]
+    wi_shape = [3, _cap_h, _cap_e]
+    wh_shape = [3, _cap_h, _cap_h]
+    wi = helper.create_parameter(
+        attr=param_attr_in, shape=wi_shape, dtype=dtype, is_bias=False)
+    wh = helper.create_parameter(
+        attr=param_attr_hidden, shape=wh_shape, dtype=dtype, is_bias=False)
+
+    grnn_res = helper.create_variable_for_type_inference(dtype)
+    grnn_buffer = helper.create_variable_for_type_inference(dtype)
+    grnn_idx_sorted_by_width = helper.create_variable_for_type_inference(dtype)
+    grnn_layout_input = helper.create_variable_for_type_inference(dtype)
+
+    helper.append_op(
+        type='search_grnn',
+        inputs={
+            'X': input,
+            'Wi': wi,
+            'Wh': wh,
+        },
+        outputs={
+            "Out": grnn_res,
+            "tmp_buffer": grnn_buffer,
+            'idx_sorted_by_width': grnn_idx_sorted_by_width,
+            'layout_input': grnn_layout_input
+        },
+        attrs={'num_input': num_input,
+               'num_hidden': num_hidden})
+
+    return grnn_res
 
 
 @dygraph_only

@@ -169,5 +169,59 @@ inline void axpy_noadd(const int8_t* x, int8_t* y, size_t len,
       "int8_t input of axpy_noadd is not supported"));
 }
 
+template <typename T>
+inline void sse_eltadd(const T* x, const T* y, T* z, size_t len) {
+  unsigned int jjj, lll;
+  jjj = lll = 0;
+
+#ifdef PADDLE_WITH_AVX
+  lll = len & ~AVX_CUT_LEN_MASK;
+  for (jjj = 0; jjj < lll; jjj += AVX_STEP_SIZE) {
+    _mm256_store_px(z + jjj, _mm256_add_px(_mm256_load_px(x + jjj),
+                                           _mm256_load_px(y + jjj)));
+  }
+#elif defined(PADDLE_WITH_ARM)
+  PADDLE_THROW(platform::errors::Unimplemented("sse_eltadd is not supported"));
+#else
+  lll = len & ~SSE_CUT_LEN_MASK;
+
+  for (jjj = 0; jjj < lll; jjj += SSE_STEP_SIZE) {
+    _mm_store_px(z + jjj,
+                 _mm_add_px(_mm_load_px(x + jjj), _mm_load_px(y + jjj)));
+  }
+#endif
+
+  for (; jjj < len; jjj++) {
+    z[jjj] = x[jjj] + y[jjj];
+  }
+}
+
+template <typename T>
+inline void sse_eltmul(const T* x, const T* y, T* z, size_t len) {
+  unsigned int jjj, lll;
+  jjj = lll = 0;
+
+#ifdef PADDLE_WITH_AVX
+  lll = len & ~AVX_CUT_LEN_MASK;
+  for (jjj = 0; jjj < lll; jjj += AVX_STEP_SIZE) {
+    _mm256_store_px(z + jjj, _mm256_mul_px(_mm256_load_px(x + jjj),
+                                           _mm256_load_px(y + jjj)));
+  }
+#elif defined(PADDLE_WITH_ARM)
+  PADDLE_THROW(platform::errors::Unimplemented("sse_eltadd is not supported"));
+#else
+  lll = len & ~SSE_CUT_LEN_MASK;
+
+  for (jjj = 0; jjj < lll; jjj += SSE_STEP_SIZE) {
+    _mm_store_px(z + jjj,
+                 _mm_mul_px(_mm_load_px(x + jjj), _mm_load_px(y + jjj)));
+  }
+#endif
+
+  for (; jjj < len; jjj++) {
+    z[jjj] = x[jjj] * y[jjj];
+  }
+}
+
 }  // namespace operators
 }  // namespace paddle
