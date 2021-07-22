@@ -29,7 +29,7 @@ class TestElementwiseMulDoubleGradCheck(unittest.TestCase):
     @prog_scope()
     def func(self, place):
         # the shape of input variable should be clearly specified, not inlcude -1.
-        shape = [2, 3, 4, 5]
+        shape = [2, 7, 3, 3]
         eps = 0.005
         dtype = np.float64
 
@@ -56,7 +56,7 @@ class TestElementwiseMulBroadcastDoubleGradCheck(unittest.TestCase):
     @prog_scope()
     def func(self, place):
         # the shape of input variable should be clearly specified, not inlcude -1.
-        shape = [2, 3, 4, 5]
+        shape = [2, 7, 3, 3]
         eps = 0.005
         dtype = np.float64
 

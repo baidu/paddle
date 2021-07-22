@@ -18,16 +18,23 @@ from __future__ import division
 import sys
 sys.path.append("..")
 import unittest
-import numpy as np
-
 import paddle.fluid.core as core
 from op_test_xpu import XPUOpTest
 import paddle.fluid as fluid
 from paddle.fluid import Program, program_guard
 from test_pool2d_op import adaptive_start_index, adaptive_end_index
 import paddle
+import numpy as np
 
 paddle.enable_static()
+
+
+def adaptive_start_index(index, input_size, output_size):
+    return int(np.floor(index * input_size / output_size))
+
+
+def adaptive_end_index(index, input_size, output_size):
+    return int(np.ceil((index + 1) * input_size / output_size))
 
 
 def max_pool2D_forward_naive(x,
