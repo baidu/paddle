@@ -24,12 +24,12 @@ class BoxClipOp : public framework::OperatorWithKernel {
     PADDLE_ENFORCE_EQ(ctx->HasInput("Input"), true,
                       platform::errors::NotFound("Input(Input) of BoxClipOp "
                                                  "is not found."));
-    PADDLE_ENFORCE_EQ(ctx->HasInput("ImInfo"), true,
-                      platform::errors::NotFound("Input(ImInfo) of BoxClipOp "
+    PADDLE_ENFORCE_EQ(ctx->HasInput("ImShape"), true,
+                      platform::errors::NotFound("Input(ImShape) of BoxClipOp "
                                                  "is not found."));
 
     auto input_box_dims = ctx->GetInputDim("Input");
-    auto im_info_dims = ctx->GetInputDim("ImInfo");
+    auto im_shape_dims = ctx->GetInputDim("ImShape");
 
     if (ctx->IsRuntime()) {
       auto input_box_size = input_box_dims.size();
@@ -39,20 +39,26 @@ class BoxClipOp : public framework::OperatorWithKernel {
               "The last dimension of Input(Input) in BoxClipOp must be 4. "
               "But received last dimension = %d",
               input_box_dims[input_box_size - 1]));
-      PADDLE_ENFORCE_EQ(im_info_dims.size(), 2,
+      PADDLE_ENFORCE_EQ(im_shape_dims.size(), 2,
                         platform::errors::InvalidArgument(
                             "The rank of Input(Input) in BoxClipOp must be 2."
                             " But received rank = %d",
-                            im_info_dims.size()));
+                            im_shape_dims.size()));
       PADDLE_ENFORCE_EQ(
-          im_info_dims[1], 3,
+          im_shape_dims[1], 2,
           platform::errors::InvalidArgument(
-              "The last dimension of Input(ImInfo) of BoxClipOp must be 3. "
+              "The last dimension of Input(ImShape) of BoxClipOp must be 2. "
               "But received last dimension = %d",
-              im_info_dims[1]));
+              im_shape_dims[1]));
     }
     ctx->ShareDim("Input", /*->*/ "Output");
     ctx->ShareLoD("Input", /*->*/ "Output");
+  }
+
+  framework::OpKernelType GetExpectedKernelType(
+      const framework::ExecutionContext& ctx) const override {
+    return framework::OpKernelType(ctx.Input<Tensor>("Input")->type(),
+                                   ctx.GetPlace());
   }
 };
 
@@ -63,9 +69,11 @@ class BoxClipOpMaker : public framework::OpProtoAndCheckerMaker {
              "(LoDTensor) "
              "Input is a LoDTensor with shape [..., 4] holds 4 points"
              "in last dimension in format [xmin, ymin, xmax, ymax]");
-    AddInput("ImInfo",
-             "(Tensor) Information for image reshape is in shape (N, 3), "
-             "in format (height, width, im_scale)");
+    AddInput("ImShape",
+             "(Tensor) Information for image shape is in shape (N, 2), "
+             "in format (height, width)");
+    AddInput("RoisNum", "(Tensor) the number of box from each level in shape")
+        .AsDispensable();
     AddOutput("Output",
               "(LoDTensor) "
               "Output is a LoDTensor with the same shape as Input"
@@ -80,10 +88,10 @@ For each input box, The formula is given as follows:
        $$xmax = \max(\min(xmax, im_w - 1), 0)$$
        $$ymax = \max(\min(ymax, im_h - 1), 0)$$
 
-where im_w and im_h are computed from ImInfo, the formula is given as follows:
+where im_w and im_h are computed from ImShape, the formula is given as follows:
 
-       $$im_w = \round(width / im_scale)$$
-       $$im_h = \round(height / im_scale)$$ 
+       $$im_w = width
+       $$im_h = height
 )DOC");
   }
 };

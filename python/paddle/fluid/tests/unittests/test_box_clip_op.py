@@ -22,9 +22,9 @@ from op_test import OpTest
 import copy
 
 
-def box_clip(input_box, im_info, output_box):
-    im_w = round(im_info[1] / im_info[2])
-    im_h = round(im_info[0] / im_info[2])
+def box_clip(input_box, im_shape, output_box):
+    im_w = im_shape[1]
+    im_h = im_shape[0]
     output_box[:, :, 0] = np.maximum(
         np.minimum(input_box[:, :, 0], im_w - 1), 0)
     output_box[:, :, 1] = np.maximum(
@@ -35,14 +35,14 @@ def box_clip(input_box, im_info, output_box):
         np.minimum(input_box[:, :, 3], im_h - 1), 0)
 
 
-def batch_box_clip(input_boxes, im_info, lod):
+def batch_box_clip(input_boxes, im_shape, lod):
     n = input_boxes.shape[0]
     m = input_boxes.shape[1]
     output_boxes = np.zeros((n, m, 4), dtype=np.float32)
     cur_offset = 0
     for i in range(len(lod)):
         box_clip(input_boxes[cur_offset:(cur_offset + lod[i]), :, :],
-                 im_info[i, :],
+                 im_shape[i, :],
                  output_boxes[cur_offset:(cur_offset + lod[i]), :, :])
         cur_offset += lod[i]
     return output_boxes
@@ -56,14 +56,33 @@ class TestBoxClipOp(OpTest):
         self.op_type = "box_clip"
         lod = [[1, 2, 3]]
         input_boxes = np.random.random((6, 10, 4)) * 5
-        im_info = np.array([[5, 8, 1.], [6, 6, 1.], [7, 5, 1.]])
-        output_boxes = batch_box_clip(input_boxes, im_info, lod[0])
+        im_shape = np.array([[5, 8], [6, 6], [7, 5]])
+        output_boxes = batch_box_clip(input_boxes, im_shape, lod[0])
 
         self.inputs = {
             'Input': (input_boxes.astype('float32'), lod),
-            'ImInfo': im_info.astype('float32'),
+            'ImShape': im_shape.astype('float32'),
         }
         self.outputs = {'Output': output_boxes}
+
+
+class TestBoxClipWithRoisNumOp(TestBoxClipOp):
+    def setUp(self):
+        self.op_type = "box_clip"
+        lod = [[1, 2, 3]]
+        rois_num = lod[0]
+        input_boxes = np.random.random((6, 10, 4)) * 5
+        im_shape = np.array([[5, 8], [6, 6], [7, 5]])
+        output_boxes = batch_box_clip(input_boxes, im_shape, lod[0])
+        self.inputs = {
+            'Input': (input_boxes.astype('float32')),
+            'ImShape': im_shape.astype('float32'),
+            'RoisNum': np.array(rois_num).astype('int32')
+        }
+        self.outputs = {'Output': output_boxes}
+
+    def test_check_output(self):
+        self.check_output(check_dygraph=False)
 
 
 if __name__ == '__main__':
