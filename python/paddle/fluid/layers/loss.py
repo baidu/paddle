@@ -1062,11 +1062,11 @@ def sampled_softmax_with_cross_entropy(logits,
     a softmax with cross entropy.
 
     Args:
-        logits (Variable): The unscaled log probabilities, which is a 2-D tensor
+        logits (Tensor): The unscaled log probabilities, which is a 2-D tensor
             with shape [N x K]. N is the batch_size, and K is the class number.
-        label (Variable): The ground truth which is a 2-D tensor. Label is a 
+        label (Tensor): The ground truth which is a 2-D tensor. Label is a 
             Tensor<int64> with shape [N x T], where T is the number of true 
-            labels per example. 
+            labels per example.
         num_samples (int): The number for each example, num_samples should be 
             less than the number of class.
         num_true(int): The number of target classes per training example.
@@ -1077,28 +1077,29 @@ def sampled_softmax_with_cross_entropy(logits,
             close to zero. Default is True.
         use_customized_samples (bool): Whether to use custom samples and probabities to sample
             logits.
-        customized_samples (Variable): User defined samples, which is a 2-D tensor
+        customized_samples (Tensor): User defined samples, which is a 2-D tensor
             with shape [N, T + S]. S is the num_samples, and T is the number of true 
-            labels per example. 
-        customized_probabilities (Variable): User defined probabilities of samples, 
+            labels per example.
+        customized_probabilities (Tensor): User defined probabilities of samples, 
             a 2-D tensor which has the same shape with customized_samples.
         seed (int): The random seed for generating random number, which is used
             in the process of sampling. Default is 0.
 
     Returns:
-        Variable: Return the cross entropy loss which is a 2-D tensor with shape
+        Tensor: Return the cross entropy loss which is a 2-D tensor with shape
                   [N x 1].
 
     Examples:
         .. code-block:: python
 
-            import paddle.fluid as fluid
+            import paddle
+            import paddle.nn as nn
 
-            input = fluid.layers.data(name='data', shape=[256], dtype='float32')
-            label = fluid.layers.data(name='label', shape=[1], dtype='int64')
-            fc = fluid.layers.fc(input=input, size=100)
-            out = fluid.layers.sampled_softmax_with_cross_entropy(
-                      logits=fc, label=label, num_samples=25)
+            linear = nn.Linear(256, 100)
+            input = paddle.rand(shape=[32, 256])
+            label = paddle.full([32, 1], 1, "int64")
+            fc = linear(input)
+            out = nn.functional.loss.sampled_softmax_with_cross_entropy(logits=fc, label=label, num_samples=25)
     """
     helper = LayerHelper('sample_logits', **locals())
     samples = customized_samples if use_customized_samples else helper.create_variable_for_type_inference(
