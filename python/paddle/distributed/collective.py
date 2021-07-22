@@ -1341,20 +1341,20 @@ def split(x,
 
     Examples:
         .. code-block:: python
-
+            # required: distributed
             import paddle
-            from paddle.distributed import init_parallel_env
+            import paddle.distributed.fleet as fleet
 
-            # required: gpu
-
+            paddle.enable_static()
             paddle.set_device('gpu:%d'%paddle.distributed.ParallelEnv().dev_id)
-            init_parallel_env()
+            fleet.init(is_collective=True)
             data = paddle.randint(0, 8, shape=[10,4])
             emb_out = paddle.distributed.split(
                 data,
                 (8, 8),
                 operation="embedding",
                 num_partitions=2)
+
     """
     assert isinstance(size, (list, tuple)), (
         "The type of size for "
