@@ -41,8 +41,9 @@ class LookupTableV2NPUKernel : public framework::OpKernel<T> {
     output_t->mutable_data<T>(ctx.GetPlace());
 
     // add copy ids to ensure ids_t is prepared.
-    std::vector<int> ids;
-    TensorToVector(*ids_t, ctx.device_context(), &ids);
+    //std::vector<int> ids;
+    //TensorToVector(*ids_t, ctx.device_context(), &ids);
+    VLOG(4) << "input ids:" << ids_t;
 
     NpuOpRunner runner;
     runner.SetType("GatherV2")

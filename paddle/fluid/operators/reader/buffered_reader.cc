@@ -263,10 +263,12 @@ void BufferedReader::ReadAsync(size_t i) {
           PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeStream(stream_.get()));
         }
         npu[i].set_lod(cpu[i].lod());
+        VLOG(10) << "buffer reader npu_ptr:" << npu_ptr << ", cpu_put:" << cpu_ptr;
       }
       PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeStream(stream_.get()));
     }
 #endif
+    VLOG(10) << "buffer reader return:" << i;
     return i;
   }));
 }

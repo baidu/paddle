@@ -54,6 +54,7 @@ class CAllReduceSumOpMaker : public CAllReduceOpMaker {
   std::string GetName() const override { return "Sum"; }
 };
 
+
 DECLARE_INPLACE_OP_INFERER(AllreduceSumInplaceInferer, {"X", "Out"});
 
 }  // namespace operators

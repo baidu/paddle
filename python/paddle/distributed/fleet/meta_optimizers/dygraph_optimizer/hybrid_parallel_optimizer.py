@@ -132,6 +132,7 @@ class HybridParallelOptimizer:
             else self._inner_opt._parameter_list
 
         # Here should use global parameter list 
+        print("sharding_enable:", sharding_enable)
         if self._sharding_enable:
             sharding_reduce_gradients(
                 list(self._inner_opt._parameter_list), self._hcg)
