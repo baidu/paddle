@@ -67,6 +67,25 @@ class LeNetDygraph(paddle.nn.Layer):
             x = self.fc(x)
         return x
 
+class ModelInner(paddle.nn.Layer):
+    def __init__(self):
+        super(ModelInner, self).__init__()
+        self.fc = paddle.nn.Linear(3, 4)
+
+    def forward(self, x):
+        y = self.fc(x)
+        return y, 0
+
+class ModelOutter(paddle.nn.Layer):
+    def __init__(self):
+        super(ModelOutter, self).__init__()
+        self.module1 = ModelInner()
+        self.module2 = paddle.nn.Linear(4, 5)
+
+    def forward(self, x):
+        y, dummpy = self.module1(x)
+        y = self.module2(y)
+        return y, 3
 
 class MnistDataset(MNIST):
     def __init__(self, mode, return_label=True, sample_num=None):
@@ -585,6 +604,9 @@ class TestModelFunction(unittest.TestCase):
             model.summary(input_size=(20))
             model.summary(input_size=[(20)])
             model.summary(input_size=(20), dtype='float32')
+
+    def test_summary_non_tensor(self):
+        paddle.summary(ModelOutter(), input_size=(-1, 3))
 
     def test_summary_nlp(self):
         def _get_param_from_state_dict(state_dict):

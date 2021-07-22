@@ -207,8 +207,10 @@ def summary_string(model, input_size, dtypes=None):
     def _get_output_shape(output):
         if isinstance(output, (list, tuple)):
             output_shape = [_get_output_shape(o) for o in output]
-        else:
+        elif hasattr(output, 'shape'):
             output_shape = list(output.shape)
+        else:
+            output_shape = []
         return output_shape
 
     def register_hook(layer):
