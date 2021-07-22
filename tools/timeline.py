@@ -30,6 +30,8 @@ parser.add_argument(
     'should be trainer1=file1,trainer2=file2,ps=file3')
 parser.add_argument(
     '--timeline_path', type=str, default='', help='Output timeline file name.')
+parser.add_argument(
+    '--mlnx_perf_path', type=str, default='', help='mlnx_perf input filename.')
 args = parser.parse_args()
 
 
@@ -283,10 +285,26 @@ class Timeline(object):
                     0, total_size)
                 i += 1
 
+    def _add_mlnx_perf(self, mlnx_perf_path):
+        # zhangwenhui03: to do Pid
+        self._chrome_trace.emit_pid("tx", 10)
+        self._chrome_trace.emit_pid("rx", 11)
+        with open(mlnx_perf_path, "r") as rf:
+            for line in rf:
+                event_str = json.loads(line.strip())
+                self._chrome_trace._events.append(event_str)
+
     def generate_chrome_trace(self):
         self._allocate_pids()
         self._allocate_events()
         self._allocate_memory_event()
+        return self._chrome_trace.format_to_string()
+
+    def generate_chrome_trace_mlnx_perf(self, mlnx_perf_path):
+        self._allocate_pids()
+        self._allocate_events()
+        self._allocate_memory_event()
+        self._add_mlnx_perf(mlnx_perf_path)
         return self._chrome_trace.format_to_string()
 
 
@@ -296,6 +314,9 @@ if args.profile_path:
 timeline_path = '/tmp/timeline'
 if args.timeline_path:
     timeline_path = args.timeline_path
+mlnx_perf_path = None
+if args.mlnx_perf_path:
+    mlnx_perf_path = args.mlnx_perf_path
 
 profile_paths = profile_path.split(',')
 profile_dict = dict()
@@ -316,4 +337,7 @@ else:
 
 tl = Timeline(profile_dict)
 with open(timeline_path, 'w') as f:
-    f.write(tl.generate_chrome_trace())
+    if mlnx_perf_path is None:
+        f.write(tl.generate_chrome_trace())
+    else:
+        f.write(tl.generate_chrome_trace_mlnx_perf(mlnx_perf_path))
