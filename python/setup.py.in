@@ -311,6 +311,10 @@ if '${WITH_PSLIB}' == 'ON':
         shutil.copy('${PSLIB_VERSION_PY}', '${PADDLE_BINARY_DIR}/python/paddle/fluid/incubate/fleet/parameter_server/pslib/')
     package_data['paddle.libs'] += ['libps' + ext_name]
 
+if os.path.exists('${BRPC_LIBRARIES}'):
+    shutil.copy('${BRPC_LIBRARIES}', libs_path)
+    package_data['paddle.libs'] += ['libbrpc' + ext_name]
+
 if '${WITH_MKLDNN}' == 'ON':
     if '${CMAKE_BUILD_TYPE}' == 'Release' and os.name != 'nt':
         # only change rpath in Release mode.

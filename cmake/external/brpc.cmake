@@ -28,7 +28,8 @@ SET_PROPERTY(TARGET crypto PROPERTY IMPORTED_LOCATION ${OPENSSL_CRYPTO_LIBRARY})
 SET(BRPC_SOURCES_DIR ${THIRD_PARTY_PATH}/brpc)
 SET(BRPC_INSTALL_DIR ${THIRD_PARTY_PATH}/install/brpc)
 SET(BRPC_INCLUDE_DIR "${BRPC_INSTALL_DIR}/include" CACHE PATH "brpc include directory." FORCE)
-SET(BRPC_LIBRARIES "${BRPC_INSTALL_DIR}/lib/libbrpc.a" CACHE FILEPATH "brpc library." FORCE)
+SET(BRPC_LIBRARIES "${BRPC_INSTALL_DIR}/lib/libbrpc.so" CACHE FILEPATH "brpc library." FORCE)
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH}" "${BRPC_INSTALL_DIR}/lib")
 
 INCLUDE_DIRECTORIES(${BRPC_INCLUDE_DIR})
 
@@ -66,11 +67,10 @@ ExternalProject_Add(
 )
 # ADD_DEPENDENCIES(extern_brpc protobuf ssl crypto leveldb gflags glog gtest snappy)
 ADD_DEPENDENCIES(extern_brpc protobuf ssl crypto leveldb gflags glog snappy)
-ADD_LIBRARY(brpc STATIC IMPORTED GLOBAL)
+ADD_LIBRARY(brpc SHARED IMPORTED GLOBAL)
 SET_PROPERTY(TARGET brpc PROPERTY IMPORTED_LOCATION ${BRPC_LIBRARIES})
 ADD_DEPENDENCIES(brpc extern_brpc)
 
 add_definitions(-DBRPC_WITH_GLOG)
 
 LIST(APPEND external_project_dependencies brpc)
-
