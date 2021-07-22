@@ -77,10 +77,6 @@ class RnnXPUKernel : public framework::OpKernel<T> {
         platform::errors::InvalidArgument(
             "XPU only support LSTM mode now, current mode is %s", mode));
 
-    PADDLE_ENFORCE_EQ(is_bidirec, false,
-                      platform::errors::InvalidArgument(
-                          "XPU only support unidirectional LSTM now"));
-
     PADDLE_ENFORCE_EQ(
         num_layers, 1,
         platform::errors::InvalidArgument(
@@ -93,25 +89,26 @@ class RnnXPUKernel : public framework::OpKernel<T> {
     auto last_c = state[1];
 
     // check shape
+    const int& direction_num = is_bidirec ? 2 : 1;
     int seq_len = input->dims()[0];
     int batch_size = input->dims()[1];
     int input_dim = input->dims()[2];
 
-    PADDLE_ENFORCE_EQ(
-        init_h->dims()[0], num_layers,
-        platform::errors::InvalidArgument("The num_layers of in RNN layer must"
-                                          " be the same as first dim of init "
-                                          "hidden, but received num_layers:%d,"
-                                          " dim:%d",
-                                          num_layers, init_h->dims()[0]));
+    PADDLE_ENFORCE_EQ(init_h->dims()[0], num_layers * direction_num,
+                      platform::errors::InvalidArgument(
+                          "The num_layers of in RNN layer must"
+                          " be the same as first dim of init "
+                          "hidden, but received num_layers:%d,"
+                          " dim:%d",
+                          num_layers * direction_num, init_h->dims()[0]));
 
     PADDLE_ENFORCE_EQ(
-        init_c->dims()[0], num_layers,
+        init_c->dims()[0], num_layers * direction_num,
         platform::errors::InvalidArgument(
             "The num_layers of in RNN layer must"
             " be the same as first dim of cell state hidden, but received"
             " num_layers:%d, dim:%d",
-            num_layers, init_c->dims()[0]));
+            num_layers * direction_num, init_c->dims()[0]));
 
     std::vector<std::vector<const T*>> parameter_lists;
     parameter_lists.resize(num_layers);
@@ -122,22 +119,27 @@ class RnnXPUKernel : public framework::OpKernel<T> {
     output->mutable_data<T>(ctx.GetPlace());
     last_h->mutable_data<T>(ctx.GetPlace());
     last_c->mutable_data<T>(ctx.GetPlace());
-    reserve_data->Resize({seq_len * batch_size * hidden_size * 5});
+    reserve_data->Resize(
+        {seq_len * batch_size * hidden_size * 5 * direction_num});
     reserve_data->mutable_data<T>(ctx.GetPlace());
 
     // get ptr from tensor
-    auto x = input->data<T>();
-    auto h_0 = init_h->data<T>();
-    auto c_0 = init_c->data<T>();
-    auto w_x = parameter_lists[0][0];
-    auto w_h = parameter_lists[0][1];
-    auto b_x = parameter_lists[0][2];
-    auto b_h = parameter_lists[0][3];
-    auto y = output->data<T>();
-    auto last_h_ptr = last_h->data<T>();
-    auto last_c_ptr = last_c->data<T>();
-    auto i_f_g_o = reserve_data->data<T>();
-    auto c = i_f_g_o + seq_len * batch_size * hidden_size * 4;
+    const T* x = input->data<T>();
+    const T* h_0 = init_h->data<T>();
+    const T* c_0 = init_c->data<T>();
+    const T* forward_w_x = parameter_lists[0][0];
+    const T* forward_w_h = parameter_lists[0][1];
+    const T* forward_b_x = parameter_lists[0][2];
+    const T* forward_b_h = parameter_lists[0][3];
+    const T* backward_w_x = is_bidirec ? parameter_lists[0][4] : nullptr;
+    const T* backward_w_h = is_bidirec ? parameter_lists[0][5] : nullptr;
+    const T* backward_b_x = is_bidirec ? parameter_lists[0][6] : nullptr;
+    const T* backward_b_h = is_bidirec ? parameter_lists[0][7] : nullptr;
+    T* y = output->data<T>();
+    T* last_h_ptr = last_h->data<T>();
+    T* last_c_ptr = last_c->data<T>();
+    T* i_f_g_o = reserve_data->data<T>();
+    T* c = i_f_g_o + seq_len * batch_size * hidden_size * 4 * direction_num;
 
     std::vector<int> seq_len_tensor(batch_size, seq_len);
     if (has_seq_length) {
@@ -146,13 +148,21 @@ class RnnXPUKernel : public framework::OpKernel<T> {
 
     // run kernel
     auto& dev_ctx = ctx.template device_context<DeviceContext>();
-    int r = xpu::lstm_train<T, T, int16_t>(
-        dev_ctx.x_context(), (const T*)x, (const T*)h_0, (const T*)c_0,
-        (const T*)w_x, (const T*)w_h, (const T*)b_x, (const T*)b_h,
-        reinterpret_cast<T*>(y), reinterpret_cast<T*>(last_h_ptr),
-        reinterpret_cast<T*>(last_c_ptr), batch_size, input_dim, hidden_size,
-        seq_len, seq_len_tensor, nullptr, nullptr, nullptr, nullptr,
-        reinterpret_cast<T*>(i_f_g_o), reinterpret_cast<T*>(c));
+    int r = xpu::Error_t::SUCCESS;
+    if (!is_bidirec) {
+      r = xpu::lstm_train<T, T, int16_t>(
+          dev_ctx.x_context(), x, h_0, c_0, forward_w_x, forward_w_h,
+          forward_b_x, forward_b_h, y, last_h_ptr, last_c_ptr, batch_size,
+          input_dim, hidden_size, seq_len, seq_len_tensor, nullptr, nullptr,
+          nullptr, nullptr, i_f_g_o, c);
+    } else {
+      r = xpu::bilstm_train<T, T, int16_t>(
+          dev_ctx.x_context(), x, h_0, c_0, forward_w_x, forward_w_h,
+          forward_b_x, forward_b_h, backward_w_x, backward_w_h, backward_b_x,
+          backward_b_h, y, last_h_ptr, last_c_ptr, batch_size, input_dim,
+          hidden_size, seq_len, seq_len_tensor, nullptr, nullptr, nullptr,
+          nullptr, nullptr, nullptr, i_f_g_o, c);
+    }
     PADDLE_ENFORCE_EQ(r, xpu::Error_t::SUCCESS,
                       platform::errors::External("RnnXPU(lstm) return wrong "
                                                  "value[%d %s]",
@@ -186,10 +196,6 @@ class RnnXPUGradKernel : public framework::OpKernel<T> {
         platform::errors::InvalidArgument(
             "XPU only support LSTM mode now, current mode is %s", mode));
 
-    PADDLE_ENFORCE_EQ(is_bidirec, false,
-                      platform::errors::InvalidArgument(
-                          "XPU only support unidirectional LSTM now"));
-
     PADDLE_ENFORCE_EQ(
         num_layers, 1,
         platform::errors::InvalidArgument(
@@ -218,25 +224,26 @@ class RnnXPUGradKernel : public framework::OpKernel<T> {
     }
 
     // check shape
+    const int& direction_num = is_bidirec ? 2 : 1;
     int seq_len = input->dims()[0];
     int batch_size = input->dims()[1];
     int input_dim = input->dims()[2];
 
-    PADDLE_ENFORCE_EQ(
-        init_h->dims()[0], num_layers,
-        platform::errors::InvalidArgument("The num_layers of in RNN layer must"
-                                          " be the same as first dim of init "
-                                          "hidden, but received num_layers:%d,"
-                                          " dim:%d",
-                                          num_layers, init_h->dims()[0]));
+    PADDLE_ENFORCE_EQ(init_h->dims()[0], num_layers * direction_num,
+                      platform::errors::InvalidArgument(
+                          "The num_layers of in RNN layer must"
+                          " be the same as first dim of init "
+                          "hidden, but received num_layers:%d,"
+                          " dim:%d",
+                          num_layers * direction_num, init_h->dims()[0]));
 
     PADDLE_ENFORCE_EQ(
-        init_c->dims()[0], num_layers,
+        init_c->dims()[0], num_layers * direction_num,
         platform::errors::InvalidArgument(
             "The num_layers of in RNN layer must"
             " be the same as first dim of cell state hidden, but received"
             " num_layers:%d, dim:%d",
-            num_layers, init_c->dims()[0]));
+            num_layers * direction_num, init_c->dims()[0]));
 
     std::vector<std::vector<const T*>> parameter_lists;
     parameter_lists.resize(num_layers);
@@ -261,24 +268,31 @@ class RnnXPUGradKernel : public framework::OpKernel<T> {
     }
 
     // get ptr from tensor
-    auto x = input->data<T>();
-    auto h_0 = init_h->data<T>();
-    auto c_0 = init_c->data<T>();
-    auto w_x = parameter_lists[0][0];
-    auto w_h = parameter_lists[0][1];
-    auto y = output->data<T>();
-    auto y_grad = output_grad->data<T>();
-    auto last_h_grad_ptr = last_h_grad->data<T>();
-    auto last_c_grad_ptr = last_c_grad->data<T>();
-    auto x_grad = input_grad->data<T>();
-    auto h_0_grad = init_h_grad ? init_h_grad->data<T>() : nullptr;
-    auto c_0_grad = init_c_grad ? init_c_grad->data<T>() : nullptr;
-    auto w_x_grad = parameter_lists_grad[0][0];
-    auto w_h_grad = parameter_lists_grad[0][1];
-    auto b_x_grad = parameter_lists_grad[0][2];
-    auto b_h_grad = parameter_lists_grad[0][3];
-    auto i_f_g_o = reserve_data->data<T>();
-    auto c = i_f_g_o + seq_len * batch_size * hidden_size * 4;
+    const T* x = input->data<T>();
+    const T* h_0 = init_h->data<T>();
+    const T* c_0 = init_c->data<T>();
+    const T* forward_w_x = parameter_lists[0][0];
+    const T* forward_w_h = parameter_lists[0][1];
+    const T* backward_w_x = parameter_lists[0][4];
+    const T* backward_w_h = parameter_lists[0][5];
+    const T* y = output->data<T>();
+    const T* y_grad = output_grad->data<T>();
+    const T* last_h_grad_ptr = last_h_grad->data<T>();
+    const T* last_c_grad_ptr = last_c_grad->data<T>();
+    T* x_grad = input_grad->data<T>();
+    T* h_0_grad = init_h_grad ? init_h_grad->data<T>() : nullptr;
+    T* c_0_grad = init_c_grad ? init_c_grad->data<T>() : nullptr;
+    T* forward_w_x_grad = parameter_lists_grad[0][0];
+    T* forward_w_h_grad = parameter_lists_grad[0][1];
+    T* forward_b_x_grad = parameter_lists_grad[0][2];
+    T* forward_b_h_grad = parameter_lists_grad[0][3];
+    T* backward_w_x_grad = is_bidirec ? parameter_lists_grad[0][4] : nullptr;
+    T* backward_w_h_grad = is_bidirec ? parameter_lists_grad[0][5] : nullptr;
+    T* backward_b_x_grad = is_bidirec ? parameter_lists_grad[0][6] : nullptr;
+    T* backward_b_h_grad = is_bidirec ? parameter_lists_grad[0][7] : nullptr;
+    const T* i_f_g_o = reserve_data->data<T>();
+    const T* c =
+        i_f_g_o + seq_len * batch_size * hidden_size * 4 * direction_num;
 
     std::vector<int> seq_len_tensor(batch_size, seq_len);
     if (has_seq_length) {
@@ -286,14 +300,26 @@ class RnnXPUGradKernel : public framework::OpKernel<T> {
     }
 
     auto& dev_ctx = ctx.template device_context<DeviceContext>();
-    int r = xpu::lstm_grad<T, T, int16_t>(
-        dev_ctx.x_context(), (const T*)x, (const T*)h_0, (const T*)c_0,
-        (const T*)w_x, (const T*)w_h, (const T*)y, (const T*)y_grad,
-        (const T*)last_h_grad_ptr, (const T*)last_c_grad_ptr,
-        reinterpret_cast<T*>(x_grad), reinterpret_cast<T*>(h_0_grad),
-        reinterpret_cast<T*>(c_0_grad), w_x_grad, w_h_grad, b_x_grad, b_h_grad,
-        batch_size, input_dim, hidden_size, seq_len, seq_len_tensor, nullptr,
-        nullptr, nullptr, nullptr, i_f_g_o, c);
+    int r = xpu::Error_t::SUCCESS;
+    if (!is_bidirec) {
+      r = xpu::lstm_grad<T, T, int16_t>(
+          dev_ctx.x_context(), x, h_0, c_0, forward_w_x, forward_w_h, y, y_grad,
+          last_h_grad_ptr, last_c_grad_ptr, x_grad, h_0_grad, c_0_grad,
+          forward_w_x_grad, forward_w_h_grad, forward_b_x_grad,
+          forward_b_h_grad, batch_size, input_dim, hidden_size, seq_len,
+          seq_len_tensor, nullptr, nullptr, nullptr, nullptr, i_f_g_o, c);
+    } else {
+      r = xpu::bilstm_grad<T, T, int16_t>(
+          dev_ctx.x_context(), x, h_0, c_0, forward_w_x, forward_w_h,
+          backward_w_x, backward_w_h, y, y_grad, last_h_grad_ptr,
+          last_c_grad_ptr, x_grad, h_0_grad, c_0_grad, forward_w_x_grad,
+          forward_w_h_grad, forward_b_x_grad, forward_b_h_grad,
+          backward_w_x_grad, backward_w_h_grad, backward_b_x_grad,
+          backward_b_h_grad, batch_size, input_dim, hidden_size, seq_len,
+          seq_len_tensor, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+          i_f_g_o, c);
+    }
+
     PADDLE_ENFORCE_EQ(
         r, xpu::Error_t::SUCCESS,
         platform::errors::External("RnnXPUGrad(lstm) return wrong "

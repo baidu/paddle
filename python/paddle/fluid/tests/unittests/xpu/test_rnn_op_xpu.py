@@ -169,5 +169,38 @@ class TestRNNOpCase2(TestRNNOp):
         self.hidden_size = 64
 
 
+class TestRNNOpCase3(TestRNNOp):
+    def init_size(self):
+        self.seq_length = 2
+        self.batch_size = 4
+        self.input_size = 10
+        self.hidden_size = 32
+
+    def set_attrs(self):
+        self.is_bidirec = True
+
+
+class TestRNNOpCase4(TestRNNOp):
+    def init_size(self):
+        self.seq_length = 5
+        self.batch_size = 16
+        self.input_size = 30
+        self.hidden_size = 64
+
+    def set_attrs(self):
+        self.is_bidirec = True
+
+
+class TestRNNOpCase5(TestRNNOp):
+    def init_size(self):
+        self.seq_length = 10
+        self.batch_size = 64
+        self.input_size = 50
+        self.hidden_size = 64
+
+    def set_attrs(self):
+        self.is_bidirec = True
+
+
 if __name__ == '__main__':
     unittest.main()
