@@ -389,4 +389,4 @@ def add_sample_code(func, sample_code):
        func: The function of the function to be append sample code to.
        sample_code: sample code session in rst format.
     """
-    func.__doc__ = func.__doc__ + sample_code
+    func.__doc__ = func.__doc__ + "\n" + sample_code
