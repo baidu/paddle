@@ -181,6 +181,8 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
             self._blocking_queue.close()
             self._shutdown_thread()
         except StopIteration:
+            logging.warning(
+                "chenweihang: DataLoader catch a stop iteration in thread loop")
             self._blocking_queue.close()
         except Exception:
             self._blocking_queue.kill()
@@ -213,6 +215,8 @@ class _DataLoaderIterSingleProcess(_DataLoaderIterBase):
 
             return data
         except StopIteration:
+            logging.warning(
+                "chenweihang: DataLoader catch a stop iteration in next")
             self._reader.shutdown()
             six.reraise(*sys.exc_info())
 

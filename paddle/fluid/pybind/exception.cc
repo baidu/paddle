@@ -37,7 +37,10 @@ void BindException(pybind11::module* m) {
   static pybind11::exception<platform::EnforceNotMet> exc(*m, "EnforceNotMet");
   pybind11::register_exception_translator([](std::exception_ptr p) {
     try {
-      if (p) std::rethrow_exception(p);
+      if (p) {
+        VLOG(0) << "register_exception_translator catch a exception.";
+        std::rethrow_exception(p);
+      }
     } catch (const platform::EOFException& e) {
       eof(e.what());
     } catch (const platform::EnforceNotMet& e) {
@@ -72,6 +75,9 @@ void BindException(pybind11::module* m) {
           exc(e.what());
           break;
       }
+    } catch (const std::exception& e) {
+      VLOG(0) << "std::exception caught: " << e.what();
+      std::rethrow_exception(std::current_exception());
     }
   });
 
