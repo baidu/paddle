@@ -55,13 +55,11 @@ class Shard(object):
             mem = get_var_size(param)
             total_param_mem += mem
             param2mem.append((param.name, mem))
-        device2params = {x: [] for x in range(worker_num)}
         device_idx = 0
         mem_accu = 0.0
         for param_name, mem in param2mem:
             if mem_accu > total_param_mem * 1.0 * (device_idx + 1) / worker_num:
                 device_idx += 1
-            device2params[device_idx].append(param_name)
             param2device[param_name] = device_idx
             mem_accu += mem
         return param2device
