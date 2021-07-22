@@ -53,6 +53,7 @@ GRAPH_ID = 0
 
 def unique_id():
     def generator():
+        global GRAPH_ID
         GRAPH_ID += 1
         return GRAPH_ID
 
