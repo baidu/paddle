@@ -1013,13 +1013,13 @@ class ParameterServerLauncher(object):
             if len(self.procs["heter_worker"]) > 0:
                 for i, proc in enumerate(self.procs["heter_worker"]):
                     self.log_fns["heter_worker"][i].close()
-                    self.procs["heter_worker"][i].proc.terminate()
+                    self.procs["heter_worker"][i].proc.kill()
                 logger.info("all heter_worker are killed")
 
             if len(self.procs["server"]) > 0:
                 for i, proc in enumerate(self.procs["server"]):
                     self.log_fns["server"][i].close()
-                    self.procs["server"][i].proc.terminate()
+                    self.procs["server"][i].proc.kill()
                 logger.info("all parameter server are killed")
 
         else:
