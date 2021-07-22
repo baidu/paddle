@@ -46,19 +46,20 @@ function gen_full_html_report() {
         '/paddle/paddle/fluid/inference/*' \
         '/paddle/paddle/fluid/memory/*' \
         '/paddle/paddle/fluid/operators/*' \
-        '/paddle/paddle/fluid/recordio/*' \
         '/paddle/paddle/fluid/string/*' \
+        '/paddle/paddle/fluid/distributed/*' \
+        '/paddle/paddle/fluid/platform/*' \
+        '/paddle/paddle/fluid/extension/*' \
+        '/paddle/paddle/fluid/pybind/*' \
         -o coverage-full.tmp \
         --rc lcov_branch_coverage=0
 
     mv -f coverage-full.tmp coverage-full.info
 
     lcov --remove coverage-full.info \
-        '/paddle/paddle/fluid/framework/*_test*' \
         '/paddle/paddle/fluid/*/*test*' \
         '/paddle/paddle/fluid/*/*/*test*' \
-        '/paddle/paddle/fluid/inference/tests/*' \
-        '/paddle/paddle/fluid/inference/api/demo_ci/*' \
+        '/paddle/paddle/fluid/*/*/*/*test*' \
         -o coverage-full.tmp \
         --rc lcov_branch_coverage=0
 
@@ -74,11 +75,9 @@ function gen_full_html_report_xpu() {
     mv -f coverage-full.tmp coverage-full.info
 
     lcov --remove coverage-full.info \
-        '/paddle/paddle/fluid/framework/*_test*' \
         '/paddle/paddle/fluid/*/*test*' \
         '/paddle/paddle/fluid/*/*/*test*' \
-        '/paddle/paddle/fluid/inference/tests/*' \
-        '/paddle/paddle/fluid/inference/api/demo_ci/*' \
+        '/paddle/paddle/fluid/*/*/*/*test*' \
         -o coverage-full.tmp \
         --rc lcov_branch_coverage=0
 
