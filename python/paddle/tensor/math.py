@@ -716,13 +716,15 @@ def sum(x, axis=None, dtype=None, keepdim=False, name=None):
         else:
             reduce_all_flag = False
 
-    dtype_flag = False
-    if dtype is not None:
-        if dtype in ['float64', 'int64']:
-            if (convert_dtype(x.dtype) == "float32" and dtype == "float64") or \
-               (convert_dtype(x.dtype) == "int32" and dtype == "int64"):
-                dtype_flag = True
+    def get_dtype(x, dtype):
+        if dtype is not None:
+            return (True, dtype)
+        src_type = convert_dtype(x.dtype)
+        if src_type in ['bool','int32', 'int64']:
+            return (True, 'int64')
+        return (False, src_type)
 
+    dtype_flag, dtype = get_dtype(x, dtype)
     if in_dygraph_mode():
         axis = axis if axis != None and axis != [] else [0]
         if dtype_flag:
@@ -740,27 +742,17 @@ def sum(x, axis=None, dtype=None, keepdim=False, name=None):
         'reduce_all': reduce_all_flag
     }
 
-    if dtype is not None:
-        if dtype in ['float64', 'int64']:
-            if (convert_dtype(x.dtype) == "float32" and dtype == "float64") or \
-               (convert_dtype(x.dtype) == "int32" and dtype == "int64"):
-                attrs.update({
-                    'in_dtype': x.dtype,
-                    'out_dtype': convert_np_dtype_to_dtype_(dtype)
-                })
+    if dtype_flag:
+        attrs.update({
+            'in_dtype': x.dtype,
+            'out_dtype': convert_np_dtype_to_dtype_(dtype)
+        })
 
     check_variable_and_dtype(
-        x, 'x', ['float32', 'float64', 'int32', 'int64'], 'sum')
-
-    if dtype is not None:
-        check_dtype(dtype, 'dtype', ['float32', 'float64', 'int32', 'int64'], 'sum')
-        x_dtype = convert_dtype(x.dtype)
-
-        if (x_dtype == "float64" and dtype in ["float32", "int32"]) or \
-                (x_dtype == "int64" and dtype == "int32"):
-            raise ValueError("The input(x)'s dtype is {} but the attr(dtype) of sum is {}, "
-                             "which may cause data type overflows. Please reset attr(dtype) of sum."
-                             .format(x_dtype, dtype))
+        x, 'x', ['bool', 'float16', 'float32', 'float64',
+                'int32', 'int64', 'complex64', 'complex128',
+                u'bool', u'float16', u'float32', u'float64',
+                u'int32', u'int64', u'complex64', u'complex128'], 'sum')
 
     check_type(axis, 'axis', (int, list, tuple, type(None)), 'sum')
 
