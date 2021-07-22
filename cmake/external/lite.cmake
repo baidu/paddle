@@ -42,7 +42,7 @@ if (NOT LITE_SOURCE_DIR OR NOT LITE_BINARY_DIR)
   set(LITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/lite)
 
   if(NOT LITE_GIT_TAG)
-    set(LITE_GIT_TAG d3a3a6931b6d22d504d21ba32b3ae972770e9204)
+    set(LITE_GIT_TAG 7d54f557529e2f1a6b3daa4e35c1bf32bac002b8) # lite branch is release/v2.9 and the xpu_tool_chain is 2.0.0.128
   endif()
 
   if(NOT CUDA_ARCH_NAME)
