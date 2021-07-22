@@ -338,6 +338,36 @@ def predict_test_util(place, mode, stop_gradient=True):
     paddle.disable_static()
 
 
+class TestLSTMWithSeqs(unittest.TestCase):
+    def setUp(self):
+        paddle.disable_static()
+        paddle.set_device("cpu")
+        self.lstm = paddle.nn.LSTM(16, 32, 1)
+        self.optimizer = paddle.optimizer.SGD(learning_rate=0.00001)
+
+    def test_lstm1(self):
+        input1 = np.random.rand(8, 8, 16)
+        input2 = np.random.rand(8, 10, 16)
+        inputs = [input1, input2]
+        for i in range(len(inputs)):
+            y, (h, c) = self.lstm(paddle.to_tensor(inputs[i]))
+            loss = paddle.mean(h)
+            loss.backward()
+            self.optimizer.step()
+            self.optimizer.clear_grad()
+
+    def test_lstm2(self):
+        input1 = np.random.rand(8, 12, 16)
+        input2 = np.random.rand(8, 10, 16)
+        inputs = [input1, input2]
+        for i in range(len(inputs)):
+            y, (h, c) = self.lstm(paddle.to_tensor(inputs[i]))
+            loss = paddle.mean(h)
+            loss.backward()
+            self.optimizer.step()
+            self.optimizer.clear_grad()
+
+
 def load_tests(loader, tests, pattern):
     suite = unittest.TestSuite()
     devices = ["cpu", "gpu"] if paddle.fluid.is_compiled_with_cuda() \
