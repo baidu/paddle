@@ -17,6 +17,7 @@ import sys
 import six
 import numpy as np
 import threading
+import multiprocessing
 import paddle
 from .framework import Program, Variable, program_guard, default_main_program, default_startup_program, in_dygraph_mode, cpu_places, _current_expected_place
 from .executor import global_scope
@@ -239,6 +240,14 @@ class DataLoader(object):
         worker_init_fn(callable): init function which will be called with
             worker id on each subproces starting if not set as None. Default
             None.
+        multiprocessing_context (str|multiprocessing.context|None): set
+            multiprocessing context, this can only be set when
+            :attr:`num_workers > 0` and Python version is higher than 3.4.
+            It can be set as `fork`, 'spawn', 'forkserver' or multiprocessing
+            context instance of :attr:`multiprocessing.context.BaseContext`,
+            and if :attr:`multiprocessing_context` is attr:`None`, the default
+            context of :attr:`multiprocessing` will be used. Default None.
+            
 
     Returns:
         DataLoader: an iterable object for data iterating, each elemnet of the generated data is a Tensor.
@@ -325,7 +334,8 @@ class DataLoader(object):
                  use_buffer_reader=True,
                  use_shared_memory=True,
                  timeout=0,
-                 worker_init_fn=None):
+                 worker_init_fn=None,
+                 multiprocessing_context=None):
         self.return_list = return_list
         self.collate_fn = collate_fn
         self.use_buffer_reader = use_buffer_reader
@@ -407,6 +417,8 @@ class DataLoader(object):
             self.pin_memory = True if use_pinned_memory(
             ) is None else use_pinned_memory()
 
+        self.multiprocessing_context = multiprocessing_context
+
     def __len__(self):
         if self.dataset_kind == _DatasetKind.ITER:
             raise ValueError("length of IterableDataset not supported")
@@ -424,6 +436,36 @@ class DataLoader(object):
 
     def __call__(self):
         return self.__iter__()
+
+    @property
+    def multiprocessing_context(self):
+        return self.__multiprocessing_context
+
+    @multiprocessing_context.setter
+    def multiprocessing_context(self, multiprocessing_context):
+        if multiprocessing_context is not None:
+            if self.num_workers <= 0:
+                raise ValueError("multiprocessing_context can only be set "
+                                 "when num_workers > 0")
+            if not sys.version_info >= (3, 4):
+                raise ValueError("multiprocessing_context can only be set "
+                                 "when Python version >= 3.4")
+
+            if isinstance(multiprocessing_context, (str, bytes)):
+                valid_start_methods = multiprocessing.get_all_start_methods()
+                if multiprocessing_context not in valid_start_methods:
+                    raise ValueError(
+                        "multiprocessing_context can only be"
+                        "set as one of {}, but got {}".format(
+                            valid_start_methods, multiprocessing_context))
+                multiprocessing_context = \
+                        multiprocessing.get_context(multiprocessing_context)
+            elif not isinstance(multiprocessing_context,
+                                multiprocessing.context.BaseContext):
+                raise TypeError("multiprocessing_context can only be set "
+                                "as str or multiprocessing context")
+
+        self.__multiprocessing_context = multiprocessing_context
 
     @staticmethod
     def from_generator(feed_list=None,

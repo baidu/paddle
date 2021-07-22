@@ -78,6 +78,11 @@ class _DataLoaderIterBase(object):
                     _InfiniteIterableSampler(self._dataset, 1))
             self._collate_fn = loader.collate_fn or default_convert_fn
 
+        # if multiprocessing_context not set(None), use default
+        # multiprocessing as context
+        self._multiprocessing_context = loader.multiprocessing_context \
+                                            or multiprocessing
+
         # LoDTensorBlockingQueue instance for create_py_reader and a thread
         # to put mini-batch data to self._blocking_queue, mini-batch data
         # will be get from:
@@ -285,23 +290,26 @@ class _DataLoaderIterMultiProcess(_DataLoaderIterBase):
         self._workers_idx_cycle = itertools.cycle(range(self._num_workers))
 
         # create data_queue for workers
-        self._data_queue = multiprocessing.Queue()
+        self._data_queue = self._multiprocessing_context.Queue()
 
         # event for workers and thread, thread event is only need 
         # in multi-processing mode
-        self._workers_done_event = multiprocessing.Event()
+        self._workers_done_event = self._multiprocessing_context.Event()
         self._thread_done_event = threading.Event()
 
+        is_spawn = sys.version_info >= (3, 4) and \
+                    isinstance(self._multiprocessing_context,
+                               multiprocessing.context.SpawnContext)
         for i in range(self._num_workers):
-            indices_queue = multiprocessing.Queue()
+            indices_queue = self._multiprocessing_context.Queue()
             self._indices_queues.append(indices_queue)
-            worker = multiprocessing.Process(
+            worker = self._multiprocessing_context.Process(
                 target=_worker_loop,
                 args=(self._dataset, self._dataset_kind, indices_queue,
                       self._data_queue, self._workers_done_event,
                       self._auto_collate_batch, self._collate_fn,
                       self._worker_init_fn, i, self._num_workers,
-                      self._use_shared_memory))
+                      self._use_shared_memory, is_spawn))
             worker.daemon = True
             worker.start()
             self._workers.append(worker)

@@ -181,7 +181,7 @@ class TestDataLoaderWorkerLoop(unittest.TestCase):
                 _worker_loop(loader._dataset, 0, indices_queue,
                              loader._data_queue, loader._workers_done_event,
                              True, _collate_fn, _init_fn, 0, 1,
-                             loader._use_shared_memory)
+                             loader._use_shared_memory, multiprocessing)
                 self.assertTrue(False)
         except AssertionError:
             pass
@@ -225,7 +225,7 @@ class TestDataLoaderWorkerLoop(unittest.TestCase):
                 _worker_loop(loader._dataset, 0, indices_queue,
                              loader._data_queue, loader._workers_done_event,
                              True, _collate_fn, _init_fn, 0, 1,
-                             loader._use_shared_memory)
+                             loader._use_shared_memory, multiprocessing)
                 self.assertTrue(True)
         except AssertionError:
             pass

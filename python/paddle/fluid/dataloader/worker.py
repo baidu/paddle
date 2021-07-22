@@ -250,7 +250,7 @@ def _generate_states(base_seed=0, worker_id=0):
 
 def _worker_loop(dataset, dataset_kind, indices_queue, out_queue, done_event,
                  auto_collate_batch, collate_fn, init_fn, worker_id,
-                 num_workers, use_shared_memory):
+                 num_workers, use_shared_memory, is_spawn):
     try:
         # NOTE: [ mmap files clear ] When the child process exits unexpectedly,
         # some shared memory objects may have been applied for but have not yet
@@ -308,13 +308,19 @@ def _worker_loop(dataset, dataset_kind, indices_queue, out_queue, done_event,
                     batch = init_exception
                     init_exception = None
                 else:
-                    # NOTE: GPU tensor operation is not supported in sub-process
-                    #       but default device is GPU in paddle-gpu version, which
-                    #       may copy CPU tensor to GPU even if users want to use
-                    #       CPU tensor operation, so we add CPUPlace guard here
-                    #       to make sure tensor will be operated only on CPU
-                    with paddle.fluid.dygraph.guard(place=paddle.CPUPlace()):
+                    # NOTE: GPU tensor operation in sub-process only support in
+                    #       spawn start method, but default device is GPU in
+                    #       paddle-gpu version, which may copy CPU tensor to GPU
+                    #       even if users want to use CPU tensor operation, so we
+                    #       add CPUPlace guard here to make sure tensor will be
+                    #       operated only on CPU if multiprocessing_context is not
+                    #       spawn context
+                    if is_spawn:
                         batch = fetcher.fetch(indices)
+                    else:
+                        with paddle.fluid.dygraph.guard(
+                                place=paddle.CPUPlace()):
+                            batch = fetcher.fetch(indices)
             except Exception as e:
                 if isinstance(
                         e, StopIteration) and dataset_kind == _DatasetKind.ITER:
@@ -328,8 +334,8 @@ def _worker_loop(dataset, dataset_kind, indices_queue, out_queue, done_event,
                 batch, structure = _flatten_batch(batch)
                 if use_shared_memory:
                     tensor_list = [
-                        core._array_to_share_memory_tensor(b)
-                        if isinstance(b, np.ndarray) else b._share_memory()
+                        core._array_to_share_memory_tensor(b) if
+                        isinstance(b, np.ndarray) else b.cpu()._share_memory()
                         for b in batch
                     ]
                     out_queue.put((idx, tensor_list, structure))
