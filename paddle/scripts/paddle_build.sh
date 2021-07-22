@@ -785,6 +785,26 @@ function generate_api_spec() {
     deactivate
 }
 
+function check_qa_approvals() {
+    if [ "$GITHUB_API_TOKEN" == "" ] || [ "$GIT_PR_ID" == "" ]; then
+        return 0
+    fi
+	# approval_user_list: DDDivano 10734244,OliverLPH 14963836,kolinwei 22165420,gentelyang 25795827,XieYunshen 32428676,ccmeteorljh 33303691,JiaXiao243 37854899,mmglove 38800877,zhengya01 43601548,chalsliu 45041955,xiegegege 46314656,hysunflower 52739577
+	approval_line=`curl -H "Authorization: token ${GITHUB_API_TOKEN}" https://api.github.com/repos/PaddlePaddle/Paddle/pulls/${GIT_PR_ID}/reviews?per_page=10000`
+	APPROVALS=`echo ${approval_line}|python ${PADDLE_ROOT}/tools/check_pr_approval.py 1 10734244 14963836 22165420 25795827 32428676 33303691 37854899 38800877 43601548 45041955 46314656 52739577`
+    set +x
+    echo "current pr ${GIT_PR_ID} got approvals: ${APPROVALS}"
+	if [ "${APPROVALS}" == "FALSE" ]; then
+		echo "************************************"
+		echo -e "Each pull request need at least one QA approval.\n"
+		echo -e "Then you must have one QA (kolinwei(recommended)) approval for the pull request. \n"
+		echo -e "If you have any problems about pull request need as least one QA approval , please read the specification https://github.com/PaddlePaddle/Paddle/wiki/Pull-Request-need-QA-Approval. \n"
+		echo "************************************"
+		exit 1
+	fi
+	set -x
+}
+
 function check_approvals_of_unittest() {
     set +x
     if [ "$GITHUB_API_TOKEN" == "" ] || [ "$GIT_PR_ID" == "" ]; then
@@ -2170,6 +2190,7 @@ function main() {
         example_code=$?
         summary_check_problems $check_style_code $[${example_code_gpu} + ${example_code}] "$check_style_info" "${example_info_gpu}\n${example_info}"
         assert_api_spec_approvals
+        check_qa_approvals
         ;;
       build)
         cmake_gen ${PYTHON_ABI:-""}
@@ -2268,7 +2289,7 @@ function main() {
         check_approvals_of_unittest 3 
         ;;
       test_train)
-        gen_fluid_lib ${parallel_number}
+        gen_fluid_lib ${parallel_number}check_qa_approvals
         test_fluid_lib_train
         ;;
       assert_api_approvals)
