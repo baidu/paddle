@@ -307,6 +307,7 @@ class TestFleetHeterBase(unittest.TestCase):
         heter1.terminate()
         self.assertEqual(tr0_ret, 0, "something wrong in tr0, please check")
         self.assertEqual(tr1_ret, 0, "something wrong in tr1, please check")
+        # for check
         shutil.rmtree(gloo_path)
         return 0, 0
 
