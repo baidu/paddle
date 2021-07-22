@@ -44,6 +44,8 @@ if [ `git branch | grep 'prec_added_ut'` ];then
     git branch -D 'prec_added_ut'
 fi
 git checkout -b prec_added_ut upstream/${BRANCH}
+echo 'upstream develop log'
+git log -1
 git branch
 mkdir prec_build
 cd prec_build
@@ -69,6 +71,8 @@ elif [[ "$SYSTEM" == "Windows_NT" ]];then
     rm $PADDLE_ROOT/br-ut $PADDLE_ROOT/pr-ut $PADDLE_ROOT/win_cmake.sh
 fi
 git checkout -f $CURBRANCH
+echo 'current branch log'
+git log -1
 echo $CURBRANCH
 git branch -D prec_added_ut
 cd $CURDIR
