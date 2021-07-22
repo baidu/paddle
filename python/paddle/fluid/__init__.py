@@ -207,6 +207,7 @@ def __bootstrap__():
         'call_stack_level',
         'sort_sum_gradient',
         'max_inplace_grad_add',
+        'convert_all_blocks',
     ]
     if 'Darwin' not in sysstr:
         read_env_flags.append('use_pinned_memory')

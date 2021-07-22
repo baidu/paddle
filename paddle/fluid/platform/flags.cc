@@ -602,3 +602,14 @@ DEFINE_bool(check_kernel_launch, false,
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 DEFINE_bool(conv2d_disable_cudnn, false, "Disable cudnn in conv2d");
 #endif
+
+/**
+ * Multi-Block convert to sub-graph FLAG
+ * Name: convert_all_blocks
+ * Since Version:
+ * Value Range: bool, default=false
+ * Example:
+ * Note: Enable multi-block convert to sub-graph.
+ */
+DEFINE_bool(convert_all_blocks, false,
+            "Convert all blocks in program into SSAgraphs");

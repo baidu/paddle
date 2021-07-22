@@ -67,6 +67,7 @@ DECLARE_bool(benchmark);
 DECLARE_int32(inner_op_parallelism);
 DECLARE_int32(max_inplace_grad_add);
 DECLARE_string(tracer_profile_fname);
+DECLARE_bool(convert_all_blocks);
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 // cudnn
 DECLARE_uint64(conv_workspace_size_limit);
@@ -365,7 +366,8 @@ static void RegisterGlobalVarGetterSetter() {
       FLAGS_memory_fraction_of_eager_deletion, FLAGS_use_pinned_memory,
       FLAGS_benchmark, FLAGS_inner_op_parallelism, FLAGS_tracer_profile_fname,
       FLAGS_paddle_num_threads, FLAGS_use_mkldnn, FLAGS_max_inplace_grad_add,
-      FLAGS_tracer_mkldnn_ops_on, FLAGS_tracer_mkldnn_ops_off);
+      FLAGS_tracer_mkldnn_ops_on, FLAGS_tracer_mkldnn_ops_off,
+      FLAGS_convert_all_blocks);
 
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
   REGISTER_PUBLIC_GLOBAL_VAR(
