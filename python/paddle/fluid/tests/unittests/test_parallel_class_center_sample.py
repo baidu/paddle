@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,24 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# no_check_set of check_output must be None
-no_check_set_white_list = [
-    'fake_quantize_range_abs_max',
-    'coalesce_tensor',
-    'flatten2',
-    'flatten_contiguous_range',
-    'lrn',
-    'squeeze2',
-    'reshape2',
-    'transpose2',
-    'unsqueeze2',
-    'cross_entropy2',
-    'seed',
-    'check_finite_and_unscale',
-    'update_loss_scaling',
-    'cudnn_lstm',
-    'rnn',
-    'fusion_lstm',
-    'softmax_with_cross_entropy',
-    'class_center_sample',
-]
+from __future__ import print_function
+
+import unittest
+import paddle.fluid as fluid
+
+from test_parallel_dygraph_dataparallel import TestMultipleGpus
+
+
+class TestParallelClassCenterSample(TestMultipleGpus):
+    def test_parallel_class_center_sample(self):
+        self.run_mnist_2gpu('parallel_class_center_sample.py')
+
+
+if __name__ == "__main__":
+    unittest.main()

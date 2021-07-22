@@ -135,6 +135,7 @@ from .tensor.manipulation import scatter_  # noqa: F401
 from .tensor.manipulation import scatter_nd_add  # noqa: F401
 from .tensor.manipulation import scatter_nd  # noqa: F401
 from .tensor.manipulation import shard_index  # noqa: F401
+from .tensor.manipulation import class_center_sample  # noqa: F401
 from .tensor.manipulation import slice  # noqa: F401
 from .tensor.manipulation import split  # noqa: F401
 from .tensor.manipulation import squeeze  # noqa: F401

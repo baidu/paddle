@@ -719,4 +719,5 @@ STATIC_MODE_TESTING_LIST = [
     'test_sgd_op_bf16',
     'test_marker_op',
     'test_c_embedding_op',
+    'test_class_center_sample_op',
 ]

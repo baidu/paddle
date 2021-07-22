@@ -29,6 +29,7 @@ from ..fluid.layers import unstack  # noqa: F401
 
 from ..fluid.layers import scatter_nd  # noqa: F401
 from ..fluid.layers import shard_index  # noqa: F401
+from ..fluid.layers import class_center_sample  # noqa: F401
 from ..fluid import layers
 from ..fluid.dygraph.inplace_utils import inplace_apis_in_dygraph_only
 import paddle

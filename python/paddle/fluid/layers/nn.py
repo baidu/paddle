@@ -187,6 +187,7 @@ __all__ = [
     'deformable_roi_pooling',
     'filter_by_instag',
     'shard_index',
+    'class_center_sample',
     'hard_swish',
     'mish',
     'gather_tree',
@@ -14831,6 +14832,150 @@ def shard_index(input, index_num, nshards, shard_id, ignore_value=-1):
         },
         stop_gradient=True)
     return out
+
+
+def class_center_sample(label, num_classes, num_samples, group=None, seed=None):
+    """
+    Class center sample method is proposed from the paper PartialFC that only sample a subset of the class centers.
+    The process of sampling subset class centers is straightforward: 1) First select the positive class centers;
+    2) Randomly sample negative class centers. Specifically, given a label tensor, shape [batch_size], select all
+    the positive class centers and randomly sample negative class centers, then remap the input label tensor using
+    the sampled class centers. Note that if the number of the positive class centers is greater than the input 
+    num_samples, it keeps all the positive class centers and the shape of sampled_class_center will be 
+    [num_positive_class_centers]. The API supports CPU, single GPU and multi GPU.
+
+    For more information, Partial FC: Training 10 Million Identities on a Single Machine
+    arxiv: https://arxiv.org/abs/2010.05222
+
+    Args:
+    	label (list): each label in [0, num_classes)
+    	num_classes (int): A positive integer to specify the number of classes at local rank.
+                     Note that num_classes of each GPU can be different.
+    	num_samples (int): A positive integer to specify the number of class center to sample
+        group (Group): The abstract representation of group, see paddle.distributed.collective.Group
+        seed (int): random seed
+
+    Return:
+    	remapped_label (list): remapped label using sampled class center
+    	sampled_class_center (list): sampled class center from [0, num_classes)
+
+    Examples:
+    .. code-block:: python
+
+      # for CPU or single GPU
+      import os
+      os.environ["CUDA_VISIBLE_DEVICES"] = ""
+      import paddle
+      import numpy as np
+      num_classes = 20
+      batch_size = 10
+      num_samples = 6
+      np_label = np.random.randint(0, num_classes, (batch_size,), dtype=np.int64)
+      label = paddle.to_tensor(np_label, dtype="int64")
+      print(label)
+      remapped_label, sampled_class_index = paddle.class_center_sample(label, num_classes, num_samples)
+      print(remapped_label)
+      print(sampled_class_index)
+      # the output is
+      #Tensor(shape=[10], dtype=int64, place=CPUPlace, stop_gradient=True,
+      #       [11, 5 , 1 , 3 , 12, 2 , 15, 19, 18, 19])
+      #Tensor(shape=[10], dtype=int64, place=CPUPlace, stop_gradient=True,
+      #       [4, 3, 0, 2, 5, 1, 6, 8, 7, 8])
+      #Tensor(shape=[9], dtype=int64, place=CPUPlace, stop_gradient=True,
+      #       [1 , 2 , 3 , 5 , 11, 12, 15, 18, 19])
+
+      # for multi GPU, test_class_center_sample.py
+      #import paddle
+      #import paddle.distributed as dist
+      #import numpy as np
+      #strategy = dist.fleet.DistributedStrategy()
+      #dist.fleet.init(is_collective=True, strategy=strategy)
+      #batch_size = 10
+      #num_samples = 6
+      #rank_id = dist.get_rank()
+      ## num_classes of each GPU can be different, e.g num_classes_list = [10, 8]
+      #num_classes_list = [10, 10]
+      #num_classes = np.sum(num_classes_list)
+      #np_label = np.random.randint(0, num_classes, (batch_size,), dtype=np.int64)
+      #label = paddle.to_tensor(np_label, dtype="int64")
+      #label_list = []
+      #dist.all_gather(label_list, label)
+      #label = paddle.concat(label_list, axis=0)
+      #print(label)
+      #remapped_label, sampled_class_index = paddle.class_center_sample(label, num_classes_list[rank_id], num_samples)
+      #print(remapped_label)
+      #print(sampled_class_index)
+
+      #python -m paddle.distributed.launch --gpus=0,1 test_class_center_sample.py
+      # rank 0 output:
+      #Tensor(shape=[20], dtype=int64, place=CUDAPlace(0), stop_gradient=True,
+      #       [10, 17, 15, 11, 9 , 12, 18, 18, 17, 18, 19, 2 , 8 , 13, 11, 13, 9 , 10, 0 , 4 ])
+      #Tensor(shape=[20], dtype=int64, place=CUDAPlace(0), stop_gradient=True,
+      #       [6 , 11, 10, 7 , 4 , 8 , 12, 12, 11, 12, 13, 1 , 3 , 9 , 7 , 9 , 4 , 6 , 0 , 2 ])
+      #Tensor(shape=[6], dtype=int64, place=CUDAPlace(0), stop_gradient=True,
+      #       [0, 2, 4, 8, 9, 3])
+      
+      # rank 1 output:
+      #Tensor(shape=[20], dtype=int64, place=CUDAPlace(1), stop_gradient=True,
+      #       [10, 17, 15, 11, 9 , 12, 18, 18, 17, 18, 19, 2 , 8 , 13, 11, 13, 9 , 10, 0 , 4 ])
+      #Tensor(shape=[20], dtype=int64, place=CUDAPlace(1), stop_gradient=True,
+      #       [6 , 11, 10, 7 , 4 , 8 , 12, 12, 11, 12, 13, 1 , 3 , 9 , 7 , 9 , 4 , 6 , 0 , 2 ])
+      #Tensor(shape=[7], dtype=int64, place=CUDAPlace(1), stop_gradient=True,
+      #       [0, 1, 2, 3, 5, 7, 8])
+    """
+    if group is not None and not group.is_member():
+        return
+
+    ring_id = 0 if group is None else group.id
+    rank = 0
+    nranks = 1
+    if core.is_compiled_with_dist():
+        parallel_env = paddle.distributed.ParallelEnv()
+        global_rank = parallel_env.rank
+        rank = global_rank if group is None else group.get_group_rank(
+            global_rank)
+        nranks = parallel_env.world_size if group is None else group.nranks
+
+    if num_samples > num_classes:
+        raise ValueError(
+            'Expected num_samples less than or equal to {}, got num_samples {}'.
+            format(num_classes, num_samples))
+
+    if (seed is None or seed == 0) and default_main_program().random_seed != 0:
+        seed = default_main_program().random_seed
+
+    if in_dygraph_mode():
+        remapped_label, sampled_class_center = core.ops.class_center_sample(
+            label, 'num_classes', num_classes, 'num_samples', num_samples,
+            'ring_id', ring_id, 'nranks', nranks, 'rank', rank, 'fix_seed',
+            seed is not None, 'seed', seed if seed is not None else 0)
+        return remapped_label, sampled_class_center
+
+    check_variable_and_dtype(label, 'label', ['int64', 'int'],
+                             'class_center_sample')
+    op_type = 'class_center_sample'
+    helper = LayerHelper(op_type, **locals())
+    remapped_label = helper.create_variable_for_type_inference(
+        dtype=label.dtype)
+    sampled_class_center = helper.create_variable_for_type_inference(
+        dtype=label.dtype)
+    helper.append_op(
+        type=op_type,
+        inputs={'Label': label},
+        outputs={
+            'RemappedLabel': remapped_label,
+            'SampledLocalClassCenter': sampled_class_center
+        },
+        attrs={
+            'num_classes': num_classes,
+            'num_samples': num_samples,
+            'ring_id': ring_id,
+            'nranks': nranks,
+            'rank': rank,
+            'fix_seed': seed is not None,
+            'seed': seed if seed is not None else 0
+        })
+    return remapped_label, sampled_class_center
 
 
 @templatedoc()

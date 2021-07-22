@@ -81,6 +81,7 @@ from .manipulation import scatter_  # noqa: F401
 from .manipulation import scatter_nd_add  # noqa: F401
 from .manipulation import scatter_nd  # noqa: F401
 from .manipulation import shard_index  # noqa: F401
+from .manipulation import class_center_sample  # noqa: F401
 from .manipulation import slice  # noqa: F401
 from .manipulation import split  # noqa: F401
 from .manipulation import squeeze  # noqa: F401
